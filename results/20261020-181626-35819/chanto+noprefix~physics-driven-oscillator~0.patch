@@ -1,0 +1,86 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..eeaf8a7 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,79 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the continuous value 1 at x = 0."""
++    if x == 0.0:
++        return 1.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the continuous value 1 at x = 0."""
++    if x == 0.0:
++        return 1.0
++    return math.sinh(x) / x
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    a = k - m * omega * omega
++    b = c * omega
++    return abs(F0) / math.hypot(a, b)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    a = k - m * omega * omega
++    b = c * omega
++    denom = math.hypot(a, b)
++    scale = F0 / denom
++    P = scale * (a / denom)
++    Q = scale * (b / denom)
++
++    # Particular solution and its initial position/velocity.
++    xp0 = P
++    vp0 = Q * omega
++
++    # Homogeneous solution constants.
++    C = x0 - xp0
++    V = v0 - vp0
++
++    mu = c / (2.0 * m)
++    omega0_sq = k / m
++    delta = mu * mu - omega0_sq
++    decay = math.exp(-mu * t)
++
++    if delta < 0.0:
++        omega_d = math.sqrt(-delta)
++        theta = omega_d * t
++        phi_c = decay * math.cos(theta)
++        phi_s = decay * t * _sinc(theta)
++    elif delta > 0.0:
++        gamma = math.sqrt(delta)
++        x = gamma * t
++        if abs(x) < 0.5:
++            phi_c = decay * math.cosh(x)
++            phi_s = decay * t * _sinhc(x)
++        else:
++            # e^{-mu t} cosh(gamma t) and e^{-mu t} sinh(gamma t) / gamma,
++            # written with the (non-positive) characteristic exponents so the
++            # exponentially growing factors never appear on their own.
++            # The slow exponent is formed without cancellation when gamma ~ mu.
++            slow = -omega0_sq / (mu + gamma)
++            fast = -mu - gamma
++            e1 = math.exp(slow * t)
++            e2 = math.exp(fast * t)
++            phi_c = 0.5 * (e1 + e2)
++            phi_s = 0.5 * (e1 - e2) / gamma
++    else:
++        phi_c = decay
++        phi_s = decay * t
++
++    homogeneous = C * phi_c + (V + mu * C) * phi_s
++    return P * math.cos(omega * t) + Q * math.sin(omega * t) + homogeneous

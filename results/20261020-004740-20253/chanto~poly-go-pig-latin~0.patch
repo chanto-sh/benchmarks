@@ -1,0 +1,48 @@
+diff --git a/pig_latin.go b/pig_latin.go
+index 2836af2..edecce1 100644
+--- a/pig_latin.go
++++ b/pig_latin.go
+@@ -1,5 +1,42 @@
+ package piglatin
+ 
++import "strings"
++
+ func Sentence(sentence string) string {
+-	panic("Please implement the Sentence function")
++	words := strings.Fields(sentence)
++	for i, word := range words {
++		words[i] = translate(word)
++	}
++	return strings.Join(words, " ")
++}
++
++func translate(word string) string {
++	if word == "" {
++		return word
++	}
++	if isVowel(word[0]) || strings.HasPrefix(word, "xr") || strings.HasPrefix(word, "yt") {
++		return word + "ay"
++	}
++
++	split := 0
++	for split < len(word) {
++		c := word[split]
++		if c == 'q' && split+1 < len(word) && word[split+1] == 'u' {
++			split += 2
++			break
++		}
++		if c == 'y' && split > 0 {
++			break
++		}
++		if isVowel(c) {
++			break
++		}
++		split++
++	}
++
++	return word[split:] + word[:split] + "ay"
++}
++
++func isVowel(c byte) bool {
++	return c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u'
+ }

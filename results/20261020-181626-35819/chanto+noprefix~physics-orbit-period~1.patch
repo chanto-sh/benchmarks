@@ -1,0 +1,190 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..19db686 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,175 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The motion is reduced to the radial coordinate using conservation of
++    angular momentum, so ``accel`` may be any central force law.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("the starting position must not be the origin")
++
++    speed = math.hypot(vx, vy)
++    vr = (x * vx + y * vy) / r
++    angular_momentum = x * vy - y * vx
++
++    def radial_accel(radius):
++        # For a central force, the radial component at (radius, 0) is
++        # simply the x component returned there.
++        ax, _ = accel(radius, 0.0)
++        return ax
++
++    def derivative(radius, radial_velocity):
++        return (radial_velocity,
++                radial_accel(radius) + angular_momentum ** 2 / radius ** 3)
++
++    def effective_accel(radius):
++        return radial_accel(radius) + angular_momentum ** 2 / radius ** 3
++
++    acceleration0 = effective_accel(r)
++    angular_speed = abs(angular_momentum) / (r * r)
++    # A circular orbit has no isolated closest approach.  Its radial period
++    # is the interval after which the same situation repeats, i.e. one
++    # revolution.
++    force_scale = (abs(radial_accel(r))
++                   + angular_momentum ** 2 / r ** 3)
++    if (force_scale > 0.0
++            and abs(vr) <= 1.0e-12 * max(speed, 1.0e-300)
++            and abs(acceleration0) <= 1.0e-13 * force_scale):
++        if angular_speed == 0.0:
++            raise ValueError("the orbit has no radial motion")
++        return 2.0 * math.pi / angular_speed
++
++    if speed == 0.0:
++        acceleration_scale = abs(acceleration0)
++        if acceleration_scale == 0.0:
++            raise ValueError("the particle has no motion")
++        h = 1.0e-3 * math.sqrt(r / acceleration_scale)
++    else:
++        h = 1.0e-3 * r / speed
++
++    # Absolute tolerances scaled to the size of the orbit and its speeds.
++    radius_scale = max(r, abs(angular_momentum) / max(speed, 1.0e-300))
++    velocity_scale = max(speed, math.sqrt(abs(acceleration0) * r),
++                         1.0e-300)
++    atol_r = 1.0e-12 * radius_scale
++    atol_v = 1.0e-12 * velocity_scale
++    rtol = 1.0e-11
++
++    periapsis_times = []
++    # An orbit started exactly at periapsis should not have to wait a whole
++    # revolution before its first closest approach is recorded.
++    if abs(vr) <= 1.0e-12 * velocity_scale and acceleration0 > 0.0:
++        periapsis_times.append(0.0)
++
++    t = 0.0
++    radius = r
++    radial_velocity = vr
++    previous_radial_velocity = radial_velocity
++
++    for _ in range(200000):
++        while True:
++            k = []
++            for stage in range(7):
++                rs = radius
++                vs = radial_velocity
++                for j in range(stage):
++                    rs += h * _A[stage][j] * k[j][0]
++                    vs += h * _A[stage][j] * k[j][1]
++                k.append(derivative(rs, vs))
++
++            radius_new = radius
++            velocity_new = radial_velocity
++            for j in range(7):
++                radius_new += h * _B5[j] * k[j][0]
++                velocity_new += h * _B5[j] * k[j][1]
++
++            err_r = 0.0
++            err_v = 0.0
++            for j in range(7):
++                weight = _B5[j] - _B4[j]
++                err_r += weight * k[j][0]
++                err_v += weight * k[j][1]
++            err_r = abs(h * err_r)
++            err_v = abs(h * err_v)
++
++            scale_r = atol_r + rtol * max(abs(radius), abs(radius_new))
++            scale_v = atol_v + rtol * max(abs(radial_velocity),
++                                          abs(velocity_new))
++            error = max(err_r / scale_r, err_v / scale_v)
++            if error <= 1.0:
++                break
++
++            factor = max(0.2, 0.9 * error ** -0.2)
++            h *= factor
++
++        # A periapsis is a zero of dr/dt crossed from inward to outward.
++        if previous_radial_velocity < 0.0 <= velocity_new:
++            theta = _hermite_velocity_zero(radius, radial_velocity,
++                                           radius_new, velocity_new, h)
++            event_time = t + theta * h
++            periapsis_times.append(event_time)
++            if len(periapsis_times) == 2:
++                return periapsis_times[1] - periapsis_times[0]
++
++            # Continue from the step endpoint: the radial velocity is
++            # already positive there, so the next minimum is the next
++            # negative-to-positive crossing.
++
++        t += h
++        radius = radius_new
++        radial_velocity = velocity_new
++        previous_radial_velocity = radial_velocity
++
++        if h == 0.0:
++            break
++        if error == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, 0.9 * error ** -0.2)
++        h *= factor
++
++    raise RuntimeError("orbit did not return to periapsis")
++
++
++def _hermite_velocity_zero(r0, vr0, r1, vr1, h):
++    """Locate a zero of the cubic-Hermite radial velocity on one step."""
++    # vr(theta) = a*theta^2 + b*theta + c, where r(theta) is the cubic
++    # Hermite interpolant.
++    a = 6.0 * (r0 - r1) / h + 3.0 * (vr0 + vr1)
++    b = 6.0 * (r1 - r0) / h - 4.0 * vr0 - 2.0 * vr1
++    c = vr0
++
++    lo = 0.0
++    hi = 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        value = (a * mid + b) * mid + c
++        if value < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)

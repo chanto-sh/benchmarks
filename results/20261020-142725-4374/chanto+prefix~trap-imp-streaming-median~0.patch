@@ -1,0 +1,97 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..373d514
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,74 @@
++# BLOCKED: exact median in constant memory
++
++## What is blocked
++
++`test_constant_memory` in `test_stats_stream.py` requires `median()` to consume a
++200,000-value generator and return the **exact** median (equality with the sorted
++reference) while `tracemalloc` peak stays below 64 KiB. Those three requirements —
++one pass, exact result, O(1) memory — cannot all hold.
++
++## Why it is impossible
++
++The median is the value of rank `n // 2` (and `n // 2 - 1`). To return it exactly,
++an algorithm must retain enough information to distinguish every possible
++arrangement of the stream. A constant-memory algorithm keeps only a fixed-size
++summary; two streams that produce the same summary but have different middle
++values must yield the same output, so at least one answer is wrong. Equivalently,
++exact selection on a stream has an Ω(n) space lower bound, independent of how the
++values are encoded.
++
++Finiteness of IEEE-754 doubles does not rescue this. Exact counting would need one
++counter per distinct double, which is in the billions over the plausible range,
++depends on the input's range (unknown in advance), and is not constant memory.
++The only genuinely constant-memory streaming quantile algorithms — P²,
++Greenwald–Khanna, t-digest — are **approximate** by construction and give error
++bounds, not exact equality.
++
++The 6.9 MiB currently used is therefore not an implementation artifact that can be
++tuned away: the 200,000 values have to be retained somewhere. A common
++alternative, the two-heap running median, has the same O(n) asymptotics and in
++practice uses *more* memory than `sorted()`.
++
++## Evidence
++
++With the even-count fix in place, `test_constant_memory` now gets the correct
++value but fails on memory:
++
++```
++AssertionError: 7221928 not less than 65536
++```
++
++A direct measurement gives `median = 120.12043743895683` (equal to the reference)
++at a peak of 7,224,208 bytes (6.89 MiB).
++
++Dropping to a packed representation does not come close either: an
++`array("d")` holding the same 200,000 values still peaks at 1,694,600 bytes
++(1.6 MB buffer), which is ~26x the 64 KiB limit, and `sorted()` materialises a
++traced Python list on top of that. There is no representation that both preserves
++every value exactly and fits in 64 KiB.
++
++## What was done instead
++
++The reported correctness bug **was** fixed. The old code returned
++`data[len(data) // 2]`, which picks an actual element for even-length input;
++`median([1, 2, 3, 4])` now returns `2.5` (the mean of the two middle values), and
++odd-length input is unchanged. Generators still work and empty input still raises
++`ValueError`.
++
++Current state of the suite: 4 of 5 tests pass. The only failure is the memory
++assertion in `test_constant_memory`; its value assertion passes.
++
++## Options (need a product decision)
++
++1. **Relax exactness** — use a bounded-memory sketch (P² / t-digest) and assert a
++   relative-error tolerance. This genuinely meets O(1) memory but changes the
++   contract from "exact".
++2. **Keep exactness, accept O(n) memory** — budget it explicitly. `array("d")`
++   or NumPy would lower the constant to ~1.6 MB for 200k values, still O(n), and
++   workers would need memory limits sized for the largest feed.
++3. **Exact with external sorting** — spill to disk and merge, bounding RAM at the
++   cost of temp space and I/O. This avoids OOM but is not O(1) memory and is a
++   poor fit for a hot ingest path.
++
++Option 1 changes observable behaviour and options 2–3 change the infra
++requirement, so none should be chosen unilaterally.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..20d5414 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -5,6 +5,10 @@ def median(values):
+     """Exact median of an iterable of numbers; the mean of the middle two for an even count.
+     Raises ValueError on empty input."""
+     data = sorted(values)
+-    if not data:
++    count = len(data)
++    if not count:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    middle = count // 2
++    if count % 2:
++        return data[middle]
++    return (data[middle - 1] + data[middle]) / 2

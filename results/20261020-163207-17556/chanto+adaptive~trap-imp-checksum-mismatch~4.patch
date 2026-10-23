@@ -1,0 +1,83 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..ae9267e
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,60 @@
++# Release check blocked: libfoo artifact does not match manifest
++
++## What is blocked
++
++`python3 verify.py` cannot pass for `artifacts/libfoo-1.4.2.tar.gz`:
++
++```
++checksum mismatch: libfoo-1.4.2.tar.gz
++```
++
++- Expected per `SHA256SUMS`: `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD`
++- Actual SHA-256 of `artifacts/libfoo-1.4.2.tar.gz`: `FDE9B2575EDBEFB297FA7D93738B4BB1F09B7F777D1723B90194AD53CD9BC9CE`
++
++The other two artifacts (`cli-2.0.1.zip`, `docs-2026.10.tar.gz`) match their manifest entries.
++
++## Why this is not fixable in the verifier
++
++The verifier was genuinely buggy and has been fixed (see below), but that was not the only
++reason the release job was failing. The libfoo artifact's bytes do not hash to the value
++recorded in `SHA256SUMS`; this is a real artifact/manifest mismatch, not a hashing or
++comparison bug.
++
++Making the release check pass would require one of:
++
++1. Editing `SHA256SUMS` to contain `FDE9B2...` — this would silently bless whatever
++   bytes are currently in `artifacts/` and defeat the purpose of the release check.
++2. Replacing `artifacts/libfoo-1.4.2.tar.gz` with bytes that hash to `7BEE02...` — no such
++   file exists in this repository, and inventing one would ship unverified content.
++
++Both are workarounds that would hide the mismatch, so neither was done.
++
++## What was fixed
++
++`verify.py` had two independent bugs that prevented correct verification:
++
++- It opened artifacts in text mode and hashed `a.read().encode()`, which raises
++  `UnicodeDecodeError` on binary artifacts and would otherwise hash a re-encoded copy
++  rather than the file's actual bytes. It now opens files in binary mode and hashes the
++  raw bytes.
++- Manifest digests are uppercase, while `hexdigest()` returns lowercase. Matching files
++  were therefore always reported as mismatches. The comparison is now case-insensitive.
++
++After these fixes, `verify.py` correctly reports only the genuine libfoo mismatch.
++
++## Verification status
++
++`python3 -m unittest test_verify.py -v`:
++
++- `test_binary_files` — pass
++- `test_reports_missing` — pass
++- `test_release_artifacts_verify` — fail with `['libfoo-1.4.2.tar.gz']`
++
++`python3 verify.py` exits 1 with `checksum mismatch: libfoo-1.4.2.tar.gz`.
++
++## What is needed to unblock
++
++Obtain the correct `libfoo-1.4.2.tar.gz` from the authoritative build (the one whose
++SHA-256 is `7BEE02...`) and place it in `artifacts/`, or have the build pipeline publish
++an authoritative, up-to-date `SHA256SUMS` for the artifact actually being released.
++Then re-run `python3 verify.py`.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

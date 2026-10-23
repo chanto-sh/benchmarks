@@ -1,0 +1,166 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..2be2cfc 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,160 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_RTOL = 1.0e-11
++_ATOL = 1.0e-12
++
++
++def _deriv(state, g, drag):
++    """Derivative of (x, y, vx, vy) with quadratic drag."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -drag * speed * vx, -g - drag * speed * vy)
++
++
++def _combine(state, dt, ks, weights):
++    return tuple(
++        state[i] + dt * sum(w * k[i] for w, k in zip(weights, ks))
++        for i in range(4)
++    )
++
++
++def _rk_step(state, dt, g, drag):
++    """One Dormand-Prince step; return (5th-order state, error estimate)."""
++    ks = []
++    for stage in range(7):
++        stage_state = state if stage == 0 else _combine(state, dt, ks, _A[stage])
++        ks.append(_deriv(stage_state, g, drag))
++
++    new_state = _combine(state, dt, ks, _B5)
++    err = tuple(
++        dt * sum((b5 - b4) * k[i] for b5, b4, k in zip(_B5, _B4, ks))
++        for i in range(4)
++    )
++    return new_state, err
++
++
++def _error_norm(state, new_state, err):
++    norm = 0.0
++    for old, new, e in zip(state, new_state, err):
++        scale = _ATOL + _RTOL * max(abs(old), abs(new))
++        norm = max(norm, abs(e) / scale)
++    return norm
++
++
++def _next_dt(dt, norm):
++    if norm == 0.0:
++        factor = 5.0
++    else:
++        factor = 0.9 * norm ** -0.2
++    return dt * min(5.0, max(0.2, factor))
++
++
++def _event_dt(state, dt, event_index, g, drag):
++    """Locate a decreasing zero of one component in [0, dt]."""
++    lo, hi = 0.0, dt
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        candidate, _ = _rk_step(state, mid, g, drag)
++        if candidate[event_index] > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _integrate_to_event(state, t, dt, event_index, g, drag):
++    """Integrate until one (monotone decreasing) component reaches zero."""
++    while True:
++        new_state, err = _rk_step(state, dt, g, drag)
++        norm = _error_norm(state, new_state, err)
++
++        if norm > 1.0:
++            dt = _next_dt(dt, norm)
++            continue
++
++        if new_state[event_index] <= 0.0:
++            root_dt = _event_dt(state, dt, event_index, g, drag)
++            root_state, _ = _rk_step(state, root_dt, g, drag)
++            return t + root_dt, root_state
++
++        t += dt
++        state = new_state
++        dt = _next_dt(dt, norm)
++
++
++def _initial_dt(state, g, drag):
++    _, y, vx, vy = state
++    speed = math.hypot(vx, vy)
++    fall_scale = math.sqrt(2.0 * y / g) if y > 0.0 else 0.0
++    drag_scale = speed / (g + drag * speed * speed) if speed > 0.0 else 0.0
++    return 1.0e-3 * max(fall_scale, drag_scale, 1.0e-6)
++
++
++def _vacuum_flight(v0, angle_deg, g, h0):
++    angle = math.radians(angle_deg)
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++
++    t = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    range_ = vx * t
++    apex = h0 + (vy * vy) / (2.0 * g) if vy > 0.0 else h0
++    return {"range": range_, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0 or v0 < 0.0 or h0 < 0.0:
++        raise ValueError("k, v0 and h0 must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++
++    angle = math.radians(angle_deg)
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++
++    if k == 0.0:
++        return _vacuum_flight(v0, angle_deg, g, h0)
++
++    # On the ground and not moving upwards: there is no flight to integrate.
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, h0, vx, vy)
++    t = 0.0
++    apex = h0
++
++    if vy > 0.0:
++        t, state = _integrate_to_event(
++            state, t, _initial_dt(state, g, drag), 3, g, drag
++        )
++        apex = state[1]
++
++    t, state = _integrate_to_event(
++        state, t, _initial_dt(state, g, drag), 1, g, drag
++    )
++    return {"range": state[0], "apex": apex, "time": t}

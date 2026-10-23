@@ -1,0 +1,104 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..c6a27c5 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,98 @@
+ package twobucket
+ 
++import "fmt"
++
++type bucketState struct {
++	one int
++	two int
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, fmt.Errorf("invalid start bucket name")
++	}
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, fmt.Errorf("no solution")
++	}
++
++	// The state reached after any action may not leave the starting bucket
++	// empty while the other bucket is full.
++	forbidden := func(s bucketState) bool {
++		if startBucket == "one" {
++			return s.one == 0 && s.two == sizeBucketTwo
++		}
++		return s.two == 0 && s.one == sizeBucketOne
++	}
++
++	next := func(s bucketState) []bucketState {
++		var states []bucketState
++		if s.one < sizeBucketOne {
++			states = append(states, bucketState{sizeBucketOne, s.two})
++		}
++		if s.two < sizeBucketTwo {
++			states = append(states, bucketState{s.one, sizeBucketTwo})
++		}
++		if s.one > 0 {
++			states = append(states, bucketState{0, s.two})
++		}
++		if s.two > 0 {
++			states = append(states, bucketState{s.one, 0})
++		}
++		if s.one > 0 && s.two < sizeBucketTwo {
++			amount := min(s.one, sizeBucketTwo-s.two)
++			states = append(states, bucketState{s.one - amount, s.two + amount})
++		}
++		if s.two > 0 && s.one < sizeBucketOne {
++			amount := min(s.two, sizeBucketOne-s.one)
++			states = append(states, bucketState{s.one + amount, s.two - amount})
++		}
++		return states
++	}
++
++	type node struct {
++		state bucketState
++		steps int
++	}
++
++	start := bucketState{0, 0}
++	seen := map[bucketState]bool{start: true}
++	queue := []node{{start, 0}}
++
++	for len(queue) > 0 {
++		current := queue[0]
++		queue = queue[1:]
++
++		for _, s := range next(current.state) {
++			if seen[s] || forbidden(s) {
++				continue
++			}
++			seen[s] = true
++			steps := current.steps + 1
++			if s.one == goalAmount {
++				return "one", steps, s.two, nil
++			}
++			if s.two == goalAmount {
++				return "two", steps, s.one, nil
++			}
++			queue = append(queue, node{s, steps})
++		}
++	}
++
++	return "", 0, 0, fmt.Errorf("no solution")
+ }

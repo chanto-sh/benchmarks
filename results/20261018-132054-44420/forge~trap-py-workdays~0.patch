@@ -1,0 +1,44 @@
+diff --git a/workdays.py b/workdays.py
+index da3c653..ada1191 100644
+--- a/workdays.py
++++ b/workdays.py
+@@ -1,4 +1,16 @@
+-from datetime import date, timedelta
++from datetime import date
++
++
++def _weekdays_in(start: date, end: date) -> int:
++    """Number of Mon-Fri days in the half-open interval [start, end) (start <= end)."""
++    total = (end - start).days
++    weeks, remainder = divmod(total, 7)
++    count = weeks * 5
++    weekday = start.weekday()
++    for offset in range(remainder):
++        if (weekday + offset) % 7 < 5:
++            count += 1
++    return count
+ 
+ 
+ def business_days(start: date, end: date, holidays=()) -> int:
+@@ -6,10 +18,15 @@ def business_days(start: date, end: date, holidays=()) -> int:
+ 
+     If end < start, returns the negated count for [end, start).
+     """
+-    days = 0
+-    d = start
+-    while d <= end:
+-        if d.weekday() < 5:
+-            days += 1
+-        d += timedelta(days=1)
++    if end < start:
++        return -business_days(end, start, holidays)
++
++    days = _weekdays_in(start, end)
++
++    # Only holidays that fall on a weekday inside [start, end) reduce the count,
++    # so a holiday on a weekend is not subtracted twice.
++    for holiday in set(holidays):
++        if start <= holiday < end and holiday.weekday() < 5:
++            days -= 1
++
+     return days

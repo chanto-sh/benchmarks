@@ -1,0 +1,181 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..13956a9 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,174 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++def _derivs(state, drag, g):
++    """Derivatives of (x, y, vx, vy) for quadratic drag."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    ax = -drag * speed * vx
++    ay = -g - drag * speed * vy
++    return vx, vy, ax, ay
++
++
++def _rk4_step(state, dt, drag, g):
++    """One classical fourth-order Runge--Kutta step."""
++    x, y, vx, vy = state
++
++    k1x, k1y, k1vx, k1vy = _derivs(state, drag, g)
++
++    h2 = 0.5 * dt
++    s2 = (x + h2 * k1x, y + h2 * k1y,
++          vx + h2 * k1vx, vy + h2 * k1vy)
++    k2x, k2y, k2vx, k2vy = _derivs(s2, drag, g)
++
++    s3 = (x + h2 * k2x, y + h2 * k2y,
++          vx + h2 * k2vx, vy + h2 * k2vy)
++    k3x, k3y, k3vx, k3vy = _derivs(s3, drag, g)
++
++    s4 = (x + dt * k3x, y + dt * k3y,
++          vx + dt * k3vx, vy + dt * k3vy)
++    k4x, k4y, k4vx, k4vy = _derivs(s4, drag, g)
++
++    sixth = dt / 6.0
++    return (
++        x + sixth * (k1x + 2.0 * k2x + 2.0 * k3x + k4x),
++        y + sixth * (k1y + 2.0 * k2y + 2.0 * k3y + k4y),
++        vx + sixth * (k1vx + 2.0 * k2vx + 2.0 * k3vx + k4vx),
++        vy + sixth * (k1vy + 2.0 * k2vy + 2.0 * k3vy + k4vy),
++    )
++
++
++def _state_at_fraction(state, dt, fraction, drag, g, substeps=32):
++    """Integrate from ``state`` over ``fraction * dt`` with small RK4 steps."""
++    if fraction <= 0.0:
++        return state
++    step = fraction * dt / substeps
++    for _ in range(substeps):
++        state = _rk4_step(state, step, drag, g)
++    return state
++
++
++def _bisect_event(state, dt, component, drag, g):
++    """Locate the first zero of one state component inside [0, dt]."""
++    left = 0.0
++    right = 1.0
++    f_left = state[component]
++    for _ in range(60):
++        middle = 0.5 * (left + right)
++        f_middle = _state_at_fraction(
++            state, dt, middle, drag, g
++        )[component]
++        if (f_left > 0.0) == (f_middle > 0.0):
++            left = middle
++            f_left = f_middle
++        else:
++            right = middle
++    return 0.5 * (left + right)
++
++
++def _vacuum_flight(v0, angle_deg, g, h0):
++    """Closed-form solution for k = 0."""
++    angle = math.radians(angle_deg)
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    time = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    apex = h0 + (vy * vy) / (2.0 * g) if vy > 0.0 else h0
++    return {"range": vx * time, "apex": apex, "time": time}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg``.  Air resistance is quadratic, with force
++    ``F = -k |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++
++    if k == 0.0:
++        return _vacuum_flight(v0, angle_deg, g, h0)
++
++    angle = math.radians(angle_deg)
++    state = (0.0, h0, v0 * math.cos(angle), v0 * math.sin(angle))
++
++    # A projectile leaving the ground with no upward velocity has already
++    # reached the end of its (zero-length) flight.
++    if h0 == 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    apex = h0
++
++    # Estimate the vacuum time of flight; it gives a useful scale for the
++    # initial step even when drag is strong.
++    flight_estimate = (
++        state[3] + math.sqrt(state[3] * state[3] + 2.0 * g * h0)
++    ) / g
++    h = min(0.01, max(1.0e-12, flight_estimate / 50.0))
++
++    rtol = 1.0e-11
++    atol = 1.0e-12
++    time = 0.0
++
++    for _ in range(10_000_000):
++        full = _rk4_step(state, h, drag, g)
++        half = _rk4_step(state, 0.5 * h, drag, g)
++        half = _rk4_step(half, 0.5 * h, drag, g)
++
++        error = 0.0
++        for a, b in zip(full, half):
++            scale = atol + rtol * max(abs(a), abs(b))
++            error = max(error, abs(b - a) / scale)
++
++        if error > 1.0:
++            factor = max(0.1, 0.9 * error ** -0.2)
++            h *= factor
++            continue
++
++        old = state
++        new = half
++
++        # If the first step from the ground overshoots the entire flight,
++        # shrink it rather than mistaking t = 0 for the landing time.
++        if old[1] == 0.0 and old[3] > 0.0 and new[1] <= 0.0:
++            h *= 0.1
++            continue
++
++        # The apex is where the vertical velocity changes sign.
++        if old[3] > 0.0 and new[3] <= 0.0:
++            fraction = _bisect_event(old, h, 3, drag, g)
++            peak = _state_at_fraction(old, h, fraction, drag, g)
++            apex = max(apex, peak[1])
++
++        # Ground impact is the first downward crossing of y = 0.
++        if old[1] > 0.0 and new[1] <= 0.0:
++            fraction = _bisect_event(old, h, 1, drag, g)
++            landing = _state_at_fraction(old, h, fraction, drag, g)
++            return {
++                "range": landing[0],
++                "apex": apex,
++                "time": time + fraction * h,
++            }
++
++        time += h
++        state = new
++
++        if error == 0.0:
++            h *= 5.0
++        else:
++            h *= min(5.0, max(0.2, 0.9 * error ** -0.2))
++
++    raise RuntimeError("projectile integration did not reach the ground")

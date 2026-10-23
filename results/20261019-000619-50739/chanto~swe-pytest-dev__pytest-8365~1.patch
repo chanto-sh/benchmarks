@@ -1,0 +1,46 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..d2073f4
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed creation of the base temporary directory when the user name contains characters which are invalid in directory names, for example a domain separator on Windows.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..2773468 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,13 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # If we cannot create the base directory, use the temporary
++                # directory directly (e.g. if the user name contains invalid
++                # characters on Windows).
++                rootdir = temproot
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..67eb6b6 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -67,6 +67,15 @@ class TestTempdirHandler:
+         t = TempPathFactory.from_config(config, _ispytest=True)
+         assert t.getbasetemp().resolve() == (tmp_path / "hello").resolve()
+ 
++    def test_basetemp_with_invalid_username(self, tmp_path, monkeypatch):
++        """#8365: fall back to the temp root if the user name contains
++        characters which are invalid in directory names."""
++        monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path))
++        monkeypatch.setattr("_pytest.tmpdir.get_user", lambda: "contoso/john_doe")
++        t = TempPathFactory(None, lambda *args: None, _ispytest=True)
++        basetemp = t.getbasetemp()
++        assert basetemp.parent.resolve() == tmp_path.resolve()
++
+ 
+ class TestConfigTmpdir:
+     def test_getbasetemp_custom_removes_old(self, pytester: Pytester) -> None:

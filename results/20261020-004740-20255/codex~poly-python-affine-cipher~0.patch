@@ -1,0 +1,52 @@
+diff --git a/affine_cipher.py b/affine_cipher.py
+index 2d41e04..65e3881 100644
+--- a/affine_cipher.py
++++ b/affine_cipher.py
+@@ -1,6 +1,45 @@
++from math import gcd
++
++
++ALPHABET_SIZE = 26
++
++
++def _validate_key(a):
++    if gcd(a, ALPHABET_SIZE) != 1:
++        raise ValueError("a and m must be coprime.")
++
++
+ def encode(plain_text, a, b):
+-    pass
++    _validate_key(a)
++
++    encoded = []
++    for char in plain_text.lower():
++        if char.isalpha():
++            encoded.append(chr((a * (ord(char) - ord("a")) + b) % ALPHABET_SIZE + ord("a")))
++        elif char.isdigit():
++            encoded.append(char)
++
++    encoded_text = "".join(encoded)
++    return " ".join(
++        encoded_text[index : index + 5]
++        for index in range(0, len(encoded_text), 5)
++    )
+ 
+ 
+ def decode(ciphered_text, a, b):
+-    pass
++    _validate_key(a)
++
++    inverse_a = pow(a, -1, ALPHABET_SIZE)
++    decoded = []
++    for char in ciphered_text.lower():
++        if char.isalpha():
++            decoded.append(
++                chr(
++                    (inverse_a * (ord(char) - ord("a") - b)) % ALPHABET_SIZE
++                    + ord("a")
++                )
++            )
++        elif char.isdigit():
++            decoded.append(char)
++
++    return "".join(decoded)

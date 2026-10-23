@@ -1,0 +1,30 @@
+diff --git a/report.py b/report.py
+new file mode 100644
+index 0000000..8fd178a
+--- /dev/null
++++ b/report.py
+@@ -0,0 +1,24 @@
++import csv
++from collections import defaultdict
++
++
++def main():
++    revenue_by_region = defaultdict(float)
++
++    with open("sales.csv", newline="") as f:
++        for row in csv.DictReader(f):
++            try:
++                quantity = float(row["quantity"])
++                unit_price = float(row["unit_price"])
++            except (TypeError, ValueError):
++                continue
++            revenue_by_region[row["region"]] += quantity * unit_price
++
++    for region, revenue in sorted(
++        revenue_by_region.items(), key=lambda item: item[1], reverse=True
++    ):
++        print(f"{region}: {revenue:.2f}")
++
++
++if __name__ == "__main__":
++    main()

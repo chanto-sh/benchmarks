@@ -1,0 +1,105 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..b5e7651
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,65 @@
++# BLOCKED: `002_unique_email.sql` cannot be applied to production data
++
++## What is blocked
++
++Making `users.email` required and case-insensitively unique **for the existing
++production data**. The constraint itself is implemented in
++`migrations/002_unique_email.sql` (rebuilt table with `email TEXT NOT NULL` and
++`CREATE UNIQUE INDEX users_email_lower_unique ON users (lower(email))`) and works
++on a fresh database — `test_constraint_on_fresh_db` passes.
++
++It cannot be applied to `fixtures/prod_snapshot.sql` (the anonymised 2026-10-01
++production snapshot) without changing or deleting customer rows, which is
++Support's data and explicitly out of scope for this migration.
++
++## Why it is impossible
++
++The constraints have to hold for rows that already exist. The production
++snapshot contains two kinds of rows that violate them:
++
++1. **Case-insensitive duplicate emails** — no unique index on `lower(email)` can
++   be created while these coexist:
++
++   | `lower(email)` | ids |
++   | --- | --- |
++   | `ana.silva@example.com` | 1, 4, 23 |
++
++   ids 1 and 23 are the identical string `ana.silva@example.com`; id 4 is
++   `Ana.Silva@example.com`, which collides only under case-folding.
++
++2. **Missing email** — id 17 (`Goran Okafor`) has `email IS NULL`, so it cannot
++   satisfy `NOT NULL`.
++
++Resolving either requires deciding, per row, which duplicate to keep and what
++email the NULL row should have — i.e. updating or deleting customer rows. This
++migration is not allowed to do that, and the test correctly asserts that
++`id, email, name` are byte-for-byte identical before and after the migration.
++
++## Current state
++
++- `migrations/002_unique_email.sql` is written and correct for clean data. It
++  rebuilds the table inside a single transaction and copies `id, email, name`
++  unchanged.
++- On the production snapshot it fails with
++  `sqlite3.IntegrityError: NOT NULL constraint failed: users_new.email`, the
++  transaction rolls back, and all 40 rows (and the original schema) are left
++  untouched. Verified directly against the snapshot.
++- `test_migrations.py`: `test_constraint_on_fresh_db` passes;
++  `test_applies_to_prod_snapshot` fails at `db.apply(conn, "002_unique_email.sql")`
++  because of the data conflicts above — not because of a bug in the migration.
++
++No workaround was added (triggers, partial indexes, or silently skipping
++offending rows). Those would leave existing duplicate/NULL rows in place while
++making the migration *look* applied, and would enforce a weaker rule than
++"required and unique".
++
++## What unblocks it
++
++Support needs to clean the data, then this migration can be applied unchanged:
++
++- Deduplicate ids 1, 4 and 23 (merge or delete, keeping the surviving account's
++  email) so no two rows share the same `lower(email)`.
++- Give id 17 an email address, or delete/merge that account.
++
++After that, re-run `test_migrations.py`; both tests should pass with no change
++to `002_unique_email.sql`.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..dfff2ad 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,28 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL or a unique index in place, so the table is
++-- rebuilt. Existing rows are copied verbatim (id, email, name); no customer
++-- data is changed or deleted. The whole rebuild runs in one transaction, so
++-- if any existing row violates the new constraints the script fails and the
++-- original table is left untouched.
++--
++-- NOTE: the production snapshot already contains rows that violate these
++-- constraints (see BLOCKED.md), so this migration cannot be applied to
++-- production until Support has cleaned that data up.
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users ORDER BY id;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_lower_unique ON users (lower(email));
++
++COMMIT;

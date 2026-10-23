@@ -1,0 +1,78 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..62dc897 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,72 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	question = strings.TrimSpace(question)
++	if !strings.HasSuffix(question, "?") {
++		return 0, false
++	}
++
++	fields := strings.Fields(strings.TrimSpace(strings.TrimSuffix(question, "?")))
++	if len(fields) < 3 || fields[0] != "What" || fields[1] != "is" {
++		return 0, false
++	}
++
++	result, err := strconv.Atoi(fields[2])
++	if err != nil {
++		return 0, false
++	}
++
++	for i := 3; i < len(fields); {
++		var operandIndex int
++		var apply func(int, int) (int, bool)
++
++		switch fields[i] {
++		case "plus":
++			operandIndex = i + 1
++			apply = func(a, b int) (int, bool) { return a + b, true }
++		case "minus":
++			operandIndex = i + 1
++			apply = func(a, b int) (int, bool) { return a - b, true }
++		case "multiplied", "divided":
++			if i+1 >= len(fields) || fields[i+1] != "by" {
++				return 0, false
++			}
++			operandIndex = i + 2
++			if fields[i] == "multiplied" {
++				apply = func(a, b int) (int, bool) { return a * b, true }
++			} else {
++				apply = func(a, b int) (int, bool) {
++					if b == 0 {
++						return 0, false
++					}
++					return a / b, true
++				}
++			}
++		default:
++			return 0, false
++		}
++
++		if operandIndex >= len(fields) {
++			return 0, false
++		}
++
++		operand, err := strconv.Atoi(fields[operandIndex])
++		if err != nil {
++			return 0, false
++		}
++
++		var ok bool
++		result, ok = apply(result, operand)
++		if !ok {
++			return 0, false
++		}
++		i = operandIndex + 1
++	}
++
++	return result, true
+ }

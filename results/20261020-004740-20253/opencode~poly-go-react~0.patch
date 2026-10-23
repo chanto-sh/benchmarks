@@ -1,0 +1,150 @@
+diff --git a/react.go b/react.go
+index fabc3c0..c1bbddd 100644
+--- a/react.go
++++ b/react.go
+@@ -3,34 +3,136 @@ package react
+ // Define reactor, cell and canceler types here.
+ // These types will implement the Reactor, Cell and Canceler interfaces, respectively.
+ 
++// callback is a single registered change notification handler.
++type callback struct {
++	id     int
++	fn     func(int)
++	active bool
++}
++
++// canceler removes a callback from a cell.
++type canceler struct {
++	cell *cell
++	id   int
++}
++
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	c.cell.removeCallback(c.id)
++}
++
++// cell implements both InputCell and ComputeCell. Input cells have a nil
++// compute function; compute cells store an eagerly evaluated value.
++type cell struct {
++	reactor *reactor
++	value   int
++	compute func() int
++
++	// deps and depValues are used to detect which compute cells are affected
++	// by a change, so their compute functions run only when needed.
++	deps      []Cell
++	depValues []int
++
++	callbacks []*callback
++	nextID    int
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	if c.compute != nil || c.value == value {
++		return
++	}
++	c.value = value
++	c.reactor.propagate()
++}
++
++func (c *cell) AddCallback(fn func(int)) Canceler {
++	id := c.nextID
++	c.nextID++
++	c.callbacks = append(c.callbacks, &callback{id: id, fn: fn, active: true})
++	return &canceler{cell: c, id: id}
+ }
+ 
+-func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++func (c *cell) removeCallback(id int) {
++	for i, cb := range c.callbacks {
++		if cb.id == id {
++			cb.active = false
++			c.callbacks = append(c.callbacks[:i], c.callbacks[i+1:]...)
++			return
++		}
++	}
++}
++
++// reactor tracks compute cells in creation order. Since a compute cell can
++// only depend on previously created cells, this order is topological.
++type reactor struct {
++	computes []*cell
+ }
+ 
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	return &cell{reactor: r, value: initial}
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	c := &cell{
++		reactor:   r,
++		deps:      []Cell{dep},
++		depValues: []int{dep.Value()},
++		compute:   func() int { return compute(dep.Value()) },
++	}
++	c.value = c.compute()
++	r.computes = append(r.computes, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	c := &cell{
++		reactor:   r,
++		deps:      []Cell{dep1, dep2},
++		depValues: []int{dep1.Value(), dep2.Value()},
++		compute:   func() int { return compute(dep1.Value(), dep2.Value()) },
++	}
++	c.value = c.compute()
++	r.computes = append(r.computes, c)
++	return c
++}
++
++// propagate recomputes affected compute cells in creation order, then notifies
++// callbacks of cells whose value changed. Because compute cells are visited in
++// dependency order, each affected cell is recomputed at most once. Callbacks
++// run only after the whole system has reached a new stable state.
++func (r *reactor) propagate() {
++	var changed []*cell
++	for _, c := range r.computes {
++		dirty := false
++		for i, dep := range c.deps {
++			if v := dep.Value(); v != c.depValues[i] {
++				c.depValues[i] = v
++				dirty = true
++			}
++		}
++		if !dirty {
++			continue
++		}
++		value := c.compute()
++		if value != c.value {
++			c.value = value
++			changed = append(changed, c)
++		}
++	}
++	for _, c := range changed {
++		// Snapshot so callbacks may safely cancel themselves or others.
++		callbacks := append([]*callback(nil), c.callbacks...)
++		for _, cb := range callbacks {
++			if cb.active {
++				cb.fn(c.value)
++			}
++		}
++	}
+ }

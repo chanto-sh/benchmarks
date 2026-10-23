@@ -1,0 +1,103 @@
+diff --git a/food_chain.go b/food_chain.go
+index b46ea45..8a5db2b 100644
+--- a/food_chain.go
++++ b/food_chain.go
+@@ -1,13 +1,95 @@
+ package foodchain
+ 
++import "strings"
++
++type animal struct {
++	name     string
++	remark   string
++	previous string
++}
++
++var animals = []animal{
++	{},
++	{name: "fly", previous: "fly"},
++	{
++		name:     "spider",
++		remark:   "It wriggled and jiggled and tickled inside her.",
++		previous: "spider that wriggled and jiggled and tickled inside her",
++	},
++	{
++		name:     "bird",
++		remark:   "How absurd to swallow a bird!",
++		previous: "bird",
++	},
++	{
++		name:     "cat",
++		remark:   "Imagine that, to swallow a cat!",
++		previous: "cat",
++	},
++	{
++		name:     "dog",
++		remark:   "What a hog, to swallow a dog!",
++		previous: "dog",
++	},
++	{
++		name:     "goat",
++		remark:   "Just opened her throat and swallowed a goat!",
++		previous: "goat",
++	},
++	{
++		name:     "cow",
++		remark:   "I don't know how she swallowed a cow!",
++		previous: "cow",
++	},
++	{
++		name:     "horse",
++		remark:   "She's dead, of course!",
++		previous: "horse",
++	},
++}
++
++// Verse returns the verse starting with the given animal number.
+ func Verse(v int) string {
+-	panic("Please implement the Verse function")
++	if v < 1 || v > len(animals)-1 {
++		return ""
++	}
++
++	current := animals[v]
++	lines := []string{
++		"I know an old lady who swallowed a " + current.name + ".",
++	}
++	if current.remark != "" {
++		lines = append(lines, current.remark)
++	}
++
++	if v == len(animals)-1 {
++		return strings.Join(lines, "\n")
++	}
++
++	for i := v; i > 1; i-- {
++		lines = append(lines, "She swallowed the "+animals[i].name+
++			" to catch the "+animals[i-1].previous+".")
++	}
++
++	lines = append(lines,
++		"I don't know why she swallowed the fly. Perhaps she'll die.")
++
++	return strings.Join(lines, "\n")
+ }
+ 
++// Verses returns the verses from start through end, separated by a blank line.
+ func Verses(start, end int) string {
+-	panic("Please implement the Verses function")
++	if start > end {
++		return ""
++	}
++	verses := make([]string, 0, end-start+1)
++	for v := start; v <= end; v++ {
++		verses = append(verses, Verse(v))
++	}
++	return strings.Join(verses, "\n\n")
+ }
+ 
++// Song returns the entire song.
+ func Song() string {
+-	panic("Please implement the Song function")
++	return Verses(1, len(animals)-1)
+ }

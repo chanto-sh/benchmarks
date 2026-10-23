@@ -1,0 +1,12 @@
+diff --git a/solution.py b/solution.py
+index f5670cc..686b252 100644
+--- a/solution.py
++++ b/solution.py
+@@ -9,3 +9,7 @@ def find_max(words):
+     find_max(["name", "enam", "game"]) == "enam"
+     find_max(["aaaaaaa", "bb" ,"cc"]) == ""aaaaaaa"
+     """
++    if not words:
++        return ""
++
++    return min(words, key=lambda word: (-len(set(word)), word))

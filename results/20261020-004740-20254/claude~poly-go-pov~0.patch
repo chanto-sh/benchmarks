@@ -1,0 +1,111 @@
+diff --git a/pov.go b/pov.go
+index 48e2477..a9bba58 100644
+--- a/pov.go
++++ b/pov.go
+@@ -1,24 +1,25 @@
+ package pov
+ 
+ type Tree struct {
+-	// Add the needed fields here
++	value    string
++	children []*Tree
+ }
+ 
+ // New creates and returns a new Tree with the given root value and children.
+ func New(value string, children ...*Tree) *Tree {
+-	panic("Please implement this function")
++	return &Tree{value: value, children: children}
+ }
+ 
+ // Value returns the value at the root of a tree.
+ func (tr *Tree) Value() string {
+-	panic("Please implement this function")
++	return tr.value
+ }
+ 
+ // Children returns a slice containing the children of a tree.
+ // There is no need to sort the elements in the result slice,
+ // they can be in any order.
+ func (tr *Tree) Children() []*Tree {
+-	panic("Please implement this function")
++	return tr.children
+ }
+ 
+ // String describes a tree in a compact S-expression format.
+@@ -42,10 +43,74 @@ func (tr *Tree) String() string {
+ 
+ // FromPov returns the pov from the node specified in the argument.
+ func (tr *Tree) FromPov(from string) *Tree {
+-	panic("Please implement this function")
++	path := pathToValue(tr, from)
++	if path == nil {
++		return nil
++	}
++
++	// Start with a copy of the target node, then walk up the path towards the
++	// original root, re-attaching each former parent below its child.
++	result := New(path[len(path)-1].value, copyChildren(path[len(path)-1].children)...)
++	attachPoint := result
++	for i := len(path) - 2; i >= 0; i-- {
++		parent := path[i]
++		others := make([]*Tree, 0, len(parent.children)-1)
++		for _, child := range parent.children {
++			if child != path[i+1] {
++				others = append(others, child)
++			}
++		}
++		newParent := New(parent.value, others...)
++		attachPoint.children = append(attachPoint.children, newParent)
++		attachPoint = newParent
++	}
++	return result
++}
++
++func copyChildren(children []*Tree) []*Tree {
++	result := make([]*Tree, len(children))
++	copy(result, children)
++	return result
+ }
+ 
+ // PathTo returns the shortest path between two nodes in the tree.
+ func (tr *Tree) PathTo(from, to string) []string {
+-	panic("Please implement this function")
++	fromPath := pathToValue(tr, from)
++	toPath := pathToValue(tr, to)
++	if fromPath == nil || toPath == nil {
++		return nil
++	}
++
++	// Find the last common ancestor: the longest common prefix of the two paths.
++	common := 0
++	for common < len(fromPath) && common < len(toPath) &&
++		fromPath[common].value == toPath[common].value {
++		common++
++	}
++
++	path := make([]string, 0, len(fromPath)+len(toPath)-2*common+1)
++	for i := len(fromPath) - 1; i >= common-1; i-- {
++		path = append(path, fromPath[i].value)
++	}
++	for i := common; i < len(toPath); i++ {
++		path = append(path, toPath[i].value)
++	}
++	return path
++}
++
++// pathToValue returns the path of nodes from the root to the node with the
++// given value, or nil if no such node exists.
++func pathToValue(tr *Tree, value string) []*Tree {
++	if tr == nil {
++		return nil
++	}
++	if tr.value == value {
++		return []*Tree{tr}
++	}
++	for _, child := range tr.children {
++		if path := pathToValue(child, value); path != nil {
++			return append([]*Tree{tr}, path...)
++		}
++	}
++	return nil
+ }

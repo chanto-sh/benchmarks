@@ -1,0 +1,42 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..537922c 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,34 @@
+ class Scale:
++    SHARP_SCALE = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++    FLAT_SCALE = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++    FLAT_TONICS = {
++        "F", "Bb", "Eb", "Ab", "Db", "Gb",
++        "d", "g", "c", "f", "bb", "eb",
++    }
++
++    INTERVALS = {"m": 1, "M": 2, "A": 3}
++
+     def __init__(self, tonic):
+-        pass
++        tonic = tonic.translate(str.maketrans({"♯": "#", "♭": "b"}))
++
++        self.tonic = tonic[0].upper() + tonic[1:]
++        self._scale = self.FLAT_SCALE if tonic in self.FLAT_TONICS else self.SHARP_SCALE
++        self._tonic_index = self._scale.index(self.tonic)
+ 
+     def chromatic(self):
+-        pass
++        return self._rotate(self._scale)
+ 
+     def interval(self, intervals):
+-        pass
++        notes = self._rotate(self._scale)
++        result = [self.tonic]
++        index = 0
++
++        for interval in intervals:
++            index += self.INTERVALS[interval]
++            result.append(notes[index % len(notes)])
++
++        return result
++
++    def _rotate(self, notes):
++        return notes[self._tonic_index:] + notes[:self._tonic_index]

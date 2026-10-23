@@ -1,0 +1,238 @@
+diff --git a/test_roman.py b/test_roman.py
+new file mode 100644
+index 0000000..3364654
+--- /dev/null
++++ b/test_roman.py
+@@ -0,0 +1,232 @@
++import re
++import unittest
++
++from roman import to_roman
++
++
++class TestNormalValues(unittest.TestCase):
++    def test_basic_symbols(self):
++        cases = {
++            1: "I",
++            5: "V",
++            10: "X",
++            50: "L",
++            100: "C",
++            500: "D",
++            1000: "M",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++    def test_repeated_symbols(self):
++        cases = {
++            2: "II",
++            3: "III",
++            6: "VI",
++            7: "VII",
++            8: "VIII",
++            11: "XI",
++            20: "XX",
++            30: "XXX",
++            200: "CC",
++            300: "CCC",
++            2000: "MM",
++            3000: "MMM",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++    def test_compound_values(self):
++        cases = {
++            13: "XIII",
++            18: "XVIII",
++            27: "XXVII",
++            42: "XLII",
++            58: "LVIII",
++            88: "LXXXVIII",
++            123: "CXXIII",
++            256: "CCLVI",
++            888: "DCCCLXXXVIII",
++            1666: "MDCLXVI",
++            2024: "MMXXIV",
++            2525: "MMDXXV",
++            3888: "MMMDCCCLXXXVIII",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++    def test_known_examples(self):
++        self.assertEqual(to_roman(1977), "MCMLXXVII")
++        self.assertEqual(to_roman(1990), "MCMXC")
++        self.assertEqual(to_roman(2008), "MMVIII")
++        self.assertEqual(to_roman(2014), "MMXIV")
++        self.assertEqual(to_roman(2022), "MMXXII")
++
++    def test_result_is_str(self):
++        self.assertIsInstance(to_roman(42), str)
++
++    def test_calls_are_pure(self):
++        first = to_roman(1987)
++        second = to_roman(1987)
++        self.assertEqual(first, "MCMLXXXVII")
++        self.assertEqual(first, second)
++
++
++class TestBoundaries(unittest.TestCase):
++    def test_lower_bound(self):
++        self.assertEqual(to_roman(1), "I")
++
++    def test_upper_bound(self):
++        self.assertEqual(to_roman(3999), "MMMCMXCIX")
++
++    def test_near_lower_bound(self):
++        self.assertEqual(to_roman(2), "II")
++        self.assertEqual(to_roman(3), "III")
++        self.assertEqual(to_roman(4), "IV")
++
++    def test_near_upper_bound(self):
++        self.assertEqual(to_roman(3998), "MMMCMXCVIII")
++        self.assertEqual(to_roman(3997), "MMMCMXCVII")
++        self.assertEqual(to_roman(3990), "MMMCMXC")
++
++    def test_largest_single_symbol_values(self):
++        self.assertEqual(to_roman(1000), "M")
++        self.assertEqual(to_roman(2000), "MM")
++        self.assertEqual(to_roman(3000), "MMM")
++
++
++class TestSubtractiveForms(unittest.TestCase):
++    def test_single_subtractive_forms(self):
++        cases = {
++            4: "IV",
++            9: "IX",
++            40: "XL",
++            90: "XC",
++            400: "CD",
++            900: "CM",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++    def test_subtractive_forms_in_context(self):
++        cases = {
++            14: "XIV",
++            19: "XIX",
++            24: "XXIV",
++            39: "XXXIX",
++            44: "XLIV",
++            49: "XLIX",
++            89: "LXXXIX",
++            94: "XCIV",
++            99: "XCIX",
++            104: "CIV",
++            109: "CIX",
++            140: "CXL",
++            190: "CXC",
++            404: "CDIV",
++            409: "CDIX",
++            440: "CDXL",
++            490: "CDXC",
++            904: "CMIV",
++            909: "CMIX",
++            940: "CMXL",
++            990: "CMXC",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++    def test_combined_subtractive_forms(self):
++        cases = {
++            444: "CDXLIV",
++            449: "CDXLIX",
++            494: "CDXCIV",
++            499: "CDXCIX",
++            944: "CMXLIV",
++            949: "CMXLIX",
++            994: "CMXCIV",
++            999: "CMXCIX",
++            1994: "MCMXCIV",
++            3994: "MMMCMXCIV",
++        }
++        for n, expected in cases.items():
++            with self.subTest(n=n):
++                self.assertEqual(to_roman(n), expected)
++
++
++class TestInvalidInputs(unittest.TestCase):
++    def test_below_range(self):
++        for n in (0, -1, -2, -100, -3999, -4000):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_above_range(self):
++        for n in (4000, 4001, 5000, 10000, 10**9):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_bool_is_rejected(self):
++        for n in (True, False):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_non_integer_numbers_are_rejected(self):
++        for n in (1.0, 4.0, 3999.0, 0.5, float("nan"), float("inf"), 2 + 0j):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_strings_and_bytes_are_rejected(self):
++        for n in ("1", "IV", "", b"1", b""):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_none_is_rejected(self):
++        with self.assertRaises(ValueError):
++            to_roman(None)
++
++    def test_other_types_are_rejected(self):
++        for n in ([], [1], (1,), {1}, {"n": 1}, object()):
++            with self.subTest(n=n):
++                with self.assertRaises(ValueError):
++                    to_roman(n)
++
++    def test_error_message_mentions_out_of_range(self):
++        with self.assertRaisesRegex(ValueError, "out of range"):
++            to_roman(0)
++        with self.assertRaisesRegex(ValueError, "out of range"):
++            to_roman(4000)
++
++
++class TestAllValuesInvariants(unittest.TestCase):
++    CANONICAL = re.compile(
++        r"^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$"
++    )
++
++    def test_every_value_produces_canonical_roman_numeral(self):
++        for n in range(1, 4000):
++            with self.subTest(n=n):
++                result = to_roman(n)
++                self.assertRegex(result, self.CANONICAL)
++                self.assertTrue(result)
++                self.assertTrue(set(result) <= set("IVXLCDM"))
++
++    def test_outputs_are_unique(self):
++        seen = {}
++        for n in range(1, 4000):
++            result = to_roman(n)
++            self.assertNotIn(result, seen, f"{n} and {seen.get(result)} collide")
++            seen[result] = n
++        self.assertEqual(len(seen), 3999)
++
++
++if __name__ == "__main__":
++    unittest.main()

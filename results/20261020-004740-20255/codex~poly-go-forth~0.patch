@@ -1,0 +1,198 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..6e41bda 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,192 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++type operation int
++
++const (
++	opPush operation = iota
++	opAdd
++	opSubtract
++	opMultiply
++	opDivide
++	opDup
++	opDrop
++	opSwap
++	opOver
++)
++
++type instruction struct {
++	op    operation
++	value int
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	words := map[string][]instruction{
++		"+":    {{op: opAdd}},
++		"-":    {{op: opSubtract}},
++		"*":    {{op: opMultiply}},
++		"/":    {{op: opDivide}},
++		"dup":  {{op: opDup}},
++		"drop": {{op: opDrop}},
++		"swap": {{op: opSwap}},
++		"over": {{op: opOver}},
++	}
++
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	stack := []int{}
++	for i := 0; i < len(tokens); i++ {
++		token := strings.ToLower(tokens[i])
++
++		if token == ":" {
++			if i+1 >= len(tokens) {
++				return nil, errors.New("illegal operation")
++			}
++
++			i++
++			name := strings.ToLower(tokens[i])
++			if _, isNumber, _ := parseNumber(name); isNumber {
++				return nil, errors.New("illegal operation")
++			}
++
++			body := []instruction{}
++			terminated := false
++			for i+1 < len(tokens) {
++				i++
++				next := strings.ToLower(tokens[i])
++				if next == ";" {
++					terminated = true
++					break
++				}
++
++				compiled, err := compile(next, words)
++				if err != nil {
++					return nil, err
++				}
++				body = append(body, compiled...)
++			}
++			if !terminated {
++				return nil, errors.New("unterminated definition")
++			}
++
++			words[name] = body
++			continue
++		}
++
++		compiled, err := compile(token, words)
++		if err != nil {
++			return nil, err
++		}
++		for _, instruction := range compiled {
++			if err := execute(instruction, &stack); err != nil {
++				return nil, err
++			}
++		}
++	}
++
++	return stack, nil
++}
++
++func compile(token string, words map[string][]instruction) ([]instruction, error) {
++	if value, isNumber, err := parseNumber(token); isNumber {
++		if err != nil {
++			return nil, errors.New("illegal operation")
++		}
++		return []instruction{{op: opPush, value: value}}, nil
++	}
++
++	definition, ok := words[token]
++	if !ok {
++		return nil, errors.New("undefined operation")
++	}
++	return append([]instruction(nil), definition...), nil
++}
++
++func parseNumber(token string) (int, bool, error) {
++	start := 0
++	if strings.HasPrefix(token, "-") {
++		start = 1
++	}
++	if start == len(token) {
++		return 0, false, nil
++	}
++	for i := start; i < len(token); i++ {
++		if token[i] < '0' || token[i] > '9' {
++			return 0, false, nil
++		}
++	}
++
++	value, err := strconv.Atoi(token)
++	return value, true, err
++}
++
++func execute(instruction instruction, stack *[]int) error {
++	switch instruction.op {
++	case opPush:
++		*stack = append(*stack, instruction.value)
++	case opDup:
++		if len(*stack) < 1 {
++			return errors.New("empty stack")
++		}
++		*stack = append(*stack, (*stack)[len(*stack)-1])
++	case opDrop:
++		if len(*stack) < 1 {
++			return errors.New("empty stack")
++		}
++		*stack = (*stack)[:len(*stack)-1]
++	case opSwap:
++		if len(*stack) < 1 {
++			return errors.New("empty stack")
++		}
++		if len(*stack) < 2 {
++			return errors.New("only one value on the stack")
++		}
++		last := len(*stack) - 1
++		(*stack)[last], (*stack)[last-1] = (*stack)[last-1], (*stack)[last]
++	case opOver:
++		if len(*stack) < 1 {
++			return errors.New("empty stack")
++		}
++		if len(*stack) < 2 {
++			return errors.New("only one value on the stack")
++		}
++		*stack = append(*stack, (*stack)[len(*stack)-2])
++	case opAdd, opSubtract, opMultiply, opDivide:
++		if len(*stack) < 1 {
++			return errors.New("empty stack")
++		}
++		if len(*stack) < 2 {
++			return errors.New("only one value on the stack")
++		}
++
++		right := (*stack)[len(*stack)-1]
++		left := (*stack)[len(*stack)-2]
++		*stack = (*stack)[:len(*stack)-2]
++
++		var result int
++		switch instruction.op {
++		case opAdd:
++			result = left + right
++		case opSubtract:
++			result = left - right
++		case opMultiply:
++			result = left * right
++		case opDivide:
++			if right == 0 {
++				return errors.New("divide by zero")
++			}
++			result = left / right
++		}
++		*stack = append(*stack, result)
++	}
++
++	return nil
+ }

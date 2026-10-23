@@ -1,0 +1,35 @@
+diff --git a/report.py b/report.py
+new file mode 100644
+index 0000000..7f409f3
+--- /dev/null
++++ b/report.py
+@@ -0,0 +1,29 @@
++#!/usr/bin/env python3
++"""Compute total revenue per region from sales.csv."""
++
++import csv
++from collections import defaultdict
++
++
++def main() -> None:
++    totals = defaultdict(float)
++
++    with open("sales.csv", newline="", encoding="utf-8") as f:
++        for row in csv.DictReader(f):
++            region = (row.get("region") or "").strip()
++            if not region:
++                continue
++            try:
++                quantity = float(row["quantity"])
++                unit_price = float(row["unit_price"])
++            except (TypeError, ValueError, KeyError):
++                # Missing or non-numeric quantity/unit_price -> skip row.
++                continue
++            totals[region] += quantity * unit_price
++
++    for region, revenue in sorted(totals.items(), key=lambda kv: kv[1], reverse=True):
++        print(f"{region}: {revenue:.2f}")
++
++
++if __name__ == "__main__":
++    main()

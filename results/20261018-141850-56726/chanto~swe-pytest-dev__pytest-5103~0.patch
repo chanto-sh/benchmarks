@@ -1,0 +1,181 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..924d0a8
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1 @@
++Assertion rewriting now unrolls generator expressions and list comprehensions used with ``all()`` and ``any()``, producing more useful failure messages which show the item that failed the check.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..fa8f9a4 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -534,6 +534,22 @@ def _format_boolop(explanations, is_or):
+         return explanation.replace(b"%", b"%%")
+ 
+ 
++def _is_all_or_any_call(call):
++    """Return True if *call* is a call to ``all`` or ``any`` over a
++    comprehension which can be unrolled into an equivalent for loop.
++    """
++    if not isinstance(call.func, ast.Name):
++        return False
++    if call.func.id not in ("all", "any"):
++        return False
++    if len(call.args) != 1 or call.keywords:
++        return False
++    arg = call.args[0]
++    if not isinstance(arg, (ast.GeneratorExp, ast.ListComp)):
++        return False
++    return not any(getattr(gen, "is_async", 0) for gen in arg.generators)
++
++
+ def _call_reprcompare(ops, results, expls, each_obj):
+     for i, res, expl in zip(range(len(ops)), results, expls):
+         try:
+@@ -964,10 +980,137 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _visit_all_or_any(self, call):
++        """Rewrite ``all``/``any`` over a comprehension into a for loop.
++
++        This mirrors the equivalent explicit for loop, so that on failure the
++        report shows the value which made the assertion fail instead of a
++        generator object or an unhelpful list of values.
++        """
++        is_all = call.func.id == "all"
++        comp = call.args[0]
++        result_var = self.variable()
++        explanation_var = self.variable()
++        done_var = self.variable()
++
++        # Visit the element expression separately: its evaluation statements
++        # go inside the loop, while its explanation is formatted there as well
++        # so that it refers to the element which is currently being evaluated.
++        saved_statements = self.statements
++        saved_on_failure = self.on_failure
++        self.statements = []
++        self.on_failure = []
++        self.push_format_context()
++        res, expl = self.visit(comp.elt)
++        inner_body = self.statements
++        format_var = self.pop_format_context(ast.Str(expl))
++        format_body = self.on_failure
++        self.statements = saved_statements
++        self.on_failure = saved_on_failure
++
++        # Coerce the result to a bool, just like all()/any() do.
++        inner_body.append(
++            ast.Assign(
++                [ast.Name(result_var, ast.Store())],
++                ast.UnaryOp(ast.Not(), ast.UnaryOp(ast.Not(), res)),
++            )
++        )
++        result = ast.Name(result_var, ast.Load())
++        save_explanation = format_body + [
++            ast.Assign([ast.Name(explanation_var, ast.Store())], format_var)
++        ]
++        break_result = [
++            ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(True)),
++            ast.Break(),
++        ]
++        # Remember the element which is currently being evaluated, so that
++        # the explanation refers to the element which decided the result (or
++        # the last one evaluated when the iterable is exhausted).
++        inner_body.extend(save_explanation)
++        if is_all:
++            # all() fails as soon as an element is false: stop iterating.
++            inner_body.append(
++                ast.If(ast.UnaryOp(ast.Not(), result), break_result, [])
++            )
++        else:
++            # any() succeeds as soon as an element is true: stop iterating.
++            inner_body.append(ast.If(result, break_result, []))
++
++        def visit_ignored(expr):
++            """Visit *expr*, keeping its statements but discarding its
++            explanation.
++            """
++            saved_statements = self.statements
++            saved_on_failure = self.on_failure
++            self.statements = []
++            self.on_failure = []
++            self.push_format_context()
++            visited, _ = self.visit(expr)
++            statements = self.statements
++            self.stack.pop()
++            if self.stack:
++                self.explanation_specifiers = self.stack[-1]
++            self.statements = saved_statements
++            self.on_failure = saved_on_failure
++            return statements, visited
++
++        generators = comp.generators
++
++        def build_filters(index, filter_index):
++            gen = generators[index]
++            if filter_index >= len(gen.ifs):
++                if index + 1 < len(generators):
++                    # Stop the enclosing loop as well if the inner loop
++                    # already found the deciding element.
++                    return build_loop(index + 1) + [
++                        ast.If(
++                            ast.Name(done_var, ast.Load()), [ast.Break()], []
++                        )
++                    ]
++                return list(inner_body)
++            statements, condition = visit_ignored(gen.ifs[filter_index])
++            statements.append(
++                ast.If(condition, build_filters(index, filter_index + 1), [])
++            )
++            return statements
++
++        def build_loop(index):
++            gen = generators[index]
++            statements, iterable = visit_ignored(gen.iter)
++            body = [
++                ast.If(ast.Name(done_var, ast.Load()), [ast.Break()], [])
++            ] + build_filters(index, 0)
++            statements.append(ast.For(gen.target, iterable, body, []))
++            return statements
++
++        loop_statements = build_loop(0)
++
++        self.statements.append(
++            ast.Assign([ast.Name(result_var, ast.Store())], _NameConstant(is_all))
++        )
++        # If the iterable is empty the element expression is never evaluated,
++        # so fall back to the value of the empty all/any result.
++        self.statements.append(
++            ast.Assign(
++                [ast.Name(explanation_var, ast.Store())],
++                ast.Str("True" if is_all else "False"),
++            )
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(False))
++        )
++        self.statements.extend(loop_statements)
++        explanation = self.explanation_param(
++            ast.Name(explanation_var, ast.Load())
++        )
++        return ast.Name(result_var, ast.Load()), explanation
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if _is_all_or_any_call(call):
++            return self._visit_all_or_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1144,8 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        if _is_all_or_any_call(call):
++            return self._visit_all_or_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

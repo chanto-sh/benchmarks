@@ -1,0 +1,55 @@
+diff --git a/transpose.go b/transpose.go
+index 0db7e6a..e4ef029 100644
+--- a/transpose.go
++++ b/transpose.go
+@@ -1,5 +1,49 @@
+ package transpose
+ 
++import "strings"
++
++// Transpose returns the transpose of the given text, treating each string in
++// input as a row. Shorter rows are padded on the left (i.e. missing cells are
++// spaces), but no padding is added to the right, so trailing padding is
++// trimmed from each output row.
+ func Transpose(input []string) []string {
+-	panic("Please implement the Transpose function")
++	if len(input) == 0 {
++		return []string{}
++	}
++
++	maxLen := 0
++	for _, row := range input {
++		if len(row) > maxLen {
++			maxLen = len(row)
++		}
++	}
++
++	result := make([]string, 0, maxLen)
++	for col := 0; col < maxLen; col++ {
++		// The last row that actually has a character in this column. Rows
++		// after it must not be padded, which keeps trailing spaces out of
++		// the output unless they come from the input itself.
++		last := -1
++		for i := len(input) - 1; i >= 0; i-- {
++			if col < len(input[i]) {
++				last = i
++				break
++			}
++		}
++		if last < 0 {
++			continue
++		}
++
++		var b strings.Builder
++		for i := 0; i <= last; i++ {
++			if col < len(input[i]) {
++				b.WriteByte(input[i][col])
++			} else {
++				b.WriteByte(' ')
++			}
++		}
++		result = append(result, b.String())
++	}
++
++	return result
+ }

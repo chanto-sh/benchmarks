@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index 2eab097..5d70ec8 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,10 @@ def order_by_points(nums):
+     >>> order_by_points([1, 11, -1, -11, -12]) == [-1, -11, 1, -12, 11]
+     >>> order_by_points([]) == []
+     """
++    def weight(value):
++        digits = str(value)
++        if digits.startswith("-"):
++            return -int(digits[1]) + sum(int(char) for char in digits[2:])
++        return sum(int(char) for char in digits)
++
++    return sorted(nums, key=weight)

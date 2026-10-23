@@ -1,0 +1,66 @@
+diff --git a/variable_length_quantity.go b/variable_length_quantity.go
+index 2ddd432..0924b6b 100644
+--- a/variable_length_quantity.go
++++ b/variable_length_quantity.go
+@@ -1,9 +1,59 @@
+ package variablelengthquantity
+ 
++import "errors"
++
++// ErrIncompleteSequence is returned when the input ends in the middle of a
++// variable length quantity (the last byte still has its continuation bit set).
++var ErrIncompleteSequence = errors.New("incomplete sequence")
++
++// EncodeVarint encodes each of the given 32-bit unsigned integers as a
++// variable length quantity, returning the concatenation of all encodings.
+ func EncodeVarint(input []uint32) []byte {
+-	panic("Please implement the EncodeVarint function")
++	out := make([]byte, 0, len(input))
++	for _, n := range input {
++		// Collect 7-bit groups, least significant first.
++		var groups []byte
++		for {
++			groups = append(groups, byte(n&0x7f))
++			n >>= 7
++			if n == 0 {
++				break
++			}
++		}
++		// Emit most significant first; set the continuation bit on all but
++		// the final byte.
++		for i := len(groups) - 1; i >= 0; i-- {
++			b := groups[i]
++			if i != 0 {
++				b |= 0x80
++			}
++			out = append(out, b)
++		}
++	}
++	return out
+ }
+ 
++// DecodeVarint decodes a sequence of variable length quantities into the
++// 32-bit unsigned integers they represent. It returns an error if the input
++// ends in the middle of a value.
+ func DecodeVarint(input []byte) ([]uint32, error) {
+-	panic("Please implement the DecodeVarint function")
++	var out []uint32
++	var value uint32
++	inSequence := false
++
++	for _, b := range input {
++		value = value<<7 | uint32(b&0x7f)
++		if b&0x80 != 0 {
++			inSequence = true
++			continue
++		}
++		out = append(out, value)
++		value = 0
++		inSequence = false
++	}
++
++	if inSequence {
++		return nil, ErrIncompleteSequence
++	}
++	return out, nil
+ }

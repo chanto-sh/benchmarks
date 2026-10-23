@@ -1,0 +1,158 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..bc84cbb 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,143 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5,),
++    (3.0 / 40, 9.0 / 40),
++    (44.0 / 45, -56.0 / 15, 32.0 / 9),
++    (19372.0 / 6561, -25360.0 / 2187, 64448.0 / 6561, -212.0 / 729),
++    (9017.0 / 3168, -355.0 / 33, 46732.0 / 5247, 49.0 / 176,
++     -5103.0 / 18656),
++    (35.0 / 384, 0.0, 500.0 / 1113, 125.0 / 192,
++     -2187.0 / 6784, 11.0 / 84),
++)
++# Difference between the fifth- and fourth-order weights.
++_E = (
++    35.0 / 384 - 5179.0 / 57600,
++    0.0,
++    500.0 / 1113 - 7571.0 / 16695,
++    125.0 / 192 - 393.0 / 640,
++    -2187.0 / 6784 + 92097.0 / 339200,
++    11.0 / 84 - 187.0 / 2100,
++    -1.0 / 40,
++)
++
++
++def _derivs(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return (vx, vy, ax, ay)
++
++
++def _rk_step(state, h, accel):
++    """One Dormand-Prince 5(4) step; returns (new_state, error_estimate)."""
++    k1 = _derivs(state, accel)
++    stages = [k1]
++    for i in range(1, 7):
++        row = _A[i]
++        x = state[0] + h * sum(row[j] * stages[j][0] for j in range(i))
++        y = state[1] + h * sum(row[j] * stages[j][1] for j in range(i))
++        vx = state[2] + h * sum(row[j] * stages[j][2] for j in range(i))
++        vy = state[3] + h * sum(row[j] * stages[j][3] for j in range(i))
++        ax, ay = accel(x, y)
++        stages.append((vx, vy, ax, ay))
++
++    y5 = tuple(state[i] + h * sum(_A[6][j] * stages[j][i]
++                                 for j in range(6))
++               for i in range(4))
++    err = tuple(h * sum(_E[j] * stages[j][i] for j in range(7))
++                for i in range(4))
++    return y5, err
++
++
++def _event_value(state):
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The orbit is integrated in Cartesian coordinates with an adaptive
++    Dormand-Prince 5(4) method.  A closest approach is an upward crossing of
++    d(r^2)/dt = 2 r.v through zero.
++    """
++    state = (float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1]))
++    t = 0.0
++    g = _event_value(state)
++
++    # A perfectly circular orbit has no distinguished closest approach.  The
++    # natural limiting answer is its angular period.
++    radius = math.hypot(state[0], state[1])
++    speed = math.hypot(state[2], state[3])
++    if (radius > 0.0 and speed > 0.0
++            and abs(g) <= 1.0e-12 * radius * speed):
++        ax, ay = accel(state[0], state[1])
++        radial_accel = (ax * state[0] + ay * state[1]) / radius
++        centripetal = speed * speed / radius
++        if abs(radial_accel + centripetal) <= 1.0e-12 * max(
++                1.0, abs(radial_accel), centripetal):
++            return math.tau * radius / speed
++
++    # A step comparable to the local dynamical time, then let the error
++    # controller choose its own size.
++    h = 1.0e-3 * radius / speed if speed else 1.0e-3 * radius
++    if not h > 0.0 or not math.isfinite(h):
++        h = 1.0e-3
++
++    rtol = 1.0e-12
++    atol = 1.0e-14
++    events = []
++    steps = 0
++
++    while len(events) < 2:
++        steps += 1
++        if steps > 200000:
++            raise ValueError("orbit does not return to periapsis")
++
++        new_state, err = _rk_step(state, h, accel)
++        new_g = _event_value(new_state)
++
++        # The 5(4) error estimate uses the largest of the old and new
++        # component values as the scale.
++        err_norm = math.sqrt(sum(
++            (err[i] / (atol + rtol * max(abs(state[i]),
++                                        abs(new_state[i])))) ** 2
++            for i in range(4)
++        ) / 4.0)
++
++        if not math.isfinite(err_norm):
++            h *= 0.25
++            continue
++
++        if err_norm <= 1.0:
++            if g < 0.0 and new_g >= 0.0:
++                # Locate the crossing by bisecting on the length of a fresh
++                # Dormand-Prince step from the beginning of this interval.
++                lo, hi = 0.0, h
++                for _ in range(60):
++                    mid = 0.5 * (lo + hi)
++                    y_mid, _ = _rk_step(state, mid, accel)
++                    if _event_value(y_mid) < 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                    if hi - lo <= 1.0e-13 * max(1.0, abs(t) + h):
++                        break
++                events.append(t + 0.5 * (lo + hi))
++
++            t += h
++            state = new_state
++            g = new_g
++
++            if err_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * err_norm ** -0.2
++            h *= min(5.0, max(0.2, factor))
++        else:
++            h *= max(0.2, 0.9 * err_norm ** -0.2)
++
++    return events[1] - events[0]

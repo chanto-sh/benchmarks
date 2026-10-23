@@ -1,0 +1,193 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..7ab9de9 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -10,5 +12,178 @@ def newtonian(gm):
+ 
+ 
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``accel(x, y)`` must describe a central force, but need not be an
++    inverse-square law.  The orbit does not have to start at a turning point.
++    """
++    x, y = r0
++    vx, vy = v0
++    x = float(x)
++    y = float(y)
++    vx = float(vx)
++    vy = float(vy)
++
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("r0 must not be at the origin")
++
++    # Split the velocity into radial and angular parts.  For a central force
++    # the angular momentum L = r^2 * dtheta/dt is constant, so the motion is
++    # exactly the one-dimensional equation
++    #
++    #     r'' = a_r(r) + L^2 / r^3.
++    vr = (x * vx + y * vy) / r
++    angular_momentum = x * vy - y * vx
++    if angular_momentum == 0.0:
++        raise ValueError("a purely radial orbit has no finite periapsis")
++
++    L2 = angular_momentum * angular_momentum
++
++    def radial_accel(radius):
++        # By spherical symmetry, evaluating on the x axis is enough.
++        ax, _ = accel(radius, 0.0)
++        return float(ax)
++
++    def deriv(radius, radial_velocity):
++        return (radial_velocity,
++                radial_accel(radius) + L2 / (radius * radius * radius))
++
++    # Dormand-Prince 5(4) coefficients.
++    a21 = 1 / 5
++    a31, a32 = 3 / 40, 9 / 40
++    a41, a42, a43 = 44 / 45, -56 / 15, 32 / 9
++    a51, a52, a53, a54 = 19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729
++    a61, a62, a63, a64, a65 = (9017 / 3168, -355 / 33, 46732 / 5247,
++                               49 / 176, -5103 / 18656)
++    a71, a73, a74, a75, a76 = (35 / 384, 500 / 1113, 125 / 192,
++                               -2187 / 6784, 11 / 84)
++
++    # Differences between the fifth- and fourth-order weights.
++    e1, e3, e4, e5, e6, e7 = (71 / 57600, -71 / 16695, 71 / 1920,
++                              -17253 / 339200, 22 / 525, -1 / 40)
++
++    def rk_step(radius, radial_velocity, step):
++        k1r = radial_velocity
++        k1v = deriv(radius, radial_velocity)[1]
++
++        k2r = radial_velocity + step * a21 * k1v
++        k2v = deriv(radius + step * a21 * k1r, k2r)[1]
++
++        k3r = radial_velocity + step * (a31 * k1v + a32 * k2v)
++        k3v = deriv(radius + step * (a31 * k1r + a32 * k2r), k3r)[1]
++
++        k4r = radial_velocity + step * (a41 * k1v + a42 * k2v + a43 * k3v)
++        k4v = deriv(radius + step * (a41 * k1r + a42 * k2r + a43 * k3r),
++                    k4r)[1]
++
++        k5r = radial_velocity + step * (a51 * k1v + a52 * k2v + a53 * k3v
++                                        + a54 * k4v)
++        k5v = deriv(radius + step * (a51 * k1r + a52 * k2r + a53 * k3r
++                                    + a54 * k4r), k5r)[1]
++
++        k6r = radial_velocity + step * (a61 * k1v + a62 * k2v + a63 * k3v
++                                        + a64 * k4v + a65 * k5v)
++        k6v = deriv(radius + step * (a61 * k1r + a62 * k2r + a63 * k3r
++                                    + a64 * k4r + a65 * k5r), k6r)[1]
++
++        k7r = radial_velocity + step * (a71 * k1v + a73 * k3v + a74 * k4v
++                                        + a75 * k5v + a76 * k6v)
++        new_radius = radius + step * (a71 * k1r + a73 * k3r + a74 * k4r
++                                      + a75 * k5r + a76 * k6r)
++        k7v = deriv(new_radius, k7r)[1]
++
++        new_vr = radial_velocity + step * (a71 * k1v + a73 * k3v + a74 * k4v
++                                           + a75 * k5v + a76 * k6v)
++
++        err_r = step * (e1 * k1r + e3 * k3r + e4 * k4r + e5 * k5r
++                        + e6 * k6r + e7 * k7r)
++        err_v = step * (e1 * k1v + e3 * k3v + e4 * k4v + e5 * k5v
++                        + e6 * k6v + e7 * k7v)
++        return new_radius, new_vr, err_r, err_v
++
++    rtol = 1.0e-11
++    atol_r = 1.0e-13 * max(1.0, abs(r))
++    speed_scale = max(1.0, math.hypot(vx, vy), abs(angular_momentum) / r)
++    atol_v = 1.0e-13 * speed_scale
++
++    # A conservative initial step: resolve the local dynamical time.
++    g0 = radial_accel(r) + L2 / (r * r * r)
++    speed_scale = max(1.0, math.hypot(vx, vy), abs(angular_momentum) / r)
++
++    # On a circular orbit every point is a closest approach; return the time
++    # for one full revolution.
++    radial_scale = abs(radial_accel(r)) + L2 / (r * r * r)
++    if (abs(vr) <= 1.0e-12 * speed_scale
++            and abs(g0) <= 1.0e-12 * max(radial_scale, 1.0e-300)):
++        return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    time_scale = min(r / max(abs(vr), 1.0e-300),
++                     math.sqrt(r / max(abs(g0), 1.0e-300)))
++    angular_step = 0.1 * r * r / abs(angular_momentum)
++    step = max(1.0e-12, min(0.01 * time_scale, angular_step))
++
++    event_times = []
++    previous_vr = vr
++    t = 0.0
++    max_steps = 200000
++    for _ in range(max_steps):
++        # Do not let one step pass through more than a small angular sector;
++        # this also prevents missing a pericentre when the radial motion is
++        # slow compared with the orbital motion.
++        angular_limit = 0.1 * r * r / abs(angular_momentum)
++        if step > angular_limit:
++            step = angular_limit
++
++        new_r, new_vr, err_r, err_v = rk_step(r, vr, step)
++
++        scale_r = atol_r + rtol * max(abs(r), abs(new_r))
++        scale_v = atol_v + rtol * max(abs(vr), abs(new_vr))
++        error = max(abs(err_r) / scale_r, abs(err_v) / scale_v)
++
++        if error <= 1.0:
++            # A negative-to-positive radial-velocity crossing is a closest
++            # approach.  If one occurred inside the step, locate it by
++            # bisecting the numerical flow, then restart exactly there.
++            if previous_vr < 0.0 <= new_vr:
++                lo, hi = 0.0, step
++                for _ in range(50):
++                    mid = 0.5 * (lo + hi)
++                    _, mid_vr, _, _ = rk_step(r, vr, mid)
++                    if mid_vr < 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                event_step = 0.5 * (lo + hi)
++                r_event, vr_event, _, _ = rk_step(r, vr, event_step)
++
++                t += event_step
++                event_times.append(t)
++                if len(event_times) == 2:
++                    return event_times[1] - event_times[0]
++
++                # Restart at the event, with the detector primed so that the
++                # same turning point cannot be counted twice.
++                r, vr = r_event, vr_event
++                previous_vr = 0.0
++                step = max(1.0e-12, min(step, event_step))
++            else:
++                t += step
++                r, vr = new_r, new_vr
++                previous_vr = vr
++
++            if error > 0.0:
++                factor = 0.9 * error ** -0.2
++                factor = min(5.0, max(0.2, factor))
++            else:
++                factor = 5.0
++            step *= factor
++        else:
++            factor = 0.9 * error ** -0.2
++            factor = min(0.9, max(0.1, factor))
++            step *= factor
++
++        if step <= 1.0e-14 * max(1.0, abs(t)):
++            raise RuntimeError("radial integration stalled")
++
++    raise RuntimeError("no second closest approach found (orbit may be unbound)")

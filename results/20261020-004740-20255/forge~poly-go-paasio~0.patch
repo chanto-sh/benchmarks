@@ -1,0 +1,97 @@
+diff --git a/paasio.go b/paasio.go
+index 6e751fd..5d67b50 100644
+--- a/paasio.go
++++ b/paasio.go
+@@ -1,35 +1,82 @@
+ package paasio
+ 
+-import "io"
++import (
++	"io"
++	"sync"
++)
+ 
+-// Define readCounter and writeCounter types here.
++// readCounter wraps an io.Reader and keeps track of how many bytes and how
++// many read operations have been successfully performed.
++//
++// The mutex protects both fields and is also held while the underlying Read
++// executes, which guarantees that ReadCount always observes a consistent
++// (bytes, ops) pair even when Read is called concurrently.
++type readCounter struct {
++	mu      sync.Mutex
++	reader  io.Reader
++	bytes   int64
++	readOps int
++}
++
++// writeCounter wraps an io.Writer and keeps track of how many bytes and how
++// many write operations have been successfully performed.
++type writeCounter struct {
++	mu       sync.Mutex
++	writer   io.Writer
++	bytes    int64
++	writeOps int
++}
+ 
+-// For the return of the function NewReadWriteCounter, you must also define a type that satisfies the ReadWriteCounter interface.
++// readWriteCounter satisfies ReadWriteCounter by combining a readCounter and
++// a writeCounter.
++type readWriteCounter struct {
++	*readCounter
++	*writeCounter
++}
+ 
+ func NewWriteCounter(writer io.Writer) WriteCounter {
+-	panic("Please implement the NewWriterCounter function")
++	return &writeCounter{writer: writer}
+ }
+ 
+ func NewReadCounter(reader io.Reader) ReadCounter {
+-	panic("Please implement the NewReadCounter function")
++	return &readCounter{reader: reader}
+ }
+ 
+ func NewReadWriteCounter(readwriter io.ReadWriter) ReadWriteCounter {
+-	panic("Please implement the NewReadWriteCounter function")
++	return &readWriteCounter{
++		readCounter:  &readCounter{reader: readwriter},
++		writeCounter: &writeCounter{writer: readwriter},
++	}
+ }
+ 
+ func (rc *readCounter) Read(p []byte) (int, error) {
+-	panic("Please implement the Read function")
++	rc.mu.Lock()
++	defer rc.mu.Unlock()
++
++	n, err := rc.reader.Read(p)
++	rc.bytes += int64(n)
++	rc.readOps++
++	return n, err
+ }
+ 
+ func (rc *readCounter) ReadCount() (int64, int) {
+-	panic("Please implement the ReadCount function")
++	rc.mu.Lock()
++	defer rc.mu.Unlock()
++	return rc.bytes, rc.readOps
+ }
+ 
+ func (wc *writeCounter) Write(p []byte) (int, error) {
+-	panic("Please implement the Write function")
++	wc.mu.Lock()
++	defer wc.mu.Unlock()
++
++	n, err := wc.writer.Write(p)
++	wc.bytes += int64(n)
++	wc.writeOps++
++	return n, err
+ }
+ 
+ func (wc *writeCounter) WriteCount() (int64, int) {
+-	panic("Please implement the WriteCount function")
++	wc.mu.Lock()
++	defer wc.mu.Unlock()
++	return wc.bytes, wc.writeOps
+ }

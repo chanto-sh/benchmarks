@@ -1,0 +1,68 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..7065d28 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,61 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a single stone with two sides.
++type Domino [2]int
+ 
++// MakeChain attempts to arrange the given dominoes into a legal chain.
++// A chain is legal when adjacent sides match and the two outer sides of
++// the chain match each other. It returns the chain and whether one exists.
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return []Domino{}, true
++	}
++
++	used := make([]bool, len(input))
++	chain := make([]Domino, 0, len(input))
++	// The first domino may be placed in either orientation, so it is
++	// handled separately to anchor the chain.
++	for i, d := range input {
++		for _, start := range [2]Domino{d, {d[1], d[0]}} {
++			used[i] = true
++			chain = append(chain, start)
++			if full, ok := buildChain(input, used, chain, start[1]); ok {
++				return full, true
++			}
++			chain = chain[:len(chain)-1]
++			used[i] = false
++		}
++	}
++
++	return nil, false
++}
++
++// buildChain extends chain by placing unused dominoes so that each one's
++// first side matches the open end. It returns the completed chain and true
++// when every domino is used and the chain's two outer sides match.
++func buildChain(input []Domino, used []bool, chain []Domino, openEnd int) ([]Domino, bool) {
++	if len(chain) == len(input) {
++		return chain, chain[0][0] == openEnd
++	}
++
++	for i, d := range input {
++		if used[i] {
++			continue
++		}
++		// Try the domino in both orientations.
++		for _, placed := range [2]Domino{d, {d[1], d[0]}} {
++			if placed[0] != openEnd {
++				continue
++			}
++			used[i] = true
++			chain = append(chain, placed)
++			if full, ok := buildChain(input, used, chain, placed[1]); ok {
++				return full, true
++			}
++			chain = chain[:len(chain)-1]
++			used[i] = false
++		}
++	}
++
++	return nil, false
+ }

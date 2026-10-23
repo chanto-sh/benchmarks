@@ -1,0 +1,33 @@
+diff --git a/solution.py b/solution.py
+index b74ff86..e9579f5 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,4 +1,3 @@
+-
+ def is_multiply_prime(a):
+     """Write a function that returns true if the given number is the multiplication of 3 prime numbers
+     and false otherwise.
+@@ -7,3 +6,23 @@ def is_multiply_prime(a):
+     is_multiply_prime(30) == True
+     30 = 2 * 3 * 5
+     """
++    if a < 2:
++        return False
++
++    count = 0
++    n = a
++
++    # Count prime factors with multiplicity.
++    d = 2
++    while d * d <= n:
++        while n % d == 0:
++            count += 1
++            n //= d
++            if count > 3:
++                return False
++        d += 1
++
++    if n > 1:
++        count += 1
++
++    return count == 3

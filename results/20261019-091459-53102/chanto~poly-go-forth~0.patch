@@ -1,0 +1,197 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..818f8c9 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,191 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// word is a user-defined word together with a snapshot of the definitions
++// that were visible when it was defined. Resolving its body against that
++// snapshot makes redefinition behave the way Forth users expect.
++type word struct {
++	body []string
++	dict map[string]*word
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	stack := []int{}
++	dict := map[string]*word{}
++
++	var (
++		defining bool
++		haveName bool
++		name     string
++		body     []string
++	)
++
++	for _, line := range input {
++		for _, token := range strings.Fields(line) {
++			token = strings.ToLower(token)
++
++			if defining {
++				if !haveName {
++					if _, ok := parseNumber(token); ok {
++						return nil, errors.New("illegal operation")
++					}
++					name = token
++					haveName = true
++					continue
++				}
++				if token == ";" {
++					// Capture the definitions visible before the new word
++					// is added, so a definition cannot refer to itself.
++					dict[name] = &word{body: body, dict: copyDict(dict)}
++					defining = false
++					haveName = false
++					name = ""
++					body = nil
++					continue
++				}
++				body = append(body, token)
++				continue
++			}
++
++			switch token {
++			case ":":
++				defining = true
++				haveName = false
++				name = ""
++				body = nil
++			case ";":
++				return nil, errors.New("illegal operation")
++			default:
++				if err := executeToken(token, dict, &stack); err != nil {
++					return nil, err
++				}
++			}
++		}
++	}
++
++	if defining {
++		return nil, errors.New("unterminated definition")
++	}
++	return stack, nil
++}
++
++func copyDict(dict map[string]*word) map[string]*word {
++	clone := make(map[string]*word, len(dict))
++	for k, v := range dict {
++		clone[k] = v
++	}
++	return clone
++}
++
++func executeToken(token string, dict map[string]*word, stack *[]int) error {
++	if n, ok := parseNumber(token); ok {
++		*stack = append(*stack, n)
++		return nil
++	}
++
++	if w, ok := dict[token]; ok {
++		return execute(w.body, w.dict, stack)
++	}
++
++	switch token {
++	case "+":
++		return binaryOp(stack, func(a, b int) (int, error) { return a + b, nil })
++	case "-":
++		return binaryOp(stack, func(a, b int) (int, error) { return a - b, nil })
++	case "*":
++		return binaryOp(stack, func(a, b int) (int, error) { return a * b, nil })
++	case "/":
++		return binaryOp(stack, func(a, b int) (int, error) {
++			if b == 0 {
++				return 0, errors.New("divide by zero")
++			}
++			return a / b, nil
++		})
++	case "dup":
++		if len(*stack) == 0 {
++			return errors.New("empty stack")
++		}
++		*stack = append(*stack, (*stack)[len(*stack)-1])
++		return nil
++	case "drop":
++		if len(*stack) == 0 {
++			return errors.New("empty stack")
++		}
++		*stack = (*stack)[:len(*stack)-1]
++		return nil
++	case "swap":
++		if err := requireStack(stack, 2); err != nil {
++			return err
++		}
++		n := len(*stack)
++		(*stack)[n-1], (*stack)[n-2] = (*stack)[n-2], (*stack)[n-1]
++		return nil
++	case "over":
++		if err := requireStack(stack, 2); err != nil {
++			return err
++		}
++		n := len(*stack)
++		*stack = append(*stack, (*stack)[n-2])
++		return nil
++	default:
++		return errors.New("undefined operation")
++	}
++}
++
++func execute(tokens []string, dict map[string]*word, stack *[]int) error {
++	for _, token := range tokens {
++		if err := executeToken(token, dict, stack); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++func binaryOp(stack *[]int, op func(a, b int) (int, error)) error {
++	if err := requireStack(stack, 2); err != nil {
++		return err
++	}
++	n := len(*stack)
++	a, b := (*stack)[n-2], (*stack)[n-1]
++	result, err := op(a, b)
++	if err != nil {
++		return err
++	}
++	*stack = append((*stack)[:n-2], result)
++	return nil
++}
++
++func requireStack(stack *[]int, n int) error {
++	switch {
++	case len(*stack) == 0:
++		return errors.New("empty stack")
++	case len(*stack) < n:
++		return errors.New("only one value on the stack")
++	}
++	return nil
++}
++
++func parseNumber(token string) (int, bool) {
++	digits := token
++	if strings.HasPrefix(digits, "-") {
++		digits = digits[1:]
++	}
++	if digits == "" {
++		return 0, false
++	}
++	for i := 0; i < len(digits); i++ {
++		if digits[i] < '0' || digits[i] > '9' {
++			return 0, false
++		}
++	}
++	n, err := strconv.Atoi(token)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
+ }

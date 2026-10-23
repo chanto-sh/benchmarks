@@ -1,0 +1,11 @@
+diff --git a/solution.py b/solution.py
+index 451015d..70f1aa6 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,5 @@
+ def set_left_most_unset_bit(n): 
+-    pass
++    for pos in range(n.bit_length() - 1, -1, -1):
++        if not (n >> pos) & 1:
++            return n | (1 << pos)
++    return n

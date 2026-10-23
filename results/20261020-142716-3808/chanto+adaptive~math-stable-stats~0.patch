@@ -1,0 +1,57 @@
+diff --git a/stats.py b/stats.py
+index add4f59..c3deb6c 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,46 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() arg is an empty sequence")
++
++    # Work with deviations from the first reading.  This keeps the variance
++    # computation well-conditioned when all readings share a large offset.
++    origin = xs[0]
++    diffs = [x - origin for x in xs]
++
++    if not all(math.isfinite(d) for d in diffs):
++        # The spread is too large for a finite variance.  The mean can still
++        # be computed from scaled readings without overflowing.
++        scale = max(abs(x) for x in xs)
++        mean = scale * (math.fsum(x / scale for x in xs) / n)
++        return mean, math.inf
++
++    try:
++        shift = math.fsum(diffs) / n
++    except OverflowError:
++        # The mean deviation is finite even though the sum overflows.
++        scale = max(abs(d) for d in diffs)
++        shift = scale * (math.fsum(d / scale for d in diffs) / n)
++
++    mean = origin + shift
++
++    # Divide by sqrt(n) before squaring so the intermediate sum of squared
++    # deviations cannot overflow when the final variance is representable.
++    root_n = math.sqrt(n)
++    try:
++        variance = math.fsum(((d - shift) / root_n) ** 2 for d in diffs)
++    except OverflowError:
++        variance = math.inf
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    largest = max(xs)
++    return largest + math.log(math.fsum(math.exp(x - largest) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    return max(x, 0.0) + math.log1p(math.exp(-abs(x)))

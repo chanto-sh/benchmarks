@@ -1,0 +1,57 @@
+diff --git a/tree_building.go b/tree_building.go
+index 0b789a5..dfe1168 100644
+--- a/tree_building.go
++++ b/tree_building.go
+@@ -1,5 +1,7 @@
+ package tree
+ 
++import "fmt"
++
+ type Record struct {
+ 	ID     int
+ 	Parent int
+@@ -12,6 +14,43 @@ type Node struct {
+ 	// feel free to add fields as you see fit
+ }
+ 
++// Build reconstructs a tree from an unordered set of records.
++//
++// Record IDs must form the contiguous range [0, len(records)). Every record
++// except the root (ID 0) must reference an existing parent with a lower ID.
++// The root's parent must be itself. Children are ordered by ascending ID.
+ func Build(records []Record) (*Node, error) {
+-	panic("Please implement the Build function")
++	if len(records) == 0 {
++		return nil, nil
++	}
++
++	n := len(records)
++	nodes := make([]*Node, n)
++	parents := make([]int, n)
++
++	for _, r := range records {
++		if r.ID < 0 || r.ID >= n {
++			return nil, fmt.Errorf("record ID %d out of range [0, %d)", r.ID, n)
++		}
++		if nodes[r.ID] != nil {
++			return nil, fmt.Errorf("duplicate record ID %d", r.ID)
++		}
++		nodes[r.ID] = &Node{ID: r.ID}
++		parents[r.ID] = r.Parent
++	}
++
++	if parents[0] != 0 {
++		return nil, fmt.Errorf("root record has parent %d, expected 0", parents[0])
++	}
++
++	for id := 1; id < n; id++ {
++		parent := parents[id]
++		if parent < 0 || parent >= id {
++			return nil, fmt.Errorf("record ID %d has invalid parent %d", id, parent)
++		}
++		p := nodes[parent]
++		p.Children = append(p.Children, nodes[id])
++	}
++
++	return nodes[0], nil
+ }

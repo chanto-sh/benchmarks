@@ -1,0 +1,97 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..8b7684a
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,55 @@
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyTest(unittest.TestCase):
++    def test_documented_examples(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++        self.assertEqual(slugify("!!!"), "")
++
++    def test_lowercases(self):
++        self.assertEqual(slugify("MiXeD CaSe"), "mixed-case")
++
++    def test_accented_letters(self):
++        self.assertEqual(slugify("é ñ ü"), "e-n-u")
++        self.assertEqual(slugify("Señor Piñata"), "senor-pinata")
++        self.assertEqual(slugify("Ångström über"), "angstrom-uber")
++
++    def test_runs_of_non_alphanumerics_collapse(self):
++        self.assertEqual(slugify("a  \t\n b"), "a-b")
++        self.assertEqual(slugify("hello...world?!again"), "hello-world-again")
++
++    def test_no_leading_or_trailing_hyphens(self):
++        self.assertEqual(slugify("---hello---"), "hello")
++        self.assertEqual(slugify("__hello world__"), "hello-world")
++
++    def test_digits_are_kept(self):
++        self.assertEqual(slugify("Version 2.0 Beta"), "version-2-0-beta")
++
++    def test_empty_and_non_alphanumeric_input(self):
++        self.assertEqual(slugify(""), "")
++        self.assertEqual(slugify("   "), "")
++        self.assertEqual(slugify("--__--"), "")
++        self.assertEqual(slugify("中文"), "")
++
++    def test_max_length_not_exceeded(self):
++        self.assertEqual(len(slugify("The quick brown fox", max_length=13)), 9)
++        self.assertEqual(slugify("The quick brown fox", max_length=100), "the-quick-brown-fox")
++
++    def test_max_length_truncation_cuts_at_hyphen(self):
++        self.assertEqual(slugify("abc def ghi", max_length=7), "abc-def")
++        # No hyphen available within the limit: plain truncation.
++        self.assertEqual(slugify("abcdefghij", max_length=5), "abcde")
++        # The cut would land on a trailing hyphen: drop it.
++        self.assertEqual(slugify("abc def", max_length=4), "abc")
++
++    def test_max_length_zero(self):
++        self.assertEqual(slugify("hello", max_length=0), "")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..d9c3449 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,8 @@
+ """Text helpers."""
+ 
++import re
++import unicodedata
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +23,21 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    normalized = unicodedata.normalize("NFKD", text.lower())
++    ascii_text = "".join(
++        char for char in normalized if not unicodedata.combining(char)
++    )
++    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text).strip("-")
++    if not slug:
++        return ""
++    if max_length is not None and len(slug) > max_length:
++        if max_length <= 0:
++            return ""
++        if slug[max_length] == "-":
++            slug = slug[:max_length]
++        else:
++            slug = slug[:max_length]
++            if "-" in slug:
++                slug = slug[: slug.rfind("-")]
++            slug = slug.rstrip("-")
++    return slug

@@ -1,0 +1,81 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..7567bdf 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,75 @@
+ def can_chain(dominoes):
+-    pass
++    """Return a valid domino chain (as a list of tuples) or None.
++
++    A valid chain uses every domino exactly once, matches touching halves and
++    has matching values at the two open ends.  This is an Eulerian circuit
++    problem on the multigraph whose vertices are the numbers on the halves and
++    whose edges are the dominoes.
++    """
++    edges = [(a, b) for a, b in dominoes]
++
++    if not edges:
++        return []
++
++    # Build the multigraph.  Every edge appears once at each of its endpoints
++    # (twice at the same endpoint for a double domino), so vertex degrees are
++    # counted correctly for the Eulerian-circuit checks.
++    adjacency = {}
++    for index, (a, b) in enumerate(edges):
++        adjacency.setdefault(a, []).append((b, index))
++        adjacency.setdefault(b, []).append((a, index))
++
++    # Every vertex must have an even degree.
++    for neighbours in adjacency.values():
++        if len(neighbours) % 2 != 0:
++            return None
++
++    # All vertices with incident edges must be in one connected component.
++    start = edges[0][0]
++    visited = {start}
++    stack = [start]
++    while stack:
++        vertex = stack.pop()
++        for neighbour, _ in adjacency[vertex]:
++            if neighbour not in visited:
++                visited.add(neighbour)
++                stack.append(neighbour)
++    if len(visited) != len(adjacency):
++        return None
++
++    # Hierholzer's algorithm: build an Eulerian circuit.
++    used = set()
++    walk = []
++    stack = [start]
++    while stack:
++        vertex = stack[-1]
++        neighbours = adjacency[vertex]
++        while neighbours and neighbours[-1][1] in used:
++            neighbours.pop()
++        if neighbours:
++            neighbour, index = neighbours.pop()
++            used.add(index)
++            stack.append(neighbour)
++        else:
++            walk.append(stack.pop())
++    walk.reverse()
++
++    if len(walk) != len(edges) + 1:
++        return None
++
++    # Orient each domino according to the order in which it was traversed.
++    available = {}
++    for index, (a, b) in enumerate(edges):
++        available.setdefault((min(a, b), max(a, b)), []).append(index)
++
++    chain = []
++    for left, right in zip(walk, walk[1:]):
++        candidates = available[(min(left, right), max(left, right))]
++        index = candidates.pop()
++        a, b = edges[index]
++        if (a, b) == (left, right):
++            chain.append((a, b))
++        else:
++            chain.append((b, a))
++
++    return chain

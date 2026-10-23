@@ -1,0 +1,17 @@
+diff --git a/solution.py b/solution.py
+index ff48b79..d4747ec 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,12 @@ def search(lst):
+         search([1, 2, 2, 3, 3, 3, 4, 4, 4]) == 3
+         search([5, 5, 4, 4, 4]) == -1
+     '''
++    frequencies = {}
++    for value in lst:
++        frequencies[value] = frequencies.get(value, 0) + 1
++
++    valid_values = [
++        value for value, frequency in frequencies.items()
++        if frequency >= value
++    ]
++    return max(valid_values, default=-1)

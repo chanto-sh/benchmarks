@@ -1,0 +1,56 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..4a626ed 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,48 @@
++SHARP_NOTES = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++FLAT_NOTES = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++# Tonics that use sharps or flats, following the key-signature table in the
++# instructions.  Casing is significant: upper-case tonics are major keys and
++# lower-case tonics are minor keys.
++SHARP_TONICS = {
++    "C", "G", "D", "A", "E", "B", "F#",
++    "a", "e", "b", "f#", "c#", "g#", "d#",
++}
++FLAT_TONICS = {
++    "F", "Bb", "Eb", "Ab", "Db", "Gb",
++    "d", "g", "c", "f", "bb", "eb",
++}
++
++INTERVALS = {"m": 1, "M": 2, "A": 3}
++
++
+ class Scale:
+     def __init__(self, tonic):
+-        pass
++        letter = tonic[0]
++        accidental = (
++            tonic[1:].replace("\u266f", "#").replace("\u266d", "b")
++        )
++        # Keep the original letter case for the key-signature lookup, but
++        # normalize the note itself to upper case (flats keep their "b").
++        self._tonic_key = letter + accidental
++        self._tonic = letter.upper() + accidental
++
++    def _notes(self):
++        if self._tonic_key in FLAT_TONICS:
++            notes = FLAT_NOTES
++        else:
++            notes = SHARP_NOTES
++        index = notes.index(self._tonic)
++        return notes[index:] + notes[:index]
+ 
+     def chromatic(self):
+-        pass
++        return self._notes()
+ 
+     def interval(self, intervals):
+-        pass
++        notes = self._notes()
++        result = [notes[0]]
++        index = 0
++        for interval in intervals:
++            index = (index + INTERVALS[interval]) % 12
++            result.append(notes[index])
++        return result

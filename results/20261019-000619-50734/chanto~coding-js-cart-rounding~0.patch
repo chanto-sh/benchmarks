@@ -1,0 +1,178 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..ce61ae8 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,23 +1,48 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+-const { fmt } = require("./format");
++const { pow10, parseDecimal, roundHalfUpDiv, formatCents } = require("./money");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+ function checkout(cart) {
+-  let subtotal = 0;
+-  let discount = 0;
+-  let taxable = 0;
+-  for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
+-    const d = discountFor(line, item.discountPct || 0);
+-    subtotal += line;
+-    discount += d;
+-    if (!item.taxExempt) taxable += line - d;
++  const items = cart.items || [];
++  const lines = items.map((item) => {
++    const price = parseDecimal(item.price);
++    const qty = parseDecimal(item.qty);
++    return { item, price, qty, scale: price.scale + qty.scale };
++  });
++
++  // Work in exact decimal units, with at least cents of precision.
++  const scale = lines.reduce((max, line) => Math.max(max, line.scale), 2);
++  const unitToCent = pow10(scale - 2);
++
++  let subtotalUnits = 0n;
++  let discountCents = 0n;
++  let taxableUnits = 0n;
++
++  for (const { item, price, qty, scale: lineScale } of lines) {
++    const lineUnits = price.n * qty.n * pow10(scale - lineScale);
++    const lineDiscount = discountFor(lineUnits, scale, item.discountPct ?? 0);
++
++    subtotalUnits += lineUnits;
++    discountCents += lineDiscount;
++    if (!item.taxExempt) {
++      taxableUnits += lineUnits - lineDiscount * unitToCent;
++    }
+   }
+-  const tax = taxFor(taxable, cart.taxRate || 0);
+-  const total = subtotal - discount + tax;
+-  return { subtotal: fmt(subtotal), discount: fmt(discount), tax: fmt(tax), total: fmt(total) };
++
++  const taxCents = taxFor(taxableUnits, scale, cart.taxRate ?? 0);
++  const subtotalCents = roundHalfUpDiv(subtotalUnits, unitToCent);
++
++  // Keep the receipt consistent with the displayed values.
++  const totalCents = subtotalCents - discountCents + taxCents;
++
++  return {
++    subtotal: formatCents(subtotalCents),
++    discount: formatCents(discountCents),
++    tax: formatCents(taxCents),
++    total: formatCents(totalCents),
++  };
+ }
+ 
+ module.exports = { checkout };
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..4428b81 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,9 @@
++const { percentageCents } = require("./money");
++
+ // Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++// `lineUnits` is the line amount in units of `10^-scale`; returns cents, rounded half up.
++function discountFor(lineUnits, scale, pct) {
++  return percentageCents(lineUnits, scale, pct);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..28aae13 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,10 @@
++const { pow10, parseDecimal, roundHalfUpDiv, formatCents } = require("./money");
++
+ // Money as a plain "1234.50" string for receipts and the API.
+ function fmt(amount) {
+-  return amount.toFixed(2);
++  const { n, scale } = parseDecimal(amount);
++  const cents = scale <= 2 ? n * pow10(2 - scale) : roundHalfUpDiv(n, pow10(scale - 2));
++  return formatCents(cents);
+ }
+ 
+ module.exports = { fmt };
+diff --git a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..e7efefd
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,58 @@
++// Exact decimal helpers. An amount is `n / 10^scale`, where `n` is a BigInt.
++
++function pow10(exp) {
++  return 10n ** BigInt(exp);
++}
++
++function parseDecimal(value) {
++  const str = String(value).trim();
++  const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/.exec(str);
++  if (!match) {
++    throw new TypeError(`Invalid decimal: ${value}`);
++  }
++  const sign = match[1] === "-" ? -1n : 1n;
++  const whole = match[2] || "0";
++  const fraction = match[3] !== undefined ? match[3] : match[4] || "";
++  let n = sign * BigInt(whole + fraction);
++  let scale = fraction.length - Number(match[5] || 0);
++  if (scale < 0) {
++    n *= pow10(-scale);
++    scale = 0;
++  }
++  return { n, scale };
++}
++
++// Divide `numerator` by `denominator`, rounding half up (away from zero).
++function roundHalfUpDiv(numerator, denominator) {
++  if (denominator === 0n) {
++    throw new RangeError("Division by zero");
++  }
++  if (denominator < 0n) {
++    numerator = -numerator;
++    denominator = -denominator;
++  }
++  if (numerator < 0n) {
++    return -roundHalfUpDiv(-numerator, denominator);
++  }
++  return (2n * numerator + denominator) / (2n * denominator);
++}
++
++// A percentage of an amount given in units of `10^-scale`, returned in cents.
++function percentageCents(amountUnits, scale, pct) {
++  const percentage = parseDecimal(pct);
++  return roundHalfUpDiv(
++    amountUnits * percentage.n,
++    pow10(scale + percentage.scale),
++  );
++}
++
++// Format an integer number of cents as a "0.00" string.
++function formatCents(cents) {
++  const negative = cents < 0n;
++  const absolute = negative ? -cents : cents;
++  const whole = absolute / 100n;
++  const fraction = (absolute % 100n).toString().padStart(2, "0");
++  return `${negative ? "-" : ""}${whole}.${fraction}`;
++}
++
++module.exports = { pow10, parseDecimal, roundHalfUpDiv, percentageCents, formatCents };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..9898138 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,9 @@
++const { percentageCents } = require("./money");
++
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++// `amountUnits` is in units of `10^-scale`; returns cents, rounded half up.
++function taxFor(amountUnits, scale, rate) {
++  return percentageCents(amountUnits, scale, rate);
+ }
+ 
+ module.exports = { taxFor };

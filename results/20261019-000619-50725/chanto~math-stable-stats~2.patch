@@ -1,0 +1,67 @@
+diff --git a/stats.py b/stats.py
+index add4f59..2cec51d 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,56 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++
++    # Shift by the first reading before summing.  Summing the raw values
++    # would make the rounding error grow with the common offset times n,
++    # which is what destroys the variance for clustered data.
++    offset = xs[0]
++    try:
++        total = math.fsum(x - offset for x in xs)
++    except OverflowError:
++        total = math.inf
++    mean = offset + total / n
++    if not math.isfinite(mean):
++        # Differences (or their sum) overflowed; rescale by the largest
++        # magnitude so the mean can still be computed.
++        scale = max(abs(x) for x in xs)
++        mean = scale * (math.fsum(x / scale for x in xs) / n)
++
++    # Second pass: subtract the mean first, then scale before squaring so
++    # that neither cancellation nor intermediate overflow ruins the result.
++    dmax = max(abs(x - mean) for x in xs)
++    if dmax == 0.0:
++        return mean, 0.0
++    if not math.isfinite(dmax):
++        # |x - mean| overflowed; do the second pass on rescaled inputs.
++        scale = max(abs(x) for x in xs)
++        ys = [x / scale for x in xs]
++        mean_y = math.fsum(ys) / n
++        dmax_y = max(abs(y - mean_y) for y in ys)
++        if dmax_y == 0.0:
++            return mean, 0.0
++        avg_y = math.fsum(((y - mean_y) / dmax_y) ** 2 for y in ys) / n
++        var_y = dmax_y * (avg_y * dmax_y)
++        return mean, (scale * var_y) * scale
++
++    avg = math.fsum(((x - mean) / dmax) ** 2 for x in xs) / n
++    var = dmax * (avg * dmax)
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    # Shift by the maximum so every exponent is <= 0: no overflow, and
++    # fsum keeps the accumulated terms accurate.
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # log1p avoids losing the result when exp(x) is tiny (or 1 + exp(x)
++    # rounds to 1), and the shifted form avoids overflow for large x.
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

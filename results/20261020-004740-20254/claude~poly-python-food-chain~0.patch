@@ -1,0 +1,47 @@
+diff --git a/food_chain.py b/food_chain.py
+index ed87e69..19c8397 100644
+--- a/food_chain.py
++++ b/food_chain.py
+@@ -1,2 +1,41 @@
++ANIMALS = [
++    ("fly", None, "fly"),
++    ("spider", "It wriggled and jiggled and tickled inside her.",
++     "spider that wriggled and jiggled and tickled inside her"),
++    ("bird", "How absurd to swallow a bird!", "bird"),
++    ("cat", "Imagine that, to swallow a cat!", "cat"),
++    ("dog", "What a hog, to swallow a dog!", "dog"),
++    ("goat", "Just opened her throat and swallowed a goat!", "goat"),
++    ("cow", "I don't know how she swallowed a cow!", "cow"),
++    ("horse", None, "horse"),
++]
++
++
++def _verse(number):
++    name, remark, catch = ANIMALS[number - 1]
++    lines = [f"I know an old lady who swallowed a {name}."]
++
++    if name == "horse":
++        lines.append("She's dead, of course!")
++        return lines
++
++    if remark:
++        lines.append(remark)
++
++    for index in range(number - 1, 0, -1):
++        previous_catch = ANIMALS[index - 1][2]
++        lines.append(
++            f"She swallowed the {ANIMALS[index][0]} to catch the {previous_catch}."
++        )
++
++    lines.append("I don't know why she swallowed the fly. Perhaps she'll die.")
++    return lines
++
++
+ def recite(start_verse, end_verse):
+-    pass
++    song = []
++    for number in range(start_verse, end_verse + 1):
++        if song:
++            song.append("")
++        song.extend(_verse(number))
++    return song

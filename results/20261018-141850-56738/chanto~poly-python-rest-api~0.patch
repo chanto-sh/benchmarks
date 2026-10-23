@@ -1,0 +1,92 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..fcf2872 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,84 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        self.users = {}
++        if database:
++            for user in database.get("users", []):
++                self.users[user["name"]] = {
++                    "name": user["name"],
++                    "owes": dict(user.get("owes", {})),
++                    "owed_by": dict(user.get("owed_by", {})),
++                    "balance": user.get("balance", 0.0),
++                }
++
++    def _user_object(self, name):
++        user = self.users[name]
++        owes = dict(user["owes"])
++        owed_by = dict(user["owed_by"])
++        balance = sum(owed_by.values()) - sum(owes.values())
++        return {
++            "name": name,
++            "owes": owes,
++            "owed_by": owed_by,
++            "balance": balance,
++        }
++
++    def _set_debt(self, debtor, creditor, amount):
++        debtor_user = self.users[debtor]
++        creditor_user = self.users[creditor]
++
++        if amount > 0:
++            debtor_user["owes"][creditor] = amount
++            creditor_user["owed_by"][debtor] = amount
++        else:
++            debtor_user["owes"].pop(creditor, None)
++            creditor_user["owed_by"].pop(debtor, None)
++
++    def _get_debt(self, debtor, creditor):
++        return self.users[debtor]["owes"].get(creditor, 0.0)
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            if payload:
++                requested = json.loads(payload).get("users", [])
++                names = sorted(requested)
++            else:
++                names = sorted(self.users)
++            return json.dumps({"users": [self._user_object(name) for name in names]})
++        return None
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = json.loads(payload) if payload else {}
++
++        if url == "/add":
++            name = data["user"]
++            self.users[name] = {
++                "name": name,
++                "owes": {},
++                "owed_by": {},
++                "balance": 0.0,
++            }
++            return json.dumps(self._user_object(name))
++
++        if url == "/iou":
++            lender = data["lender"]
++            borrower = data["borrower"]
++            amount = data["amount"]
++
++            # Positive value means the borrower owes the lender.
++            net = self._get_debt(borrower, lender) - self._get_debt(lender, borrower)
++            net += amount
++
++            if net >= 0:
++                self._set_debt(borrower, lender, net)
++                self._set_debt(lender, borrower, 0)
++            else:
++                self._set_debt(lender, borrower, -net)
++                self._set_debt(borrower, lender, 0)
++
++            names = sorted([lender, borrower])
++            return json.dumps({"users": [self._user_object(name) for name in names]})
++
++        return None

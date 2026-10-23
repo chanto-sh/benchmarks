@@ -1,0 +1,45 @@
+diff --git a/grep.py b/grep.py
+index 3c8a8e1..e4b5f49 100644
+--- a/grep.py
++++ b/grep.py
+@@ -1,2 +1,39 @@
+ def grep(pattern, flags, files):
+-    pass
++    flag_set = set(flags.split())
++    invert = "-v" in flag_set
++    ignore_case = "-i" in flag_set
++    entire_line = "-x" in flag_set
++    show_line_numbers = "-n" in flag_set
++    names_only = "-l" in flag_set
++
++    multiple_files = len(files) > 1
++    needle = pattern.lower() if ignore_case else pattern
++
++    output = []
++    for fname in files:
++        matches = []
++        with open(fname) as f:
++            for number, line in enumerate(f.readlines(), start=1):
++                text = line[:-1] if line.endswith("\n") else line
++                haystack = text.lower() if ignore_case else text
++                if entire_line:
++                    matched = haystack == needle
++                else:
++                    matched = needle in haystack
++                if matched != invert:
++                    matches.append((number, line))
++
++        if names_only:
++            if matches:
++                output.append(fname + "\n")
++            continue
++
++        for number, line in matches:
++            prefix = ""
++            if multiple_files:
++                prefix += fname + ":"
++            if show_line_numbers:
++                prefix += str(number) + ":"
++            output.append(prefix + line)
++
++    return "".join(output)

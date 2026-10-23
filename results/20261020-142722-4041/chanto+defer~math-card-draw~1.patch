@@ -1,0 +1,58 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..476aef2 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,13 @@
+ from fractions import Fraction
++from math import comb, factorial
++
++
++def _multinomial(counts):
++    total = sum(counts)
++    result = factorial(total)
++    for count in counts:
++        result //= factorial(count)
++    return result
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +15,38 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++
++    n = r + b + g
++    if k > r or m <= 0 or n == 0:
++        return Fraction(0)
++
++    m = min(m, n)
++    favorable = 0
++
++    # Case 1: the first green is turned at position p <= m.  The p - 1 cards
++    # before it are red/blue; everything after it is unrestricted.
++    if g > 0:
++        for p in range(1, m + 1):
++            before = p - 1
++            jlo = max(0, before - b)
++            jhi = min(r, before)
++            for reds in range(max(jlo, k), jhi + 1):
++                blues = before - reds
++                suffix = _multinomial((r - reds, b - blues, g - 1))
++                favorable += comb(before, reds) * suffix
++
++    # Case 2: no green is turned in the first m cards, so the dealer turns
++    # exactly m cards.  (With g == 0 there is never a green, m is already
++    # capped at the deck size above.)
++    if g == 0 or m < n:
++        jlo = max(0, m - b)
++        jhi = min(r, m)
++        for reds in range(max(jlo, k), jhi + 1):
++            blues = m - reds
++            suffix = _multinomial((r - reds, b - blues, g))
++            favorable += comb(m, reds) * suffix
++
++    total = _multinomial((r, b, g))
++    return Fraction(favorable, total)

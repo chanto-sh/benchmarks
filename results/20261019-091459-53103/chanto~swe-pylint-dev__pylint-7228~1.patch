@@ -1,0 +1,46 @@
+diff --git a/doc/whatsnew/fragments/7202.bugfix b/doc/whatsnew/fragments/7202.bugfix
+new file mode 100644
+index 0000000..05f1266
+--- /dev/null
++++ b/doc/whatsnew/fragments/7202.bugfix
+@@ -0,0 +1,5 @@
++Fix a crash when a regex option (e.g. ``function-rgx``) contained an invalid
++regular expression. The invalid expression is now reported as a configuration
++error instead of an unhandled traceback.
++
++Closes #7202
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..00ef212 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,20 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regex_transformer(value: str) -> Pattern[str]:
++    """Return `re.compile(value)`."""
++    try:
++        return re.compile(value)
++    except re.error as e:
++        msg = f"Error in provided regular expression: {value} beginning at index {e.pos}: {e}"
++        raise argparse.ArgumentTypeError(msg)
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -130,7 +139,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regex_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,

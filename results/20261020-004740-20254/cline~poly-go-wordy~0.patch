@@ -1,0 +1,102 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..c7e2412 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,96 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
++type operation int
++
++const (
++	add operation = iota
++	subtract
++	multiply
++	divide
++)
++
++// Answer parses a simple math word problem and evaluates it from left to
++// right. The second return value reports whether the question was valid.
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	const prefix = "What is "
++
++	q := strings.TrimSpace(question)
++	if !strings.HasPrefix(q, prefix) || !strings.HasSuffix(q, "?") {
++		return 0, false
++	}
++
++	body := strings.TrimSuffix(strings.TrimPrefix(q, prefix), "?")
++	tokens := strings.Fields(body)
++	if len(tokens) == 0 {
++		return 0, false
++	}
++
++	parseNumber := func(s string) (int, bool) {
++		n, err := strconv.Atoi(s)
++		if err != nil {
++			return 0, false
++		}
++		return n, true
++	}
++
++	result, ok := parseNumber(tokens[0])
++	if !ok {
++		return 0, false
++	}
++
++	for i := 1; i < len(tokens); {
++		var op operation
++		switch tokens[i] {
++		case "plus":
++			op = add
++			i++
++		case "minus":
++			op = subtract
++			i++
++		case "multiplied":
++			if i+1 >= len(tokens) || tokens[i+1] != "by" {
++				return 0, false
++			}
++			op = multiply
++			i += 2
++		case "divided":
++			if i+1 >= len(tokens) || tokens[i+1] != "by" {
++				return 0, false
++			}
++			op = divide
++			i += 2
++		default:
++			return 0, false
++		}
++
++		if i >= len(tokens) {
++			return 0, false
++		}
++		operand, ok := parseNumber(tokens[i])
++		if !ok {
++			return 0, false
++		}
++		i++
++
++		switch op {
++		case add:
++			result += operand
++		case subtract:
++			result -= operand
++		case multiply:
++			result *= operand
++		case divide:
++			if operand == 0 {
++				return 0, false
++			}
++			result /= operand
++		}
++	}
++
++	return result, true
+ }

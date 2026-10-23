@@ -1,0 +1,63 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..7ed5689
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1 @@
++The JUnit XML report now includes the ``hostname`` and ``timestamp`` attributes in the ``<testsuite>`` element, as required by the JUnit schema.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..7b06d5f 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -10,9 +10,11 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ """
+ import functools
+ import os
++import platform
+ import re
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.now().isoformat(),
++            hostname=platform.node(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..7c500ed 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -1,4 +1,6 @@
+ import os
++import platform
++from datetime import datetime
+ from xml.dom import minidom
+ 
+ import py
+@@ -1376,3 +1378,19 @@ def test_logging_passing_tests_disabled_does_not_log_test_output(testdir):
+     node = dom.find_first_by_tag("testcase")
+     assert len(node.find_by_tag("system-err")) == 0
+     assert len(node.find_by_tag("system-out")) == 0
++
++
++def test_suite_hostname_and_timestamp(testdir):
++    testdir.makepyfile(
++        """
++        def test_func():
++            pass
++    """
++    )
++    result, dom = runandparse(testdir)
++    assert result.ret == 0
++    node = dom.find_first_by_tag("testsuite")
++    node.assert_attr(hostname=platform.node())
++    # The timestamp is an ISO 8601 date-time, as required by the JUnit
++    # schema. Only check the date-time part to ignore optional fractions.
++    datetime.strptime(node["timestamp"][:19], "%Y-%m-%dT%H:%M:%S")

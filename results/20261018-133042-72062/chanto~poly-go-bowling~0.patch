@@ -1,0 +1,137 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..200e059 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,128 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
++
++var (
++	errNegativeRoll = errors.New("Negative roll is invalid")
++	errPinCount     = errors.New("Pin count exceeds pins on the lane")
++	errGameOver     = errors.New("Cannot roll after game is over")
++	errIncomplete   = errors.New("Score cannot be taken until the end of the game")
++)
++
++// Game keeps track of the rolls of a single game of bowling.
++type Game struct {
++	rolls []int
++}
+ 
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{}
+ }
+ 
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if pins < 0 {
++		return errNegativeRoll
++	}
++	if pins > 10 {
++		return errPinCount
++	}
++	max, over := g.rollState()
++	if over {
++		return errGameOver
++	}
++	if pins > max {
++		return errPinCount
++	}
++	g.rolls = append(g.rolls, pins)
++	return nil
++}
++
++// rollState reports the maximum number of pins the next roll may knock down,
++// and whether the game is already over.
++func (g *Game) rollState() (max int, over bool) {
++	frame := 0
++	i := 0
++
++	// Consume the first nine frames.
++	for frame < 9 {
++		if i >= len(g.rolls) {
++			return 10, false
++		}
++		if g.rolls[i] == 10 {
++			frame++
++			i++
++			continue
++		}
++		if i+1 >= len(g.rolls) {
++			// First roll of the current frame: one pin per standing pin left.
++			return 10 - g.rolls[i], false
++		}
++		frame++
++		i += 2
++	}
++
++	// Handle the tenth frame, including its bonus rolls.
++	remaining := g.rolls[i:]
++	switch len(remaining) {
++	case 0:
++		return 10, false
++	case 1:
++		if remaining[0] == 10 {
++			return 10, false
++		}
++		return 10 - remaining[0], false
++	case 2:
++		if remaining[0] == 10 {
++			if remaining[1] == 10 {
++				return 10, false
++			}
++			return 10 - remaining[1], false
++		}
++		if remaining[0]+remaining[1] == 10 {
++			return 10, false
++		}
++		return 0, true
++	default:
++		return 0, true
++	}
+ }
+ 
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	score := 0
++	i := 0
++
++	for frame := 0; frame < 10; frame++ {
++		switch {
++		case i >= len(g.rolls):
++			return 0, errIncomplete
++		case g.rolls[i] == 10:
++			// Strike: the next two rolls are counted twice.
++			if i+2 >= len(g.rolls) {
++				return 0, errIncomplete
++			}
++			score += 10 + g.rolls[i+1] + g.rolls[i+2]
++			if frame == 9 {
++				i += 3
++			} else {
++				i++
++			}
++		case i+1 >= len(g.rolls):
++			return 0, errIncomplete
++		case g.rolls[i]+g.rolls[i+1] == 10:
++			// Spare: the next roll is counted twice.
++			if i+2 >= len(g.rolls) {
++				return 0, errIncomplete
++			}
++			score += 10 + g.rolls[i+2]
++			if frame == 9 {
++				i += 3
++			} else {
++				i += 2
++			}
++		default:
++			score += g.rolls[i] + g.rolls[i+1]
++			i += 2
++		}
++	}
++
++	return score, nil
+ }

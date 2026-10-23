@@ -1,0 +1,65 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..ff45817 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,57 @@
+-
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.board = [
++            line.split() for line in board.strip().splitlines() if line.strip()
++        ]
++
++    def _neighbours(self, row, col):
++        candidates = (
++            (row - 1, col),
++            (row - 1, col + 1),
++            (row, col - 1),
++            (row, col + 1),
++            (row + 1, col - 1),
++            (row + 1, col),
++        )
++        for r, c in candidates:
++            if 0 <= r < len(self.board) and 0 <= c < len(self.board[r]):
++                yield r, c
++
++    def _has_connection(self, player, starts, is_goal):
++        visited = set()
++        stack = [(r, c) for r, c in starts if self.board[r][c] == player]
++        while stack:
++            cell = stack.pop()
++            if cell in visited:
++                continue
++            visited.add(cell)
++            if is_goal(*cell):
++                return True
++            for r, c in self._neighbours(*cell):
++                if (r, c) not in visited and self.board[r][c] == player:
++                    stack.append((r, c))
++        return False
+ 
+     def get_winner(self):
+-        pass
++        if not self.board:
++            return ""
++
++        width = len(self.board[0])
++
++        # X connects the left and right sides.
++        if self._has_connection(
++            "X",
++            ((r, 0) for r in range(len(self.board))),
++            lambda r, c: c == width - 1,
++        ):
++            return "X"
++
++        # O connects the top and bottom sides.
++        if self._has_connection(
++            "O",
++            ((0, c) for c in range(width)),
++            lambda r, c: r == len(self.board) - 1,
++        ):
++            return "O"
++
++        return ""

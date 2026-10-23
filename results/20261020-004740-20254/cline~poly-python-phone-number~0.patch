@@ -1,0 +1,57 @@
+diff --git a/phone_number.py b/phone_number.py
+index ff5b904..d498677 100644
+--- a/phone_number.py
++++ b/phone_number.py
+@@ -1,3 +1,51 @@
+ class PhoneNumber:
+     def __init__(self, number):
+-        pass
++        self._number = self._clean(number)
++
++    @staticmethod
++    def _clean(number):
++        has_letter = any(char.isalpha() for char in number)
++        if has_letter:
++            raise ValueError("letters not permitted")
++
++        allowed_punctuation = {"+", "(", ")", "-", ".", " "}
++        for char in number:
++            if not char.isdigit() and char not in allowed_punctuation:
++                raise ValueError("punctuations not permitted")
++
++        digits = "".join(char for char in number if char.isdigit())
++
++        if len(digits) < 10:
++            raise ValueError("must not be fewer than 10 digits")
++        if len(digits) > 11:
++            raise ValueError("must not be greater than 11 digits")
++        if len(digits) == 11:
++            if digits[0] != "1":
++                raise ValueError("11 digits must start with 1")
++            digits = digits[1:]
++
++        area_code = digits[:3]
++        exchange_code = digits[3:6]
++
++        if area_code[0] == "0":
++            raise ValueError("area code cannot start with zero")
++        if area_code[0] == "1":
++            raise ValueError("area code cannot start with one")
++        if exchange_code[0] == "0":
++            raise ValueError("exchange code cannot start with zero")
++        if exchange_code[0] == "1":
++            raise ValueError("exchange code cannot start with one")
++
++        return digits
++
++    @property
++    def number(self):
++        return self._number
++
++    @property
++    def area_code(self):
++        return self._number[:3]
++
++    def pretty(self):
++        return f"({self._number[:3]})-{self._number[3:6]}-{self._number[6:]}"
++

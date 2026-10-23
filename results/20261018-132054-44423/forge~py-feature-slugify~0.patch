@@ -1,0 +1,137 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..34eb88c
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,89 @@
++"""Tests for text_utils.slugify."""
++
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyDocstringExamplesTest(unittest.TestCase):
++    def test_basic_sentence(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++
++    def test_accents_are_folded_to_ascii(self):
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++
++    def test_runs_of_separators_collapse(self):
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++
++    def test_truncates_on_hyphen_boundary(self):
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++
++    def test_no_alphanumeric_returns_empty(self):
++        self.assertEqual(slugify("!!!"), "")
++
++
++class SlugifyEdgeCaseTest(unittest.TestCase):
++    def test_empty_string(self):
++        self.assertEqual(slugify(""), "")
++
++    def test_whitespace_only(self):
++        self.assertEqual(slugify("   \t\n "), "")
++
++    def test_already_a_slug(self):
++        self.assertEqual(slugify("already-a-slug"), "already-a-slug")
++
++    def test_uppercase_and_digits(self):
++        self.assertEqual(slugify("Python 3.12 Release"), "python-3-12-release")
++
++    def test_leading_and_trailing_punctuation(self):
++        self.assertEqual(slugify("--Hello!!"), "hello")
++
++    def test_multiple_accented_characters(self):
++        self.assertEqual(slugify("ÁÉÍÓÚ ñ ü"), "aeiou-n-u")
++
++    def test_underscores_and_slashes_are_separators(self):
++        self.assertEqual(slugify("path/to_file"), "path-to-file")
++
++    def test_no_max_length_keeps_full_slug(self):
++        slug = "the-quick-brown-fox-jumps-over-the-lazy-dog"
++        self.assertEqual(slugify("The quick brown fox jumps over the lazy dog"), slug)
++
++    def test_max_length_zero_returns_empty(self):
++        self.assertEqual(slugify("Hello World", max_length=0), "")
++
++    def test_negative_max_length_returns_empty(self):
++        self.assertEqual(slugify("Hello World", max_length=-5), "")
++
++    def test_max_length_longer_than_slug_is_noop(self):
++        self.assertEqual(slugify("Hello World", max_length=99), "hello-world")
++
++    def test_max_length_exactly_at_hyphen_boundary(self):
++        self.assertEqual(slugify("the quick brown", max_length=9), "the-quick")
++
++    def test_max_length_without_hyphen_boundary_hard_truncates(self):
++        self.assertEqual(slugify("abcdefghij", max_length=4), "abcd")
++
++    def test_max_length_never_leaves_trailing_hyphen(self):
++        # "hello world" -> "hello-world": a cut at 6 would land on the hyphen.
++        self.assertEqual(slugify("hello world", max_length=6), "hello")
++
++    def test_max_length_one(self):
++        self.assertEqual(slugify("Hello World", max_length=1), "h")
++
++    def test_result_never_exceeds_max_length(self):
++        text = "The quick brown fox jumps over the lazy dog"
++        slug = slugify(text, max_length=20)
++        self.assertLessEqual(len(slug), 20)
++        self.assertFalse(slug.endswith("-"))
++        self.assertFalse(slug.startswith("-"))
++
++    def test_non_latin_runs_become_separators(self):
++        self.assertEqual(slugify("a日本語b"), "a-b")
++
++    def test_repeated_calls_are_stable(self):
++        text = "  Crème Brûlée -- 2024!! "
++        self.assertEqual(slugify(text), slugify(text))
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..da078f6 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,16 @@
+ """Text helpers."""
+ 
++import re
++import unicodedata
++
++_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
++
++
++def _strip_accents(text):
++    """Return `text` with combining marks removed (é -> e, ñ -> n, ü -> u)."""
++    decomposed = unicodedata.normalize("NFKD", text)
++    return "".join(char for char in decomposed if not unicodedata.combining(char))
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +31,19 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    text = _strip_accents(text).lower()
++    slug = _SEPARATOR_RE.sub("-", text).strip("-")
++
++    if max_length is not None:
++        if max_length <= 0:
++            return ""
++        if len(slug) > max_length:
++            truncated = slug[:max_length]
++            # A hyphen right at the cut point already marks a word boundary.
++            if slug[max_length] != "-":
++                boundary = truncated.rfind("-")
++                if boundary > 0:
++                    truncated = truncated[:boundary]
++            slug = truncated
++
++    return slug

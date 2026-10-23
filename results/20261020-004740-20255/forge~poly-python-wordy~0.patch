@@ -1,0 +1,62 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..0a3cf33 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,56 @@
++PREFIX = "What is"
++
++OPERATIONS = {
++    "plus": (1, lambda x, y: x + y),
++    "minus": (1, lambda x, y: x - y),
++    "multiplied": (2, lambda x, y: x * y),
++    "divided": (2, lambda x, y: int(x / y)),
++}
++
++
+ def answer(question):
+-    pass
++    """Evaluate a simple math word problem, returning the answer as an integer."""
++    if not question.startswith(PREFIX) or not question.endswith("?"):
++        raise ValueError("unknown operation")
++
++    tokens = question[len(PREFIX) : -1].split()
++    if not tokens:
++        raise ValueError("syntax error")
++
++    # Any token that is neither a number nor part of a known operation
++    # means the question asks for something we cannot do.
++    for token in tokens:
++        if token in OPERATIONS or token == "by":
++            continue
++        try:
++            int(token)
++        except ValueError:
++            raise ValueError("unknown operation")
++
++    position = 0
++    result = _number(tokens, position)
++    position += 1
++
++    while position < len(tokens):
++        operation = tokens[position]
++        if operation not in OPERATIONS:
++            raise ValueError("syntax error")
++
++        length, calculate = OPERATIONS[operation]
++        if length == 2 and tokens[position + 1 : position + 2] != ["by"]:
++            raise ValueError("syntax error")
++        position += length
++
++        operand = _number(tokens, position)
++        position += 1
++        result = calculate(result, operand)
++
++    return result
++
++
++def _number(tokens, position):
++    """Return the integer at `position`, or raise a syntax error."""
++    try:
++        return int(tokens[position])
++    except (IndexError, ValueError):
++        raise ValueError("syntax error")

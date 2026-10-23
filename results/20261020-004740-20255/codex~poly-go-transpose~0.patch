@@ -1,0 +1,37 @@
+diff --git a/transpose.go b/transpose.go
+index 0db7e6a..21fac7a 100644
+--- a/transpose.go
++++ b/transpose.go
+@@ -1,5 +1,31 @@
+ package transpose
+ 
+ func Transpose(input []string) []string {
+-	panic("Please implement the Transpose function")
++	rows := make([][]rune, len(input))
++	maxWidth := 0
++	for i, line := range input {
++		rows[i] = []rune(line)
++		if len(rows[i]) > maxWidth {
++			maxWidth = len(rows[i])
++		}
++	}
++
++	output := make([]string, 0, maxWidth)
++	for column := 0; column < maxWidth; column++ {
++		transposed := make([]rune, len(rows))
++		lastCharacter := -1
++
++		for row, line := range rows {
++			if column < len(line) {
++				transposed[row] = line[column]
++				lastCharacter = row
++			} else {
++				transposed[row] = ' '
++			}
++		}
++
++		output = append(output, string(transposed[:lastCharacter+1]))
++	}
++
++	return output
+ }

@@ -1,0 +1,74 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..a6a514d 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,68 @@
++"""Parse and evaluate simple math word problems."""
++
++_OPERATIONS = {
++    "plus": lambda x, y: x + y,
++    "minus": lambda x, y: x - y,
++    "multiplied": lambda x, y: x * y,
++    "divided": lambda x, y: _divide(x, y),
++}
++
++# Words that may legitimately appear in a question.
++_KEYWORDS = {"plus", "minus", "multiplied", "divided", "by"}
++
++
++def _divide(x, y):
++    """Integer division truncating toward zero, as expected by the tests."""
++    quotient = abs(x) // abs(y)
++    return -quotient if (x < 0) != (y < 0) else quotient
++
++
++def _parse_int(token):
++    try:
++        return int(token)
++    except ValueError:
++        raise ValueError("syntax error") from None
++
++
+ def answer(question):
+-    pass
++    if not isinstance(question, str) or not question.strip().startswith("What is"):
++        raise ValueError("unknown operation")
++
++    if not question.strip().endswith("?"):
++        raise ValueError("unknown operation")
++
++    inner = question.strip()[len("What is"):-1].strip()
++
++    # Any word that is not a known keyword makes the operation unknown.
++    for token in inner.split():
++        if token.isalpha() and token not in _KEYWORDS:
++            raise ValueError("unknown operation")
++
++    tokens = inner.split()
++    if not tokens:
++        raise ValueError("syntax error")
++
++    result = _parse_int(tokens[0])
++    index = 1
++
++    while index < len(tokens):
++        token = tokens[index]
++
++        if token in ("plus", "minus"):
++            operation = _OPERATIONS[token]
++            index += 1
++        elif token in ("multiplied", "divided"):
++            if tokens[index + 1:index + 2] != ["by"]:
++                raise ValueError("syntax error")
++            operation = _OPERATIONS[token]
++            index += 2
++        else:
++            raise ValueError("syntax error")
++
++        if index >= len(tokens):
++            raise ValueError("syntax error")
++
++        result = operation(result, _parse_int(tokens[index]))
++        index += 1
++
++    return result

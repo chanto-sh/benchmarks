@@ -1,0 +1,175 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..c32f387 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,161 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _step(rhs, y, h):
++    """One Dormand-Prince 5(4) step; returns the 5th and 4th order results."""
++    n = len(y)
++    k = [rhs(y)]
++    for s in range(1, 6):
++        row = _A[s]
++        ys = [y[j] + h * sum(row[m] * k[m][j] for m in range(s))
++              for j in range(n)]
++        k.append(rhs(ys))
++    y5 = [y[j] + h * sum(_B5[m] * k[m][j] for m in range(6))
++          for j in range(n)]
++    k.append(rhs(y5))
++    y4 = [y[j] + h * sum(_B4[m] * k[m][j] for m in range(7))
++          for j in range(n)]
++    return y5, y4, k
++
++
++def _quintic(p0, m0, q0, p1, m1, q1, s):
++    """Quintic Hermite value and derivative (w.r.t. s) on [0, 1]."""
++    s2 = s * s
++    s3 = s2 * s
++    s4 = s3 * s
++    s5 = s4 * s
++    value = (p0 * (1.0 - 10.0 * s3 + 15.0 * s4 - 6.0 * s5)
++             + m0 * (s - 6.0 * s3 + 8.0 * s4 - 3.0 * s5)
++             + q0 * (0.5 * s2 - 1.5 * s3 + 1.5 * s4 - 0.5 * s5)
++             + p1 * (10.0 * s3 - 15.0 * s4 + 6.0 * s5)
++             + m1 * (-4.0 * s3 + 7.0 * s4 - 3.0 * s5)
++             + q1 * (0.5 * s3 - s4 + 0.5 * s5))
++    deriv = (p0 * (-30.0 * s2 + 60.0 * s3 - 30.0 * s4)
++             + m0 * (1.0 - 18.0 * s2 + 32.0 * s3 - 15.0 * s4)
++             + q0 * (s - 4.5 * s2 + 6.0 * s3 - 2.5 * s4)
++             + p1 * (30.0 * s2 - 60.0 * s3 + 30.0 * s4)
++             + m1 * (-12.0 * s2 + 28.0 * s3 - 15.0 * s4)
++             + q1 * (1.5 * s2 - 4.0 * s3 + 2.5 * s4))
++    return value, deriv
++
++
++def _event_fraction(y0, y1, k, h):
++    """Fraction of a step at which the radial velocity changes sign."""
++    # Endpoint data: positions, velocities and accelerations.
++    x0, y0_, vx0, vy0 = y0
++    x1, y1_, vx1, vy1 = y1
++    ax0, ay0 = k[0][2], k[0][3]
++    ax1, ay1 = k[6][2], k[6][3]
++
++    def radial_velocity(s):
++        x, dx = _quintic(x0, h * vx0, h * h * ax0,
++                         x1, h * vx1, h * h * ax1, s)
++        y, dy = _quintic(y0_, h * vy0, h * h * ay0,
++                         y1_, h * vy1, h * h * ay1, s)
++        xd, yd = dx / h, dy / h
++        r = math.hypot(x, y)
++        return (x * xd + y * yd) / r
++
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if radial_velocity(mid) < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    y = [float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1])]
++    x, yy, vx, vy = y
++    r = math.hypot(x, yy)
++    if r == 0.0:
++        raise ValueError("initial position is at the origin")
++
++    def rhs(state):
++        ax, ay = accel(state[0], state[1])
++        return (state[2], state[3], ax, ay)
++
++    def radial_velocity(state):
++        rr = math.hypot(state[0], state[1])
++        if rr == 0.0:
++            raise ValueError("particle reaches the origin")
++        return (state[0] * state[2] + state[1] * state[3]) / rr
++
++    # Initial step from the shortest local dynamical timescale.
++    ax0, ay0 = accel(x, yy)
++    speed = math.hypot(vx, vy)
++    acc = math.hypot(ax0, ay0)
++    scales = []
++    if speed > 0.0:
++        scales.append(r / speed)
++    if acc > 0.0:
++        scales.append(math.sqrt(r / acc))
++    h = 0.01 * min(scales) if scales else 0.01 * r
++
++    # A circular orbit has no closest approach; its radial period equals the
++    # orbital period, so return that rather than waiting for a turning point.
++    angular_momentum = x * vy - yy * vx
++    if angular_momentum != 0.0:
++        radial_acc = (x * ax0 + yy * ay0) / r
++        centripetal = angular_momentum ** 2 / r ** 3
++        radial_vel0 = (x * vx + yy * vy) / r
++        scale = abs(radial_acc) + centripetal
++        if (abs(radial_vel0) <= 1e-12 * speed
++                and abs(radial_acc + centripetal) <= 1e-12 * scale):
++            return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    rtol = 1e-12
++    atol = 1e-14
++    t = 0.0
++    u = radial_velocity(y)
++    events = []
++
++    for _ in range(200000):
++        y5, y4, k = _step(rhs, y, h)
++        err = max(
++            abs(y5[i] - y4[i])
++            / (atol + rtol * max(abs(y[i]), abs(y5[i])))
++            for i in range(4)
++        )
++        if err <= 1.0:
++            u5 = radial_velocity(y5)
++            if u < 0.0 <= u5:
++                event_t = t + h * _event_fraction(y, y5, k, h)
++                events.append(event_t)
++                if len(events) == 2:
++                    return events[1] - events[0]
++            t += h
++            y = y5
++            u = u5
++
++        if err == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err ** -0.2
++        if err > 1.0:
++            factor = min(1.0, factor)
++        h *= min(5.0, max(0.2, factor))
++
++        if not math.isfinite(h) or h <= 1e-15 * max(1.0, abs(t)):
++            raise ValueError("integration stalled")
++
++    raise ValueError("no periodic radial motion found")

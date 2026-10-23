@@ -1,0 +1,57 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..2afdd89
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,27 @@
++# BLOCKED: contradictory underscore tests
++
++`test_slug.py` cannot be made to pass in full because two of its tests assert
++mutually exclusive results for the exact same input.
++
++- `test_preserves_underscores` (line 24): `slugify("user_id field")` must be
++  `"user_id-field"` — quoted as "Spec 4.2: identifiers keep their underscores."
++- `test_underscores_become_dashes` (line 28): `slugify("user_id field")` must be
++  `"user-id-field"` — quoted as "Spec 4.5: slugs only ever contain [a-z0-9-]."
++
++Any implementation returns one value or the other, never both. The tests were
++left unchanged as requested; the conflict has to be resolved by the content team
++(or one of the two spec clauses supersedes the other).
++
++## Current state
++
++`slug.py` implements the spec points that do not conflict. It preserves
++underscores, so 6 of the 7 tests pass:
++
++```
++FAIL: test_underscores_become_dashes
++Ran 7 tests ... FAILED (failures=1)
++```
++
++The only remaining failure is the contradictory assertion above. If Spec 4.5 is
++declared to supersede Spec 4.2, replacing underscores with dashes in `slugify`
++(or deleting `test_preserves_underscores`) makes the suite green.
+diff --git a/slug.py b/slug.py
+index 2fc2902..274555b 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,18 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
+ 
+ 
+ def slugify(title):
+     """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    # Fold accents to their ASCII base characters (é -> e).
++    decomposed = unicodedata.normalize("NFKD", title)
++    ascii_title = "".join(c for c in decomposed if not unicodedata.combining(c))
++
++    ascii_title = ascii_title.lower()
++
++    # Spaces and dashes are word separators; everything else that is not an
++    # allowed character is dropped.
++    separated = re.sub(r"[\s-]+", "-", ascii_title)
++    stripped = re.sub(r"[^a-z0-9_-]", "", separated)
++    return stripped.strip("-")

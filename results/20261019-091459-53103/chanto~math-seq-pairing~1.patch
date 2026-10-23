@@ -1,0 +1,70 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..fc10308 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,63 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _pair(a, b):
++    """A bijection from N x N to N whose size grows additively."""
++    p = (a + 1).bit_length()
++    q = (b + 1).bit_length()
++    s = p + q
++    block = 1 << (s - 2)
++
++    # rank of a among the p-bit values and of b among the q-bit values
++    ra = a - (1 << (p - 1)) + 1
++    rb = b - (1 << (q - 1)) + 1
++
++    rank = (p - 1) * block + (ra << (q - 1)) + rb
++    return (s - 3) * block + 1 + rank
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    # Group s contains all pairs whose encoded lengths p + q sum to s.
++    # Its first key is (s - 3) * 2**(s - 2) + 1.
++    bits = n.bit_length()
++    lo, hi = 2, max(3, bits + 3)
++    while lo + 1 < hi:
++        mid = (lo + hi) // 2
++        start = (mid - 3) * (1 << (mid - 2)) + 1
++        if start <= n:
++            lo = mid
++        else:
++            hi = mid
++
++    s = lo
++    block = 1 << (s - 2)
++    rank = n - ((s - 3) * block + 1)
++
++    p = rank // block + 1
++    q = s - p
++    within = rank % block
++
++    ra = within >> (q - 1)
++    rb = within - (ra << (q - 1))
++
++    a = (1 << (p - 1)) - 1 + ra
++    b = (1 << (q - 1)) - 1 + rb
++    return a, b
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(value, key) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

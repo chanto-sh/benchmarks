@@ -1,0 +1,81 @@
+diff --git a/pylint/config/arguments_manager.py b/pylint/config/arguments_manager.py
+index eda1a58..e12a571 100644
+--- a/pylint/config/arguments_manager.py
++++ b/pylint/config/arguments_manager.py
+@@ -677,8 +677,10 @@ class _ArgumentsManager:
+         stdout.
+         """
+         toml_doc = tomlkit.document()
++        tool_table = tomlkit.table(is_super_table=True)
+         pylint_tool_table = tomlkit.table(is_super_table=True)
+-        toml_doc.add(tomlkit.key(["tool", "pylint"]), pylint_tool_table)
++        tool_table.add("pylint", pylint_tool_table)
++        toml_doc.add("tool", tool_table)
+ 
+         for group in sorted(
+             self._arg_parser._action_groups,
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..2507e92 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -120,7 +120,9 @@ def expand_modules(
+         else:
+             is_namespace = modutils.is_namespace(spec)
+             is_directory = modutils.is_directory(spec)
+-        if not is_namespace:
++        if not is_namespace and not _is_in_ignore_list_re(
++            filepath, ignore_list_paths_re
++        ):
+             result.append(
+                 {
+                     "path": filepath,
+diff --git a/tests/lint/unittest_expand_modules.py b/tests/lint/unittest_expand_modules.py
+index 15f72d0..64430ab 100644
+--- a/tests/lint/unittest_expand_modules.py
++++ b/tests/lint/unittest_expand_modules.py
+@@ -134,12 +134,7 @@ class TestExpandModules(CheckerTestCase):
+         "files_or_modules,expected",
+         [
+             ([__file__], []),
+-            (
+-                [str(Path(__file__).parent)],
+-                [
+-                    init_of_package,
+-                ],
+-            ),
++            ([str(Path(__file__).parent)], []),
+         ],
+     )
+     @set_config(ignore_paths=".*/lint/.*")
+diff --git a/tests/lint/unittest_lint.py b/tests/lint/unittest_lint.py
+index 3dbde39..c0920f1 100644
+--- a/tests/lint/unittest_lint.py
++++ b/tests/lint/unittest_lint.py
+@@ -912,6 +912,27 @@ def test_recursive_ignore(ignore_parameter, ignore_parameter_value) -> None:
+     assert module in linted_file_paths
+ 
+ 
++def test_recursive_ignore_paths_for_package() -> None:
++    """A package whose init matches ignore-paths should not be checked recursively."""
++    directory = join(REGRTEST_DATA_DIR, "directory")
++    run = Run(
++        ["--recursive", "y", "--ignore-paths", ".*/package/.*", directory],
++        exit=False,
++    )
++
++    linted_file_paths = [
++        file_item.filepath
++        for file_item in run.linter._iterate_file_descrs(
++            tuple(run.linter._discover_files([directory]))
++        )
++    ]
++
++    ignored_package = os.path.abspath(join(directory, "package"))
++    assert not any(
++        path.startswith(ignored_package + os.sep) for path in linted_file_paths
++    )
++
++
+ def test_import_sibling_module_from_namespace(initialized_linter: PyLinter) -> None:
+     """If the parent directory above `namespace` is on sys.path, ensure that
+     modules under `namespace` can import each other without raising `import-error`."""

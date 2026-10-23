@@ -1,68 +1,107 @@
 # Auditing the benchmark
 
-This is a benchmark of our own tool, so don't take the tables on trust. This page
-covers what each run records, how to check a result yourself, and which runs were
-excluded and why.
+This benchmark measures our own tool, so don't take the tables on trust. This
+page covers what each run records, how to check a result, and what was excluded
+and why.
 
 ## What a result file contains
 
-Each `results/<stamp>-<pid>.json` has:
+Each `results/<stamp>-<pid>.json` has a `meta` block for the run and one entry
+per agent-and-task run.
 
-- **`meta`**, written once per run:
-  - `bench_commit` and `bench_dirty`: the runner, tasks and grader as of that commit, and whether the benchmark repository had uncommitted changes.
-  - `chanto_bin.sha256`: the exact Chanto binary that ran.
-  - `agent_versions`: each agent's `--version` output.
-  - `upstream_model`: the model the proxy really routed to, as the proxy reports it, and `proxy` (the LiteLLM version).
-  - `tasks`: a SHA-256 for every task's definition (prompt, setup, test patch and grader).
-  - `seed`, `timeout_s`, `offline_sandbox` and `offline_profile_sha256` (the macOS sandbox rules).
-  - The platform, and the exact `command`.
-- **`results`**, one entry per agent-and-task run:
-  - pass/fail, wall time, exit code, timeout, "false done" (it claimed success but the check failed), and tampered test files;
-  - `usage`: tokens and calls, metered at the proxy from the provider's own counts;
-  - `meter_label`, which matches every model call that run made in the meter log;
-  - start and end times;
-  - `evidence`: three files kept next to the result in `results/<stamp>-<pid>/`, each with its SHA-256:
-    - `<agent>~<task>~<rep>.out`: the agent's full output;
-    - `.patch`: the change it made, new files included, taken before the grader ran;
-    - `.check.txt`: everything the grader printed.
-    - `.session<N>.json` / `.jsonl`: the agent's own step-by-step transcript, where it keeps one (Chanto, Claude Code, Codex and others that write JSON lines into their config home), for runs from October 14 evening on.
+`meta`:
 
-The October 2026 hard tier's result files and evidence are committed once the run finishes; until then they exist only on the machine running it. Runs from before evidence was recorded automatically (most of the October 2026 hard tier) were saved afterwards in `results/hard-evidence/`. By then the grader had already applied the hidden tests to those workspaces, so their patches leave out the files that the task's `test.patch` touches. `index.json` lists those files for each run.
+- `agent_versions`: each agent's `--version` output.
+- `chanto_bin.sha256`: the exact Chanto binary that ran; newer runs also record
+  `chanto_commit`.
+- `upstream_model`: the model the proxy actually routed to, and `proxy` (the
+  LiteLLM version).
+- `tasks`: a SHA-256 for every task's definition (prompt, setup, test patch,
+  grader).
+- `bench_commit` and `bench_dirty`: the benchmark's own commit, and whether it
+  had uncommitted changes.
+- `seed`, `timeout_s`, `offline_sandbox`, `offline_profile_sha256`, the platform
+  and the exact `command`.
 
-## Checking a result yourself
+Each run entry has pass or fail, wall time, exit code, timeout, *false "done"*
+(it claimed success but the check failed), any edited test files, token usage
+metered at the proxy, a `meter_label`, start and end times, and `evidence`.
 
-- **A pass or fail:** take the task's repository at the commit in `tasks/<task>/instance.json`, apply the run's `.patch`, then run `tasks/<task>/check.sh`. The check restores the test files to their original state, applies SWE-bench's hidden test patch, and runs SWE-bench's FAIL_TO_PASS and PASS_TO_PASS tests. It differs from official SWE-bench scoring in two ways:
-  - it runs each listed test function whole, not each parametrized case;
-  - it runs in a local Python 3.9 virtual environment, not SWE-bench's Docker images.
+**Published evidence** is each run's `.patch`: the change the agent made, new
+files included, captured before grading, in `results/<stamp>-<pid>/`, and the
+grader's output, inline as `check_output`. The agent's full output, its own
+transcript and the full grader log are recorded too but stay on the benchmark
+machine: agents that searched outside their task listed unrelated private files
+in them. Their SHA-256 hashes are in the result file.
+The proxy's per-call meter log isn't published either, for the same reason.
 
-  Every task was checked under this grader when it was imported: the original code fails and SWE-bench's reference fix passes. To repeat that check: `python3 import_swebench.py --ids <list.json>`.
-- **That an agent did the work itself:** read its `.out`. In offline mode it couldn't reach the internet, the fixed upstream release in other installed packages, the other agents' workspaces or earlier results.
-- **That tokens weren't misreported:** filter the meter log (`logs/meter-*.jsonl`) by the run's `meter_label`.
-- **That nothing changed between agents:** `meta.tasks`, `chanto_bin.sha256`, `upstream_model` and `bench_commit` are the same in every shard's file.
-- **The statistics:** `python3 run.py --report results/<files>.json` prints pass rates with 95% Wilson confidence intervals. With 25 tasks and one run each, those intervals are wide. A difference of a few tasks is not a result.
+Runs from before evidence was captured automatically (most of the October 2026
+hard tier) were saved afterwards in `results/hard-evidence/`. The grader had
+already applied the hidden tests to those workspaces by then, so those patches
+leave out the files the task's `test.patch` touches; `index.json` lists them.
+
+## Checking a result
+
+- **A pass or fail:** check out the task's repository at the commit in
+  `tasks/<task>/instance.json`, apply the run's `.patch` and run
+  `tasks/<task>/check.sh`. The check restores the test files, applies SWE-bench's
+  hidden test patch and runs its `FAIL_TO_PASS` and `PASS_TO_PASS` tests. Two
+  differences from official SWE-bench scoring: each listed test function runs
+  whole rather than per parametrized case, and it runs in a local Python virtual
+  environment rather than SWE-bench's Docker images. Every task was validated
+  under this grader at import (`python3 import_swebench.py --ids <list.json>`
+  repeats that).
+- **That nothing changed between agents:** `meta.tasks`, `chanto_bin.sha256`,
+  `upstream_model` and `bench_commit` match across every shard of a run.
+- **The tasks themselves:** compare `meta.tasks` with the task folders here.
+- **The statistics:** `python3 run.py --report results/<files>.json` prints pass
+  rates with 95% Wilson intervals. With 25 tasks and one run each, those are
+  wide: a difference of a few tasks is not a result.
 
 ## Exclusions and incidents (October 2026 hard tier)
 
-Nothing is dropped silently. Everything excluded is listed here.
+Everything excluded is listed here.
 
-- **The first attempt was voided whole, regardless of outcome.** Agents could read newer releases of pytest and pylint from the machine's installed packages, which already contain the fixes. That makes any pass suspect, whoever got it. The attempt's complete result files are in `results/void/`: 5 runs, of which opencode, claude and goose passed and pi failed. The sandbox was fixed to hide all installed packages, package caches and the bench data, and every voided pair was rerun from scratch. Those transcripts weren't kept.
-- **A crashed setup:** one shard stopped when Python's `ensurepip` failed while building a task environment. Setup now retries once. The pairs that never ran were run later with the same settings.
-- **A pause on request:** the run was stopped to free the machine and resumed later. The runs in progress at that moment (one per shard) left no result and were rerun from scratch. `resume_hard.py` reruns only pairs with no result line, so no pair is ever run twice and the better result kept.
-- **Disk full:** the machine's disk filled up during the resumed run (October 14, 13:42). One shard stopped while writing its results. The run it had just finished (goose on pytest-5495) was printed in the log but never recorded, so it counts as not run and was rerun. `resume_hard.py` and `archive_evidence.py` take what's done from the result files, not the logs, so a lost write can't be counted.
-- **Shared machine:** two shards ran in parallel, and there were a few light, non-build activities on the same machine. That affects wall times, not pass rates. Don't compare speeds from this run.
+- **The first attempt was voided whole.** Agents could read newer pytest and
+  pylint releases from the machine's installed packages, which contain the
+  fixes, so any pass was suspect. Its result files are in `results/void/`
+  (5 runs: opencode, Claude Code and Goose passed, Pi failed). The sandbox now
+  hides installed packages, package caches and the benchmark data, and every
+  voided pair was rerun from scratch.
+- **A crashed setup:** one shard stopped when `ensurepip` failed building a task
+  environment. Setup now retries once; the pairs that never ran were run later
+  with the same settings.
+- **A pause:** the run was stopped to free the machine and resumed later. Runs
+  in progress then left no result and were rerun. `resume_hard.py` reruns only
+  pairs with no result, so no pair ran twice with the better result kept.
+- **A full disk** (October 14, 13:42): one shard stopped while writing results.
+  The run it had just finished (Goose on pytest-5495) was never recorded, so it
+  counts as not run and was rerun.
+- **A shared machine:** two shards ran in parallel. That affects wall times, not
+  pass rates; don't compare speeds from this run.
 
 ## Known limitations
 
-- **Agent versions.** Agents are pinned for the whole of a run so that every one of its results comes from one version. On the October 2026 hard tier, two weren't the newest release when the run started: OpenCode V2 2.0.22 (2.0.27 was out) and pi 1.1.0 (1.2.0 was out). The others were current: Claude Code 2.1.300, codex-cli 0.162.1, goose 1.54.0, Qwen Code 0.25.1, Kilo 7.8.8, Crush 0.98.1 and Aider 0.86.2. Repeat runs upgrade all of them first.
-
-- **Which tasks.** The 25 tasks are a fixed-seed sample (`import_swebench.py --seed 42`) from SWE-bench Lite. That's not Verified. The sample is limited to four repositories that can be set up without Docker: pytest, requests, flask and pylint. Tasks whose reference fix didn't pass under this grader were dropped at import. `hard-tasks.txt` is the list.
-
-- **Sample size.** 25 tasks, one run each, on a non-deterministic model. Repeat runs and paired per-task comparisons are needed before claiming one agent beats another.
-- **One model for all.** Every agent talks to the same model (`upstream_model`) through LiteLLM. That isolates the agent from the model, but agents built for a particular model family (Claude Code for Claude, Codex for GPT) run outside their home setup, and the format translation may hurt some more than others.
-- **Offline sandbox.** `--offline` uses `sandbox-exec` on macOS and bubblewrap with socat on Linux. The Linux version blocks the network except the proxy ports and hides the same paths, but its rules differ in detail from macOS. The October 2026 hard tier ran on macOS. Runs without `--offline` can't rule out the contamination described above.
-- **The author's own tool.** Chanto was developed alongside this benchmark and its prompts were tuned on earlier tiers. The SWE-bench hard tier was not used for tuning. Independent reruns are the real test, and all the scripts, tasks, raw results and evidence are here for that.
-- **Binary hashes.** Rust builds are not bit-for-bit reproducible across machines, so a rebuild won't necessarily match `chanto_bin.sha256`. Prebuilt release binaries make this checkable.
-- **Commits in older result files.** Runs recorded before Chanto's public release name a `bench_commit` from its private development history, which isn't published. What those runs graded is still checkable: `meta.tasks` holds each task's SHA-256 digest, which you can compare with the task folders here. Newer runs also record `chanto_commit`, the Chanto sources the binary was built from.
+- **Versions.** Agents are pinned for a whole run. On the October 2026 hard tier,
+  OpenCode 2.0.22 (2.0.27 was out) and Pi 1.1.0 (1.2.0 was out) weren't the
+  newest; the rest were current. Each RESULTS.md section lists its versions.
+- **Which tasks.** A fixed-seed sample (`import_swebench.py --seed 42`) from
+  SWE-bench Lite, not Verified, limited to four repositories that set up without
+  Docker (pytest, requests, Flask, pylint). `hard-tasks.txt` is the list.
+- **Sample size.** 25 tasks, one run each, on a non-deterministic model.
+- **One model for all.** Every agent uses the same model through LiteLLM. That
+  separates the agent from the model, but agents built for one model family
+  (Claude Code, Codex) run outside their home setup.
+- **The sandbox.** `--offline` uses `sandbox-exec` on macOS and bubblewrap on
+  Linux; their rules differ in detail. The October 2026 hard tier ran on macOS.
+- **The author's own tool.** Chanto was developed alongside this benchmark, and
+  its prompts were tuned on earlier tiers, not on the SWE-bench hard tier.
+  Independent reruns are the real test.
+- **Binary hashes.** Rust builds aren't bit-for-bit reproducible across machines,
+  so a rebuild won't necessarily match `chanto_bin.sha256`.
+- **Older commits.** Runs from before Chanto's public release name a
+  `bench_commit` from its private development history. The task hashes in
+  `meta.tasks` still let you confirm what was graded.
 
 ## Rerunning
 

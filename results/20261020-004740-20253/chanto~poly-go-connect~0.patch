@@ -1,0 +1,103 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..8c91f72 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,97 @@
+ package connect
+ 
++import "fmt"
++
++type cell struct {
++	row, col int
++}
++
++// ResultOf determines the winner of a game of Hex.
++// "O" wins by connecting top to bottom, "X" by connecting left to right.
++// It returns an empty string when there is no winner.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	if len(lines) == 0 {
++		return "", fmt.Errorf("empty board")
++	}
++
++	height := len(lines)
++	width := len(lines[0])
++	if width == 0 {
++		return "", fmt.Errorf("empty board row")
++	}
++	for i, line := range lines {
++		if len(line) != width {
++			return "", fmt.Errorf("row %d has length %d, want %d", i, len(line), width)
++		}
++		for _, c := range line {
++			if c != '.' && c != 'X' && c != 'O' {
++				return "", fmt.Errorf("invalid character %q on row %d", c, i)
++			}
++		}
++	}
++
++	if connected(lines, 'X', width, height) {
++		return "X", nil
++	}
++	if connected(lines, 'O', width, height) {
++		return "O", nil
++	}
++	return "", nil
++}
++
++// connected reports whether player's stones form a connection between the
++// player's two sides. For X that is left-to-right; for O top-to-bottom.
++func connected(board []string, player rune, width, height int) bool {
++	visited := make([][]bool, height)
++	for i := range visited {
++		visited[i] = make([]bool, width)
++	}
++
++	var queue []cell
++	var goal func(c cell) bool
++
++	if player == 'X' {
++		goal = func(c cell) bool { return c.col == width-1 }
++		for row := 0; row < height; row++ {
++			if rune(board[row][0]) == player {
++				visited[row][0] = true
++				queue = append(queue, cell{row, 0})
++			}
++		}
++	} else {
++		goal = func(c cell) bool { return c.row == height-1 }
++		for col := 0; col < width; col++ {
++			if rune(board[0][col]) == player {
++				visited[0][col] = true
++				queue = append(queue, cell{0, col})
++			}
++		}
++	}
++
++	// Neighbours on this skewed, parallelogram-shaped grid.
++	offsets := [6][2]int{
++		{-1, 0}, {-1, 1},
++		{0, -1}, {0, 1},
++		{1, -1}, {1, 0},
++	}
++
++	for len(queue) > 0 {
++		c := queue[0]
++		queue = queue[1:]
++		if goal(c) {
++			return true
++		}
++		for _, o := range offsets {
++			r, col := c.row+o[0], c.col+o[1]
++			if r < 0 || r >= height || col < 0 || col >= width {
++				continue
++			}
++			if visited[r][col] || rune(board[r][col]) != player {
++				continue
++			}
++			visited[r][col] = true
++			queue = append(queue, cell{r, col})
++		}
++	}
++	return false
+ }

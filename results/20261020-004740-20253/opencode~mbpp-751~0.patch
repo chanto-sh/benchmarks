@@ -1,0 +1,22 @@
+diff --git a/solution.py b/solution.py
+index 523a623..4e3e4c6 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,16 @@
+ def check_min_heap_helper(arr, i):
+-    pass
++    n = len(arr)
++
++    # A leaf node is always a valid min heap.
++    if i >= n:
++        return True
++
++    left = 2 * i + 1
++    right = 2 * i + 2
++
++    if left < n and arr[left] < arr[i]:
++        return False
++    if right < n and arr[right] < arr[i]:
++        return False
++
++    return check_min_heap_helper(arr, left) and check_min_heap_helper(arr, right)

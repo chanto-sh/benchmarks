@@ -1,0 +1,42 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..a0bab0f 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,5 @@
+ from fractions import Fraction
++from math import comb
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +7,30 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    m = max(0, min(m, n))
++
++    total = Fraction(0)
++
++    # First green at position j: the j-1 cards before it are red or blue,
++    # so the red count is hypergeometric over those r+b cards.
++    for j in range(1, m + 1):
++        lo = max(k, j - 1 - b)
++        hi = min(r, j - 1)
++        ways = sum(comb(r, x) * comb(b, j - 1 - x) for x in range(lo, hi + 1))
++        if ways:
++            total += Fraction(g * ways, comb(n, j) * j)
++
++    # No green among the first m cards: all m are red or blue.
++    lo = max(k, m - b)
++    hi = min(r, m)
++    ways = sum(comb(r, x) * comb(b, m - x) for x in range(lo, hi + 1))
++    if ways:
++        total += Fraction(ways, comb(n, m))
++
++    return total

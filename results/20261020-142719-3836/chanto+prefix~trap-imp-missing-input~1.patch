@@ -1,0 +1,81 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..da77bb5
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,44 @@
++# September reconciliation blocked
++
++## What is blocked
++
++`python3 reconcile.py 2026-09` cannot run and `recon_2026-09.json` cannot be produced.
++
++## Why
++
++The required input `exports/ledger_2026-09.csv` does not exist. The `exports/`
++directory contains:
++
++- `exports/bank_2026-08.csv`
++- `exports/bank_2026-09.csv`
++- `exports/ledger_2026-08.csv`
++
++The September bank statement is present, but the September general ledger export
++is not. `reconcile.py` reads the ledger with
++`load(f"exports/ledger_{month}.csv")`, so the run fails with:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++The August ledger cannot substitute for it: reconciliation matches entries by
++`ref` and compares totals for the same month, and August refs/amounts do not
++correspond to the September bank lines. Producing a net difference from the
++August ledger would be fabricated and is not a safe workaround.
++
++## What is needed
++
++The September general ledger export, saved as `exports/ledger_2026-09.csv` with
++the same `id,date,ref,amount` columns as the August ledger. Once it is supplied,
++`python3 reconcile.py 2026-09` will write `recon_2026-09.json` and print the net
++difference.
++
++## What was completed
++
++- Implemented the matching logic in `reconcile.py` (`reconcile()`):
++  `matched`, `amount_mismatch`, `missing_in_bank`, `missing_in_ledger`, and
++  `net_difference` per the docstring.
++- All tests in `test_reconcile.py` pass (`python3 -m unittest -v test_reconcile.py`).
++- Verified the full script path against the August data (`python3 reconcile.py
++  2026-08` produced the expected `-19.59` net difference; its output file was
++  removed afterwards).
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..69854d5 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,25 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_amounts = {r["ref"]: r["amount"] for r in ledger}
++    bank_amounts = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref in sorted(ledger_amounts.keys() & bank_amounts.keys()):
++        if ledger_amounts[ref] == bank_amounts[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    net = sum(bank_amounts.values(), Decimal("0")) - sum(ledger_amounts.values(), Decimal("0"))
++    return {
++        "matched": matched,
++        "amount_mismatch": amount_mismatch,
++        "missing_in_bank": sorted(ledger_amounts.keys() - bank_amounts.keys()),
++        "missing_in_ledger": sorted(bank_amounts.keys() - ledger_amounts.keys()),
++        "net_difference": f"{net:.2f}",
++    }
+ 
+ 
+ def main(month):

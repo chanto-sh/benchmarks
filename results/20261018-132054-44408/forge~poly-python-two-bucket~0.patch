@@ -1,0 +1,94 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..1c8fae5 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,88 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    """Measure exactly ``goal`` liters using two buckets.
++
++    Returns a tuple of ``(actions, bucket_with_goal, liters_in_other_bucket)``.
++    """
++    if bucket_one <= 0 or bucket_two <= 0:
++        raise ValueError("Bucket sizes must be positive integers.")
++    if start_bucket not in ("one", "two"):
++        raise ValueError('The starting bucket must be either "one" or "two".')
++    if goal <= 0:
++        raise ValueError("The goal must be a positive number of liters.")
++    if goal > max(bucket_one, bucket_two):
++        raise ValueError(
++            "The goal of {0} liters cannot be measured: it exceeds both "
++            "bucket sizes.".format(goal)
++        )
++
++    start_empty_index = 0 if start_bucket == "one" else 1
++    start_full_index = 1 - start_empty_index
++    capacities = (bucket_one, bucket_two)
++    start_state = (
++        (bucket_one, 0) if start_bucket == "one" else (0, bucket_two)
++    )
++
++    # States are (liters in bucket one, liters in bucket two).  The first
++    # action is filling the starting bucket, hence the initial count of 1.
++    queue = deque([(start_state, 1)])
++    seen = {start_state}
++
++    while queue:
++        (first, second), actions = queue.popleft()
++
++        if first == goal:
++            return actions, "one", second
++        if second == goal:
++            return actions, "two", first
++
++        amounts = (first, second)
++        candidates = []
++
++        # Fill a bucket.
++        for index in (0, 1):
++            if amounts[index] != capacities[index]:
++                filled = list(amounts)
++                filled[index] = capacities[index]
++                candidates.append(tuple(filled))
++
++        # Empty a bucket.
++        for index in (0, 1):
++            if amounts[index] != 0:
++                emptied = list(amounts)
++                emptied[index] = 0
++                candidates.append(tuple(emptied))
++
++        # Pour one bucket into the other until the source is empty or the
++        # destination is full.
++        for source, destination in ((0, 1), (1, 0)):
++            if amounts[source] == 0:
++                continue
++            room = capacities[destination] - amounts[destination]
++            if room == 0:
++                continue
++            poured = list(amounts)
++            transfer = min(amounts[source], room)
++            poured[source] -= transfer
++            poured[destination] += transfer
++            candidates.append(tuple(poured))
++
++        for state in candidates:
++            if state in seen:
++                continue
++            # After an action the starting bucket may not be empty while the
++            # other bucket is full.
++            if (
++                state[start_empty_index] == 0
++                and state[start_full_index] == capacities[start_full_index]
++            ):
++                continue
++            seen.add(state)
++            queue.append((state, actions + 1))
++
++    raise ValueError(
++        "It is not possible to measure exactly {0} liters with buckets of "
++        "size {1} and {2}.".format(goal, bucket_one, bucket_two)
++    )

@@ -1,0 +1,72 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..fba9a04 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,55 @@
+ class Zipper:
++    def __init__(self, focus, path=()):
++        # ``focus`` is the current tree node (a dict) and ``path`` is a tuple of
++        # ``(parent_node, direction)`` pairs describing how we got here.  Every
++        # operation returns a new Zipper, leaving the original untouched.
++        self._focus = focus
++        self._path = path
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return None if self._focus is None else self._focus["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        new_focus = dict(self._focus)
++        new_focus["value"] = value
++        return Zipper(new_focus, self._path)
+ 
+     def left(self):
+-        pass
++        if self._focus is None or self._focus["left"] is None:
++            return None
++        return Zipper(self._focus["left"], self._path + ((self._focus, "left"),))
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, tree):
++        new_focus = dict(self._focus)
++        new_focus["left"] = tree
++        return Zipper(new_focus, self._path)
+ 
+     def right(self):
+-        pass
++        if self._focus is None or self._focus["right"] is None:
++            return None
++        return Zipper(self._focus["right"], self._path + ((self._focus, "right"),))
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, tree):
++        new_focus = dict(self._focus)
++        new_focus["right"] = tree
++        return Zipper(new_focus, self._path)
+ 
+     def up(self):
+-        pass
++        if not self._path:
++            return None
++        parent, direction = self._path[-1]
++        new_parent = dict(parent)
++        new_parent[direction] = self._focus
++        return Zipper(new_parent, self._path[:-1])
+ 
+     def to_tree(self):
+-        pass
++        focus = self._focus
++        for parent, direction in reversed(self._path):
++            new_parent = dict(parent)
++            new_parent[direction] = focus
++            focus = new_parent
++        return focus

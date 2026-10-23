@@ -1,0 +1,72 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..1667a41 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,65 @@
+ 
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.board = [
++            row.split()
++            for row in board.splitlines()
++            if row.strip()
++        ]
++
++    def _neighbors(self, row, col):
++        # Hexagonal fields: east/west, plus the four diagonal
++        # neighbours of the offset (staggered) grid.
++        return (
++            (row, col - 1),
++            (row, col + 1),
++            (row - 1, col),
++            (row - 1, col + 1),
++            (row + 1, col - 1),
++            (row + 1, col),
++        )
++
++    def _has_path(self, player, starts, is_target):
++        visited = set()
++        stack = [(r, c) for r, c in starts
++                 if self.board[r][c] == player]
++        while stack:
++            row, col = stack.pop()
++            if (row, col) in visited:
++                continue
++            visited.add((row, col))
++            if is_target(row, col):
++                return True
++            for nr, nc in self._neighbors(row, col):
++                if (
++                    0 <= nr < len(self.board)
++                    and 0 <= nc < len(self.board[nr])
++                    and (nr, nc) not in visited
++                    and self.board[nr][nc] == player
++                ):
++                    stack.append((nr, nc))
++        return False
+ 
+     def get_winner(self):
+-        pass
++        if not self.board:
++            return ""
++
++        # Player O connects top to bottom.
++        starts_o = ((0, c) for c in range(len(self.board[0])))
++        if self._has_path(
++            "O",
++            starts_o,
++            lambda row, col: row == len(self.board) - 1,
++        ):
++            return "O"
++
++        # Player X connects left to right.
++        starts_x = ((r, 0) for r in range(len(self.board)))
++        if self._has_path(
++            "X",
++            starts_x,
++            lambda row, col: col == len(self.board[row]) - 1,
++        ):
++            return "X"
++
++        return ""

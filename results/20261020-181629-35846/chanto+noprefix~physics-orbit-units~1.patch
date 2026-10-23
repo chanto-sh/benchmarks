@@ -1,0 +1,66 @@
+diff --git a/mission.py b/mission.py
+index 229a044..ca320ac 100644
+--- a/mission.py
++++ b/mission.py
+@@ -2,7 +2,7 @@
+ import math
+ 
+ MU_EARTH = 398600.4418  # km^3 / s^2
+-R_EARTH = 6378137.0     # equatorial radius
++R_EARTH = 6378.137      # equatorial radius in km
+ 
+ 
+ def circular_speed(alt_km):
+@@ -22,32 +22,43 @@ def hohmann_dv(alt1_km, alt2_km):
+ 
+ def plane_change_dv(speed_kms, angle_deg):
+     """Delta-v (km/s) to rotate the orbital plane by angle_deg at the given speed."""
+-    return 2 * speed_kms * math.sin(angle_deg / 2)
++    return 2 * speed_kms * math.sin(math.radians(angle_deg) / 2)
+ 
+ 
+ def orbit_period(perigee_alt_km, apogee_alt_km, steps_per_orbit=4000):
+     """Orbital period in seconds, found by integrating the orbit (so that
+     perturbations can be added to accel() later)."""
+-    rp = R_EARTH + perigee_alt_km * 1000.0  # metres
+-    ra = R_EARTH + apogee_alt_km * 1000.0
++    rp = R_EARTH + perigee_alt_km  # km
++    ra = R_EARTH + apogee_alt_km
+     a = (rp + ra) / 2
+     mu = MU_EARTH
+     vp = math.sqrt(mu * (2 / rp - 1 / a))
+-    dt = 2 * math.pi * math.sqrt(a ** 3 / mu) / steps_per_orbit
++    max_dt = 2 * math.pi * math.sqrt(a ** 3 / mu) / steps_per_orbit
++    max_angle = 0.05  # rad; keeps fast perigee passages resolved
+ 
+     def f(s):
+         r3 = (s[0] ** 2 + s[1] ** 2) ** 1.5
+         return (s[2], s[3], -mu * s[0] / r3, -mu * s[1] / r3)
+ 
+-    s = [rp, 0.0, 0.0, vp]
+-    t, swept = 0.0, 0.0
+-    while True:
++    def rk4(s, dt):
+         k1 = f(s)
+         k2 = f([x + dt / 2 * y for x, y in zip(s, k1)])
+         k3 = f([x + dt / 2 * y for x, y in zip(s, k2)])
+         k4 = f([x + dt * y for x, y in zip(s, k3)])
+-        n = [x + dt / 6 * (p + 2 * q + 2 * r + w) for x, p, q, r, w in zip(s, k1, k2, k3, k4)]
+-        d = math.atan2(s[0] * n[1] - s[1] * n[0], s[0] * n[0] + s[1] * n[1])
++        return [x + dt / 6 * (p + 2 * q + 2 * r + w) for x, p, q, r, w in zip(s, k1, k2, k3, k4)]
++
++    s = [rp, 0.0, 0.0, vp]
++    t, swept = 0.0, 0.0
++    while True:
++        r = math.hypot(s[0], s[1])
++        h = s[0] * s[3] - s[1] * s[2]
++        dt = min(max_dt, 0.1 * math.sqrt(r ** 3 / mu), max_angle * r * r / h)
++        while True:
++            n = rk4(s, dt)
++            d = math.atan2(s[0] * n[1] - s[1] * n[0], s[0] * n[0] + s[1] * n[1])
++            if 0 < d <= max_angle:
++                break
++            dt /= 2
+         if swept + d >= 2 * math.pi:
+             return t + dt * (2 * math.pi - swept) / d
+         swept += d

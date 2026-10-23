@@ -1,0 +1,31 @@
+diff --git a/fetcher.py b/fetcher.py
+index 21035b5..155c524 100644
+--- a/fetcher.py
++++ b/fetcher.py
+@@ -11,18 +11,18 @@ async def fetch_all(urls, fetch, limit=5, retries=2):
+       fails, results[i] is the last exception instance raised for it; the other
+       URLs are not affected.
+     """
+-    results = []
++    sem = asyncio.Semaphore(limit)
++    results = [None] * len(urls)
+ 
+-    async def one(url):
+-        sem = asyncio.Semaphore(limit)
++    async def one(i, url):
+         async with sem:
+-            for attempt in range(retries):
++            for attempt in range(retries + 1):
+                 try:
+-                    results.append(await fetch(url))
++                    results[i] = await fetch(url)
+                     return
+-                except Exception:
++                except Exception as exc:
+                     if attempt == retries:
+-                        raise
++                        results[i] = exc
+ 
+-    await asyncio.gather(*(one(u) for u in urls))
++    await asyncio.gather(*(one(i, u) for i, u in enumerate(urls)))
+     return results

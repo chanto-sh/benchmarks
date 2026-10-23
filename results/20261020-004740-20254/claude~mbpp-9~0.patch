@@ -1,0 +1,20 @@
+diff --git a/solution.py b/solution.py
+index f91b0ed..fdf4918 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,13 @@
+-def find_Rotations(s): 
+-    pass
++def find_Rotations(s):
++    """Return the minimum positive number of left rotations that maps s to itself.
++
++    For a string of length n with no smaller period, n rotations are needed.
++    """
++    n = len(s)
++    if n == 0:
++        return 0
++    doubled = s + s
++    for shift in range(1, n):
++        if doubled[shift:shift + n] == s:
++            return shift
++    return n

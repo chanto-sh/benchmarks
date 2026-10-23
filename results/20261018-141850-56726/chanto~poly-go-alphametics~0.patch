@@ -1,0 +1,152 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..8c456ed 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,146 @@
+ package alphametics
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++type term struct {
++	letter byte
++	coeff  int
++}
++
++// Solve finds a digit substitution that makes the alphametic puzzle true.
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, fmt.Errorf("puzzle must contain exactly one == operator")
++	}
++
++	var addends []string
++	for _, word := range strings.Split(parts[0], "+") {
++		word = strings.TrimSpace(word)
++		if word == "" {
++			return nil, fmt.Errorf("empty addend")
++		}
++		addends = append(addends, word)
++	}
++
++	result := strings.TrimSpace(parts[1])
++	if result == "" {
++		return nil, fmt.Errorf("empty result")
++	}
++
++	var leading [26]bool
++	if len(result) > 1 {
++		leading[result[0]-'A'] = true
++	}
++
++	maxLen := len(result)
++	for _, word := range addends {
++		if len(word) > 1 {
++			leading[word[0]-'A'] = true
++		}
++		if len(word) > maxLen {
++			maxLen = len(word)
++		}
++	}
++
++	// Each column stores the letters taking part in it, with their
++	// coefficients: +1 for an addend digit and -1 for the result digit.
++	columns := make([][]term, maxLen)
++	addWord := func(word string, coeff int) {
++		for i := 0; i < len(word); i++ {
++			col := len(word) - 1 - i
++			columns[col] = append(columns[col], term{letter: word[i], coeff: coeff})
++		}
++	}
++	for _, word := range addends {
++		addWord(word, 1)
++	}
++	addWord(result, -1)
++
++	for i, col := range columns {
++		byLetter := make(map[byte]int)
++		for _, t := range col {
++			byLetter[t.letter] += t.coeff
++		}
++		col = col[:0]
++		for letter, coeff := range byLetter {
++			col = append(col, term{letter: letter, coeff: coeff})
++		}
++		columns[i] = col
++	}
++
++	var digits [26]int
++	for i := range digits {
++		digits[i] = -1
++	}
++	var used uint16
++
++	var search func(col, carry int) bool
++	search = func(col, carry int) bool {
++		if col == maxLen {
++			return carry == 0
++		}
++
++		entries := columns[col]
++
++		var unknown []byte
++		for _, t := range entries {
++			idx := t.letter - 'A'
++			if digits[idx] == -1 {
++				unknown = append(unknown, t.letter)
++			}
++		}
++
++		var assign func(i int) bool
++		assign = func(i int) bool {
++			if i == len(unknown) {
++				total := carry
++				for _, t := range entries {
++					total += t.coeff * digits[t.letter-'A']
++				}
++				if total < 0 || total%10 != 0 {
++					return false
++				}
++				return search(col+1, total/10)
++			}
++
++			letter := unknown[i]
++			idx := letter - 'A'
++			for d := 0; d < 10; d++ {
++				bit := uint16(1) << d
++				if used&bit != 0 {
++					continue
++				}
++				if d == 0 && leading[idx] {
++					continue
++				}
++
++				digits[idx] = d
++				used |= bit
++				if assign(i + 1) {
++					return true
++				}
++				used &^= bit
++				digits[idx] = -1
++			}
++			return false
++		}
++
++		return assign(0)
++	}
++
++	if !search(0, 0) {
++		return nil, fmt.Errorf("no solution for puzzle %q", puzzle)
++	}
++
++	solution := make(map[string]int)
++	for letter, digit := range digits {
++		if digit != -1 {
++			solution[string(rune('A'+letter))] = digit
++		}
++	}
++	return solution, nil
+ }

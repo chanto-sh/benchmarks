@@ -1,0 +1,22 @@
+diff --git a/solution.py b/solution.py
+index 1e72c67..c4e7610 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,14 @@
+-import math  
+-def next_Perfect_Square(N): 
+-    pass
++import math
++
++
++def next_Perfect_Square(N):
++    """Return the smallest perfect square strictly greater than N."""
++    n = int(N)
++    if n < 0:
++        return 0
++    root = math.isqrt(n)
++    # For a non-negative n, isqrt(n) is the floor of its square root, so
++    # (root + 1) ** 2 is the first square strictly greater than n — this
++    # also handles the case where n is itself a perfect square.
++    candidate = root + 1
++    return candidate * candidate

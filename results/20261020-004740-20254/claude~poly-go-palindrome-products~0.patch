@@ -1,0 +1,78 @@
+diff --git a/palindrome_products.go b/palindrome_products.go
+index 892101c..d610a83 100644
+--- a/palindrome_products.go
++++ b/palindrome_products.go
+@@ -1,7 +1,71 @@
+ package palindrome
+ 
+-// Define Product type here.
++import "fmt"
+ 
++// Product holds a palindromic product value and all the factor pairs
++// within the requested range that produce it.
++type Product struct {
++	Value          int
++	Factorizations [][2]int
++}
++
++// Products returns the smallest and largest palindromic products of two
++// numbers in the inclusive range [fmin, fmax].
+ func Products(fmin, fmax int) (Product, Product, error) {
+-	panic("Please implement the Products function")
++	if fmin > fmax {
++		return Product{}, Product{}, fmt.Errorf("fmin > fmax")
++	}
++
++	pmin := Product{}
++	pmax := Product{}
++	found := false
++
++	for a := fmin; a <= fmax; a++ {
++		for b := a; b <= fmax; b++ {
++			p := a * b
++			if !isPalindrome(p) {
++				continue
++			}
++
++			if !found {
++				pmin = Product{Value: p, Factorizations: [][2]int{{a, b}}}
++				pmax = Product{Value: p, Factorizations: [][2]int{{a, b}}}
++				found = true
++				continue
++			}
++
++			switch {
++			case p < pmin.Value:
++				pmin = Product{Value: p, Factorizations: [][2]int{{a, b}}}
++			case p == pmin.Value:
++				pmin.Factorizations = append(pmin.Factorizations, [2]int{a, b})
++			}
++
++			switch {
++			case p > pmax.Value:
++				pmax = Product{Value: p, Factorizations: [][2]int{{a, b}}}
++			case p == pmax.Value:
++				pmax.Factorizations = append(pmax.Factorizations, [2]int{a, b})
++			}
++		}
++	}
++
++	if !found {
++		return Product{}, Product{}, fmt.Errorf("no palindromes")
++	}
++
++	// Factor pairs are collected in ascending (a, b) order by construction.
++
++	return pmin, pmax, nil
++}
++
++func isPalindrome(n int) bool {
++	if n < 0 {
++		n = -n
++	}
++	reversed := 0
++	for x := n; x > 0; x /= 10 {
++		reversed = reversed*10 + x%10
++	}
++	return reversed == n
+ }

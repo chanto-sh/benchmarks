@@ -1,0 +1,95 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..bdff37f
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,49 @@
++"""Tests for text_utils.slugify."""
++
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyTests(unittest.TestCase):
++    def test_documented_examples(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++        self.assertEqual(slugify("!!!"), "")
++
++    def test_accents_are_folded(self):
++        self.assertEqual(slugify("naïve café"), "naive-cafe")
++        self.assertEqual(slugify("Añejo über"), "anejo-uber")
++
++    def test_separators_collapse_and_are_stripped(self):
++        self.assertEqual(slugify("---Hello...World---"), "hello-world")
++        self.assertEqual(slugify("foo/bar\tbaz\nqux"), "foo-bar-baz-qux")
++
++    def test_no_letters_or_digits(self):
++        self.assertEqual(slugify(""), "")
++        self.assertEqual(slugify("   "), "")
++        self.assertEqual(slugify("_-_"), "")
++
++    def test_digits_are_kept(self):
++        self.assertEqual(slugify("Python 3.12!"), "python-3-12")
++
++    def test_truncation_without_hyphen(self):
++        self.assertEqual(slugify("hello", max_length=3), "hel")
++
++    def test_truncation_at_hyphen_boundary(self):
++        self.assertEqual(slugify("hello-world", max_length=8), "hello")
++        self.assertEqual(slugify("hello-world", max_length=11), "hello-world")
++
++    def test_truncation_does_not_leave_trailing_hyphen(self):
++        self.assertEqual(slugify("hello world", max_length=6), "hello")
++        self.assertEqual(slugify("a b c", max_length=2), "a")
++
++    def test_truncation_to_zero_or_negative(self):
++        self.assertEqual(slugify("hello", max_length=0), "")
++        self.assertEqual(slugify("hello", max_length=-5), "")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..4020ee2 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,8 @@
+ """Text helpers."""
+ 
++import re
++import unicodedata
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +23,25 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    if text is None:
++        text = ""
++
++    # Split accented characters into their base letter plus combining marks,
++    # then drop the marks so the base ASCII letter remains.
++    decomposed = unicodedata.normalize("NFKD", text)
++    base = "".join(char for char in decomposed if not unicodedata.combining(char))
++
++    slug = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")
++
++    if max_length is not None:
++        if max_length <= 0:
++            return ""
++        if len(slug) > max_length:
++            truncated = slug[:max_length]
++            # If truncation lands in the middle of a word, fall back to the
++            # previous hyphen boundary.
++            if slug[max_length] != "-" and "-" in truncated:
++                truncated = truncated.rsplit("-", 1)[0]
++            slug = truncated.rstrip("-")
++
++    return slug

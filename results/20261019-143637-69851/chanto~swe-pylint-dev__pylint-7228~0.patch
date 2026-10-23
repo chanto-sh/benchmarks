@@ -1,0 +1,106 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..1f194ce
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,4 @@
++Give a clearer error message instead of a traceback when an invalid regular
++expression is used for an option in a configuration file or on the command line.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..c6ee8ac 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,21 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regexp_transformer(value: str) -> Pattern[str]:
++    """Transforms a string to a regex."""
++    try:
++        return re.compile(value)
++    except re.error as exc:
++        raise argparse.ArgumentTypeError(
++            f"Invalid regular expression: {value!r}: {exc}"
++        ) from exc
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regexp_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -111,13 +121,18 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions paths."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(
+-            re.compile(
+-                str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+-                + "|"
+-                + pathlib.PureWindowsPath(pattern).as_posix()
++        try:
++            patterns.append(
++                re.compile(
++                    str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
++                    + "|"
++                    + pathlib.PureWindowsPath(pattern).as_posix()
++                )
+             )
+-        )
++        except re.error as exc:
++            raise argparse.ArgumentTypeError(
++                f"Invalid regular expression: {pattern!r}: {exc}"
++            ) from exc
+     return patterns
+ 
+ 
+@@ -130,7 +145,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regexp_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,
+diff --git a/tests/config/test_regexp_argument_error.py b/tests/config/test_regexp_argument_error.py
+new file mode 100644
+index 0000000..8862276
+--- /dev/null
++++ b/tests/config/test_regexp_argument_error.py
+@@ -0,0 +1,29 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++# Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
++
++"""Tests for invalid regular expressions passed as options."""
++
++from __future__ import annotations
++
++import argparse
++from collections.abc import Callable
++
++import pytest
++
++from pylint.config.argument import (
++    _regexp_csv_transfomer,
++    _regexp_paths_csv_transfomer,
++    _regexp_transformer,
++)
++
++
++@pytest.mark.parametrize(
++    "transformer",
++    [_regexp_transformer, _regexp_csv_transfomer, _regexp_paths_csv_transfomer],
++)
++def test_invalid_regexp_raises_argument_type_error(
++    transformer: Callable[[str], object]
++) -> None:
++    with pytest.raises(argparse.ArgumentTypeError):
++        transformer(r"test_)")

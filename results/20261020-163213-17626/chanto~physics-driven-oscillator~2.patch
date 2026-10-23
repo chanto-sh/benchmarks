@@ -1,0 +1,105 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..b0ffd8f 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,98 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++_FMA = getattr(math, "fma", None)
++
++
++def _stiffness(m, k, omega):
++    """k - m * omega**2, retaining accuracy near resonance."""
++    if _FMA is None:
++        return k - m * omega * omega
++
++    p = m * omega
++    p_error = _FMA(m, omega, -p)
++    square = p * omega
++    square_error = _FMA(p, omega, -square)
++    return math.fsum((k, -square, -square_error, -p_error * omega))
++
++
++def _discriminant(m, k, c):
++    """c**2 - 4*m*k, retaining accuracy near critical damping."""
++    if _FMA is None:
++        return c * c - 4.0 * m * k
++
++    c2 = c * c
++    c2_error = _FMA(c, c, -c2)
++    product = m * k
++    product_error = _FMA(m, k, -product)
++    return math.fsum((c2, -4.0 * product, c2_error, -4.0 * product_error))
++
++
++def _steady_coefficients(m, k, c, F0, omega):
++    """Return C, D for the steady-state solution C cos(omega t) + D sin(omega t)."""
++    stiffness = _stiffness(m, k, omega)
++    damping = c * omega
++    denominator = math.hypot(stiffness, damping)
++    scale = F0 / denominator
++    return scale * (stiffness / denominator), scale * (damping / denominator)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    stiffness = _stiffness(m, k, omega)
++    damping = c * omega
++    return abs(F0) / math.hypot(stiffness, damping)
++
++
++def _sinc(u):
++    """sin(u) / u, including the limit at u = 0."""
++    if abs(u) < 1e-8:
++        u2 = u * u
++        return 1.0 - u2 / 6.0 + u2 * u2 / 120.0
++    return math.sin(u) / u
++
++
++def _sinhc(u):
++    """sinh(u) / u, including the limit at u = 0."""
++    if abs(u) < 1e-8:
++        u2 = u * u
++        return 1.0 + u2 / 6.0 + u2 * u2 / 120.0
++    return math.sinh(u) / u
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    C, D = _steady_coefficients(m, k, c, F0, omega)
++
++    # Remove the steady-state part to obtain the homogeneous initial conditions.
++    X = x0 - C
++    V = v0 - D * omega
++
++    alpha = c / (2.0 * m)
++    discriminant = _discriminant(m, k, c)
++    W = V + alpha * X
++
++    if discriminant < 0.0:
++        # Underdamped (this also covers c = 0).
++        beta = math.sqrt(-discriminant) / (2.0 * m)
++        u = beta * t
++        homogeneous = math.exp(-alpha * t) * (X * math.cos(u) + W * t * _sinc(u))
++    elif discriminant > 0.0:
++        # Overdamped.  The hyperbolic form remains accurate as beta -> 0.
++        beta = math.sqrt(discriminant) / (2.0 * m)
++        u = beta * t
++        if u <= 50.0:
++            homogeneous = math.exp(-alpha * t) * (X * math.cosh(u) + W * t * _sinhc(u))
++        else:
++            r1 = -(k / m) / (alpha + beta)
++            r2 = -alpha - beta
++            B = X / 2.0 + W / (2.0 * beta)
++            E = X / 2.0 - W / (2.0 * beta)
++            homogeneous = B * math.exp(r1 * t) + E * math.exp(r2 * t)
++    else:
++        # Critically damped.
++        homogeneous = math.exp(-alpha * t) * (X + W * t)
++
++    return C * math.cos(omega * t) + D * math.sin(omega * t) + homogeneous

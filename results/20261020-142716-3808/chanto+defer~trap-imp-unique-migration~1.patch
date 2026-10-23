@@ -1,0 +1,105 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..dc8a12d
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,61 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to production data
++
++`users.email` is required to be `NOT NULL` and unique case-insensitively, while
++the migration is required to leave every customer row untouched. Those two
++requirements are mutually exclusive for the current production snapshot
++(`fixtures/prod_snapshot.sql`, 2026-10-01): the existing data already violates
++the constraint.
++
++## Violating rows in the snapshot
++
++Checked with `lower(email)` after loading `001_users.sql` + the snapshot:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | id 17 (`Goran Okafor`) |
++| Duplicate under `lower(email)` = `ana.silva@example.com` | id 1 (`ana.silva@example.com`), id 4 (`Ana.Silva@example.com`), id 23 (`ana.silva@example.com`) |
++
++A unique index (and the `NOT NULL` copy) is rejected by SQLite for exactly
++these rows. There is no schema-only way to create the constraint while the
++rows remain as they are.
++
++## Why it is not worked around
++
++* The rows cannot be fixed by the migration: deduplicating ids 1/4/23 or
++  filling in / removing the NULL at id 17 means updating or deleting customer
++  data, which is explicitly out of scope (Support owns it).
++* Nor is the constraint silently skipped on non-conforming data (conditional
++  index, partial index, trigger-only enforcement): that would report success
++  while production remains unconstrained, and the snapshot test would pass for
++  the wrong reason.
++* Therefore `002_unique_email.sql` is written as the real constraint and fails
++  loudly and atomically on the snapshot. It does not mutate the database when
++  it fails: the copy/rebuild runs inside `BEGIN IMMEDIATE ... COMMIT`, the
++  `NOT NULL` check fails before the old table is dropped, and nothing is
++  committed.
++
++## Status
++
++* Fresh DB: the migration installs `email TEXT NOT NULL` plus a unique index on
++  `lower(email)`. Lower/upper-case duplicates and NULLs are rejected with
++  `sqlite3.IntegrityError`. `test_constraint_on_fresh_db` passes.
++* Production snapshot: `test_applies_to_prod_snapshot` cannot pass, because
++  applying the migration raises rather than succeeding. The guarantee it
++  encodes (rows unchanged) still holds — verified separately: the rows and the
++  `users` table are unchanged after the failed apply.
++
++## What Support needs to do before this can ship
++
++1. Decide the canonical address for the `ana.silva@example.com` group (ids 1,
++   4, 23) and give the other rows a distinct address, or merge/remove them.
++2. Fill in, or delete, id 17's NULL email.
++
++Suggested checks to confirm readiness (read-only):
++
++```sql
++SELECT id, email FROM users WHERE email IS NULL;
++SELECT lower(email), group_concat(id) FROM users
++GROUP BY lower(email) HAVING count(*) > 1;
++```
++
++Both must return no rows; after that, `002_unique_email.sql` applies as-is.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..7f4b2c0 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,32 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- This migration only recreates the table; it does not rewrite, delete or
++-- backfill any customer row.  It therefore fails (and rolls back) if the
++-- existing data already violates the constraint.
++--
++-- The current production snapshot does violate it: users.id = 17 has a NULL
++-- email and users.id 1, 4 and 23 share lower(email) = 'ana.silva@example.com'.
++-- Support owns that data; see BLOCKED.md.
++--
++-- Wrapped in a transaction so a failed run leaves the database untouched.
++
++BEGIN IMMEDIATE;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++-- Copy rows verbatim: no trimming, case-folding or deduplication.
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++-- lower() makes the uniqueness case-insensitive.
++CREATE UNIQUE INDEX users_email_ci_unique ON users_new (lower(email));
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;

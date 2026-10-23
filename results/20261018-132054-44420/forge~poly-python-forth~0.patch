@@ -1,0 +1,162 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..90e0e36 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,155 @@
+ class StackUnderflowError(Exception):
+-    pass
++    """Exception raised when Stack is not full.
++
++       message: explanation of the error.
++    """
++
++    def __init__(self, message):
++        super().__init__(message)
++        self.message = message
++
++
++_DIGITS = "0123456789"
++
++
++def _is_number(token):
++    """Return True if token is a (possibly negative) sequence of ASCII digits."""
++    body = token[1:] if token.startswith("-") else token
++    return bool(body) and all(char in _DIGITS for char in body)
++
++
++def _require(stack, count):
++    if len(stack) < count:
++        raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _add(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left + right)
++
++
++def _subtract(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left - right)
++
++
++def _multiply(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left * right)
++
++
++def _divide(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    if right == 0:
++        raise ZeroDivisionError("divide by zero")
++    quotient = abs(left) // abs(right)
++    if (left < 0) != (right < 0):
++        quotient = -quotient
++    stack.append(quotient)
++
++
++def _dup(stack):
++    _require(stack, 1)
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    _require(stack, 1)
++    stack.pop()
++
++
++def _swap(stack):
++    _require(stack, 2)
++    stack[-2], stack[-1] = stack[-1], stack[-2]
++
++
++def _over(stack):
++    _require(stack, 2)
++    stack.append(stack[-2])
++
++
++_OPERATIONS = {
++    "+": _add,
++    "-": _subtract,
++    "*": _multiply,
++    "/": _divide,
++    "dup": _dup,
++    "drop": _drop,
++    "swap": _swap,
++    "over": _over,
++}
++
++
++def _expand(body, definitions):
++    """Resolve user-defined words in a definition body at definition time."""
++    expanded = []
++    for token in body:
++        word = token.lower()
++        if word in definitions:
++            expanded.extend(definitions[word])
++        else:
++            expanded.append(token)
++    return expanded
++
++
++def _execute(token, stack, definitions):
++    word = token.lower()
++    if _is_number(word):
++        stack.append(int(word))
++        return
++
++    if word in definitions:
++        for inner in definitions[word]:
++            _execute(inner, stack, definitions)
++        return
++
++    operation = _OPERATIONS.get(word)
++    if operation is None:
++        raise ValueError("undefined operation")
++    operation(stack)
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    stack = []
++    definitions = {}
++
++    tokens = []
++    for line in input_data:
++        tokens.extend(line.split())
++
++    index = 0
++    while index < len(tokens):
++        token = tokens[index]
++
++        if token == ":":
++            index += 1
++            if index >= len(tokens):
++                raise ValueError("illegal operation")
++            name = tokens[index].lower()
++            if _is_number(name):
++                raise ValueError("illegal operation")
++            index += 1
++
++            body = []
++            while index < len(tokens) and tokens[index] != ";":
++                body.append(tokens[index])
++                index += 1
++            if index >= len(tokens):
++                raise ValueError("illegal operation")
++            index += 1
++
++            definitions[name] = _expand(body, definitions)
++            continue
++
++        _execute(token, stack, definitions)
++        index += 1
++
++    return stack

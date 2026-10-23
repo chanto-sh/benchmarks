@@ -1,0 +1,77 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..fdf6778 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,70 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    return F0 / math.hypot(detuning, c * omega)
++
++
++def _sinc(z):
++    """sin(z) / z, continuous at z = 0."""
++    if z == 0.0:
++        return 1.0
++    return math.sin(z) / z
++
++
++def _sinhc(z):
++    """sinh(z) / z, continuous at z = 0."""
++    if z == 0.0:
++        return 1.0
++    return math.sinh(z) / z
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    alpha = c / (2.0 * m)
++    wn2 = k / m
++
++    # Particular solution x_p = A cos(omega t - phi).
++    detuning = k - m * omega * omega
++    denom = math.hypot(detuning, c * omega)
++    a = F0 / denom
++    cos_phi = detuning / denom
++    sin_phi = c * omega / denom
++    xp0 = a * cos_phi
++    vp0 = a * omega * sin_phi
++
++    # Homogeneous solution with x_h(0) = x0 - xp0, x_h'(0) = v0 - vp0.
++    x = x0 - xp0
++    y = (v0 - vp0) + alpha * x
++    eta = alpha * alpha - wn2
++
++    if eta < 0.0:
++        # Underdamped (including c = 0): roots -alpha +/- i*omega_d.
++        wd = math.sqrt(-eta)
++        z = wd * t
++        transient = math.exp(-alpha * t) * (x * math.cos(z) + y * t * _sinc(z))
++    elif eta > 0.0:
++        # Overdamped: roots -alpha +/- beta.  Use a hyperbolic form for
++        # moderate beta*t so that it stays accurate as beta -> 0.
++        beta = math.sqrt(eta)
++        z = beta * t
++        if abs(z) <= 100.0:
++            transient = math.exp(-alpha * t) * (
++                x * math.cosh(z) + y * t * _sinhc(z)
++            )
++        else:
++            # Avoid overflowing cosh/sinh when beta*t is large.
++            e1 = math.exp((-alpha + beta) * t)
++            e2 = math.exp((-alpha - beta) * t)
++            transient = 0.5 * (
++                (x + y * t / z) * e1 + (x - y * t / z) * e2
++            )
++    else:
++        # Critically damped: repeated root -alpha.
++        transient = math.exp(-alpha * t) * (x + y * t)
++
++    return transient + a * math.cos(omega * t - math.atan2(c * omega, detuning))

@@ -1,0 +1,212 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..edcd635 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,197 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++
++_B51 = 35.0 / 384.0
++_B53 = 500.0 / 1113.0
++_B54 = 125.0 / 192.0
++_B55 = -2187.0 / 6784.0
++_B56 = 11.0 / 84.0
++
++_B41 = 5179.0 / 57600.0
++_B43 = 7571.0 / 16695.0
++_B44 = 393.0 / 640.0
++_B45 = -92097.0 / 339200.0
++_B46 = 187.0 / 2100.0
++_B47 = 1.0 / 40.0
++
++
++def _dopri5_step(r, u, h, rhs):
++    """One Dormand-Prince step for the radial state (r, dr/dt)."""
++    k1r, k1u = rhs(r, u)
++
++    k2r, k2u = rhs(r + h * _A21 * k1r,
++                    u + h * _A21 * k1u)
++
++    k3r, k3u = rhs(r + h * (_A31 * k1r + _A32 * k2r),
++                    u + h * (_A31 * k1u + _A32 * k2u))
++
++    k4r, k4u = rhs(r + h * (_A41 * k1r + _A42 * k2r + _A43 * k3r),
++                    u + h * (_A41 * k1u + _A42 * k2u + _A43 * k3u))
++
++    k5r, k5u = rhs(r + h * (_A51 * k1r + _A52 * k2r +
++                            _A53 * k3r + _A54 * k4r),
++                    u + h * (_A51 * k1u + _A52 * k2u +
++                            _A53 * k3u + _A54 * k4u))
++
++    k6r, k6u = rhs(r + h * (_A61 * k1r + _A62 * k2r + _A63 * k3r +
++                            _A64 * k4r + _A65 * k5r),
++                    u + h * (_A61 * k1u + _A62 * k2u + _A63 * k3u +
++                            _A64 * k4u + _A65 * k5u))
++
++    r5 = r + h * (_B51 * k1r + _B53 * k3r + _B54 * k4r +
++                  _B55 * k5r + _B56 * k6r)
++    u5 = u + h * (_B51 * k1u + _B53 * k3u + _B54 * k4u +
++                  _B55 * k5u + _B56 * k6u)
++
++    k7r, k7u = rhs(r5, u5)
++
++    r4 = r + h * (_B41 * k1r + _B43 * k3r + _B44 * k4r +
++                  _B45 * k5r + _B46 * k6r + _B47 * k7r)
++    u4 = u + h * (_B41 * k1u + _B43 * k3u + _B44 * k4u +
++                  _B45 * k5u + _B46 * k6u + _B47 * k7u)
++
++    return r5, u5, r5 - r4, u5 - u4
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The motion is central, so only the radial coordinate matters.  With
++    angular momentum ``L``, the radial equation is
++
++        r'' = L**2 / r**3 + a_r(r),
++
++    where ``a_r`` is the outward radial acceleration.  The time between a
++    pericentre and the following apocentre (or vice versa) is half the
++    radial period; the result is therefore twice the time between two
++    successive radial turning points.
++    """
++    x0, y0 = r0
++    vx0, vy0 = v0
++
++    r = math.hypot(x0, y0)
++    if r == 0.0:
++        raise ValueError("starting position must not be at the origin")
++
++    speed = math.hypot(vx0, vy0)
++    u = (x0 * vx0 + y0 * vy0) / r          # dr/dt
++    L = x0 * vy0 - y0 * vx0                 # specific angular momentum
++
++    def radial_accel(radius):
++        # For a central force the acceleration at (radius, 0) is radial.
++        ax, _ = accel(radius, 0.0)
++        return ax
++
++    def rhs(radius, radial_velocity):
++        return (radial_velocity,
++                L * L / (radius * radius * radius) + radial_accel(radius))
++
++    # A perfectly circular orbit is a degenerate radial oscillation.
++    centripetal = L * L / (r * r * r)
++    a_force = radial_accel(r)
++    net0 = centripetal + a_force
++    if (speed > 0.0 and
++            abs(u) <= 1.0e-12 * speed and
++            abs(net0) <= 1.0e-11 * (abs(centripetal) + abs(a_force) + 1.0e-300)):
++        return 2.0 * math.pi * r / speed
++
++    # Characteristic scales for the absolute error tolerances.
++    r_scale = max(r, L * L / (speed * speed) if speed > 0.0 else r)
++    v_scale = max(speed,
++                  math.sqrt(abs(net0) * r) if net0 != 0.0 else speed,
++                  1.0e-300)
++    atol_r = 1.0e-14 * r_scale
++    atol_u = 1.0e-14 * v_scale
++    rtol = 1.0e-12
++
++    def locate_turning(r_start, u_start, h):
++        """Find the time of the zero of u in (0, h)."""
++        lo, hi = 0.0, h
++        for _ in range(55):
++            mid = 0.5 * (lo + hi)
++            r_mid, u_mid, _, _ = _dopri5_step(r_start, u_start, mid, rhs)
++            if u_mid == 0.0:
++                return mid, r_mid
++            if (u_mid > 0.0) == (u_start > 0.0):
++                lo = mid
++            else:
++                hi = mid
++        dt = 0.5 * (lo + hi)
++        r_ev, _, _, _ = _dopri5_step(r_start, u_start, dt, rhs)
++        return dt, r_ev
++
++    # Initial step: a small fraction of the local dynamical time scale.
++    if speed > 0.0:
++        h = 1.0e-3 * r / speed
++    elif net0 != 0.0:
++        h = 1.0e-3 * math.sqrt(r / abs(net0))
++    else:
++        raise ValueError("initial state has no bounded motion")
++    t = 0.0
++    prev_u = u
++    turning_times = []
++    steps = 0
++
++    while len(turning_times) < 2:
++        steps += 1
++        if steps > 500000:
++            raise ValueError("could not find two radial turning points")
++
++        # Do not let a step skip over a radial oscillation.
++        omega_est = math.sqrt((L / (r * r)) ** 2 +
++                              abs(L * L / (r * r * r) + radial_accel(r)) / r)
++        if omega_est > 0.0:
++            h_cap = 0.02 * (2.0 * math.pi / omega_est)
++        else:
++            h_cap = math.inf
++        h_try = min(h, h_cap)
++
++        r_new, u_new, err_r, err_u = _dopri5_step(r, u, h_try, rhs)
++
++        if r_new <= 0.0:
++            h = 0.25 * h_try
++            continue
++
++        scale_r = atol_r + rtol * max(abs(r), abs(r_new))
++        scale_u = atol_u + rtol * max(abs(u), abs(u_new))
++        err_norm = max(abs(err_r) / scale_r, abs(err_u) / scale_u)
++
++        if err_norm <= 1.0:
++            if prev_u is not None and prev_u * u_new < 0.0:
++                dt, r_ev = locate_turning(r, u, h_try)
++                t += dt
++                turning_times.append(t)
++                r, u = r_ev, 0.0
++                prev_u = 0.0
++                # The event may be well before the end of the attempted step.
++                h = max(dt, 1.0e-12 * h_try)
++            else:
++                t += h_try
++                r, u = r_new, u_new
++                prev_u = u
++                if err_norm == 0.0:
++                    factor = 5.0
++                else:
++                    factor = 0.9 * err_norm ** -0.2
++                    factor = min(5.0, max(0.2, factor))
++                h = h_try * factor
++        else:
++            factor = 0.9 * err_norm ** -0.2
++            factor = min(1.0, max(0.1, factor))
++            h = h_try * factor
++
++    return 2.0 * (turning_times[1] - turning_times[0])

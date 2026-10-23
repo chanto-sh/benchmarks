@@ -1,0 +1,108 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..628920d 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,101 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _value_count(nbits):
++    """How many non-negative ints have this bit length."""
++    return 1 if nbits == 0 else 1 << (nbits - 1)
++
++
++def _lowest(nbits):
++    """Smallest non-negative int with this bit length."""
++    return 0 if nbits == 0 else 1 << (nbits - 1)
++
++
++def _block_start(m):
++    """Number of pairs (a, b) with a.bit_length() + b.bit_length() < m."""
++    if m <= 0:
++        return 0
++    if m == 1:
++        return 1
++    return (m + 1) << (m - 2)
++
++
++def _alpha_start(m, alpha):
++    """Number of pairs of bit-length sum m whose first bit length is < alpha."""
++    if alpha <= 0:
++        return 0
++    if m == 1:
++        return 1
++    return (1 << (m - 1)) + ((alpha - 1) << (m - 2))
++
++
++def _pair(a, b):
++    """Bijection from pairs of non-negative ints to non-negative ints.
++
++    Pairs are ordered by m = a.bit_length() + b.bit_length(); each block has
++    (m + 3) * 2**(m - 2) entries, and within a block they are ordered by the
++    bit length of a, then by a, then by b.  A key is therefore only about as
++    long as the two components together, so nesting stays linear in size.
++    """
++    la = a.bit_length()
++    lb = b.bit_length()
++    m = la + lb
++    if m == 0:
++        return 0
++    base = _block_start(m)
++    if m == 1:
++        return base + la
++    offset = (
++        _alpha_start(m, la)
++        + (a - _lowest(la)) * _value_count(lb)
++        + (b - _lowest(lb))
++    )
++    return base + offset
++
++
++def _unpair(k):
++    """Inverse of _pair."""
++    if k == 0:
++        return 0, 0
++    lo, hi = 0, k.bit_length() + 2
++    while lo < hi:
++        mid = (lo + hi + 1) // 2
++        if _block_start(mid) <= k:
++            lo = mid
++        else:
++            hi = mid - 1
++    m = lo
++    r = k - _block_start(m)
++    if m == 1:
++        return (0, 1) if r == 0 else (1, 0)
++    half = 1 << (m - 1)
++    step = 1 << (m - 2)
++    last = half + (m - 1) * step
++    if r < half:
++        alpha = 0
++    elif r >= last:
++        alpha = m
++    else:
++        alpha = 1 + (r - half) // step
++    beta = m - alpha
++    q = r - _alpha_start(m, alpha)
++    a_offset, b_offset = divmod(q, _value_count(beta))
++    return _lowest(alpha) + a_offset, _lowest(beta) + b_offset
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for a in reversed(lst):
++        key = 1 + _pair(a, key)
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    out = []
++    while n:
++        n -= 1
++        a, n = _unpair(n)
++        out.append(a)
++    return out

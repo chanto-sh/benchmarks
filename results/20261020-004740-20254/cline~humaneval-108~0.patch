@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index 3eb7783..78473b4 100644
+--- a/solution.py
++++ b/solution.py
+@@ -9,3 +9,11 @@ def count_nums(arr):
+     >>> count_nums([-1, 11, -11]) == 1
+     >>> count_nums([1, 1, 2]) == 3
+     """
++    count = 0
++    for num in arr:
++        digits = [int(d) for d in str(abs(num))]
++        if num < 0:
++            digits[0] = -digits[0]
++        if sum(digits) > 0:
++            count += 1
++    return count

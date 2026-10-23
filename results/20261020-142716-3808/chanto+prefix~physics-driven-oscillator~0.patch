@@ -1,0 +1,70 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..db6e6ca 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,63 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return P, Q such that x_p(t) = P cos(omega t) + Q sin(omega t)."""
++    detuning = k - m * omega * omega
++    den = detuning * detuning + (c * omega) ** 2
++    if den == 0.0:
++        raise ValueError(
++            "an undamped oscillator has no finite steady state at resonance"
++        )
++    return F0 * detuning / den, F0 * c * omega / den
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    den = detuning * detuning + (c * omega) ** 2
++    if den == 0.0:
++        raise ValueError(
++            "an undamped oscillator has no finite steady state at resonance"
++        )
++    return abs(F0) / math.sqrt(den)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    P, Q = _steady_state_coefficients(m, k, c, F0, omega)
++
++    # Initial displacement and velocity of the homogeneous (transient) part.
++    y0 = x0 - P
++    yv0 = v0 - omega * Q
++
++    beta = c / (2.0 * m)
++    omega0 = math.sqrt(k / m)
++
++    # A critically damped c is often supplied as 2*sqrt(m*k); rounding can put
++    # beta a few ulps to either side of omega0.  Treat that as critical rather
++    # than letting the 1/(beta - omega0) coefficient blow up.
++    if abs(beta - omega0) <= 1e-14 * (abs(beta) + omega0):
++        C = y0
++        D = yv0 + beta * y0
++        transient = math.exp(-beta * t) * (C + D * t)
++    elif beta < omega0:
++        omega_d = math.sqrt((omega0 - beta) * (omega0 + beta))
++        C = y0
++        D = (yv0 + beta * y0) / omega_d
++        transient = math.exp(-beta * t) * (
++            C * math.cos(omega_d * t) + D * math.sin(omega_d * t)
++        )
++    else:
++        gamma = math.sqrt((beta - omega0) * (beta + omega0))
++        # The slow root is written this way to avoid cancellation when gamma
++        # is small (the nearly critically damped case).
++        r_slow = -(omega0 * omega0) / (beta + gamma)
++        r_fast = -beta - gamma
++        D = (yv0 - r_slow * y0) / (r_fast - r_slow)
++        C = y0 - D
++        transient = C * math.exp(r_slow * t) + D * math.exp(r_fast * t)
++
++    return P * math.cos(omega * t) + Q * math.sin(omega * t) + transient

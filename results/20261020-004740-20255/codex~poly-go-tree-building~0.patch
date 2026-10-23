@@ -1,0 +1,53 @@
+diff --git a/tree_building.go b/tree_building.go
+index 0b789a5..ee5a742 100644
+--- a/tree_building.go
++++ b/tree_building.go
+@@ -1,5 +1,7 @@
+ package tree
+ 
++import "fmt"
++
+ type Record struct {
+ 	ID     int
+ 	Parent int
+@@ -13,5 +15,39 @@ type Node struct {
+ }
+ 
+ func Build(records []Record) (*Node, error) {
+-	panic("Please implement the Build function")
++	if len(records) == 0 {
++		return nil, nil
++	}
++
++	nodes := make([]*Node, len(records))
++	parents := make([]int, len(records))
++	seen := make([]bool, len(records))
++
++	for _, record := range records {
++		if record.ID < 0 || record.ID >= len(records) {
++			return nil, fmt.Errorf("record ID %d is out of range", record.ID)
++		}
++		if seen[record.ID] {
++			return nil, fmt.Errorf("duplicate record ID %d", record.ID)
++		}
++		seen[record.ID] = true
++
++		if record.ID == 0 {
++			if record.Parent != 0 {
++				return nil, fmt.Errorf("root record has parent ID %d", record.Parent)
++			}
++		} else if record.Parent < 0 || record.Parent >= record.ID {
++			return nil, fmt.Errorf("record ID %d has invalid parent ID %d", record.ID, record.Parent)
++		}
++
++		nodes[record.ID] = &Node{ID: record.ID}
++		parents[record.ID] = record.Parent
++	}
++
++	for id := 1; id < len(nodes); id++ {
++		parent := nodes[parents[id]]
++		parent.Children = append(parent.Children, nodes[id])
++	}
++
++	return nodes[0], nil
+ }

@@ -1,0 +1,44 @@
+diff --git a/changelog/5495.bugfix.rst b/changelog/5495.bugfix.rst
+new file mode 100644
+index 0000000..f818861
+--- /dev/null
++++ b/changelog/5495.bugfix.rst
+@@ -0,0 +1,2 @@
++Fix a confusing assertion rewriting message when comparing ``bytes`` values,
++which reported the byte values as integer items instead of showing a text diff.
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..8cca952 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -82,7 +82,7 @@ def _format_lines(lines):
+ 
+ 
+ def issequence(x):
+-    return isinstance(x, Sequence) and not isinstance(x, str)
++    return isinstance(x, Sequence) and not isinstance(x, (str, bytes))
+ 
+ 
+ def istext(x):
+diff --git a/testing/test_assertion.py b/testing/test_assertion.py
+index 0fcfd9f..ac49080 100644
+--- a/testing/test_assertion.py
++++ b/testing/test_assertion.py
+@@ -459,6 +459,18 @@ class TestAssert_reprcompare:
+             "+ (4,)",
+         ]
+ 
++    def test_bytes_different_items(self):
++        lines = callequal(b"", b"42", verbose=2)
++        assert lines == [
++            "b'' == b'42'",
++            "-b''",
++            "+b'42'",
++            "Full diff:",
++            "- b''",
++            "+ b'42'",
++            "?   ++",
++        ]
++
+     def test_set(self):
+         expl = callequal({0, 1}, {0, 2})
+         assert len(expl) > 1

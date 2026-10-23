@@ -1,0 +1,91 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..02da4b0 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,84 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return (a_cos, a_sin, scale) for the particular solution.
++
++    The particular solution is a_cos*cos(omega*t) + a_sin*sin(omega*t),
++    and scale is sqrt((k - m*omega**2)**2 + (c*omega)**2).
++    """
++    residual = math.fsum((k, -(m * omega) * omega))
++    damping = c * omega
++    scale = math.hypot(residual, damping)
++    if scale == 0.0:
++        raise ValueError("undamped oscillator driven exactly at resonance")
++
++    # Divide in two steps so that a very small scale does not underflow
++    # when it is squared.
++    return F0 * (residual / scale) / scale, F0 * (damping / scale) / scale, scale
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    residual = math.fsum((k, -(m * omega) * omega))
++    scale = math.hypot(residual, c * omega)
++    if scale == 0.0:
++        raise ValueError("undamped oscillator driven exactly at resonance")
++    return abs(F0) / scale
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a_cos, a_sin, _ = _steady_state_coefficients(m, k, c, F0, omega)
++    particular = a_cos * math.cos(omega * t) + a_sin * math.sin(omega * t)
++
++    # Initial conditions for the homogeneous part y = x - x_particular.
++    y0 = x0 - a_cos
++    dy0 = v0 - a_sin * omega
++
++    alpha = -c / (2.0 * m)
++    discriminant = math.fsum((c * c, -4.0 * m * k))
++
++    if discriminant > 0.0:
++        # Overdamped: the two real roots, with the root closer to zero
++        # computed in a cancellation-free form.
++        sqrt_disc = math.sqrt(discriminant)
++        r1 = -2.0 * k / (c + sqrt_disc)
++        r2 = (-c - sqrt_disc) / (2.0 * m)
++
++        e_r1 = math.exp(r1 * t)
++        e_r2 = math.exp(r2 * t)
++        cosh_part = 0.5 * (e_r1 + e_r2)
++
++        delta = r2 - r1
++        if delta == 0.0:
++            sinh_part = e_r1 * t
++        else:
++            # (exp(r1*t) - exp(r2*t)) / (r1 - r2), evaluated without
++            # cancellation when the roots are close together.
++            sinh_part = e_r1 * math.expm1(delta * t) / delta
++
++        homogeneous = y0 * cosh_part + (dy0 - alpha * y0) * sinh_part
++    elif discriminant == 0.0:
++        # Critically damped.
++        e_rt = math.exp(alpha * t)
++        homogeneous = e_rt * (y0 + (dy0 - alpha * y0) * t)
++    else:
++        # Underdamped, also covering c = 0.
++        omega_d = math.sqrt(-discriminant) / (2.0 * m)
++        z = omega_d * t
++
++        # sin(z) / omega_d = t * sin(z) / z; sinc is evaluated by its
++        # series near zero (including the limiting case omega_d = 0).
++        if abs(z) < 1.0e-4:
++            sinc = 1.0 - z * z / 6.0 + z**4 / 120.0
++        else:
++            sinc = math.sin(z) / z
++
++        homogeneous = math.exp(alpha * t) * (
++            y0 * math.cos(z) + (dy0 - alpha * y0) * t * sinc
++        )
++
++    return particular + homogeneous

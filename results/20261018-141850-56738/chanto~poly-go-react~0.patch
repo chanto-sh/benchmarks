@@ -1,0 +1,133 @@
+diff --git a/react.go b/react.go
+index fabc3c0..d00001a 100644
+--- a/react.go
++++ b/react.go
+@@ -3,34 +3,120 @@ package react
+ // Define reactor, cell and canceler types here.
+ // These types will implement the Reactor, Cell and Canceler interfaces, respectively.
+ 
++type reactor struct {
++	cells []*cell
++}
++
++type cell struct {
++	value     int
++	deps      []*cell
++	compute   func() int
++	callbacks []*callbackEntry
++	reactor   *reactor
++}
++
++type callbackEntry struct {
++	fn     func(int)
++	active bool
++}
++
++type canceler struct {
++	callback *callbackEntry
++}
++
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	c.callback.active = false
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	if c.compute != nil || c.value == value {
++		return
++	}
++	c.value = value
++	c.reactor.propagate(c)
+ }
+ 
+ func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++	cb := &callbackEntry{fn: callback, active: true}
++	c.callbacks = append(c.callbacks, cb)
++	return &canceler{callback: cb}
+ }
+ 
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	c := &cell{value: initial, reactor: r}
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	d := dep.(*cell)
++	c := &cell{
++		deps:    []*cell{d},
++		compute: func() int { return compute(d.value) },
++		reactor: r,
++	}
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	d1 := dep1.(*cell)
++	d2 := dep2.(*cell)
++	c := &cell{
++		deps:    []*cell{d1, d2},
++		compute: func() int { return compute(d1.value, d2.value) },
++		reactor: r,
++	}
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
++}
++
++// propagate updates every cell whose dependencies changed, in creation order
++// (which is a valid topological order), then calls callbacks once per cell
++// whose stable value changed.
++func (r *reactor) propagate(changedInput *cell) {
++	changed := map[*cell]bool{changedInput: true}
++
++	for _, c := range r.cells {
++		if c.compute == nil {
++			continue
++		}
++		dirty := false
++		for _, dep := range c.deps {
++			if changed[dep] {
++				dirty = true
++				break
++			}
++		}
++		if !dirty {
++			continue
++		}
++		if value := c.compute(); value != c.value {
++			c.value = value
++			changed[c] = true
++		}
++	}
++
++	for _, c := range r.cells {
++		if c.compute == nil || !changed[c] {
++			continue
++		}
++		callbacks := make([]*callbackEntry, len(c.callbacks))
++		copy(callbacks, c.callbacks)
++		for _, cb := range callbacks {
++			if cb.active {
++				cb.fn(c.value)
++			}
++		}
++	}
+ }

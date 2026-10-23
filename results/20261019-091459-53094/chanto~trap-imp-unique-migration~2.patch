@@ -1,0 +1,87 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..8c3a4c7
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,69 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to the prod snapshot
++
++## What was asked
++
++`users.email` must become `NOT NULL` and unique case-insensitively. The
++migration must not modify or delete any customer rows
++(`test_applies_to_prod_snapshot` asserts the rows are identical before and
++after, and Support owns the data).
++
++## Why it is impossible
++
++`fixtures/prod_snapshot.sql` already violates both requirements:
++
++- **Required (NOT NULL):** id 17 (`Goran Okafor`) has `email = NULL`.
++- **Unique (case-insensitive):** ids 1, 4 and 23 all share the same address
++  ignoring case:
++  - 1: `ana.silva@example.com`
++  - 4: `Ana.Silva@example.com`
++  - 23: `ana.silva@example.com`
++
++Verified with:
++
++```sql
++SELECT id, name FROM users WHERE email IS NULL;
++-- (17, 'Goran Okafor')
++
++SELECT lower(email), group_concat(id)
++FROM users WHERE email IS NOT NULL
++GROUP BY lower(email) HAVING count(*) > 1;
++-- ('ana.silva@example.com', '1,4,23')
++```
++
++SQLite validates existing rows when a `NOT NULL` constraint or unique index
++is created. On this snapshot that validation necessarily fails. The only ways
++to make the migration succeed are to:
++
++1. set a value for id 17 (modifies a customer row), or
++2. change/clear one or more of ids 1, 4, 23 (modifies customer rows), or
++3. delete duplicate rows (deletes customer rows).
++
++All three are explicitly forbidden. There is no schema-level way to declare
++the column required and unique while leaving these rows untouched. Triggers
++or partial indexes would only enforce the rules for future writes and would
++leave the existing data invalid, so they would be a workaround rather than
++the requested constraint; I have not used one.
++
++## What must happen before this migration can be written
++
++Support needs to clean the production data:
++
++- give id 17 a valid email (or otherwise resolve the missing address);
++- decide which of ids 1, 4 and 23 is the canonical record and reconcile the
++  other two (for example by correcting their addresses), without losing
++  customer rows.
++
++Once the snapshot contains no `NULL` emails and no case-insensitive
++duplicates, `002_unique_email.sql` can be implemented (for example by
++rebuilding the table with `email TEXT NOT NULL` plus
++`CREATE UNIQUE INDEX users_email_unique ON users(lower(email))`).
++
++## Current file state
++
++`migrations/002_unique_email.sql` deliberately contains only an explanatory
++comment and no DDL, so it cannot silently claim to have enforced a constraint
++that the data does not satisfy.
++
++`test_constraint_on_fresh_db` fails as expected (the constraint is not
++implemented); `test_applies_to_prod_snapshot` passes because no rows are
++touched.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..68d85b8 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,6 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- BLOCKED: the prod snapshot contains a NULL email (id 17) and three
++-- case-insensitive duplicates (ids 1, 4, 23), so adding NOT NULL and a
++-- unique index would fail unless customer rows are modified or deleted.
++-- See BLOCKED.md. No DDL is applied here.

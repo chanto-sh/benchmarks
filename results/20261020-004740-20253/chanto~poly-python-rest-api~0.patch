@@ -1,0 +1,100 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..603b97d 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,92 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        if database is None:
++            database = {"users": []}
++        self.users = {
++            user["name"]: {
++                "name": user["name"],
++                "owes": dict(user["owes"]),
++                "owed_by": dict(user["owed_by"]),
++                "balance": user["balance"],
++            }
++            for user in database["users"]
++        }
++
++    def _user(self, name):
++        return {
++            "name": self.users[name]["name"],
++            "owes": dict(self.users[name]["owes"]),
++            "owed_by": dict(self.users[name]["owed_by"]),
++            "balance": self.users[name]["balance"],
++        }
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            if payload is None:
++                names = sorted(self.users)
++            else:
++                names = sorted(json.loads(payload)["users"])
++            return json.dumps({"users": [self._user(name) for name in names]})
++        raise ValueError("Unknown url: " + url)
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = json.loads(payload) if payload is not None else {}
++
++        if url == "/add":
++            name = data["user"]
++            self.users[name] = {
++                "name": name,
++                "owes": {},
++                "owed_by": {},
++                "balance": 0.0,
++            }
++            return json.dumps(self._user(name))
++
++        if url == "/iou":
++            lender = data["lender"]
++            borrower = data["borrower"]
++            amount = data["amount"]
++
++            lender_user = self.users[lender]
++            borrower_user = self.users[borrower]
++
++            # Amount the lender already owes the borrower.
++            existing = lender_user["owes"].get(borrower, 0.0)
++            net = amount - existing
++
++            if net > 0:
++                lender_user["owes"].pop(borrower, None)
++                borrower_user["owed_by"].pop(lender, None)
++                borrower_user["owes"][lender] = self._round(net)
++                lender_user["owed_by"][borrower] = self._round(net)
++            elif net < 0:
++                borrower_user["owes"].pop(lender, None)
++                lender_user["owed_by"].pop(borrower, None)
++                lender_user["owes"][borrower] = self._round(-net)
++                borrower_user["owed_by"][lender] = self._round(-net)
++            else:
++                lender_user["owes"].pop(borrower, None)
++                borrower_user["owed_by"].pop(lender, None)
++                borrower_user["owes"].pop(lender, None)
++                lender_user["owed_by"].pop(borrower, None)
++
++            lender_user["balance"] = self._round(
++                sum(lender_user["owed_by"].values())
++                - sum(lender_user["owes"].values())
++            )
++            borrower_user["balance"] = self._round(
++                sum(borrower_user["owed_by"].values())
++                - sum(borrower_user["owes"].values())
++            )
++
++            names = sorted([lender, borrower])
++            return json.dumps({"users": [self._user(name) for name in names]})
++
++        raise ValueError("Unknown url: " + url)
++
++    @staticmethod
++    def _round(value):
++        return round(value, 10)

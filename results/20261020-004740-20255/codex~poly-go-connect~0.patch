@@ -1,0 +1,94 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..10cdc11 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,88 @@
+ package connect
+ 
++import (
++	"fmt"
++	"strings"
++)
++
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	board := make([][]byte, len(lines))
++	width := -1
++
++	for row, line := range lines {
++		line = strings.ReplaceAll(line, " ", "")
++		if width == -1 {
++			width = len(line)
++		} else if len(line) != width {
++			return "", fmt.Errorf("row %d has width %d, want %d", row+1, len(line), width)
++		}
++
++		board[row] = []byte(line)
++		for _, cell := range board[row] {
++			if cell != '.' && cell != 'X' && cell != 'O' {
++				return "", fmt.Errorf("invalid cell %q at row %d", cell, row+1)
++			}
++		}
++	}
++
++	if len(board) == 0 || width == 0 {
++		return "", nil
++	}
++
++	if connected(board, 'X', true) {
++		return "X", nil
++	}
++	if connected(board, 'O', false) {
++		return "O", nil
++	}
++	return "", nil
++}
++
++func connected(board [][]byte, player byte, leftToRight bool) bool {
++	height, width := len(board), len(board[0])
++	visited := make([][]bool, height)
++	for row := range visited {
++		visited[row] = make([]bool, width)
++	}
++
++	type position struct {
++		row, col int
++	}
++	queue := make([]position, 0)
++
++	for row := 0; row < height; row++ {
++		for col := 0; col < width; col++ {
++			if board[row][col] != player {
++				continue
++			}
++			if (leftToRight && col == 0) || (!leftToRight && row == 0) {
++				visited[row][col] = true
++				queue = append(queue, position{row, col})
++			}
++		}
++	}
++
++	neighbors := [][2]int{
++		{-1, 0}, {-1, 1},
++		{0, -1}, {0, 1},
++		{1, -1}, {1, 0},
++	}
++
++	for head := 0; head < len(queue); head++ {
++		current := queue[head]
++		if (leftToRight && current.col == width-1) || (!leftToRight && current.row == height-1) {
++			return true
++		}
++
++		for _, offset := range neighbors {
++			row, col := current.row+offset[0], current.col+offset[1]
++			if row < 0 || row >= height || col < 0 || col >= width || visited[row][col] || board[row][col] != player {
++				continue
++			}
++			visited[row][col] = true
++			queue = append(queue, position{row, col})
++		}
++	}
++
++	return false
+ }

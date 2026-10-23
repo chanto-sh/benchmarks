@@ -1,0 +1,68 @@
+diff --git a/tree_building.go b/tree_building.go
+index 0b789a5..799117c 100644
+--- a/tree_building.go
++++ b/tree_building.go
+@@ -1,5 +1,7 @@
+ package tree
+ 
++import "errors"
++
+ type Record struct {
+ 	ID     int
+ 	Parent int
+@@ -12,6 +14,54 @@ type Node struct {
+ 	// feel free to add fields as you see fit
+ }
+ 
++var (
++	errDuplicateID = errors.New("duplicate record ID")
++	errInvalidID   = errors.New("record ID out of range")
++	errInvalidRoot = errors.New("invalid root record")
++	errInvalidTree = errors.New("invalid tree structure")
++)
++
++// Build reconstructs a tree from an unsorted list of records. Records have
++// IDs in the range [0, len(records)) and every non-root record has a parent
++// with a lower ID. Invalid input (missing root, duplicates, non-continuous
++// IDs, cycles or a parent that isn't lower than its child) yields an error.
+ func Build(records []Record) (*Node, error) {
+-	panic("Please implement the Build function")
++	if len(records) == 0 {
++		return nil, nil
++	}
++
++	n := len(records)
++	nodes := make([]*Node, n)
++	parentByID := make([]int, n)
++	for _, r := range records {
++		if r.ID < 0 || r.ID >= n || r.Parent < 0 || r.Parent >= n {
++			return nil, errInvalidID
++		}
++		if nodes[r.ID] != nil {
++			return nil, errDuplicateID
++		}
++		if r.ID == 0 {
++			if r.Parent != 0 {
++				return nil, errInvalidRoot
++			}
++		} else if r.Parent >= r.ID {
++			// Also covers cycles and parents with a higher ID.
++			return nil, errInvalidTree
++		}
++		nodes[r.ID] = &Node{ID: r.ID}
++		parentByID[r.ID] = r.Parent
++	}
++
++	if nodes[0] == nil {
++		return nil, errInvalidRoot
++	}
++
++	// Children are attached in ascending ID order, which follows from their
++	// parents always having a lower ID.
++	for id := 1; id < n; id++ {
++		parent := nodes[parentByID[id]]
++		parent.Children = append(parent.Children, nodes[id])
++	}
++
++	return nodes[0], nil
+ }

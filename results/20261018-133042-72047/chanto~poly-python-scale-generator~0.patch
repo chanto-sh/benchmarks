@@ -1,0 +1,45 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..164d988 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,37 @@
++SHARP_CHROMATIC = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++FLAT_CHROMATIC = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++# Tonics whose scales are conventionally written with flats. Case matters:
++# upper-case letters are major keys, lower-case letters are minor keys.
++FLAT_TONICS = {"F", "Bb", "Eb", "Ab", "Db", "Gb", "d", "g", "c", "f", "bb", "eb"}
++
++INTERVALS = {"m": 1, "M": 2, "A": 3}
++
++
+ class Scale:
+     def __init__(self, tonic):
+-        pass
++        self.tonic = tonic
++        self.use_flats = tonic in FLAT_TONICS
++        self.chromatic_scale = FLAT_CHROMATIC if self.use_flats else SHARP_CHROMATIC
++        self.start_index = self.chromatic_scale.index(self._normalize(tonic))
++
++    @staticmethod
++    def _normalize(tonic):
++        letter = tonic[0].upper()
++        accidental = ""
++        if len(tonic) > 1:
++            accidental = "b" if tonic[1] in ("b", "\u266d") else "#"
++        return letter + accidental
+ 
+     def chromatic(self):
+-        pass
++        return [
++            self.chromatic_scale[(self.start_index + i) % 12] for i in range(12)
++        ]
+ 
+     def interval(self, intervals):
+-        pass
++        notes = [self.chromatic_scale[self.start_index]]
++        index = self.start_index
++        for interval in intervals:
++            index = (index + INTERVALS[interval]) % 12
++            notes.append(self.chromatic_scale[index])
++        return notes

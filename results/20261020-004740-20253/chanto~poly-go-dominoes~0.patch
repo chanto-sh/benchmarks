@@ -1,0 +1,53 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..ba8a13e 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,46 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a domino stone with two sides.
++type Domino [2]int
+ 
++// MakeChain attempts to arrange input into a legal domino chain.
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return []Domino{}, true
++	}
++
++	used := make([]bool, len(input))
++	chain := make([]Domino, 0, len(input))
++
++	var solve func() bool
++	solve = func() bool {
++		if len(chain) == len(input) {
++			return chain[0][0] == chain[len(chain)-1][1]
++		}
++		for i, d := range input {
++			if used[i] {
++				continue
++			}
++			for _, cand := range [2]Domino{d, {d[1], d[0]}} {
++				if len(chain) > 0 && chain[len(chain)-1][1] != cand[0] {
++					continue
++				}
++				used[i] = true
++				chain = append(chain, cand)
++				if solve() {
++					return true
++				}
++				chain = chain[:len(chain)-1]
++				used[i] = false
++			}
++		}
++		return false
++	}
++
++	if solve() {
++		result := make([]Domino, len(chain))
++		copy(result, chain)
++		return result, true
++	}
++	return nil, false
+ }

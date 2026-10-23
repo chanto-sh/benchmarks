@@ -1,0 +1,123 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..cde3816 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -25,5 +25,117 @@ class SgfTree:
+         return not self == other
+ 
+ 
++class _Parser:
++    def __init__(self, text):
++        self.text = text
++        self.pos = 0
++
++    def _peek(self):
++        if self.pos < len(self.text):
++            return self.text[self.pos]
++        return None
++
++    def parse_tree(self):
++        if self._peek() != "(":
++            raise ValueError("tree missing")
++        self.pos += 1
++
++        if self._peek() != ";":
++            raise ValueError("tree with no nodes")
++
++        root = self._parse_node()
++        last = root
++
++        while True:
++            char = self._peek()
++            if char == ";":
++                node = self._parse_node()
++                last.children.append(node)
++                last = node
++            elif char == "(":
++                last.children.append(self.parse_tree())
++            elif char == ")":
++                self.pos += 1
++                return root
++            else:
++                raise ValueError("tree missing")
++
++    def _parse_node(self):
++        # Consume the node marker.
++        self.pos += 1
++        properties = {}
++
++        while True:
++            char = self._peek()
++            if char is None or not char.isalpha():
++                break
++
++            start = self.pos
++            while self._peek() is not None and self._peek().isalpha():
++                self.pos += 1
++            key = self.text[start:self.pos]
++
++            if key != key.upper():
++                raise ValueError("property must be in uppercase")
++
++            if self._peek() != "[":
++                raise ValueError("properties without delimiter")
++
++            values = []
++            while self._peek() == "[":
++                values.append(self._parse_property_value())
++
++            properties[key] = values
++
++        return SgfTree(properties=properties)
++
++    def _parse_property_value(self):
++        # Consume the opening bracket.
++        self.pos += 1
++        chars = []
++
++        while True:
++            char = self._peek()
++            if char is None:
++                raise ValueError("properties without delimiter")
++
++            if char == "\\":
++                self.pos += 1
++                escaped = self._peek()
++                if escaped is None:
++                    raise ValueError("properties without delimiter")
++                if escaped == "\n":
++                    # Escaped newlines are removed entirely.
++                    self.pos += 1
++                elif escaped.isspace():
++                    # Other escaped whitespace becomes a space.
++                    chars.append(" ")
++                    self.pos += 1
++                else:
++                    chars.append(escaped)
++                    self.pos += 1
++            elif char == "]":
++                self.pos += 1
++                return "".join(chars)
++            elif char == "\n":
++                chars.append("\n")
++                self.pos += 1
++            elif char.isspace():
++                chars.append(" ")
++                self.pos += 1
++            else:
++                chars.append(char)
++                self.pos += 1
++
++
+ def parse(input_string):
+-    pass
++    if not input_string or input_string[0] != "(":
++        raise ValueError("tree missing")
++
++    parser = _Parser(input_string)
++    tree = parser.parse_tree()
++
++    if parser.pos != len(input_string):
++        raise ValueError("tree missing")
++
++    return tree

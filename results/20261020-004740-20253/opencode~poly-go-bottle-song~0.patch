@@ -1,0 +1,59 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..f62acb6 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,53 @@
+ package bottlesong
+ 
++import "fmt"
++
++var numberWords = []string{
++	"no", "one", "two", "three", "four",
++	"five", "six", "seven", "eight", "nine", "ten",
++}
++
++func capitalize(s string) string {
++	if s == "" {
++		return s
++	}
++	return string(s[0]-'a'+'A') + s[1:]
++}
++
++func verse(start int) []string {
++	next := start - 1
++	current := numberWords[start]
++	if start == 1 {
++		return []string{
++			fmt.Sprintf("%s green bottle hanging on the wall,", capitalize(current)),
++			fmt.Sprintf("%s green bottle hanging on the wall,", capitalize(current)),
++			"And if one green bottle should accidentally fall,",
++			fmt.Sprintf("There'll be %s green bottles hanging on the wall.", numberWords[next]),
++		}
++	}
++
++	return []string{
++		fmt.Sprintf("%s green bottles hanging on the wall,", capitalize(current)),
++		fmt.Sprintf("%s green bottles hanging on the wall,", capitalize(current)),
++		"And if one green bottle should accidentally fall,",
++		fmt.Sprintf("There'll be %s green %s hanging on the wall.", numberWords[next], bottleWord(next)),
++	}
++}
++
++func bottleWord(n int) string {
++	if n == 1 {
++		return "bottle"
++	}
++	return "bottles"
++}
++
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	var result []string
++	for i := 0; i < takeDown; i++ {
++		if i > 0 {
++			result = append(result, "")
++		}
++		result = append(result, verse(startBottles-i)...)
++	}
++	return result
+ }

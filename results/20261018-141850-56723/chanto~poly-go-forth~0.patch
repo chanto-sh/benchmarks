@@ -1,0 +1,229 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..d02eb68 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,223 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++type instructionKind int
++
++const (
++	pushInstruction instructionKind = iota
++	builtinInstruction
++	callInstruction
++	undefinedInstruction
++)
++
++type instruction struct {
++	kind    instructionKind
++	value   int
++	builtin string
++	def     *definition
++	name    string
++}
++
++type definition struct {
++	body []instruction
++}
++
++var (
++	errEmptyStack   = errors.New("empty stack")
++	errOneValue     = errors.New("only one value on the stack")
++	errDivideByZero = errors.New("divide by zero")
++	errIllegal      = errors.New("illegal operation")
++	errUndefined    = errors.New("undefined operation")
++	errUnterminated = errors.New("unterminated definition")
++)
++
++func isNumber(token string) bool {
++	if token == "" {
++		return false
++	}
++	i := 0
++	if token[0] == '-' || token[0] == '+' {
++		i++
++	}
++	if i == len(token) {
++		return false
++	}
++	for ; i < len(token); i++ {
++		if token[i] < '0' || token[i] > '9' {
++			return false
++		}
++	}
++	return true
++}
++
++func isBuiltin(token string) bool {
++	switch token {
++	case "+", "-", "*", "/", "dup", "drop", "swap", "over":
++		return true
++	}
++	return false
++}
++
++func forthError(stack *[]int) error {
++	if len(*stack) == 0 {
++		return errEmptyStack
++	}
++	return errOneValue
++}
++
++func applyBuiltin(name string, stack *[]int) error {
++	switch name {
++	case "+":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		(*stack)[n-2] += (*stack)[n-1]
++		*stack = (*stack)[:n-1]
++	case "-":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		(*stack)[n-2] -= (*stack)[n-1]
++		*stack = (*stack)[:n-1]
++	case "*":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		(*stack)[n-2] *= (*stack)[n-1]
++		*stack = (*stack)[:n-1]
++	case "/":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		if (*stack)[n-1] == 0 {
++			return errDivideByZero
++		}
++		(*stack)[n-2] /= (*stack)[n-1]
++		*stack = (*stack)[:n-1]
++	case "dup":
++		if len(*stack) < 1 {
++			return errEmptyStack
++		}
++		*stack = append(*stack, (*stack)[len(*stack)-1])
++	case "drop":
++		if len(*stack) < 1 {
++			return errEmptyStack
++		}
++		*stack = (*stack)[:len(*stack)-1]
++	case "swap":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		(*stack)[n-1], (*stack)[n-2] = (*stack)[n-2], (*stack)[n-1]
++	case "over":
++		if len(*stack) < 2 {
++			return forthError(stack)
++		}
++		n := len(*stack)
++		*stack = append(*stack, (*stack)[n-2])
++	}
++	return nil
++}
++
++func compileToken(token string, env map[string]*definition) (instruction, error) {
++	word := strings.ToLower(token)
++	if isNumber(word) {
++		value, err := strconv.Atoi(word)
++		if err != nil {
++			return instruction{}, err
++		}
++		return instruction{kind: pushInstruction, value: value}, nil
++	}
++	if def, ok := env[word]; ok {
++		return instruction{kind: callInstruction, def: def}, nil
++	}
++	if isBuiltin(word) {
++		return instruction{kind: builtinInstruction, builtin: word}, nil
++	}
++	return instruction{kind: undefinedInstruction, name: word}, nil
++}
++
++func execute(body []instruction, stack *[]int) error {
++	for _, ins := range body {
++		switch ins.kind {
++		case pushInstruction:
++			*stack = append(*stack, ins.value)
++		case builtinInstruction:
++			if err := applyBuiltin(ins.builtin, stack); err != nil {
++				return err
++			}
++		case callInstruction:
++			if err := execute(ins.def.body, stack); err != nil {
++				return err
++			}
++		case undefinedInstruction:
++			return errUndefined
++		}
++	}
++	return nil
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	stack := []int{}
++	env := make(map[string]*definition)
++
++	for i := 0; i < len(tokens); {
++		if tokens[i] == ":" {
++			if i+1 >= len(tokens) {
++				return nil, errIllegal
++			}
++			name := strings.ToLower(tokens[i+1])
++			if isNumber(name) {
++				return nil, errIllegal
++			}
++			i += 2
++
++			body := []instruction{}
++			terminated := false
++			for i < len(tokens) {
++				if tokens[i] == ";" {
++					terminated = true
++					i++
++					break
++				}
++				ins, err := compileToken(tokens[i], env)
++				if err != nil {
++					return nil, err
++				}
++				body = append(body, ins)
++				i++
++			}
++			if !terminated {
++				return nil, errUnterminated
++			}
++			env[name] = &definition{body: body}
++			continue
++		}
++
++		ins, err := compileToken(tokens[i], env)
++		if err != nil {
++			return nil, err
++		}
++		if err := execute([]instruction{ins}, &stack); err != nil {
++			return nil, err
++		}
++		i++
++	}
++
++	return stack, nil
+ }

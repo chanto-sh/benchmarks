@@ -1,0 +1,58 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..2e01147 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,52 @@
++import operator
++import re
++
++
++_NUMBER = r"[+-]?\d+"
++_OPERATION_WORDS = {"plus", "minus", "multiplied", "divided", "by"}
++_EXPRESSION = re.compile(
++    rf"{_NUMBER}(?:\s+(?:plus|minus|multiplied by|divided by)\s+{_NUMBER})*"
++)
++
++
+ def answer(question):
+-    pass
++    """Evaluate a simple math word problem from left to right."""
++    if not question.startswith("What is") or not question.endswith("?"):
++        raise ValueError("unknown operation")
++
++    expression = question[len("What is") : -1].strip()
++    if not expression:
++        raise ValueError("syntax error")
++
++    for token in expression.split():
++        if not re.fullmatch(_NUMBER, token) and token not in _OPERATION_WORDS:
++            if any(character.isalpha() for character in token):
++                raise ValueError("unknown operation")
++            raise ValueError("syntax error")
++
++    if not _EXPRESSION.fullmatch(expression):
++        raise ValueError("syntax error")
++
++    tokens = expression.split()
++    result = int(tokens[0])
++    index = 1
++
++    while index < len(tokens):
++        operation = tokens[index]
++        index += 1
++
++        if operation == "plus":
++            calculate = operator.add
++        elif operation == "minus":
++            calculate = operator.sub
++        elif operation == "multiplied":
++            calculate = operator.mul
++            index += 1
++        else:
++            calculate = operator.floordiv
++            index += 1
++
++        result = calculate(result, int(tokens[index]))
++        index += 1
++
++    return result

@@ -1,0 +1,91 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..08e078b 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,84 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _response(m, k, c, F0, omega):
++    """Return the normalized damping, stiffness, and steady-state coefficients.
++
++    The equation is divided by m first, which keeps the discriminant
++    a**2 - wn**2 well scaled:
++
++        x'' + 2 a x' + wn**2 x = (F0 / m) cos(omega t).
++    """
++    a = c / (2.0 * m)
++    wn2 = k / m
++    delta = wn2 - omega * omega
++    damp = 2.0 * a * omega
++    den = math.hypot(delta, damp)
++
++    if den == 0.0:
++        if F0 == 0.0:
++            return a, wn2, 0.0, 0.0, 0.0
++        raise ValueError("no steady state at exact undamped resonance")
++
++    drive = F0 / m
++    scale = drive / den
++    p = scale * (delta / den)
++    q = scale * (damp / den)
++    return a, wn2, p, q, abs(drive) / den
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return _response(m, k, c, F0, omega)[4]
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, wn2, p, q, _ = _response(m, k, c, F0, omega)
++
++    if t == 0.0:
++        return x0
++
++    steady = p * math.cos(omega * t) + q * math.sin(omega * t)
++
++    # Subtract the particular solution to get the homogeneous initial data.
++    y0 = x0 - p
++    y1 = v0 - q * omega
++    z = y1 + a * y0
++
++    disc = a * a - wn2
++    if disc < 0.0:
++        # Underdamped: e^(-a t) (C cos(wd t) + D sin(wd t)).
++        wd = math.sqrt(-disc)
++        theta = wd * t
++        sinc = 1.0 if theta == 0.0 else math.sin(theta) / theta
++        homogeneous = math.exp(-a * t) * (
++            y0 * math.cos(theta) + z * t * sinc
++        )
++    elif disc > 0.0:
++        # Overdamped.  Use cosh/sinh near the critical point to avoid
++        # cancellation between two nearly equal exponential roots.
++        lam = math.sqrt(disc)
++        theta = lam * t
++        if abs(theta) <= 1.0:
++            sinhc = 1.0 if theta == 0.0 else math.sinh(theta) / theta
++            homogeneous = math.exp(-a * t) * (
++                y0 * math.cosh(theta) + z * t * sinhc
++            )
++        else:
++            # lam - a is evaluated as -wn2 / (lam + a) to avoid cancellation
++            # when the two roots are close or when k is small.
++            r1 = -wn2 / (lam + a)
++            r2 = -a - lam
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            homogeneous = 0.5 * y0 * (e1 + e2) + z * (e1 - e2) / (
++                2.0 * lam
++            )
++    else:
++        # Critically damped: e^(-a t) (C + D t).
++        homogeneous = math.exp(-a * t) * (y0 + z * t)
++
++    return homogeneous + steady

@@ -1,0 +1,99 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..6142b33 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,93 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
++const (
++	questionPrefix = "What is"
++	questionSuffix = "?"
++)
++
++// Answer parses a simple math word problem and returns its result.
++// The second return value reports whether the question was understood.
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	trimmed := strings.TrimSpace(question)
++	if !strings.HasPrefix(trimmed, questionPrefix) || !strings.HasSuffix(trimmed, questionSuffix) {
++		return 0, false
++	}
++
++	// Drop the leading phrase and the trailing question mark.
++	body := trimmed[len(questionPrefix) : len(trimmed)-len(questionSuffix)]
++	tokens := strings.Fields(body)
++	if len(tokens) == 0 {
++		return 0, false
++	}
++
++	// A well formed problem is: number (operator number)*
++	result, ok := parseNumber(tokens[0])
++	if !ok {
++		return 0, false
++	}
++	tokens = tokens[1:]
++
++	for len(tokens) > 0 {
++		op, consumed, ok := parseOperator(tokens)
++		if !ok {
++			return 0, false
++		}
++		tokens = tokens[consumed:]
++
++		if len(tokens) == 0 {
++			// Operator without an operand.
++			return 0, false
++		}
++		operand, ok := parseNumber(tokens[0])
++		if !ok {
++			return 0, false
++		}
++		tokens = tokens[1:]
++
++		switch op {
++		case "plus":
++			result += operand
++		case "minus":
++			result -= operand
++		case "multiplied":
++			result *= operand
++		case "divided":
++			if operand == 0 {
++				return 0, false
++			}
++			result /= operand
++		default:
++			return 0, false
++		}
++	}
++
++	return result, true
++}
++
++// parseNumber converts a token to an integer.
++func parseNumber(token string) (int, bool) {
++	n, err := strconv.Atoi(token)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++// parseOperator reads an operation from the front of tokens and returns the
++// operation name along with the number of tokens it consumed.
++func parseOperator(tokens []string) (op string, consumed int, ok bool) {
++	switch tokens[0] {
++	case "plus", "minus":
++		return tokens[0], 1, true
++	case "multiplied", "divided":
++		if len(tokens) >= 2 && tokens[1] == "by" {
++			return tokens[0], 2, true
++		}
++	}
++	return "", 0, false
+ }

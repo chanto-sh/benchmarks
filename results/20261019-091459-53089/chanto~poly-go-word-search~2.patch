@@ -1,0 +1,73 @@
+diff --git a/word_search.go b/word_search.go
+index c0e26bd..9a68737 100644
+--- a/word_search.go
++++ b/word_search.go
+@@ -1,5 +1,67 @@
+ package wordsearch
+ 
++import "errors"
++
++var directions = [][2]int{
++	{1, 0},
++	{-1, 0},
++	{0, 1},
++	{0, -1},
++	{1, 1},
++	{1, -1},
++	{-1, 1},
++	{-1, -1},
++}
++
+ func Solve(words []string, puzzle []string) (map[string][2][2]int, error) {
+-	panic("Please implement the Solve function")
++	locations := make(map[string][2][2]int, len(words))
++	foundAll := true
++
++	for _, word := range words {
++		start, end, ok := find(word, puzzle)
++		if ok {
++			locations[word] = [2][2]int{start, end}
++		} else {
++			foundAll = false
++			locations[word] = [2][2]int{{-1, -1}, {-1, -1}}
++		}
++	}
++
++	if !foundAll {
++		return locations, errors.New("word not found in puzzle")
++	}
++	return locations, nil
++}
++
++func find(word string, puzzle []string) ([2]int, [2]int, bool) {
++	if word == "" {
++		return [2]int{-1, -1}, [2]int{-1, -1}, false
++	}
++
++	for y, row := range puzzle {
++		for x := range row {
++			for _, d := range directions {
++				if matches(word, puzzle, x, y, d) {
++					end := [2]int{x + d[0]*(len(word)-1), y + d[1]*(len(word)-1)}
++					return [2]int{x, y}, end, true
++				}
++			}
++		}
++	}
++
++	return [2]int{-1, -1}, [2]int{-1, -1}, false
++}
++
++func matches(word string, puzzle []string, x, y int, d [2]int) bool {
++	for i := 0; i < len(word); i++ {
++		cx := x + d[0]*i
++		cy := y + d[1]*i
++		if cy < 0 || cy >= len(puzzle) || cx < 0 || cx >= len(puzzle[cy]) {
++			return false
++		}
++		if puzzle[cy][cx] != word[i] {
++			return false
++		}
++	}
++	return true
+ }

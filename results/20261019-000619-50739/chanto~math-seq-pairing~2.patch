@@ -1,0 +1,81 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..5c92d9f 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,73 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The bijection is built from a ranking of pairs of non-negative integers.
++For an integer ``x`` let its *size* be ``(x + 1).bit_length()``.  There are
++exactly ``2**(size - 1)`` integers of size ``size``.  Pairing integers by the
++sum of their sizes therefore gives a pairing function whose result has about
++as many bits as its two arguments together, rather than their product.  This
++keeps keys small when lists are encoded as nested pairs.
++"""
++
++
++def _pair(a, b):
++    """A bijection N x N -> N with roughly additive bit length."""
++    p = (a + 1).bit_length()
++    q = (b + 1).bit_length()
++    s = p + q
++
++    # Number of pairs with size sum less than s.
++    block = 1 << (s - 2)
++    base = (s - 3) * block + 1  # 0 for s == 2
++
++    ia = a - ((1 << (p - 1)) - 1)
++    ib = b - ((1 << (q - 1)) - 1)
++    within = (p - 1) * block + (ia << (q - 1)) + ib
++    return base + within
++
++
++def _before(s):
++    """The rank of the first pair whose sizes sum to ``s``."""
++    return ((s - 3) << (s - 2)) + 1
++
++
++def _unpair(n):
++    """Inverse of :func:`_pair`."""
++    # Find the largest s with _before(s) <= n.  The answer is within a few
++    # steps of n.bit_length().
++    lo, hi = 2, max(3, n.bit_length() + 5)
++    while lo < hi:
++        mid = (lo + hi + 1) // 2
++        if _before(mid) <= n:
++            lo = mid
++        else:
++            hi = mid - 1
++    s = lo
++
++    block = 1 << (s - 2)
++    within = n - _before(s)
++    p = 1 + within // block
++    rest = within % block
++    q = s - p
++
++    ia = rest >> (q - 1)
++    ib = rest & ((1 << (q - 1)) - 1)
++    a = ia + (1 << (p - 1)) - 1
++    b = ib + (1 << (q - 1)) - 1
++    return a, b
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(value, key) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    lst = []
++    while n:
++        value, n = _unpair(n - 1)
++        lst.append(value)
++    return lst

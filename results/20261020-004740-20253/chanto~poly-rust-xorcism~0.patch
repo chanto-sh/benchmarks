@@ -1,0 +1,145 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index a471a03..34342b5 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,17 +1,37 @@
++use std::borrow::Borrow;
++
++#[cfg(feature = "io")]
++use std::io::{Read, Write};
++
+ /// A munger which XORs a key with some data
+ #[derive(Clone)]
+ pub struct Xorcism<'a> {
+-    // This field is just to suppress compiler complaints;
+-    // feel free to delete it at any point.
+-    _phantom: std::marker::PhantomData<&'a u8>,
++    key: &'a [u8],
++    pos: usize,
+ }
+ 
+ impl<'a> Xorcism<'a> {
+     /// Create a new Xorcism munger from a key
+     ///
+     /// Should accept anything which has a cheap conversion to a byte slice.
+-    pub fn new<Key>(key: &Key) -> Xorcism<'a> {
+-        todo!()
++    pub fn new<Key>(key: &'a Key) -> Xorcism<'a>
++    where
++        Key: AsRef<[u8]> + ?Sized,
++    {
++        Xorcism {
++            key: key.as_ref(),
++            pos: 0,
++        }
++    }
++
++    /// XOR the next byte with the next byte of the key, advancing the key.
++    fn munge_byte(&mut self, byte: u8) -> u8 {
++        if self.key.is_empty() {
++            return byte;
++        }
++        let munged = byte ^ self.key[self.pos];
++        self.pos = (self.pos + 1) % self.key.len();
++        munged
+     }
+ 
+     /// XOR each byte of the input buffer with a byte from the key.
+@@ -19,7 +39,9 @@ impl<'a> Xorcism<'a> {
+     /// Note that this is stateful: repeated calls are likely to produce different results,
+     /// even with identical inputs.
+     pub fn munge_in_place(&mut self, data: &mut [u8]) {
+-        todo!()
++        for byte in data {
++            *byte = self.munge_byte(*byte);
++        }
+     }
+ 
+     /// XOR each byte of the data with a byte from the key.
+@@ -29,10 +51,81 @@ impl<'a> Xorcism<'a> {
+     ///
+     /// Should accept anything which has a cheap conversion to a byte iterator.
+     /// Shouldn't matter whether the byte iterator's values are owned or borrowed.
+-    pub fn munge<Data>(&mut self, data: Data) -> impl Iterator<Item = u8> {
+-        todo!();
+-        // this empty iterator silences a compiler complaint that
+-        // () doesn't implement ExactSizeIterator
+-        std::iter::empty()
++    pub fn munge<'b, Data>(&'b mut self, data: Data) -> impl Iterator<Item = u8> + 'b
++    where
++        Data: IntoIterator,
++        Data::Item: Borrow<u8>,
++        Data::IntoIter: 'b,
++    {
++        let key = self.key;
++        let pos = &mut self.pos;
++        data.into_iter().map(move |byte| {
++            let byte = *byte.borrow();
++            if key.is_empty() {
++                return byte;
++            }
++            let munged = byte ^ key[*pos];
++            *pos = (*pos + 1) % key.len();
++            munged
++        })
++    }
++
++    /// Adapt a `Read` into one which munges everything it reads.
++    #[cfg(feature = "io")]
++    pub fn reader<R>(self, inner: R) -> impl Read + use<'a, R>
++    where
++        R: Read,
++    {
++        XorcismReader {
++            xorcism: self,
++            inner,
++        }
++    }
++
++    /// Adapt a `Write` into one which munges everything written to it.
++    #[cfg(feature = "io")]
++    pub fn writer<W>(self, inner: W) -> impl Write + use<'a, W>
++    where
++        W: Write,
++    {
++        XorcismWriter {
++            xorcism: self,
++            inner,
++        }
++    }
++}
++
++#[cfg(feature = "io")]
++struct XorcismReader<'a, R> {
++    xorcism: Xorcism<'a>,
++    inner: R,
++}
++
++#[cfg(feature = "io")]
++impl<R: Read> Read for XorcismReader<'_, R> {
++    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
++        let bytes_read = self.inner.read(buf)?;
++        self.xorcism.munge_in_place(&mut buf[..bytes_read]);
++        Ok(bytes_read)
++    }
++}
++
++#[cfg(feature = "io")]
++struct XorcismWriter<'a, W> {
++    xorcism: Xorcism<'a>,
++    inner: W,
++}
++
++#[cfg(feature = "io")]
++impl<W: Write> Write for XorcismWriter<'_, W> {
++    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
++        let mut munged = buf.to_vec();
++        self.xorcism.munge_in_place(&mut munged);
++        self.inner.write_all(&munged)?;
++        Ok(buf.len())
++    }
++
++    fn flush(&mut self) -> std::io::Result<()> {
++        self.inner.flush()
+     }
+ }

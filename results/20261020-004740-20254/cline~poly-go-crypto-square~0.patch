@@ -1,0 +1,49 @@
+diff --git a/crypto_square.go b/crypto_square.go
+index 5da31f8..6bbb368 100644
+--- a/crypto_square.go
++++ b/crypto_square.go
+@@ -1,5 +1,43 @@
+ package cryptosquare
+ 
++import (
++	"math"
++	"strings"
++	"unicode"
++)
++
+ func Encode(pt string) string {
+-	panic("Please implement the Encode function")
++	var normalized []rune
++	for _, r := range pt {
++		if unicode.IsLetter(r) || unicode.IsDigit(r) {
++			normalized = append(normalized, unicode.ToLower(r))
++		}
++	}
++
++	n := len(normalized)
++	if n == 0 {
++		return ""
++	}
++
++	c := int(math.Ceil(math.Sqrt(float64(n))))
++	r := (n + c - 1) / c
++	if r > c {
++		r, c = c, r
++	}
++
++	chunks := make([]string, 0, c)
++	for col := 0; col < c; col++ {
++		var chunk strings.Builder
++		for row := 0; row < r; row++ {
++			idx := row*c + col
++			if idx < n {
++				chunk.WriteRune(normalized[idx])
++			} else {
++				chunk.WriteByte(' ')
++			}
++		}
++		chunks = append(chunks, chunk.String())
++	}
++
++	return strings.Join(chunks, " ")
+ }

@@ -1,0 +1,38 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 9c3e8ae..ceb33c9 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -3,22 +3,28 @@ pub fn parse_duration(s: &str) -> Result<u64, String> {
+     if s.is_empty() {
+         return Err("empty".into());
+     }
+-    let mut total = 0;
++    let mut total: u64 = 0;
+     let mut num = String::new();
+     for c in s.chars() {
+         if c.is_ascii_digit() {
+             num.push(c);
+         } else {
+             let n: u64 = num.parse().map_err(|_| format!("missing number before {c}"))?;
+-            total = match c {
+-                'h' => n * 3600,
+-                'm' => n * 60,
+-                's' => n,
++            let multiplier: u64 = match c {
++                'h' => 3600,
++                'm' => 60,
++                's' => 1,
+                 _ => return Err(format!("bad unit {c}")),
+             };
++            total = total
++                .checked_add(n.checked_mul(multiplier).ok_or("overflow")?)
++                .ok_or("overflow")?;
+             num.clear();
+         }
+     }
++    if !num.is_empty() {
++        return Err(format!("missing unit after {num}"));
++    }
+     Ok(total)
+ }
+ 

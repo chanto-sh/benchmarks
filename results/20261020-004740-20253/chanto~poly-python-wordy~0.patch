@@ -1,0 +1,66 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..abd1ce8 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,60 @@
++OPERATIONS = {
++    ("plus",): lambda x, y: x + y,
++    ("minus",): lambda x, y: x - y,
++    ("multiplied", "by"): lambda x, y: x * y,
++    ("divided", "by"): lambda x, y: int(x / y),
++}
++
++OPERATION_WORDS = {word for words in OPERATIONS for word in words}
++
++
++def _to_number(word):
++    try:
++        return int(word)
++    except ValueError:
++        return None
++
++
+ def answer(question):
+-    pass
++    if not question.startswith("What is") or not question.endswith("?"):
++        raise ValueError("unknown operation")
++
++    body = question[7:-1].strip()
++    if not body:
++        raise ValueError("syntax error")
++
++    words = body.split()
++
++    for word in words:
++        if _to_number(word) is None and word not in OPERATION_WORDS:
++            raise ValueError("unknown operation")
++
++    if _to_number(words[0]) is None:
++        raise ValueError("syntax error")
++
++    result = _to_number(words[0])
++    index = 1
++
++    while index < len(words):
++        for signature, operation in OPERATIONS.items():
++            length = len(signature)
++            if tuple(words[index:index + length]) == signature:
++                break
++        else:
++            raise ValueError("syntax error")
++
++        index += length
++        if index >= len(words):
++            raise ValueError("syntax error")
++
++        operand = _to_number(words[index])
++        if operand is None:
++            raise ValueError("syntax error")
++
++        if signature == ("divided", "by") and operand == 0:
++            raise ValueError("syntax error")
++
++        result = operation(result, operand)
++        index += 1
++
++    return result

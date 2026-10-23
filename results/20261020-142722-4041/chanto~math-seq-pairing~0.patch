@@ -1,0 +1,80 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..c9b6886 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,73 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _bits(n):
++    """The length and value of n's image under the standard bijection
++    from non-negative ints to finite binary strings (binary of n + 1
++    without its leading 1)."""
++    length = (n + 1).bit_length() - 1
++    return length, n + 1 - (1 << length)
++
++
++def _from_bits(length, value):
++    """Inverse of _bits."""
++    return (1 << length) + value - 1
++
++
++def _pair(a, b):
++    """A bijection N x N -> N whose result has O(bits(a) + bits(b)) bits.
++
++    Pairs of binary strings are ranked by total length, then by the
++    length of the first string, then lexicographically.  The count of
++    pairs with total length below t is (t - 1) * 2**t + 1.
++    """
++    la, va = _bits(a)
++    lb, vb = _bits(b)
++    total = la + lb
++    base = ((total - 1) << total) + 1
++    return base + (la << total) + ((va << lb) | vb)
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    lo, hi = 0, n.bit_length() + 1
++    while lo + 1 < hi:
++        mid = (lo + hi) // 2
++        if ((mid - 1) << mid) + 1 <= n:
++            lo = mid
++        else:
++            hi = mid
++    total = lo
++
++    offset = n - (((total - 1) << total) + 1)
++    first_length = offset >> total
++    combined = offset - (first_length << total)
++    second_length = total - first_length
++
++    first_value = combined >> second_length
++    if second_length:
++        second_value = combined & ((1 << second_length) - 1)
++    else:
++        second_value = 0
++
++    return (
++        _from_bits(first_length, first_value),
++        _from_bits(second_length, second_value),
++    )
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(value, key) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

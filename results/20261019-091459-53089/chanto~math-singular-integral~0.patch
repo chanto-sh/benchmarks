@@ -1,0 +1,79 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..887b879 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,64 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of an n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, n + 1):
++        # Chebyshev approximation for the i-th root, refined by Newton's method.
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(100):
++            p_prev, p = 1.0, x
++            for k in range(2, n + 1):
++                p_prev, p = p, ((2 * k - 1) * x * p - (k - 1) * p_prev) / k
++            derivative = n * (x * p - p_prev) / (x * x - 1.0)
++            dx = p / derivative
++            x -= dx
++            if abs(dx) < 1e-15:
++                break
++
++        p_prev, p = 1.0, x
++        for k in range(2, n + 1):
++            p_prev, p = p, ((2 * k - 1) * x * p - (k - 1) * p_prev) / k
++        derivative = n * (x * p - p_prev) / (x * x - 1.0)
++
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * derivative * derivative))
++    return tuple(nodes), tuple(weights)
++
++
++_NODES, _WEIGHTS = _gauss_legendre(24)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substitute x = u^2 to remove the endpoint singularity:
++        integral = 2 * integral_0^sqrt(b) cos(t*u^2) du.
++    The u interval is split so that the phase advances by at most pi/2 per
++    piece, and each piece is integrated with Gauss-Legendre quadrature.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0.0:
++        return 0.0
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    # Equal x-steps keep the phase step, t*(x_{j+1} - x_j), below pi/2.
++    n = max(1, int(math.ceil(2.0 * abs(t) * b / math.pi)))
++    step = b / n
++
++    def piece(j):
++        xa = 0.0 if j == 0 else j * step
++        xb = b if j + 1 == n else (j + 1) * step
++        ua = math.sqrt(xa)
++        ub = math.sqrt(xb)
++        mid = 0.5 * (ua + ub)
++        half = 0.5 * (ub - ua)
++        total = math.fsum(
++            w * math.cos(t * (mid + half * z) ** 2)
++            for z, w in zip(_NODES, _WEIGHTS)
++        )
++        return 2.0 * half * total
++
++    return math.fsum(piece(j) for j in range(n))

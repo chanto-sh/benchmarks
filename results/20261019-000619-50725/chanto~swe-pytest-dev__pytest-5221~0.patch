@@ -1,0 +1,251 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..95985ac
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1 @@
++Fixture scope is now shown in the output of ``pytest --fixtures``.
+diff --git a/doc/en/builtin.rst b/doc/en/builtin.rst
+index fb16140..3969d30 100644
+--- a/doc/en/builtin.rst
++++ b/doc/en/builtin.rst
+@@ -17,7 +17,7 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+ .. code-block:: pytest
+ 
+     $ pytest -q --fixtures
+-    cache
++    cache [function scope]
+         Return a cache object that can persist state between testing sessions.
+ 
+         cache.get(key, default)
+@@ -27,33 +27,33 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+         name of your plugin or application to avoid clashes with other cache users.
+ 
+         Values can be any object handled by the json stdlib module.
+-    capsys
++    capsys [function scope]
+         Enable text capturing of writes to ``sys.stdout`` and ``sys.stderr``.
+ 
+         The captured output is made available via ``capsys.readouterr()`` method
+         calls, which return a ``(out, err)`` namedtuple.
+         ``out`` and ``err`` will be ``text`` objects.
+-    capsysbinary
++    capsysbinary [function scope]
+         Enable bytes capturing of writes to ``sys.stdout`` and ``sys.stderr``.
+ 
+         The captured output is made available via ``capsysbinary.readouterr()``
+         method calls, which return a ``(out, err)`` namedtuple.
+         ``out`` and ``err`` will be ``bytes`` objects.
+-    capfd
++    capfd [function scope]
+         Enable text capturing of writes to file descriptors ``1`` and ``2``.
+ 
+         The captured output is made available via ``capfd.readouterr()`` method
+         calls, which return a ``(out, err)`` namedtuple.
+         ``out`` and ``err`` will be ``text`` objects.
+-    capfdbinary
++    capfdbinary [function scope]
+         Enable bytes capturing of writes to file descriptors ``1`` and ``2``.
+ 
+         The captured output is made available via ``capfd.readouterr()`` method
+         calls, which return a ``(out, err)`` namedtuple.
+         ``out`` and ``err`` will be ``byte`` objects.
+-    doctest_namespace
++    doctest_namespace [function scope]
+         Fixture that returns a :py:class:`dict` that will be injected into the namespace of doctests.
+-    pytestconfig
++    pytestconfig [session scope]
+         Session-scoped fixture that returns the :class:`_pytest.config.Config` object.
+ 
+         Example::
+@@ -61,7 +61,7 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+             def test_foo(pytestconfig):
+                 if pytestconfig.getoption("verbose") > 0:
+                     ...
+-    record_property
++    record_property [function scope]
+         Add an extra properties the calling test.
+         User properties become part of the test report and are available to the
+         configured reporters, like JUnit XML.
+@@ -72,11 +72,11 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+ 
+             def test_function(record_property):
+                 record_property("example_key", 1)
+-    record_xml_attribute
++    record_xml_attribute [function scope]
+         Add extra xml attributes to the tag for the calling test.
+         The fixture is callable with ``(name, value)``, with value being
+         automatically xml-encoded
+-    caplog
++    caplog [function scope]
+         Access and control log capturing.
+ 
+         Captured logs are available through the following properties/methods::
+@@ -85,7 +85,7 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+         * caplog.records         -> list of logging.LogRecord instances
+         * caplog.record_tuples   -> list of (logger_name, level, message) tuples
+         * caplog.clear()         -> clear captured records and formatted log output string
+-    monkeypatch
++    monkeypatch [function scope]
+         The returned ``monkeypatch`` fixture provides these
+         helper methods to modify objects, dictionaries or os.environ::
+ 
+@@ -102,16 +102,16 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+         test function or fixture has finished. The ``raising``
+         parameter determines if a KeyError or AttributeError
+         will be raised if the set/deletion operation has no target.
+-    recwarn
++    recwarn [function scope]
+         Return a :class:`WarningsRecorder` instance that records all warnings emitted by test functions.
+ 
+         See http://docs.python.org/library/warnings.html for information
+         on warning categories.
+-    tmpdir_factory
++    tmpdir_factory [session scope]
+         Return a :class:`_pytest.tmpdir.TempdirFactory` instance for the test session.
+-    tmp_path_factory
++    tmp_path_factory [session scope]
+         Return a :class:`_pytest.tmpdir.TempPathFactory` instance for the test session.
+-    tmpdir
++    tmpdir [function scope]
+         Return a temporary directory path object
+         which is unique to each test function invocation,
+         created as a sub directory of the base temporary
+@@ -119,7 +119,7 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+         path object.
+ 
+         .. _`py.path.local`: https://py.readthedocs.io/en/latest/path.html
+-    tmp_path
++    tmp_path [function scope]
+         Return a temporary directory path object
+         which is unique to each test function invocation,
+         created as a sub directory of the base temporary
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..fc6feb1 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1342,10 +1342,9 @@ def _showfixtures_main(config, session):
+                 currentmodule = module
+         if verbose <= 0 and argname[0] == "_":
+             continue
++        funcargspec = "%s [%s scope]" % (argname, fixturedef.scope)
+         if verbose > 0:
+-            funcargspec = "%s -- %s" % (argname, bestrel)
+-        else:
+-            funcargspec = argname
++            funcargspec = "%s -- %s" % (funcargspec, bestrel)
+         tw.line(funcargspec, green=True)
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""
+diff --git a/testing/python/fixtures.py b/testing/python/fixtures.py
+index 48f8028..05d82fd 100644
+--- a/testing/python/fixtures.py
++++ b/testing/python/fixtures.py
+@@ -3043,6 +3043,30 @@ class TestShowFixtures(object):
+         result = testdir.runpytest("--fixtures", "-v")
+         result.stdout.fnmatch_lines(["*tmpdir*--*tmpdir.py*", "*temporary directory*"])
+ 
++    def test_show_fixtures_scope(self, testdir):
++        testdir.makepyfile(
++            '''
++            import pytest
++            @pytest.fixture
++            def function_scope():
++                """ function """
++            @pytest.fixture(scope="module")
++            def module_scope():
++                """ module """
++            @pytest.fixture(scope="session")
++            def session_scope():
++                """ session """
++        '''
++        )
++        result = testdir.runpytest("--fixtures")
++        result.stdout.fnmatch_lines(
++            """
++            function_scope [function scope]
++            module_scope [module scope]
++            session_scope [session scope]
++        """
++        )
++
+     def test_show_fixtures_testmodule(self, testdir):
+         p = testdir.makepyfile(
+             '''
+@@ -3058,7 +3082,7 @@ class TestShowFixtures(object):
+         result = testdir.runpytest("--fixtures", p)
+         result.stdout.fnmatch_lines(
+             """
+-            *tmpdir
++            *tmpdir*
+             *fixtures defined from*
+             *arg1*
+             *hello world*
+@@ -3120,10 +3144,10 @@ class TestShowFixtures(object):
+             textwrap.dedent(
+                 """\
+                 * fixtures defined from test_show_fixtures_trimmed_doc *
+-                arg2
++                arg2 [function scope]
+                     line1
+                     line2
+-                arg1
++                arg1 [function scope]
+                     line1
+                     line2
+                 """
+@@ -3149,7 +3173,7 @@ class TestShowFixtures(object):
+             textwrap.dedent(
+                 """\
+                 * fixtures defined from test_show_fixtures_indented_doc *
+-                fixture1
++                fixture1 [function scope]
+                     line1
+                         indented line
+                 """
+@@ -3175,7 +3199,7 @@ class TestShowFixtures(object):
+             textwrap.dedent(
+                 """\
+                 * fixtures defined from test_show_fixtures_indented_doc_first_line_unindented *
+-                fixture1
++                fixture1 [function scope]
+                     line1
+                     line2
+                         indented line
+@@ -3203,7 +3227,7 @@ class TestShowFixtures(object):
+             textwrap.dedent(
+                 """\
+                 * fixtures defined from test_show_fixtures_indented_in_class *
+-                fixture1
++                fixture1 [function scope]
+                     line1
+                     line2
+                         indented line
+@@ -3245,11 +3269,11 @@ class TestShowFixtures(object):
+         result.stdout.fnmatch_lines(
+             """
+             * fixtures defined from test_a *
+-            fix_a
++            fix_a [function scope]
+                 Fixture A
+ 
+             * fixtures defined from test_b *
+-            fix_b
++            fix_b [function scope]
+                 Fixture B
+         """
+         )
+@@ -3285,11 +3309,11 @@ class TestShowFixtures(object):
+         result.stdout.fnmatch_lines(
+             """
+             * fixtures defined from conftest *
+-            arg1
++            arg1 [function scope]
+                 Hello World in conftest.py
+ 
+             * fixtures defined from test_show_fixtures_with_same_name *
+-            arg1
++            arg1 [function scope]
+                 Hi from test module
+         """
+         )

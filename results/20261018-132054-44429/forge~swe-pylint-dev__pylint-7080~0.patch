@@ -1,0 +1,68 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index e2bbf06..ec48aaf 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -34,7 +34,11 @@ from pylint.constants import (
+ from pylint.interfaces import HIGH
+ from pylint.lint.base_options import _make_linter_options
+ from pylint.lint.caching import load_results, save_results
+-from pylint.lint.expand_modules import _is_ignored_file, expand_modules
++from pylint.lint.expand_modules import (
++    _is_ignored_file,
++    _is_in_ignore_list_re,
++    expand_modules,
++)
+ from pylint.lint.message_state_handler import _MessageStateHandler
+ from pylint.lint.parallel import check_parallel
+ from pylint.lint.report_functions import (
+@@ -602,6 +606,12 @@ class PyLinter(
+                         self.config.ignore,
+                         self.config.ignore_patterns,
+                         self.config.ignore_paths,
++                    ) or _is_in_ignore_list_re(
++                        # Ignore-paths patterns such as ``^src/gen/.*$`` should
++                        # also match the directory itself, whose path does not
++                        # end with a separator.
++                        root + os.sep,
++                        self.config.ignore_paths,
+                     ):
+                         skip_subtrees.append(root)
+                         continue
+diff --git a/tests/lint/unittest_lint.py b/tests/lint/unittest_lint.py
+index 3dbde39..c319073 100644
+--- a/tests/lint/unittest_lint.py
++++ b/tests/lint/unittest_lint.py
+@@ -912,6 +912,33 @@ def test_recursive_ignore(ignore_parameter, ignore_parameter_value) -> None:
+     assert module in linted_file_paths
+ 
+ 
++def test_recursive_ignore_paths_package() -> None:
++    """An ignored package directory should not be linted recursively.
++
++    ``ignore-paths`` patterns ending with a path separator (e.g.
++    ``^src/gen/.*$``) must also match the directory itself, not only its
++    contents. See https://github.com/PyCQA/pylint/issues/7080.
++    """
++    run = Run(
++        [
++            "--recursive",
++            "y",
++            "--ignore-paths",
++            ".*directory/package/.*",
++            join(REGRTEST_DATA_DIR, "directory"),
++        ],
++        exit=False,
++    )
++
++    linted_files = run.linter._iterate_file_descrs(
++        tuple(run.linter._discover_files([join(REGRTEST_DATA_DIR, "directory")]))
++    )
++    linted_file_paths = [file_item.filepath for file_item in linted_files]
++
++    ignored_package = os.path.join("directory", "package")
++    assert not any(ignored_package in path for path in linted_file_paths)
++
++
+ def test_import_sibling_module_from_namespace(initialized_linter: PyLinter) -> None:
+     """If the parent directory above `namespace` is on sys.path, ensure that
+     modules under `namespace` can import each other without raising `import-error`."""

@@ -1,0 +1,128 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index ff77d85..d503f95 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,3 +1,4 @@
+ [package]
+ name = "nucleotide_codons"
+ version = "0.1.0"
++edition = "2021"
+diff --git a/src/lib.rs b/src/lib.rs
+index 17a6829..957b7d3 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,35 +1,96 @@
+-// This exercise is deprecated.
+-// Consider working on protein-translation instead.
+-
+-use std::marker::PhantomData;
++use std::collections::HashMap;
+ 
+ pub struct CodonsInfo<'a> {
+-    // This field is here to make the template compile and not to
+-    // complain about unused type lifetime parameter "'a". Once you start
+-    // solving the exercise, delete this field and the 'std::marker::PhantomData'
+-    // import.
+-    phantom: PhantomData<&'a ()>,
++    codons: HashMap<&'a str, &'a str>,
+ }
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub struct Error;
+ 
+ impl<'a> CodonsInfo<'a> {
++    /// Return the name of the amino acid encoded by `codon`.
++    ///
++    /// `codon` may use the IUPAC shorthand letters (for example `R` stands for
++    /// `A` or `G`), in which case every concrete codon it expands to must be
++    /// known and must encode for the same amino acid.
+     pub fn name_for(&self, codon: &str) -> Result<&'a str, Error> {
+-        todo!(
+-            "Return the protein name for a '{}' codon or Err, if codon string is invalid",
+-            codon
+-        );
++        let bases = codon.as_bytes();
++        if bases.len() != 3 {
++            return Err(Error);
++        }
++
++        let first = possible_bases(bases[0]).ok_or(Error)?;
++        let second = possible_bases(bases[1]).ok_or(Error)?;
++        let third = possible_bases(bases[2]).ok_or(Error)?;
++
++        let mut name: Option<&'a str> = None;
++        for &a in first {
++            for &b in second {
++                for &c in third {
++                    let concrete = [a, b, c];
++                    let key = std::str::from_utf8(&concrete).map_err(|_| Error)?;
++                    let candidate = *self.codons.get(key).ok_or(Error)?;
++                    match name {
++                        None => name = Some(candidate),
++                        Some(existing) if existing == candidate => {}
++                        Some(_) => return Err(Error),
++                    }
++                }
++            }
++        }
++
++        name.ok_or(Error)
+     }
+ 
++    /// Translate an RNA sequence into the list of encoded amino acids.
++    ///
++    /// Translation stops at the first stop codon, which is not included in the
++    /// result. An RNA whose length is not a multiple of three, or that contains
++    /// an invalid codon, yields an error.
+     pub fn of_rna(&self, rna: &str) -> Result<Vec<&'a str>, Error> {
+-        todo!("Return a list of protein names that correspond to the '{}' RNA string or Err if the RNA string is invalid", rna);
++        let bases = rna.as_bytes();
++        if bases.len() % 3 != 0 {
++            return Err(Error);
++        }
++
++        let mut proteins = Vec::new();
++        for chunk in bases.chunks(3) {
++            let codon = std::str::from_utf8(chunk).map_err(|_| Error)?;
++            let name = self.name_for(codon)?;
++            if name == "stop codon" {
++                break;
++            }
++            proteins.push(name);
++        }
++
++        Ok(proteins)
++    }
++}
++
++/// The concrete DNA bases represented by an IUPAC nucleotide code.
++fn possible_bases(base: u8) -> Option<&'static [u8]> {
++    match base {
++        b'A' => Some(b"A"),
++        b'C' => Some(b"C"),
++        b'G' => Some(b"G"),
++        b'T' => Some(b"T"),
++        b'R' => Some(b"AG"),
++        b'Y' => Some(b"CT"),
++        b'S' => Some(b"CG"),
++        b'W' => Some(b"AT"),
++        b'K' => Some(b"GT"),
++        b'M' => Some(b"AC"),
++        b'B' => Some(b"CGT"),
++        b'D' => Some(b"AGT"),
++        b'H' => Some(b"ACT"),
++        b'V' => Some(b"ACG"),
++        b'N' => Some(b"ACGT"),
++        _ => None,
+     }
+ }
+ 
+ pub fn parse<'a>(pairs: Vec<(&'a str, &'a str)>) -> CodonsInfo<'a> {
+-    todo!(
+-        "Construct a new CodonsInfo struct from given pairs: {:?}",
+-        pairs
+-    );
++    CodonsInfo {
++        codons: pairs.into_iter().collect(),
++    }
+ }

@@ -1,0 +1,33 @@
+diff --git a/stats.py b/stats.py
+index add4f59..01e3bc8 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,22 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    # Work with offsets from the first value so that a large common offset
++    # does not swamp the spread when values are squared.
++    x0 = next(iter(xs))
++    mean_shift = math.fsum(x - x0 for x in xs) / n
++    var = math.fsum((x - x0 - mean_shift) ** 2 for x in xs) / n
++    return x0 + mean_shift, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

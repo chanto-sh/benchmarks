@@ -1,0 +1,39 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..9e79bdc 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,33 @@
+ def find_kth(arr1, arr2, k):
+-    pass
++    total = len(arr1) + len(arr2)
++    if k < 1 or k > total:
++        raise ValueError("k must be between 1 and the total number of elements")
++
++    if len(arr1) > len(arr2):
++        arr1, arr2 = arr2, arr1
++
++    low = max(0, k - len(arr2))
++    high = min(k, len(arr1))
++
++    while low <= high:
++        take1 = (low + high) // 2
++        take2 = k - take1
++
++        max_left1 = arr1[take1 - 1] if take1 > 0 else None
++        min_right1 = arr1[take1] if take1 < len(arr1) else None
++        max_left2 = arr2[take2 - 1] if take2 > 0 else None
++        min_right2 = arr2[take2] if take2 < len(arr2) else None
++
++        if (max_left1 is None or min_right2 is None or max_left1 <= min_right2) and (
++            max_left2 is None or min_right1 is None or max_left2 <= min_right1
++        ):
++            if max_left1 is None:
++                return max_left2
++            if max_left2 is None:
++                return max_left1
++            return max(max_left1, max_left2)
++
++        if max_left1 is not None and min_right2 is not None and max_left1 > min_right2:
++            high = take1 - 1
++        else:
++            low = take1 + 1

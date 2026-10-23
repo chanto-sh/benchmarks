@@ -1,0 +1,55 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..105a257 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,47 @@
++SHARP_SCALE = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++FLAT_SCALE = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++# Keys whose major/minor scales are written using flats. Everything else
++# that falls within the scope of this exercise uses sharps. By convention
++# the natural keys "C" (major) and "a" (minor) use sharps when ascending.
++MAJOR_FLAT_TONICS = {"F", "Bb", "Eb", "Ab", "Db", "Gb"}
++MINOR_FLAT_TONICS = {"D", "G", "C", "F", "Bb", "Eb"}
++
++INTERVAL_STEPS = {"m": 1, "M": 2, "A": 3}
++
++
+ class Scale:
+     def __init__(self, tonic):
+-        pass
++        self.tonic = self._normalize(tonic)
++        self.uses_flats = self._uses_flats(tonic)
++        self.scale = FLAT_SCALE if self.uses_flats else SHARP_SCALE
++
++    @staticmethod
++    def _normalize(tonic):
++        """Return the tonic with an uppercase letter and unchanged accidental."""
++        return tonic[0].upper() + tonic[1:]
++
++    @staticmethod
++    def _uses_flats(tonic):
++        """Determine whether the given tonic's scale is written with flats.
++
++        A lowercase tonic denotes a minor key, an uppercase one a major key.
++        The case matters even though the output notes are always uppercase.
++        """
++        normalized = tonic[0].upper() + tonic[1:]
++        if tonic[0].islower():
++            return normalized in MINOR_FLAT_TONICS
++        return normalized in MAJOR_FLAT_TONICS
+ 
+     def chromatic(self):
+-        pass
++        start = self.scale.index(self.tonic)
++        shifted = self.scale[start:] + self.scale[:start]
++        return shifted
+ 
+     def interval(self, intervals):
+-        pass
++        index = self.scale.index(self.tonic)
++        result = [self.scale[index]]
++        for interval in intervals:
++            index = (index + INTERVAL_STEPS[interval]) % len(self.scale)
++            result.append(self.scale[index])
++        return result

@@ -1,0 +1,87 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..04f9ced 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,35 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses velocity Verlet (kick-drift-kick leapfrog), a second-order symplectic
++    integrator.  Its energy error oscillates instead of growing secularly, and
++    each kick is a symmetric pairwise interaction, so total momentum is
++    conserved.
++    """
++    n = len(masses)
++    pos = [list(xy) for xy in positions]
++    vel = [list(xy) for xy in velocities]
++    if steps <= 0:
++        return pos, vel
++
++    dt2_half = 0.5 * dt * dt
++    dt_half = 0.5 * dt
++    acc = accelerations(masses, pos, G)
++
++    for _ in range(steps):
++        # Drift using the current acceleration (half kick, drift, half kick).
++        for i in range(n):
++            pos[i][0] += vel[i][0] * dt + acc[i][0] * dt2_half
++            pos[i][1] += vel[i][1] * dt + acc[i][1] * dt2_half
++
++        new_acc = accelerations(masses, pos, G)
++
++        for i in range(n):
++            vel[i][0] += (acc[i][0] + new_acc[i][0]) * dt_half
++            vel[i][1] += (acc[i][1] + new_acc[i][1]) * dt_half
++
++        acc = new_acc
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..a1b4c6b 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -17,6 +17,40 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_momentum_and_inputs_are_unchanged(self):
++        m = [3.0, 1.0]
++        pos = [[-0.5, 0.0], [1.5, 0.0]]
++        vel = [[0.25, -0.4], [0.3, 0.7]]
++        pos0 = [xy[:] for xy in pos]
++        vel0 = [xy[:] for xy in vel]
++        momentum0 = [
++            sum(m[i] * vel[i][k] for i in range(len(m))) for k in (0, 1)
++        ]
++
++        p, q = simulate(m, pos, vel, 0.01, 5000)
++
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        for k in (0, 1):
++            momentum = sum(m[i] * q[i][k] for i in range(len(m)))
++            self.assertAlmostEqual(momentum, momentum0[k], places=10)
++
++    def test_figure_eight_energy(self):
++        # Chenciner-Montgomery figure-eight orbit, three equal masses.
++        m = [1.0, 1.0, 1.0]
++        pos = [
++            [0.97000436, -0.24308753],
++            [-0.97000436, 0.24308753],
++            [0.0, 0.0],
++        ]
++        vx, vy = -0.93240737, -0.86473146
++        vel = [[-vx / 2, -vy / 2], [-vx / 2, -vy / 2], [vx, vy]]
++        e0 = energy(m, pos, vel)
++
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

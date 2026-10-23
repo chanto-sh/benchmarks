@@ -1,0 +1,50 @@
+diff --git a/cfgload/loader.py b/cfgload/loader.py
+index b9698d9..26388e9 100644
+--- a/cfgload/loader.py
++++ b/cfgload/loader.py
+@@ -1,9 +1,16 @@
+ import json
++import logging
++
++log = logging.getLogger(__name__)
+ 
+ DEFAULTS = {"theme": "light", "retries": 3}
+ 
+ 
+-def load_config(path):
+-    with open(path) as f:
+-        data = json.load(f)
++def load_config(path: str) -> dict:
++    try:
++        with open(path) as f:
++            data = json.load(f)
++    except FileNotFoundError:
++        log.warning("Config file %s not found; using defaults", path)
++        return dict(DEFAULTS)
+     return {**DEFAULTS, **data}
+diff --git a/test_loader.py b/test_loader.py
+index 503cf5e..8450cab 100644
+--- a/test_loader.py
++++ b/test_loader.py
+@@ -1,6 +1,6 @@
+ import json, os, tempfile, unittest
+ 
+-from cfgload import load_config
++from cfgload import DEFAULTS, load_config
+ 
+ 
+ class LoaderTest(unittest.TestCase):
+@@ -11,6 +11,13 @@ class LoaderTest(unittest.TestCase):
+                 json.dump({"theme": "dark"}, f)
+             self.assertEqual(load_config(p), {"theme": "dark", "retries": 3})
+ 
++    def test_missing_file_falls_back_to_defaults(self):
++        with tempfile.TemporaryDirectory() as d:
++            p = os.path.join(d, "missing.json")
++            with self.assertLogs("cfgload.loader", level="WARNING") as logs:
++                self.assertEqual(load_config(p), DEFAULTS)
++            self.assertIn(p, logs.output[0])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

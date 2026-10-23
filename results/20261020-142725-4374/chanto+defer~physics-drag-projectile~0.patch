@@ -1,0 +1,261 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..007dc91 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,254 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince adaptive Runge-Kutta (RK45) coefficients.
++_C2 = 1.0 / 5.0
++_C3 = 3.0 / 10.0
++_C4 = 4.0 / 5.0
++_C5 = 8.0 / 9.0
++_C6 = 1.0
++_C7 = 1.0
++
++_A21 = 1.0 / 5.0
++
++_A31 = 3.0 / 40.0
++_A32 = 9.0 / 40.0
++
++_A41 = 44.0 / 45.0
++_A42 = -56.0 / 15.0
++_A43 = 32.0 / 9.0
++
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++
++_A71 = 35.0 / 384.0
++_A72 = 0.0
++_A73 = 500.0 / 1113.0
++_A74 = 125.0 / 192.0
++_A75 = -2187.0 / 6784.0
++_A76 = 11.0 / 84.0
++
++# Difference between the fifth- and fourth-order weights, used for the
++# local error estimate.
++_E1 = _A71 - 5179.0 / 57600.0
++_E2 = 0.0
++_E3 = _A73 - 7571.0 / 16695.0
++_E4 = _A74 - 393.0 / 640.0
++_E5 = _A75 + 92097.0 / 339200.0
++_E6 = _A76 - 187.0 / 2100.0
++_E7 = -1.0 / 40.0
++
++_RTOL = 1e-12
++_ATOL = 1e-12
++
++
++def _derivs(state, drag, g):
++    """Return the time derivative of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -drag * speed * vx, -drag * speed * vy - g)
++
++
++def _rk45_step(state, h, drag, g):
++    """Take one Dormand-Prince step; return new state and scaled error."""
++    x, y, vx, vy = state
++
++    k1 = _derivs(state, drag, g)
++
++    s2 = (
++        x + h * _A21 * k1[0],
++        y + h * _A21 * k1[1],
++        vx + h * _A21 * k1[2],
++        vy + h * _A21 * k1[3],
++    )
++    k2 = _derivs(s2, drag, g)
++
++    s3 = (
++        x + h * (_A31 * k1[0] + _A32 * k2[0]),
++        y + h * (_A31 * k1[1] + _A32 * k2[1]),
++        vx + h * (_A31 * k1[2] + _A32 * k2[2]),
++        vy + h * (_A31 * k1[3] + _A32 * k2[3]),
++    )
++    k3 = _derivs(s3, drag, g)
++
++    s4 = (
++        x + h * (_A41 * k1[0] + _A42 * k2[0] + _A43 * k3[0]),
++        y + h * (_A41 * k1[1] + _A42 * k2[1] + _A43 * k3[1]),
++        vx + h * (_A41 * k1[2] + _A42 * k2[2] + _A43 * k3[2]),
++        vy + h * (_A41 * k1[3] + _A42 * k2[3] + _A43 * k3[3]),
++    )
++    k4 = _derivs(s4, drag, g)
++
++    s5 = (
++        x + h * (_A51 * k1[0] + _A52 * k2[0] + _A53 * k3[0] + _A54 * k4[0]),
++        y + h * (_A51 * k1[1] + _A52 * k2[1] + _A53 * k3[1] + _A54 * k4[1]),
++        vx + h * (_A51 * k1[2] + _A52 * k2[2] + _A53 * k3[2] + _A54 * k4[2]),
++        vy + h * (_A51 * k1[3] + _A52 * k2[3] + _A53 * k3[3] + _A54 * k4[3]),
++    )
++    k5 = _derivs(s5, drag, g)
++
++    s6 = (
++        x + h * (
++            _A61 * k1[0] + _A62 * k2[0] + _A63 * k3[0]
++            + _A64 * k4[0] + _A65 * k5[0]
++        ),
++        y + h * (
++            _A61 * k1[1] + _A62 * k2[1] + _A63 * k3[1]
++            + _A64 * k4[1] + _A65 * k5[1]
++        ),
++        vx + h * (
++            _A61 * k1[2] + _A62 * k2[2] + _A63 * k3[2]
++            + _A64 * k4[2] + _A65 * k5[2]
++        ),
++        vy + h * (
++            _A61 * k1[3] + _A62 * k2[3] + _A63 * k3[3]
++            + _A64 * k4[3] + _A65 * k5[3]
++        ),
++    )
++    k6 = _derivs(s6, drag, g)
++
++    new = (
++        x + h * (_A71 * k1[0] + _A73 * k3[0] + _A74 * k4[0]
++                 + _A75 * k5[0] + _A76 * k6[0]),
++        y + h * (_A71 * k1[1] + _A73 * k3[1] + _A74 * k4[1]
++                 + _A75 * k5[1] + _A76 * k6[1]),
++        vx + h * (_A71 * k1[2] + _A73 * k3[2] + _A74 * k4[2]
++                  + _A75 * k5[2] + _A76 * k6[2]),
++        vy + h * (_A71 * k1[3] + _A73 * k3[3] + _A74 * k4[3]
++                  + _A75 * k5[3] + _A76 * k6[3]),
++    )
++    k7 = _derivs(new, drag, g)
++
++    err = (
++        h * (_E1 * k1[0] + _E3 * k3[0] + _E4 * k4[0]
++             + _E5 * k5[0] + _E6 * k6[0] + _E7 * k7[0]),
++        h * (_E1 * k1[1] + _E3 * k3[1] + _E4 * k4[1]
++             + _E5 * k5[1] + _E6 * k6[1] + _E7 * k7[1]),
++        h * (_E1 * k1[2] + _E3 * k3[2] + _E4 * k4[2]
++             + _E5 * k5[2] + _E6 * k6[2] + _E7 * k7[2]),
++        h * (_E1 * k1[3] + _E3 * k3[3] + _E4 * k4[3]
++             + _E5 * k5[3] + _E6 * k6[3] + _E7 * k7[3]),
++    )
++
++    scale = tuple(_ATOL + _RTOL * max(abs(a), abs(b))
++                  for a, b in zip(state, new))
++    error = max(abs(e) / s for e, s in zip(err, scale))
++    return new, error
++
++
++def _root_state(state, hi, index, drag, g):
++    """Locate a zero of state[index] in [0, hi] and return (state, time)."""
++    lo = 0.0
++    lo_value = state[index]
++    hi_value = _rk45_step(state, hi, drag, g)[0][index]
++
++    # The caller only invokes this when the endpoint brackets a sign change.
++    if lo_value == 0.0:
++        return state, 0.0
++    if hi_value == 0.0:
++        return _rk45_step(state, hi, drag, g)[0], hi
++
++    lo_positive = lo_value > 0.0
++    for _ in range(100):
++        mid = 0.5 * (lo + hi)
++        mid_state = _rk45_step(state, mid, drag, g)[0]
++        mid_value = mid_state[index]
++        if (mid_value > 0.0) == lo_positive:
++            lo = mid
++            lo_value = mid_value
++        else:
++            hi = mid
++        if hi - lo <= 1e-14 * hi:
++            break
++
++    tau = 0.5 * (lo + hi)
++    return _rk45_step(state, tau, drag, g)[0], tau
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height *h0* at speed *v0* and elevation
++    *angle_deg*.  Quadratic drag is ``F = -k |v| v``; *mass* is in kg and *k*
++    in kg/m.  The trajectory is integrated numerically because drag removes
++    the closed-form solution.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    angle = math.radians(angle_deg)
++    state = (
++        0.0,
++        h0,
++        v0 * math.cos(angle),
++        v0 * math.sin(angle),
++    )
++
++    # Already on (or below) the ground and not launched upwards: no flight.
++    if h0 == 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": h0, "time": 0.0}
++
++    drag = k / mass
++    t = 0.0
++    apex = h0
++
++    # Start with a step small enough to resolve the initial motion.  In
++    # particular, a level launch from y = 0 can rise and fall again within a
++    # single overly large step, which would make y = 0 ambiguous at t = 0.
++    dt = 1e-3
++    if g > 0.0 and state[3] > 0.0:
++        dt = min(dt, 0.25 * state[3] / g)
++    if drag > 0.0 and v0 > 0.0:
++        dt = min(dt, 0.1 / (drag * v0))
++    max_steps = 2_000_000
++    steps = 0
++
++    while steps < max_steps:
++        new_state, error = _rk45_step(state, dt, drag, g)
++
++        if error <= 1.0:
++            # Apex: vertical velocity changes sign inside this step.
++            if state[3] > 0.0 and new_state[3] <= 0.0:
++                apex_state, _ = _root_state(state, dt, 3, drag, g)
++                if apex_state[1] > apex:
++                    apex = apex_state[1]
++
++            # Touchdown: height changes sign inside this step.
++            if new_state[1] <= 0.0:
++                ground_state, tau = _root_state(state, dt, 1, drag, g)
++                return {
++                    "range": ground_state[0],
++                    "apex": apex,
++                    "time": t + tau,
++                }
++
++            t += dt
++            state = new_state
++            if state[1] > apex:
++                apex = state[1]
++
++            steps += 1
++            if error == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * error ** -0.2
++                factor = min(5.0, max(0.2, factor))
++            dt *= factor
++        else:
++            factor = 0.9 * error ** -0.2
++            dt *= max(0.1, min(1.0, factor))
++            steps += 1
++
++    raise RuntimeError("flight integration did not reach the ground")

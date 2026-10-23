@@ -1,0 +1,50 @@
+diff --git a/pig_latin.go b/pig_latin.go
+index 2836af2..ecd8f3d 100644
+--- a/pig_latin.go
++++ b/pig_latin.go
+@@ -1,5 +1,44 @@
+ package piglatin
+ 
++import "strings"
++
++func isVowel(c byte) bool {
++	switch c {
++	case 'a', 'e', 'i', 'o', 'u':
++		return true
++	}
++	return false
++}
++
++func translate(word string) string {
++	if word == "" {
++		return word
++	}
++
++	if isVowel(word[0]) || strings.HasPrefix(word, "xr") || strings.HasPrefix(word, "yt") {
++		return word + "ay"
++	}
++
++	i := 0
++	if word[i] == 'y' {
++		i++
++	}
++	for i < len(word) && !isVowel(word[i]) && word[i] != 'y' {
++		i++
++	}
++
++	// A "qu" following the leading consonants moves along with them.
++	if i < len(word) && word[i] == 'u' && i > 0 && word[i-1] == 'q' {
++		i++
++	}
++
++	return word[i:] + word[:i] + "ay"
++}
++
+ func Sentence(sentence string) string {
+-	panic("Please implement the Sentence function")
++	words := strings.Split(sentence, " ")
++	for i, word := range words {
++		words[i] = translate(word)
++	}
++	return strings.Join(words, " ")
+ }

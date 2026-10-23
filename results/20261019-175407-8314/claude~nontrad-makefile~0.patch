@@ -1,0 +1,62 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..c52dd09 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,17 +2,30 @@
+ PY ?= python3
+ DATA := $(wildcard data/*.csv)
+ OUT := dist
++SUMMARY := $(OUT)/summary.json
++
++.PHONY: all build test clean
+ 
+ all: build
+ 
+-build: $(OUT)/summary.json
++build: $(SUMMARY)
+ 
+-$(OUT)/summary.json: scripts/summarize.py
+-	mkdir -p $(OUT)
++# Rebuild when the script or any CSV changes. Depend on data/ as well so that
++# adding or removing a CSV is noticed (the wildcard only captures files that
++# already exist when make starts).
++$(SUMMARY): scripts/summarize.py $(DATA) data | $(OUT)
+ 	$(PY) scripts/summarize.py $(DATA) > $@
+ 
++$(OUT):
++	mkdir -p $@
++
+ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)
++
++# The shell truncates $@ as soon as the recipe starts. If summarize.py fails
++# part-way through, remove the partial file so the next `make` retries instead
++# of treating the truncated result as up to date.
++.DELETE_ON_ERROR:
+diff --git a/dist/summary.json b/dist/summary.json
+new file mode 100644
+index 0000000..8abfbb6
+--- /dev/null
++++ b/dist/summary.json
+@@ -0,0 +1,17 @@
++{
++  "files": 2,
++  "skus": {
++    "A100": {
++      "revenue": "22.50",
++      "units": 5
++    },
++    "B200": {
++      "revenue": "59.97",
++      "units": 3
++    },
++    "C300": {
++      "revenue": "11.25",
++      "units": 5
++    }
++  }
++}

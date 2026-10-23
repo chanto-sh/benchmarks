@@ -128,7 +128,7 @@ def one_run(agent, home, turns, blob_kb):
         # It is an edit-block agent, so this is per-MESSAGE overhead (marked * in
         # the report), not the same tool-loop turn as the others.
         v1 = f"{run.API}/v1"
-        cmd = ["aider", "--model", "openai/fake", "--yes-always", "--no-auto-commits",
+        cmd = [run.agent_exe("aider"), "--model", "openai/fake", "--yes-always", "--no-auto-commits",
                "--no-check-update", "--no-show-model-warnings", "--no-pretty",
                "--no-stream", "--no-gitignore", "--no-analytics"]
         extra = {"OPENAI_API_BASE": v1, "OPENAI_API_KEY": run.API_KEY, "AIDER_HOME": str(home / "aiderhome")}

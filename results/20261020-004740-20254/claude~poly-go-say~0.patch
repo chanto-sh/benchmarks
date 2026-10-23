@@ -1,0 +1,86 @@
+diff --git a/say.go b/say.go
+index f60502f..147d0cf 100644
+--- a/say.go
++++ b/say.go
+@@ -1,5 +1,80 @@
+ package say
+ 
++var (
++	ones = []string{
++		"zero", "one", "two", "three", "four", "five", "six", "seven",
++		"eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
++		"fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
++	}
++	tens = []string{
++		"", "", "twenty", "thirty", "forty", "fifty", "sixty",
++		"seventy", "eighty", "ninety",
++	}
++	scales = []string{"", "thousand", "million", "billion"}
++)
++
++// Say spells out n in English. It reports false if n is outside the range
++// 0 to 999,999,999,999 inclusive.
+ func Say(n int64) (string, bool) {
+-	panic("Please implement the Say function")
++	if n < 0 || n > 999999999999 {
++		return "", false
++	}
++	if n == 0 {
++		return "zero", true
++	}
++	return spell(n), true
++}
++
++// spell renders n, which must be in [1, 999999999999], in English.
++func spell(n int64) string {
++	var parts []string
++	for i := 0; n > 0; i++ {
++		chunk := n % 1000
++		n /= 1000
++		if chunk == 0 {
++			continue
++		}
++		s := spellChunk(chunk)
++		if scales[i] != "" {
++			s += " " + scales[i]
++		}
++		parts = append(parts, s)
++	}
++
++	// Chunks were collected from least to most significant; reverse them.
++	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
++		parts[i], parts[j] = parts[j], parts[i]
++	}
++	return joinWords(parts)
++}
++
++// spellChunk renders a value in [1, 999].
++func spellChunk(n int64) string {
++	var parts []string
++	if n >= 100 {
++		parts = append(parts, ones[n/100], "hundred")
++		n %= 100
++	}
++	if n >= 20 {
++		word := tens[n/10]
++		if n%10 != 0 {
++			word += "-" + ones[n%10]
++		}
++		parts = append(parts, word)
++	} else if n > 0 {
++		parts = append(parts, ones[n])
++	}
++	return joinWords(parts)
++}
++
++// joinWords concatenates phrase groups with single spaces.
++func joinWords(parts []string) string {
++	out := ""
++	for i, p := range parts {
++		if i > 0 {
++			out += " "
++		}
++		out += p
++	}
++	return out
+ }

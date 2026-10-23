@@ -1,0 +1,88 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..4ce9fdc 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,81 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(z):
++    """sin(z) / z, with the continuous value at z = 0."""
++    return 1.0 if z == 0.0 else math.sin(z) / z
++
++
++def _sinhc(z):
++    """sinh(z) / z, with the continuous value at z = 0."""
++    return 1.0 if z == 0.0 else math.sinh(z) / z
++
++
++def _steady_terms(m, k, c, F0, omega):
++    """Return (A, B, amplitude) for the particular solution A cos + B sin."""
++    a = k - m * omega * omega
++    b = c * omega
++    scale = math.hypot(a, b)
++    if scale == 0.0:
++        raise ValueError(
++            "an undamped system driven exactly at its natural frequency "
++            "has no finite steady-state solution"
++        )
++    amp = F0 / scale
++    return amp * (a / scale), amp * (b / scale), amp
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return _steady_terms(m, k, c, F0, omega)[2]
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, B, _ = _steady_terms(m, k, c, F0, omega)
++
++    # Particular solution and the initial conditions left for the
++    # homogeneous part.
++    xp0 = A
++    vp0 = B * omega
++    xh0 = x0 - xp0
++    vh0 = v0 - vp0
++
++    alpha = c / (2.0 * m)
++
++    # c_crit = 2 sqrt(m k).  Writing the discriminant this way keeps its
++    # sign (and its value near critical damping) accurate.
++    mk = m * k
++    if 0.0 < mk < math.inf:
++        c_crit = 2.0 * math.sqrt(mk)
++    else:
++        c_crit = 2.0 * math.sqrt(m) * math.sqrt(k)
++    discriminant = (c - c_crit) * (c + c_crit)
++
++    if discriminant < 0.0:
++        beta = math.sqrt(-discriminant) / (2.0 * m)  # damped frequency
++        z = beta * t
++        decay = math.exp(-alpha * t)
++        f1 = decay * math.cos(z)
++        f2 = decay * t * _sinc(z)
++    elif discriminant > 0.0:
++        beta = math.sqrt(discriminant) / (2.0 * m)
++        z = beta * t
++        if abs(z) < 1.0:
++            decay = math.exp(-alpha * t)
++            f1 = decay * math.cosh(z)
++            f2 = decay * t * _sinhc(z)
++        else:
++            e1 = math.exp((-alpha + beta) * t)
++            e2 = math.exp((-alpha - beta) * t)
++            f1 = 0.5 * (e1 + e2)
++            f2 = (e1 - e2) / (2.0 * beta)
++    else:
++        decay = math.exp(-alpha * t)
++        f1 = decay
++        f2 = decay * t
++
++    particular = A * math.cos(omega * t) + B * math.sin(omega * t)
++    return particular + xh0 * f1 + (vh0 + alpha * xh0) * f2

@@ -1,0 +1,44 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..97783f0 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,5 @@
+ from fractions import Fraction
++from math import comb, factorial
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +7,32 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or k > m:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)  # the deal cannot turn more cards than the deck holds
++    total = factorial(n)
++
++    def ways_in_block(taken):
++        """Orderings of `taken` non-green cards holding at least k reds."""
++        return sum(
++            comb(r, j) * comb(b, taken - j)
++            for j in range(k, min(r, taken) + 1)
++            if 0 <= taken - j <= b
++        )
++
++    numerator = 0
++    # The deal stops on a green card at position t: t - 1 non-green cards come
++    # first (in any order), then any one of the g greens, then the rest.
++    for t in range(1, m + 1):
++        numerator += (
++            ways_in_block(t - 1) * factorial(t - 1) * g * factorial(n - t)
++        )
++    # Or no green falls within the first m cards, so the deal runs to m cards.
++    if g == 0 or m < n:
++        numerator += ways_in_block(m) * factorial(m) * factorial(n - m)
++
++    return Fraction(numerator, total)

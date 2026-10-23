@@ -1,0 +1,23 @@
+diff --git a/solution.py b/solution.py
+index f64f60f..9e5ef7c 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,17 @@
+ def drop_empty(dict1):
+-    pass
++    """Return a new dict with empty-valued items removed.
++
++    An item is considered empty when its value is None, an empty string,
++    or an empty container (list, tuple, set, dict). Values such as 0 and
++    False are kept because they are meaningful, not empty.
++    """
++    def is_empty(value):
++        if value is None:
++            return True
++        if isinstance(value, str):
++            return value == ""
++        if isinstance(value, (list, tuple, set, dict)):
++            return len(value) == 0
++        return False
++
++    return {key: value for key, value in dict1.items() if not is_empty(value)}

@@ -1,0 +1,71 @@
+diff --git a/lru.go b/lru.go
+index 59f575b..97d8a8b 100644
+--- a/lru.go
++++ b/lru.go
+@@ -1,26 +1,62 @@
+ package lru
+ 
++import "container/list"
++
++type entry struct {
++	key   string
++	value int
++}
++
+ // Cache is a fixed-capacity least-recently-used cache.
+ type Cache struct {
+ 	capacity int
++	ll       *list.List // front = most recently used
++	items    map[string]*list.Element
+ }
+ 
+ // New creates a cache holding at most capacity entries (capacity >= 1).
+ func New(capacity int) *Cache {
+-	return &Cache{capacity: capacity}
++	return &Cache{
++		capacity: capacity,
++		ll:       list.New(),
++		items:    make(map[string]*list.Element),
++	}
+ }
+ 
+ // Get returns the value for key and whether it was present.
+ func (c *Cache) Get(key string) (int, bool) {
+-	panic("not implemented")
++	e, ok := c.items[key]
++	if !ok {
++		return 0, false
++	}
++	c.ll.MoveToFront(e)
++	return e.Value.(*entry).value, true
+ }
+ 
+ // Put inserts or updates key.
+ func (c *Cache) Put(key string, value int) {
+-	panic("not implemented")
++	if e, ok := c.items[key]; ok {
++		e.Value.(*entry).value = value
++		c.ll.MoveToFront(e)
++		return
++	}
++	e := c.ll.PushFront(&entry{key: key, value: value})
++	c.items[key] = e
++	if c.ll.Len() > c.capacity {
++		c.removeOldest()
++	}
++}
++
++func (c *Cache) removeOldest() {
++	e := c.ll.Back()
++	if e == nil {
++		return
++	}
++	c.ll.Remove(e)
++	delete(c.items, e.Value.(*entry).key)
+ }
+ 
+ // Len returns the number of entries.
+ func (c *Cache) Len() int {
+-	panic("not implemented")
++	return c.ll.Len()
+ }

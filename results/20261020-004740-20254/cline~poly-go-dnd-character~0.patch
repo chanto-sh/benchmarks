@@ -1,0 +1,59 @@
+diff --git a/dnd_character.go b/dnd_character.go
+index 5c048c3..e42577e 100644
+--- a/dnd_character.go
++++ b/dnd_character.go
+@@ -1,5 +1,15 @@
+ package dndcharacter
+ 
++import (
++	"math/rand"
++	"sort"
++	"time"
++)
++
++func init() {
++	rand.Seed(time.Now().UnixNano())
++}
++
+ type Character struct {
+ 	Strength     int
+ 	Dexterity    int
+@@ -12,15 +22,35 @@ type Character struct {
+ 
+ // Modifier calculates the ability modifier for a given ability score
+ func Modifier(score int) int {
+-	panic("Please implement the Modifier() function")
++	// Go's integer division truncates toward zero, which is the same as
++	// rounding down for the non-negative values produced by the formula.
++	if score < 10 {
++		return (score - 10 - 1) / 2
++	}
++	return (score - 10) / 2
+ }
+ 
+ // Ability uses randomness to generate the score for an ability
+ func Ability() int {
+-	panic("Please implement the Ability() function")
++	rolls := make([]int, 4)
++	for i := range rolls {
++		rolls[i] = rand.Intn(6) + 1
++	}
++	sort.Ints(rolls)
++	// Discard the lowest die and sum the remaining three.
++	return rolls[1] + rolls[2] + rolls[3]
+ }
+ 
+ // GenerateCharacter creates a new Character with random scores for abilities
+ func GenerateCharacter() Character {
+-	panic("Please implement the GenerateCharacter() function")
++	character := Character{
++		Strength:     Ability(),
++		Dexterity:    Ability(),
++		Constitution: Ability(),
++		Intelligence: Ability(),
++		Wisdom:       Ability(),
++		Charisma:     Ability(),
++	}
++	character.Hitpoints = 10 + Modifier(character.Constitution)
++	return character
+ }

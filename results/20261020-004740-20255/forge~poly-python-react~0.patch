@@ -1,0 +1,122 @@
+diff --git a/react.py b/react.py
+index ab6be31..5dcdbb2 100644
+--- a/react.py
++++ b/react.py
+@@ -1,15 +1,111 @@
++"""A minimal reactive programming system.
++
++Cells form a directed acyclic graph: an ``InputCell`` holds a settable value and
++``ComputeCell`` instances derive their value from a list of other cells. When an
++input changes, all cells that (transitively) depend on it are recomputed in
++dependency order, then callbacks are fired once for each cell whose value in the
++new stable state differs from its value in the previous stable state.
++"""
++
++
+ class InputCell:
++    """A cell whose value can be set directly."""
++
+     def __init__(self, initial_value):
+-        self.value = None
++        self._value = initial_value
++        self.dependents = []
++
++    @property
++    def value(self):
++        return self._value
++
++    @value.setter
++    def value(self, new_value):
++        self._value = new_value
++        _propagate(self)
+ 
+ 
+ class ComputeCell:
++    """A cell whose value is computed from a list of other cells."""
++
+     def __init__(self, inputs, compute_function):
+-        self.value = None
++        self.inputs = list(inputs)
++        self.compute_function = compute_function
++        self.dependents = []
++        self._callbacks = []
++        self._value = self._calculate()
++        for cell in self.inputs:
++            cell.dependents.append(self)
++
++    @property
++    def value(self):
++        return self._value
+ 
+     def add_callback(self, callback):
+-        pass
++        self._callbacks.append(callback)
+ 
+     def remove_callback(self, callback):
+-        pass
+-    
+\ No newline at end of file
++        # Removing a callback that is not (or no longer) registered is a no-op,
++        # and must never disturb the other registered callbacks.
++        if callback in self._callbacks:
++            self._callbacks.remove(callback)
++
++    def _calculate(self):
++        return self.compute_function([cell.value for cell in self.inputs])
++
++    def _recompute(self):
++        self._value = self._calculate()
++
++    def _notify(self):
++        for callback in list(self._callbacks):
++            callback(self._value)
++
++
++def _topological_descendants(source):
++    """Return every cell reachable from ``source`` in dependency order.
++
++    The source cell itself is excluded. The result is a topological ordering of
++    the affected subgraph, so recomputing the cells in this order guarantees
++    that a cell is recalculated only after all of its inputs are up to date.
++    """
++    order = []
++    state = {}  # id(cell) -> 1 while on the current DFS path, 2 when finished
++
++    def visit(cell):
++        cell_id = id(cell)
++        status = state.get(cell_id)
++        if status == 2:
++            return
++        if status == 1:
++            raise ValueError("Cyclic dependency detected between cells")
++        state[cell_id] = 1
++        for dependent in cell.dependents:
++            visit(dependent)
++        state[cell_id] = 2
++        if cell is not source:
++            order.append(cell)
++
++    visit(source)
++    # ``order`` is a post-order traversal; reversing it yields a topological
++    # ordering with dependencies before dependents.
++    order.reverse()
++    return order
++
++
++def _propagate(source):
++    """Recompute all cells downstream of ``source`` and fire change callbacks."""
++    affected = _topological_descendants(source)
++    if not affected:
++        return
++
++    previous = {id(cell): cell.value for cell in affected}
++
++    for cell in affected:
++        cell._recompute()
++
++    # Fire callbacks only after the whole graph has reached a stable state, and
++    # only for cells whose stable value actually changed. Each affected cell is
++    # visited once, so a callback can never fire twice for a single update.
++    for cell in affected:
++        if cell.value != previous[id(cell)]:
++            cell._notify()

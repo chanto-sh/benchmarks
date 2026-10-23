@@ -1,0 +1,79 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..e36ebc1 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,73 @@
+ package bookstore
+ 
++const bookPrice = 800
++
++// groupPrice returns the cost of a single set of n distinct books.
++func groupPrice(n int) int {
++	switch n {
++	case 1:
++		return bookPrice
++	case 2:
++		return 2 * bookPrice * 95 / 100
++	case 3:
++		return 3 * bookPrice * 90 / 100
++	case 4:
++		return 4 * bookPrice * 80 / 100
++	case 5:
++		return 5 * bookPrice * 75 / 100
++	default:
++		return 0
++	}
++}
++
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	counts := make(map[int]int, 5)
++	for _, book := range books {
++		counts[book]++
++	}
++
++	// Repeatedly take one copy of every remaining title. This produces
++	// groups of decreasing size.
++	var sizes []int
++	for len(counts) > 0 {
++		n := 0
++		for book, count := range counts {
++			if count == 1 {
++				delete(counts, book)
++			} else {
++				counts[book] = count - 1
++			}
++			n++
++		}
++		sizes = append(sizes, n)
++	}
++
++	// A group of five plus a group of three is never better than two
++	// groups of four, so convert as many such pairs as possible.
++	fives, fours, threes := 0, 0, 0
++	for _, n := range sizes {
++		switch n {
++		case 5:
++			fives++
++		case 4:
++			fours++
++		case 3:
++			threes++
++		}
++	}
++	pairs := fives
++	if threes < pairs {
++		pairs = threes
++	}
++	fives -= pairs
++	threes -= pairs
++	fours += 2 * pairs
++
++	total := fives*groupPrice(5) + fours*groupPrice(4) + threes*groupPrice(3)
++	for _, n := range sizes {
++		if n == 1 || n == 2 {
++			total += groupPrice(n)
++		}
++	}
++	return total
+ }

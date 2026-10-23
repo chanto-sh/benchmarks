@@ -1,0 +1,21 @@
+diff --git a/solution.py b/solution.py
+index 1fdcbff..3667e4c 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,15 @@
+ def max_subarray_product(arr):
+-    pass
++    if not arr:
++        return 0
++
++    max_product = arr[0]
++    current_max = arr[0]
++    current_min = arr[0]
++
++    for value in arr[1:]:
++        candidates = (value, current_max * value, current_min * value)
++        current_max = max(candidates)
++        current_min = min(candidates)
++        max_product = max(max_product, current_max)
++
++    return max_product

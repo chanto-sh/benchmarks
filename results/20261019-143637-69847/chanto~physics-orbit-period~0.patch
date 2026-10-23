@@ -1,0 +1,179 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..56ba9aa 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,164 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince (5,4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = _A[6]
++_B_ERR = (
++    71.0 / 57600.0,
++    0.0,
++    -71.0 / 16695.0,
++    71.0 / 1920.0,
++    -17253.0 / 339200.0,
++    22.0 / 525.0,
++    -1.0 / 40.0,
++)
++
++
++def _dopri5_step(f, y, h):
++    """One Dormand-Prince step, returning the 5th-order solution and error."""
++    k = []
++    for stage in range(7):
++        if stage == 0:
++            ys = y
++        else:
++            a = _A[stage]
++            ys = [
++                y[i] + h * sum(a[j] * k[j][i] for j in range(stage))
++                for i in range(4)
++            ]
++        k.append(f(ys))
++
++    y5 = [
++        y[i] + h * sum(_B[j] * k[j][i] for j in range(len(_B)))
++        for i in range(4)
++    ]
++    err = [
++        h * sum(_B_ERR[j] * k[j][i] for j in range(7))
++        for i in range(4)
++    ]
++    return y5, err
++
++
++def _event_time(f, y0, h, t0):
++    """Locate the upward zero of r.v in [0, h] by bisection."""
++    lo = 0.0
++    hi = h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        ym, _ = _dopri5_step(f, y0, mid)
++        gm = ym[0] * ym[2] + ym[1] * ym[3]
++        if gm >= 0.0:
++            hi = mid
++        else:
++            lo = mid
++    return t0 + 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The orbit is obtained by integrating the central-force equations of
++    motion; a closest approach is an upward zero of d(r^2)/dt = 2 r.v.
++    For an exactly circular orbit the orbital period is returned.
++    """
++    state = [float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1])]
++    t = 0.0
++
++    def rhs(y):
++        x, yy, vx, vy = y
++        ax, ay = accel(x, yy)
++        return (vx, vy, ax, ay)
++
++    def radial_derivative(y):
++        return y[0] * y[2] + y[1] * y[3]
++
++    # Accuracies well below the requested 1e-6; the step cap keeps the
++    # event detection from stepping over a close approach.
++    rtol = 1.0e-11
++    atol = 1.0e-13
++
++    r = math.hypot(state[0], state[1])
++    v = math.hypot(state[2], state[3])
++    ax, ay = accel(state[0], state[1])
++    a = math.hypot(ax, ay)
++
++    # For a circular orbit every point is equally close to the origin; use
++    # the orbital period as the radial period.
++    if r > 0.0 and v > 0.0:
++        radial_speed = (state[0] * state[2] + state[1] * state[3]) / r
++        tangential_speed = abs(state[0] * state[3] - state[1] * state[2]) / r
++        radial_accel = (ax * state[0] + ay * state[1]) / r
++        centripetal = radial_accel + tangential_speed ** 2 / r
++        accel_scale = abs(radial_accel) + tangential_speed ** 2 / r
++        if (abs(radial_speed) <= 1.0e-12 * v and
++                abs(centripetal) <= 1.0e-10 * accel_scale):
++            return 2.0 * math.pi * r / v
++
++    timescales = []
++    if v > 0.0:
++        timescales.append(r / v)
++    if a > 0.0:
++        timescales.append(math.sqrt(r / a))
++    h = 1.0e-3 * min(timescales) if timescales else 1.0e-3
++
++    g_prev = radial_derivative(state)
++    events = []
++
++    # A runaway orbit has no second close approach; stop eventually rather
++    # than looping forever.  This is far beyond what a bound orbit needs.
++    max_steps = 5_000_000
++    for _ in range(max_steps):
++        # Limit growth of a step in units of the local angular and
++        # acceleration timescales.  (A pure radial orbit has no angular
++        # timescale, and its closest approach is the origin itself.)
++        r = math.hypot(state[0], state[1])
++        ax, ay = accel(state[0], state[1])
++        a = math.hypot(ax, ay)
++        if r > 0.0:
++            angular_momentum = state[0] * state[3] - state[1] * state[2]
++            omega = abs(angular_momentum) / (r * r)
++            if omega > 0.0:
++                h = min(h, 0.05 / omega)
++            if a > 0.0:
++                h = min(h, 0.05 * math.sqrt(r / a))
++        if h <= 0.0 or not math.isfinite(h):
++            raise ValueError("could not determine a finite integration step")
++
++        y_new, err = _dopri5_step(rhs, state, h)
++
++        scale = [atol + rtol * max(abs(state[i]), abs(y_new[i]))
++                 for i in range(4)]
++        error = max(abs(err[i]) / scale[i] for i in range(4))
++        if error <= 1.0:
++            t_new = t + h
++            g_new = radial_derivative(y_new)
++            if g_prev < 0.0 and g_new >= 0.0:
++                events.append(_event_time(rhs, state, h, t))
++                if len(events) == 2:
++                    return events[1] - events[0]
++
++            state = y_new
++            t = t_new
++            g_prev = g_new
++            if error == 0.0:
++                factor = 5.0
++            else:
++                factor = min(5.0, max(0.2, 0.9 * error ** (-0.2)))
++            h *= factor
++        else:
++            factor = max(0.2, 0.9 * error ** (-0.2))
++            h *= factor
++
++    raise RuntimeError("no second close approach found")

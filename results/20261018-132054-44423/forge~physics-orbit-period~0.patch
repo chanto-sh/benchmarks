@@ -1,0 +1,259 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..c50c7c4 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,244 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# --- Dormand-Prince 5(4) integrator ---------------------------------------
++#
++# The state is (x, y, vx, vy).  Only the acceleration law is supplied by the
++# caller, so the integrator makes no assumption about the force beyond its
++# being central.  An adaptive embedded Runge-Kutta pair keeps the local error
++# near round-off, and the single-step re-evaluation below locates each
++# periapsis (a zero of r . v) to essentially machine precision.
++
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++)
++
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_BERR = tuple(b5 - b4 for b5, b4 in zip(_B, _B4))
++
++_MAX_STEPS = 200000
++_RTOL = 1e-12
++_ATOL_REL = 1e-14
++_TWO_PI = 2.0 * math.pi
++
++
++def _stage(y, h, coeffs, ks):
++    """One Runge-Kutta stage: y + h * sum(coeff * k)."""
++    x, yy, vx, vy = y
++    for a, k in zip(coeffs, ks):
++        if a:
++            ha = h * a
++            x += ha * k[0]
++            yy += ha * k[1]
++            vx += ha * k[2]
++            vy += ha * k[3]
++    return (x, yy, vx, vy)
++
++
++def _rk_stages(f, y, h, k1):
++    """Return the fifth-order solution and the first six stages."""
++    k2 = f(_stage(y, h, _A[1], (k1,)))
++    k3 = f(_stage(y, h, _A[2], (k1, k2)))
++    k4 = f(_stage(y, h, _A[3], (k1, k2, k3)))
++    k5 = f(_stage(y, h, _A[4], (k1, k2, k3, k4)))
++    k6 = f(_stage(y, h, _A[5], (k1, k2, k3, k4, k5)))
++    yn = _stage(y, h, _B[:6], (k1, k2, k3, k4, k5, k6))
++    return yn, (k1, k2, k3, k4, k5, k6)
++
++
++def _rk_step(f, y, h, k1):
++    """Advance one adaptive step, returning the new state, FSAL stage, error."""
++    yn, ks = _rk_stages(f, y, h, k1)
++    k7 = f(yn)
++    all_k = ks + (k7,)
++    err = tuple(
++        h * sum(c * k[d] for c, k in zip(_BERR, all_k))
++        for d in range(4)
++    )
++    return yn, k7, err
++
++
++def _rk_state(f, y, h, k1):
++    """Fifth-order state after a single step; skips the error estimate."""
++    yn, _ = _rk_stages(f, y, h, k1)
++    return yn
++
++
++def _radial_velocity_zero(state):
++    """g(t) = r . v; its upward zeros are closest approaches."""
++    return state[0] * state[2] + state[1] * state[3]
++
++
++def _timescale(r, angular_momentum, accel_mag, speed):
++    """A local dynamical timescale used only to cap the step size."""
++    tau = math.inf
++    if angular_momentum:
++        tau = _TWO_PI * r * r / abs(angular_momentum)
++    if accel_mag > 0.0 and r > 0.0:
++        tau = min(tau, _TWO_PI * math.sqrt(r / accel_mag))
++    elif speed > 0.0:
++        tau = min(tau, _TWO_PI * r / speed)
++    if not math.isfinite(tau) or tau <= 0.0:
++        tau = 1.0
++    return tau
++
++
++def _refine_event(f, t0, y0, k1, t1, g0):
++    """Locate the zero of r . v in [t0, t1] by bisection.
++
++    Each trial state comes from a fresh fifth-order step of the same size, so
++    the root is limited by integration accuracy rather than by interpolation.
++    """
++    if g0 == 0.0:
++        return t0
++    lo, hi = t0, t1
++    tol = 1e-14 * abs(t1 - t0)
++    for _ in range(200):
++        if hi - lo <= tol:
++            break
++        mid = 0.5 * (lo + hi)
++        if mid <= lo or mid >= hi:
++            break  # hit floating-point resolution at this time
++        g_mid = _radial_velocity_zero(_rk_state(f, y0, mid - t0, k1))
++        if g_mid > 0.0:
++            hi = mid
++        elif g_mid < 0.0:
++            lo = mid
++        else:
++            return mid
++    return 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    Parameters
++    ----------
++    r0, v0 : sequence of two floats
++        Initial position and velocity.
++    accel : callable
++        ``accel(x, y) -> (ax, ay)``.  It must describe a central force but is
++        otherwise unrestricted (inverse-square, relativistic corrections,
++        power laws, ...).
++
++    Returns
++    -------
++    float
++        The radial period: the elapsed time between consecutive periastra.
++        The starting point may lie anywhere on the orbit.  For a circular
++        orbit, where every point is equally close, the orbital period is
++        returned.
++
++    Notes
++    -----
++    Closest approach is a zero of d(r^2)/dt = 2 r . v with r . v increasing.
++    The orbit is integrated directly in Cartesian coordinates, so precession
++    and non-Keplerian force laws need no special treatment.
++    """
++    x0, y0 = float(r0[0]), float(r0[1])
++    vx0, vy0 = float(v0[0]), float(v0[1])
++
++    def f(state):
++        x, y, vx, vy = state
++        ax, ay = accel(x, y)
++        return (vx, vy, ax, ay)
++
++    y = (x0, y0, vx0, vy0)
++    k1 = f(y)
++    t = 0.0
++    g_prev = _radial_velocity_zero(y)
++
++    r0_mag = math.hypot(x0, y0)
++    v0_mag = math.hypot(vx0, vy0)
++    a0_mag = math.hypot(k1[2], k1[3])
++
++    # Circular orbit: the radius is constant, so there are no isolated
++    # periastra.  Round-off noise in r . v would otherwise register spurious
++    # "closest approaches"; return the orbital period instead.  This also
++    # covers numerically circular orbits, for which the radial period tends
++    # to the orbital period.
++    if r0_mag > 0.0 and v0_mag > 0.0:
++        radial_accel = (k1[2] * x0 + k1[3] * y0) / r0_mag
++        centripetal = -v0_mag * v0_mag / r0_mag
++        g0 = _radial_velocity_zero(y)
++        accel_scale = max(abs(radial_accel), abs(centripetal))
++        if (abs(g0) <= 1e-12 * r0_mag * v0_mag
++                and abs(radial_accel - centripetal) <= 1e-9 * accel_scale):
++            return _TWO_PI * r0_mag / v0_mag
++
++    # Separate position/velocity scales keep the error norm meaningful even
++    # when the force law uses very different units in each.
++    pos_scale = max(r0_mag, 1e-300)
++    vel_scale = max(v0_mag,
++                    math.sqrt(a0_mag * pos_scale) if a0_mag > 0.0 else 0.0,
++                    1e-300)
++    atol_pos = _ATOL_REL * pos_scale
++    atol_vel = _ATOL_REL * vel_scale
++    atol = (atol_pos, atol_pos, atol_vel, atol_vel)
++
++    L0 = x0 * vy0 - y0 * vx0
++    h = 0.01 * _timescale(r0_mag, L0, a0_mag, v0_mag)
++
++    events = []
++    for _ in range(_MAX_STEPS):
++        r = math.hypot(y[0], y[1])
++        L = y[0] * y[3] - y[1] * y[2]
++        a_mag = math.hypot(k1[2], k1[3])
++        speed = math.hypot(y[2], y[3])
++        tau = _timescale(r, L, a_mag, speed)
++        max_step = 0.02 * tau
++        if h > max_step:
++            h = max_step
++        if not math.isfinite(h) or h <= 0.0:
++            h = 1e-15
++
++        yn, k_new, err_vec = _rk_step(f, y, h, k1)
++
++        err_sq = 0.0
++        for d in range(4):
++            scale = atol[d] + _RTOL * max(abs(y[d]), abs(yn[d]))
++            e = err_vec[d] / scale
++            err_sq += e * e
++        err = math.sqrt(err_sq / 4.0)
++
++        # Accept a step that meets tolerance, or one that can no longer make
++        # progress because it is at the floating-point resolution of t.
++        min_h = max(1e-13 * tau, 4.0e-16 * max(abs(t), 1e-300))
++        if err <= 1.0 or h <= min_h:
++            t_new = t + h
++            g_new = _radial_velocity_zero(yn)
++
++            # Upward crossing of r . v: a local minimum of the radius.
++            if g_prev <= 0.0 < g_new:
++                events.append(
++                    _refine_event(f, t, y, k1, t_new, g_prev)
++                )
++                if len(events) == 2:
++                    return events[1] - events[0]
++
++            t, y, k1, g_prev = t_new, yn, k_new, g_new
++
++            if err == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * err ** -0.2
++            h *= min(5.0, max(0.2, factor))
++        else:
++            factor = 0.9 * err ** -0.2
++            h *= max(0.1, min(1.0, factor))
++
++    raise ValueError(
++        "could not find two successive closest approaches; the orbit may be "
++        "unbound, circular, or extremely long-period"
++    )

@@ -1,0 +1,200 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..b08c4e2 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,194 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++// solver holds the column-wise representation of a puzzle.
++//
++// Columns are processed from right (units) to left. Each column records which
++// letters occur in it (including the result letter) and how many times each
++// addend contributes that letter. Unknown letters are assigned one at a time
++// while walking a column, and the accumulated column sum is checked against
++// the result digit before moving on to the next column.
++type solver struct {
++	width       int
++	colLetters  [][]int // letter indexes present in each column
++	colCounts   [][]int // matching multiplicities from the addends
++	resultDigit []int   // assigned digit of the result letter, -1 if none
++
++	leading []bool
++	assign  []int
++	used    [10]bool
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, errors.New("alphametics: puzzle must contain exactly one ==")
++	}
++	left := strings.TrimSpace(parts[0])
++	resultWord := strings.TrimSpace(parts[1])
++	if resultWord == "" {
++		return nil, errors.New("alphametics: missing result word")
++	}
++
++	var addendWords []string
++	for _, tok := range strings.Split(left, "+") {
++		tok = strings.TrimSpace(tok)
++		if tok == "" {
++			return nil, errors.New("alphametics: empty addend")
++		}
++		addendWords = append(addendWords, tok)
++	}
++
++	index := make(map[byte]int)
++	var letters []byte
++	var leading []bool
++
++	addLetter := func(word string) error {
++		for i := 0; i < len(word); i++ {
++			ch := word[i]
++			if ch < 'A' || ch > 'Z' {
++				if ch < 'a' || ch > 'z' {
++					return errors.New("alphametics: puzzle contains a non-letter")
++				}
++			}
++			if _, ok := index[ch]; !ok {
++				index[ch] = len(letters)
++				letters = append(letters, ch)
++				leading = append(leading, false)
++			}
++		}
++		// The first digit of any word may not be zero. This includes
++		// single-letter words, which would otherwise be leading zeros.
++		leading[index[word[0]]] = true
++		return nil
++	}
++
++	for _, w := range addendWords {
++		if err := addLetter(w); err != nil {
++			return nil, err
++		}
++	}
++	if err := addLetter(resultWord); err != nil {
++		return nil, err
++	}
++	if len(letters) > 10 {
++		return nil, errors.New("alphametics: too many distinct letters")
++	}
++
++	width := len(resultWord)
++	for _, w := range addendWords {
++		if len(w) > width {
++			width = len(w)
++		}
++	}
++
++	s := &solver{
++		width:       width,
++		colLetters:  make([][]int, width),
++		colCounts:   make([][]int, width),
++		resultDigit: make([]int, width),
++		leading:     leading,
++		assign:      make([]int, len(letters)),
++	}
++	for i := range s.assign {
++		s.assign[i] = -1
++	}
++	for c := 0; c < width; c++ {
++		s.resultDigit[c] = -1
++	}
++
++	for c := 0; c < width; c++ {
++		counts := make(map[int]int)
++		for _, w := range addendWords {
++			if c < len(w) {
++				idx := index[w[len(w)-1-c]]
++				counts[idx]++
++			}
++		}
++		if c < len(resultWord) {
++			idx := index[resultWord[len(resultWord)-1-c]]
++			s.resultDigit[c] = idx
++			if _, ok := counts[idx]; !ok {
++				counts[idx] = 0
++			}
++		}
++		// Iterate letters in index order so results are deterministic.
++		for l := range letters {
++			if cnt, ok := counts[l]; ok {
++				s.colLetters[c] = append(s.colLetters[c], l)
++				s.colCounts[c] = append(s.colCounts[c], cnt)
++			}
++		}
++	}
++
++	if !s.dfs(0, 0) {
++		return nil, errors.New("alphametics: no solution")
++	}
++
++	solution := make(map[string]int, len(letters))
++	for i, ch := range letters {
++		solution[string(ch)] = s.assign[i]
++	}
++	return solution, nil
++}
++
++func (s *solver) dfs(col, carry int) bool {
++	if col == s.width {
++		return carry == 0
++	}
++
++	var unknown [10]int
++	k := 0
++	sum := carry
++	ls := s.colLetters[col]
++	cs := s.colCounts[col]
++	for i, l := range ls {
++		if s.assign[l] >= 0 {
++			sum += s.assign[l] * cs[i]
++		} else {
++			unknown[k] = i
++			k++
++		}
++	}
++	return s.assignColumn(col, unknown[:k], sum, 0)
++}
++
++func (s *solver) assignColumn(col int, unknown []int, sum, i int) bool {
++	if i == len(unknown) {
++		// The result letter for this column is guaranteed to be assigned by
++		// now: it is part of the column's letter set. Columns to the left of
++		// the result carry no result letter and must sum to zero.
++		want := 0
++		if s.resultDigit[col] >= 0 {
++			want = s.assign[s.resultDigit[col]]
++		}
++		if sum%10 != want {
++			return false
++		}
++		return s.dfs(col+1, sum/10)
++	}
++
++	li := unknown[i]
++	l := s.colLetters[col][li]
++	cnt := s.colCounts[col][li]
++	for d := 0; d <= 9; d++ {
++		if s.used[d] {
++			continue
++		}
++		if d == 0 && s.leading[l] {
++			continue
++		}
++		s.used[d] = true
++		s.assign[l] = d
++		if s.assignColumn(col, unknown, sum+d*cnt, i+1) {
++			return true
++		}
++		s.assign[l] = -1
++		s.used[d] = false
++	}
++	return false
+ }

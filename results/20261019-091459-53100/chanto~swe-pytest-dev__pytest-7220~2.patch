@@ -1,0 +1,104 @@
+diff --git a/changelog/7220.bugfix.rst b/changelog/7220.bugfix.rst
+new file mode 100644
+index 0000000..06778af
+--- /dev/null
++++ b/changelog/7220.bugfix.rst
+@@ -0,0 +1 @@
++Fixed traceback file paths being displayed relative to the current working directory instead of the invocation directory when the working directory is changed during a test or fixture.
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index 7b17d76..db297e8 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -575,6 +575,7 @@ class ExceptionInfo(Generic[_E]):
+         funcargs: bool = False,
+         truncate_locals: bool = True,
+         chain: bool = True,
++        basepath: Optional[py.path.local] = None,
+     ) -> Union["ReprExceptionInfo", "ExceptionChainRepr"]:
+         """
+         Return str()able representation of this exception info.
+@@ -588,6 +589,10 @@ class ExceptionInfo(Generic[_E]):
+         :param bool abspath:
+             If paths should be changed to absolute or left unchanged.
+ 
++        :param py.path.local basepath:
++            Base path used to produce relative paths in the traceback.
++            Defaults to the current working directory.
++
+         :param bool tbfilter:
+             Hide entries that contain a local variable ``__tracebackhide__==True``.
+             Ignored if ``style=="native"``.
+@@ -622,6 +627,7 @@ class ExceptionInfo(Generic[_E]):
+             funcargs=funcargs,
+             truncate_locals=truncate_locals,
+             chain=chain,
++            basepath=basepath,
+         )
+         return fmt.repr_excinfo(self)
+ 
+@@ -655,6 +661,7 @@ class FormattedExcinfo:
+     funcargs = attr.ib(type=bool, default=False)
+     truncate_locals = attr.ib(type=bool, default=True)
+     chain = attr.ib(type=bool, default=True)
++    basepath = attr.ib(type=Optional[py.path.local], default=None)
+     astcache = attr.ib(default=attr.Factory(dict), init=False, repr=False)
+ 
+     def _getindent(self, source: "Source") -> int:
+@@ -791,7 +798,8 @@ class FormattedExcinfo:
+     def _makepath(self, path):
+         if not self.abspath:
+             try:
+-                np = py.path.local().bestrelpath(path)
++                basepath = self.basepath or py.path.local()
++                np = basepath.bestrelpath(path)
+             except OSError:
+                 return path
+             if len(np) < len(str(path)):
+diff --git a/src/_pytest/nodes.py b/src/_pytest/nodes.py
+index 4a79bc8..bb772ec 100644
+--- a/src/_pytest/nodes.py
++++ b/src/_pytest/nodes.py
+@@ -374,6 +374,7 @@ class Node(metaclass=NodeMeta):
+             style=style,
+             tbfilter=False,  # pruned already, or in --fulltrace mode.
+             truncate_locals=truncate_locals,
++            basepath=self.config.invocation_dir,
+         )
+ 
+     def repr_failure(
+diff --git a/testing/code/test_excinfo.py b/testing/code/test_excinfo.py
+index 08c0619..011dd04 100644
+--- a/testing/code/test_excinfo.py
++++ b/testing/code/test_excinfo.py
+@@ -1347,6 +1347,31 @@ def test_cwd_deleted(testdir):
+     result.stderr.no_fnmatch_line("*INTERNALERROR*")
+ 
+ 
++def test_chdir_in_fixture_keeps_original_path(testdir):
++    testdir.makepyfile(
++        """
++        import os
++
++        import pytest
++
++        @pytest.fixture
++        def change_dir(tmpdir):
++            olddir = os.getcwd()
++            os.chdir(str(tmpdir))
++            yield
++            os.chdir(olddir)
++
++        def test_path(change_dir):
++            assert False
++    """
++    )
++    result = testdir.runpytest()
++    result.stdout.fnmatch_lines(
++        ["*test_chdir_in_fixture_keeps_original_path.py:*: AssertionError"]
++    )
++    result.stdout.no_fnmatch_line("*../test_chdir_in_fixture_keeps_original_path.py*")
++
++
+ @pytest.mark.usefixtures("limited_recursion_depth")
+ def test_exception_repr_extraction_error_on_recursion():
+     """

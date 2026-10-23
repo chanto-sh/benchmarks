@@ -1,0 +1,71 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..ac3c5ee 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,54 @@
+ class Zipper:
++    def __init__(self, tree, path=()):
++        self._tree = tree
++        self._path = path
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return self._tree["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        return Zipper(dict(self._tree, value=value), self._path)
+ 
+     def left(self):
+-        pass
++        child = self._tree["left"]
++        if child is None:
++            return None
++        return Zipper(
++            child,
++            self._path + ((self._tree, "left", self._tree["right"]),),
++        )
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, tree):
++        return Zipper(dict(self._tree, left=tree), self._path)
+ 
+     def right(self):
+-        pass
++        child = self._tree["right"]
++        if child is None:
++            return None
++        return Zipper(
++            child,
++            self._path + ((self._tree, "right", self._tree["left"]),),
++        )
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, tree):
++        return Zipper(dict(self._tree, right=tree), self._path)
+ 
+     def up(self):
+-        pass
++        if not self._path:
++            return None
++        parent, direction, sibling = self._path[-1]
++        if direction == "left":
++            node = dict(parent, left=self._tree, right=sibling)
++        else:
++            node = dict(parent, left=sibling, right=self._tree)
++        return Zipper(node, self._path[:-1])
+ 
+     def to_tree(self):
+-        pass
++        zipper = self
++        while zipper._path:
++            zipper = zipper.up()
++        return zipper._tree

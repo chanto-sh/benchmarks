@@ -1,0 +1,116 @@
+diff --git a/pov.go b/pov.go
+index 48e2477..07bab4b 100644
+--- a/pov.go
++++ b/pov.go
+@@ -1,24 +1,25 @@
+ package pov
+ 
+ type Tree struct {
+-	// Add the needed fields here
++	value    string
++	children []*Tree
+ }
+ 
+ // New creates and returns a new Tree with the given root value and children.
+ func New(value string, children ...*Tree) *Tree {
+-	panic("Please implement this function")
++	return &Tree{value: value, children: children}
+ }
+ 
+ // Value returns the value at the root of a tree.
+ func (tr *Tree) Value() string {
+-	panic("Please implement this function")
++	return tr.value
+ }
+ 
+ // Children returns a slice containing the children of a tree.
+ // There is no need to sort the elements in the result slice,
+ // they can be in any order.
+ func (tr *Tree) Children() []*Tree {
+-	panic("Please implement this function")
++	return tr.children
+ }
+ 
+ // String describes a tree in a compact S-expression format.
+@@ -42,10 +43,79 @@ func (tr *Tree) String() string {
+ 
+ // FromPov returns the pov from the node specified in the argument.
+ func (tr *Tree) FromPov(from string) *Tree {
+-	panic("Please implement this function")
++	node, ok := findNode(tr, from)
++	if !ok {
++		return nil
++	}
++	return orient(node, nil, parentMap(tr))
+ }
+ 
+ // PathTo returns the shortest path between two nodes in the tree.
+ func (tr *Tree) PathTo(from, to string) []string {
+-	panic("Please implement this function")
++	root := tr.FromPov(from)
++	if root == nil {
++		return nil
++	}
++	return findPath(root, to)
++}
++
++// findNode locates value in the tree.
++func findNode(node *Tree, value string) (*Tree, bool) {
++	if node == nil {
++		return nil, false
++	}
++	if node.value == value {
++		return node, true
++	}
++	for _, child := range node.children {
++		if found, ok := findNode(child, value); ok {
++			return found, true
++		}
++	}
++	return nil, false
++}
++
++// parentMap records each node's parent in the original tree.
++func parentMap(root *Tree) map[*Tree]*Tree {
++	parents := make(map[*Tree]*Tree)
++	var visit func(*Tree)
++	visit = func(node *Tree) {
++		for _, child := range node.children {
++			parents[child] = node
++			visit(child)
++		}
++	}
++	visit(root)
++	return parents
++}
++
++// orient builds a tree rooted at node, treating previous as the neighbour
++// that must not be traversed again.
++func orient(node, previous *Tree, parents map[*Tree]*Tree) *Tree {
++	result := New(node.value)
++	for _, child := range node.children {
++		if child != previous {
++			result.children = append(result.children, orient(child, node, parents))
++		}
++	}
++	if parent := parents[node]; parent != nil && parent != previous {
++		result.children = append(result.children, orient(parent, node, parents))
++	}
++	return result
++}
++
++// findPath returns the path from root to value, or nil if value is absent.
++func findPath(root *Tree, value string) []string {
++	if root == nil {
++		return nil
++	}
++	if root.value == value {
++		return []string{root.value}
++	}
++	for _, child := range root.children {
++		if path := findPath(child, value); path != nil {
++			return append([]string{root.value}, path...)
++		}
++	}
++	return nil
+ }

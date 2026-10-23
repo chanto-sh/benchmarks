@@ -1,0 +1,114 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..7220e38 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,108 @@
+ package twobucket
+ 
++import "errors"
++
++type state struct {
++	one, two int
++}
++
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++
++	var initial state
++	if startBucket == "one" {
++		initial = state{sizeBucketOne, 0}
++	} else {
++		initial = state{0, sizeBucketTwo}
++	}
++
++	forbidden := func(s state) bool {
++		if startBucket == "one" {
++			return s.one == 0 && s.two == sizeBucketTwo
++		}
++		return s.two == 0 && s.one == sizeBucketOne
++	}
++
++	goalBucket := func(s state) string {
++		switch {
++		case s.one == goalAmount && s.two == goalAmount:
++			return startBucket
++		case s.one == goalAmount:
++			return "one"
++		case s.two == goalAmount:
++			return "two"
++		}
++		return ""
++	}
++
++	visited := map[state]bool{initial: true}
++	queue := []state{initial}
++	moves := 0
++
++	for len(queue) > 0 {
++		moves++
++		next := make([]state, 0)
++		for _, s := range queue {
++			if g := goalBucket(s); g != "" {
++				if g == "one" {
++					return "one", moves, s.two, nil
++				}
++				return "two", moves, s.one, nil
++			}
++			next = append(next, s)
++		}
++
++		var following []state
++		for _, s := range next {
++			candidates := []state{
++				{sizeBucketOne, s.two},
++				{s.one, sizeBucketTwo},
++				{0, s.two},
++				{s.one, 0},
++				pourOneToTwo(s, sizeBucketTwo),
++				pourTwoToOne(s, sizeBucketOne),
++			}
++			for _, c := range candidates {
++				if visited[c] || forbidden(c) {
++					continue
++				}
++				visited[c] = true
++				following = append(following, c)
++			}
++		}
++		queue = following
++	}
++
++	return "", 0, 0, errors.New("impossible")
++}
++
++// pourOneToTwo returns the state after pouring bucket one into bucket two
++// until either bucket one is empty or bucket two is full.
++func pourOneToTwo(s state, capacityTwo int) state {
++	transfer := s.one
++	if space := capacityTwo - s.two; space < transfer {
++		transfer = space
++	}
++	return state{s.one - transfer, s.two + transfer}
++}
++
++// pourTwoToOne returns the state after pouring bucket two into bucket one
++// until either bucket two is empty or bucket one is full.
++func pourTwoToOne(s state, capacityOne int) state {
++	transfer := s.two
++	if space := capacityOne - s.one; space < transfer {
++		transfer = space
++	}
++	return state{s.one + transfer, s.two - transfer}
+ }

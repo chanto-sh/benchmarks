@@ -1,0 +1,103 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..ff662dc 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,96 @@
++"""Solution to the Zebra Puzzle by exhaustive search with pruning.
++
++Each attribute category is a permutation of five values indexed by house
++position (0 = leftmost house).  The permutations are generated outermost to
++innermost, and every constraint that can be checked with the attributes
++assigned so far is applied immediately so that whole branches are discarded.
++"""
++
++from functools import lru_cache
++from itertools import permutations
++
++NATIONALITIES = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++COLORS = ("red", "green", "ivory", "yellow", "blue")
++PETS = ("dog", "snails", "fox", "horse", "zebra")
++DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++
++
++@lru_cache(maxsize=None)
++def _solve():
++    """Return a tuple of houses, each a dict of its attributes."""
++    for colors in permutations(COLORS):
++        # The green house is immediately to the right of the ivory house.
++        green = colors.index("green")
++        if green == 0 or colors[green - 1] != "ivory":
++            continue
++        # The Norwegian lives in the first house, next to the blue house.
++        if colors.index("blue") != 1:
++            continue
++
++        for nations in permutations(NATIONALITIES):
++            if nations[0] != "Norwegian":
++                continue
++            # The Englishman lives in the red house.
++            if nations[colors.index("red")] != "Englishman":
++                continue
++
++            for drinks in permutations(DRINKS):
++                # The person in the middle house drinks milk.
++                if drinks[2] != "milk":
++                    continue
++                # The person in the green house drinks coffee.
++                if drinks[green] != "coffee":
++                    continue
++                # The Ukrainian drinks tea.
++                if drinks[nations.index("Ukrainian")] != "tea":
++                    continue
++
++                for hobbies in permutations(HOBBIES):
++                    # The Japanese person plays chess.
++                    if hobbies[nations.index("Japanese")] != "chess":
++                        continue
++                    # The person in the yellow house is a painter.
++                    painter = colors.index("yellow")
++                    if hobbies[painter] != "painting":
++                        continue
++                    # The person who plays football drinks orange juice.
++                    if drinks[hobbies.index("football")] != "orange juice":
++                        continue
++
++                    for pets in permutations(PETS):
++                        # The Spaniard owns the dog.
++                        if pets[nations.index("Spaniard")] != "dog":
++                            continue
++                        # The snail owner likes to go dancing.
++                        if pets[hobbies.index("dancing")] != "snails":
++                            continue
++                        # The reader lives next to the person with the fox.
++                        if abs(hobbies.index("reading") - pets.index("fox")) != 1:
++                            continue
++                        # The painter's house is next to the house with the horse.
++                        if abs(painter - pets.index("horse")) != 1:
++                            continue
++
++                        return tuple(
++                            {
++                                "nationality": nations[i],
++                                "color": colors[i],
++                                "pet": pets[i],
++                                "drink": drinks[i],
++                                "hobby": hobbies[i],
++                            }
++                            for i in range(5)
++                        )
++
++    raise AssertionError("The puzzle has no solution")
++
++
+ def drinks_water():
+-    pass
++    """Return the nationality of the resident who drinks water."""
++    return next(house["nationality"] for house in _solve() if house["drink"] == "water")
+ 
+ 
+ def owns_zebra():
+-    pass
++    """Return the nationality of the resident who owns the zebra."""
++    return next(house["nationality"] for house in _solve() if house["pet"] == "zebra")

@@ -1,0 +1,91 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..203e55e
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,72 @@
++# BLOCKED: exact median of a single-pass stream in O(1) memory
++
++`test_constant_memory` requires all of the following at once:
++
++- `median()` receives a one-shot generator (`feed()`), so the input can be read only once.
++- The result must be **exact**: equal to the mean of the 99,999th and 100,000th
++  values of the fully sorted 200,000-element feed.
++- Peak Python heap usage must stay below 64 KiB.
++
++There is no implementation that satisfies all three. This is a property of the
++problem, not of the current code, so I did not work around it.
++
++## Why it is impossible
++
++Exact selection in the single-pass streaming model requires space linear in the
++stream length (Munro & Paterson, *Selection and sorting with limited storage*,
++1980: selecting the median in `p` passes needs `Θ(n^(1/p))` storage, which is
++`Θ(n)` for one pass). Intuitively, to return a middle order statistic exactly,
++an algorithm must still be able to distinguish inputs whose middle elements
++differ. Any value it has discarded can be replaced by an adversary with a value
++that moves the middle, so a constant number of retained candidates cannot be
++correct for all inputs.
++
++Bits of precision do not create a loophole here:
++
++- Approximate streaming quantile algorithms (P², t-digest, KLL, reservoir
++  sampling) use bounded memory but return approximate answers. The test demands
++  exact equality, including the exact mean of the two middle values, so they
++  cannot pass.
++- Binary-searching the 64-bit float space would need many passes over the
++  input; `feed()` is a generator and is already consumed after one pass.
++- External merge sort on temp files would keep RAM bounded, but it trades the
++  O(1)-memory requirement for O(n) disk and is a workaround for the stated
++  requirement rather than a streaming algorithm. It is listed as an option
++  below, not implemented.
++
++## Measured evidence
++
++With the exact (sorted) implementation on the test feed (`n=200_000`):
++
++```
++result:      120.12043743895683   (exactly equals the test's `want`)
++peak bytes:  7,224,176            (~7.05 MiB)
++limit:          65,536            (64 KiB)
++```
++
++The value assertion now passes; only `assertLess(peak, 64 * 1024)` fails, by a
++factor of ~110.
++
++## What was fixed
++
++- Even-count median bug: `median([1, 2, 3, 4])` now returns `2.5` (mean of the
++  middle two) instead of `3`. Odd counts and `ValueError` on empty input are
++  unchanged.
++- All other tests pass: `test_odd`, `test_even`, `test_empty_raises`,
++  `test_generator_input`.
++- `test_constant_memory` fails on the memory assertion only. It was left
++  untouched so the unsatisfiable requirement stays visible.
++
++## Options for infra
++
++1. **Relax exactness**: use a bounded-memory streaming quantile sketch
++   (t-digest/KLL/P²). Memory becomes O(1) or O(log n), but results are
++   approximate.
++2. **Allow replay**: pass a re-iterable sequence instead of a generator and
++   permit multiple passes. Exact selection then needs only O(1) RAM (many
++   scans over the value space).
++3. **Allow external storage**: chunked external merge sort gives exact results
++   with O(1) RAM, at the cost of O(n) temp disk and extra I/O.
++4. **Accept O(n) RAM**: keep the current exact sort; here it costs ~36 bytes
++   per value (~7 MiB for 200k values), which is what causes the worker OOM on
++   large feeds.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

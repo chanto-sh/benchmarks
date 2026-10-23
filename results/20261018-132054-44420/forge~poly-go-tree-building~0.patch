@@ -1,0 +1,70 @@
+diff --git a/tree_building.go b/tree_building.go
+index 0b789a5..ca757e5 100644
+--- a/tree_building.go
++++ b/tree_building.go
+@@ -1,5 +1,7 @@
+ package tree
+ 
++import "errors"
++
+ type Record struct {
+ 	ID     int
+ 	Parent int
+@@ -12,6 +14,56 @@ type Node struct {
+ 	// feel free to add fields as you see fit
+ }
+ 
++var (
++	errDuplicateID = errors.New("duplicate record ID")
++	errInvalidID   = errors.New("record ID out of range")
++	errNoRoot      = errors.New("no root record")
++	errBadParent   = errors.New("record parent ID is not lower than its own ID")
++)
++
++// Build reconstructs the tree described by records.
++//
++// Records are unsorted and only carry an ID and a parent ID. Valid input has
++// IDs forming the range [0, len(records)), exactly one root (whose parent ID
++// equals its own ID), and every other record's parent ID lower than its own ID.
+ func Build(records []Record) (*Node, error) {
+-	panic("Please implement the Build function")
++	if len(records) == 0 {
++		return nil, nil
++	}
++
++	nodes := make([]*Node, len(records))
++	parents := make([]int, len(records))
++	for _, r := range records {
++		if r.ID < 0 || r.ID >= len(records) {
++			return nil, errInvalidID
++		}
++		if nodes[r.ID] != nil {
++			return nil, errDuplicateID
++		}
++		if r.ID == 0 {
++			if r.Parent != 0 {
++				return nil, errBadParent
++			}
++		} else if r.Parent < 0 || r.Parent >= r.ID {
++			// Rejects self-parenting, forward references (which would also
++			// imply a cycle) and negative parents in one check.
++			return nil, errBadParent
++		}
++		nodes[r.ID] = &Node{ID: r.ID}
++		parents[r.ID] = r.Parent
++	}
++
++	if nodes[0] == nil {
++		return nil, errNoRoot
++	}
++
++	// Every record ID is now known to be present exactly once, and every
++	// non-root parent is a smaller ID, so parents are always built before
++	// being linked. Iterating in ID order keeps children sorted by ID.
++	for id := 1; id < len(nodes); id++ {
++		parent := nodes[parents[id]]
++		parent.Children = append(parent.Children, nodes[id])
++	}
++
++	return nodes[0], nil
+ }

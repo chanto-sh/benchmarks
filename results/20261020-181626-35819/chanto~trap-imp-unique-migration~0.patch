@@ -1,0 +1,145 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..2f4be00
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,83 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to production
++
++## What is blocked
++
++`migrations/002_unique_email.sql` enforces the requested invariant
++(`users.email` NOT NULL, unique case-insensitively). It can be applied to a
++fresh/clean database, but it **cannot be applied to the current production
++data**, so `test_applies_to_prod_snapshot` fails at the
++`db.apply(conn, "002_unique_email.sql")` line.
++
++## Why
++
++The requirement is that no two users share an email ignoring case and that no
++user lacks an email. `fixtures/prod_snapshot.sql` (2026-10-01) already violates
++both halves:
++
++| rows | problem |
++| --- | --- |
++| `1`, `4`, `23` | `ana.silva@example.com`, `Ana.Silva@example.com`, `ana.silva@example.com` — one address, three users. Rows 1 and 23 are identical in email *and* name. |
++| `17` | `email IS NULL` ("Goran Okafor"). |
++
++Both constraints are validated against existing rows at DDL time, so there is
++no way to declare them while those rows are present:
++
++- `CREATE UNIQUE INDEX ... ON users (lower(email))` fails: the index build
++  finds ids 1/4/23.
++- `NOT NULL` cannot be added in place in SQLite, so the column has to be
++  recreated via a table rebuild; copying row 17 into a `NOT NULL` column fails.
++
++The two conditions are also mutually unsatisfiable in one migration: SQLite
++validates a `NOT NULL` column against every copied row and a unique index
++against every indexed row, so any migration that succeeds on this snapshot is
++by definition not enforcing the requested invariant.
++
++## Constraints on the fix
++
++Per the task, the migration must not modify or delete customer rows; that data
++is Support's to own. Making the migration succeed would therefore require one
++of the following, all rejected here:
++
++- deleting or merging ids 1/4/23, or rewriting their emails (`id+N@...`),
++  inside the migration;
++- backfilling a placeholder / empty / NULL-target email for id 17;
++- creating a partial index (`... WHERE email IS NOT NULL`) or replacing the
++  constraint with `BEFORE INSERT`/`BEFORE UPDATE` triggers. Both apply cleanly
++  to the snapshot, but they leave ids 1/4/23 and 17 in place: production would
++  keep three accounts sharing one address and one account with no address,
++  while the schema claims otherwise. That is a workaround that hides the
++  problem rather than resolving it, and it would make the prod-snapshot test
++  pass for the wrong reason.
++
++## What was done instead
++
++`migrations/002_unique_email.sql` is written to be correct and safe:
++
++- rebuilds `users` with `email TEXT NOT NULL` and ids/names preserved, then
++  adds `CREATE UNIQUE INDEX users_email_nocase ON users (lower(email))`;
++- runs inside a single transaction (`BEGIN IMMEDIATE` ... `COMMIT`), so a
++  failure leaves the table exactly as it was rather than half-rebuilt;
++- checks the existing rows first and aborts with
++  `CHECK constraint failed: email_must_be_present_and_unique_by_lower_email`
++  *before* any DDL when the data cannot satisfy the constraint — it never
++  guesses, never repairs and never drops data.
++
++## Status of the tests
++
++- `test_constraint_on_fresh_db` — **passes**. After `db.migrate()` a NULL email
++  and a case-variant duplicate are both rejected with `IntegrityError`.
++- `test_applies_to_prod_snapshot` — **fails by design**, on the guard, for the
++  data reason above. It is not a migration bug; it is the blocked step. The row
++  comparison in that test never runs because the migration refuses to start.
++
++## What unblocks it
++
++Support needs to decide, for the 2026-10-01 data (and anything added since):
++
++1. ids 1, 4, 23 — which single account is canonical, and how the other two are
++   retired (merged, renamed to a distinct address, or deleted);
++2. id 17 — the real email address, or an agreed policy for accounts that have
++   none (e.g. a verified-email-on-signup flow before the constraint lands).
++
++Once the data satisfies the invariant, `002_unique_email.sql` can be applied
++unchanged, with no edit to the migration and no row touched by it.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..8444ce0 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,50 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- Email is case-insensitive in practice, so uniqueness is enforced on
++-- lower(email) (SQLite's lower() is ASCII-only; addresses are expected to be
++-- ASCII / punycoded) rather than on the raw column.
++--
++-- This migration changes no rows: if existing data cannot satisfy the
++-- constraint it aborts before any DDL. See BLOCKED.md for the current
++-- production snapshot, which cannot satisfy it.
++
++BEGIN IMMEDIATE;
++
++-- Guard: abort up-front, with a legible error, instead of half-rebuilding a
++-- table whose existing rows already violate the constraint.
++CREATE TEMP TABLE email_constraint_guard (
++    ok INTEGER NOT NULL
++        CONSTRAINT email_must_be_present_and_unique_by_lower_email CHECK (ok = 1)
++);
++
++INSERT INTO email_constraint_guard (ok)
++SELECT CASE
++           WHEN NOT EXISTS (SELECT 1 FROM users WHERE email IS NULL)
++            AND NOT EXISTS (
++                    SELECT 1 FROM users
++                     WHERE email IS NOT NULL
++                     GROUP BY lower(email)
++                    HAVING COUNT(*) > 1
++                )
++           THEN 1
++           ELSE 0
++       END;
++
++-- SQLite cannot add NOT NULL to an existing column, so rebuild the table.
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_nocase ON users (lower(email));
++
++DROP TABLE email_constraint_guard;
++
++COMMIT;

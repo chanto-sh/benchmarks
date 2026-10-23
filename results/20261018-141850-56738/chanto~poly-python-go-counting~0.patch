@@ -1,0 +1,74 @@
+diff --git a/go_counting.py b/go_counting.py
+index d1c689e..a5873d9 100644
+--- a/go_counting.py
++++ b/go_counting.py
+@@ -1,4 +1,9 @@
+ 
++WHITE = "W"
++BLACK = "B"
++NONE = ""
++
++
+ class Board:
+     """Count territories of each player in a Go game
+ 
+@@ -7,7 +12,30 @@ class Board:
+     """
+ 
+     def __init__(self, board):
+-        pass
++        self.board = [list(row) for row in board]
++        self.height = len(self.board)
++        self.width = len(self.board[0]) if self.board else 0
++
++    def _in_bounds(self, x, y):
++        return 0 <= x < self.width and 0 <= y < self.height
++
++    def _empty_region(self, start):
++        """Collect the empty intersection connected to start and the
++        owners of the stones bordering the region."""
++        region = set()
++        borders = set()
++        stack = [start]
++        while stack:
++            x, y = stack.pop()
++            if (x, y) in region or not self._in_bounds(x, y):
++                continue
++            if self.board[y][x] != " ":
++                borders.add(self.board[y][x])
++                continue
++            region.add((x, y))
++            stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
++        owner = borders.pop() if len(borders) == 1 else NONE
++        return owner, region
+ 
+     def territory(self, x, y):
+         """Find the owner and the territories given a coordinate on
+@@ -23,7 +51,11 @@ class Board:
+                         second being a set of coordinates, representing
+                         the owner's territories.
+         """
+-        pass
++        if not self._in_bounds(x, y):
++            raise ValueError("Invalid coordinate")
++        if self.board[y][x] != " ":
++            return NONE, set()
++        return self._empty_region((x, y))
+ 
+     def territories(self):
+         """Find the owners and the territories of the whole board
+@@ -36,4 +68,13 @@ class Board:
+                         , i.e. "W", "B", "".  The value being a set
+                         of coordinates owned by the owner.
+         """
+-        pass
++        result = {BLACK: set(), WHITE: set(), NONE: set()}
++        visited = set()
++        for y in range(self.height):
++            for x in range(self.width):
++                if self.board[y][x] != " " or (x, y) in visited:
++                    continue
++                owner, region = self._empty_region((x, y))
++                visited |= region
++                result[owner] |= region
++        return result

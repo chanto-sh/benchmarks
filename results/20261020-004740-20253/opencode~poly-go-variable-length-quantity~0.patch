@@ -1,0 +1,63 @@
+diff --git a/variable_length_quantity.go b/variable_length_quantity.go
+index 2ddd432..c606731 100644
+--- a/variable_length_quantity.go
++++ b/variable_length_quantity.go
+@@ -1,9 +1,56 @@
+ package variablelengthquantity
+ 
++import "errors"
++
++// EncodeVarint encodes a slice of uint32 values using variable length
++// quantity encoding. Each value is split into 7-bit groups, most significant
++// group first. All bytes but the last in a value have their high bit set.
+ func EncodeVarint(input []uint32) []byte {
+-	panic("Please implement the EncodeVarint function")
++	var output []byte
++	for _, value := range input {
++		var buf [5]byte
++		i := len(buf)
++		for {
++			i--
++			buf[i] = byte(value & 0x7f)
++			value >>= 7
++			if value == 0 {
++				break
++			}
++		}
++		// Set the continuation bit on every byte except the final one.
++		for j := i; j < len(buf)-1; j++ {
++			buf[j] |= 0x80
++		}
++		output = append(output, buf[i:]...)
++	}
++	return output
+ }
+ 
++// DecodeVarint decodes a sequence of variable length quantity encoded bytes
++// into uint32 values. It returns an error if the input ends in the middle of a
++// value or if a decoded value does not fit in a uint32.
+ func DecodeVarint(input []byte) ([]uint32, error) {
+-	panic("Please implement the DecodeVarint function")
++	var output []uint32
++	var value uint32
++	bytesInValue := 0
++	inSequence := false
++	for _, b := range input {
++		if bytesInValue == 5 || value > 0x1ffffff {
++			return nil, errors.New("variable length quantity overflows uint32")
++		}
++		value = value<<7 | uint32(b&0x7f)
++		bytesInValue++
++		inSequence = true
++		if b&0x80 == 0 {
++			output = append(output, value)
++			value = 0
++			bytesInValue = 0
++			inSequence = false
++		}
++	}
++	if inSequence {
++		return nil, errors.New("incomplete variable length quantity sequence")
++	}
++	return output, nil
+ }

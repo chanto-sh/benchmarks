@@ -1,0 +1,64 @@
+diff --git a/food_chain.py b/food_chain.py
+index ed87e69..77a01c3 100644
+--- a/food_chain.py
++++ b/food_chain.py
+@@ -1,2 +1,58 @@
++"""Generate the lyrics of 'I Know an Old Lady Who Swallowed a Fly'."""
++
++# Animal swallowed in each verse, paired with the verse's second line.
++# Verse 1 (the fly) has no second line of its own.
++ANIMALS = [
++    ("fly", None),
++    ("spider", "It wriggled and jiggled and tickled inside her."),
++    ("bird", "How absurd to swallow a bird!"),
++    ("cat", "Imagine that, to swallow a cat!"),
++    ("dog", "What a hog, to swallow a dog!"),
++    ("goat", "Just opened her throat and swallowed a goat!"),
++    ("cow", "I don't know how she swallowed a cow!"),
++    ("horse", "She's dead, of course!"),
++]
++
++# Extra description appended when the spider is the prey in a chain line.
++SPIDER_DESCRIPTION = " that wriggled and jiggled and tickled inside her"
++
++# The closing line shared by every verse except the horse's.
++MORAL = "I don't know why she swallowed the fly. Perhaps she'll die."
++
++
++def _chain_line(prey, predator):
++    """Build a line describing the predator swallowing the prey to catch ..."""
++    description = SPIDER_DESCRIPTION if prey == "spider" else ""
++    return "She swallowed the {predator} to catch the {prey}{description}.".format(
++        predator=predator, prey=prey, description=description
++    )
++
++
++def _verse(number):
++    """Return the lines of the verse in which the lady swallows animal `number`."""
++    animal, remark = ANIMALS[number - 1]
++    lines = ["I know an old lady who swallowed a {animal}.".format(animal=animal)]
++
++    if remark is not None:
++        lines.append(remark)
++
++    # The horse verse ends abruptly: no chain, no moral.
++    if number == len(ANIMALS):
++        return lines
++
++    # Work backwards through the previously swallowed animals.
++    for index in range(number - 1, 0, -1):
++        lines.append(_chain_line(ANIMALS[index - 1][0], ANIMALS[index][0]))
++
++    lines.append(MORAL)
++    return lines
++
++
+ def recite(start_verse, end_verse):
+-    pass
++    """Return the lyrics from `start_verse` through `end_verse` inclusive."""
++    lines = []
++    for number in range(start_verse, end_verse + 1):
++        if lines:
++            lines.append("")
++        lines.extend(_verse(number))
++    return lines

@@ -1,0 +1,217 @@
+diff --git a/roots.py b/roots.py
+index d624667..09def59 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,164 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(coeffs):
++    coeffs = list(coeffs)
++    while coeffs and coeffs[0] == 0:
++        coeffs.pop(0)
++    return coeffs
++
++
++def _derivative(coeffs):
++    n = len(coeffs) - 1
++    return [coeffs[i] * (n - i) for i in range(n)]
++
++
++def _primitive(coeffs, positive_leading=False):
++    """Scale a rational polynomial by a positive number to primitive integers."""
++    coeffs = _trim(coeffs)
++    if not coeffs:
++        return []
++    coeffs = [Fraction(c) for c in coeffs]
++
++    den = 1
++    for c in coeffs:
++        den = den // gcd(den, c.denominator) * c.denominator
++    ints = [c.numerator * (den // c.denominator) for c in coeffs]
++
++    content = 0
++    for c in ints:
++        content = gcd(content, abs(c))
++    ints = [c // content for c in ints]
++    if positive_leading and ints[0] < 0:
++        ints = [-c for c in ints]
++    return ints
++
++
++def _rem(a, b):
++    """Remainder of a divided by b, highest degree first."""
++    r = [Fraction(c) for c in a]
++    db = len(b) - 1
++    lead = Fraction(b[0])
++    while len(r) - 1 >= db:
++        factor = r[0] / lead
++        for i, c in enumerate(b):
++            r[i] -= factor * c
++        while r and r[0] == 0:
++            r.pop(0)
++    return r
++
++
++def _divmod(a, b):
++    """Quotient and remainder of a divided by b, highest degree first."""
++    a = [Fraction(c) for c in a]
++    b = [Fraction(c) for c in b]
++    max_shift = len(a) - len(b)
++    q = [Fraction(0)] * (max_shift + 1)
++    r = a
++    lead = b[0]
++    while len(r) >= len(b):
++        shift = len(r) - len(b)
++        factor = r[0] / lead
++        q[max_shift - shift] = factor
++        for i, c in enumerate(b):
++            r[i] -= factor * c
++        while r and r[0] == 0:
++            r.pop(0)
++    return q, r
++
++
++def _gcd(a, b):
++    a = _primitive(a, positive_leading=True)
++    b = _primitive(b, positive_leading=True)
++    while b:
++        a, b = b, _primitive(_rem(a, b), positive_leading=True)
++    return _primitive(a, positive_leading=True)
++
++
++def _square_free(coeffs):
++    """Primitive square-free part: all roots once, with multiplicities removed."""
++    p = _primitive(coeffs, positive_leading=True)
++    if len(p) <= 1:
++        return []
++    g = _gcd(p, _derivative(p))
++    if len(g) <= 1:
++        return p
++    q, _ = _divmod(p, g)
++    return _primitive(q, positive_leading=True)
++
++
++def _root_bound(p):
++    """Cauchy bound: every root has absolute value at most this."""
++    lead = abs(p[0])
++    largest = max((abs(c) for c in p[1:]), default=0)
++    return 1 + (largest + lead - 1) // lead
++
++
++def _sturm_chain(p):
++    chain = [p, _primitive(_derivative(p), positive_leading=True)]
++    while len(chain[-1]) > 1:
++        r = _rem(chain[-2], chain[-1])
++        if not r:
++            break
++        chain.append(_primitive([-c for c in r]))
++    return chain
++
++
++def _variations(chain, x):
++    signs = []
++    for p in chain:
++        v = evaluate(p, x)
++        if v > 0:
++            signs.append(1)
++        elif v < 0:
++            signs.append(-1)
++    return sum(1 for i in range(1, len(signs)) if signs[i] != signs[i - 1])
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++
++    p = _square_free(coeffs)
++    if len(p) <= 1:
++        return []
++
++    bound = _root_bound(p)
++    lo, hi = max(lo, -bound), min(hi, bound)
++    if lo > hi:
++        return []
++
++    chain = _sturm_chain(p)
++    vlo, vhi = _variations(chain, lo), _variations(chain, hi)
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
++    if evaluate(p, lo) == 0:
++        roots.append(lo)
++
++    # For a Sturm chain, V(a) - V(b) is the number of roots in (a, b].
++    pending = [(lo, hi, vlo - vhi, vlo, vhi)]
++    tolerance = Fraction(1, 10**10)
++
++    while pending:
++        a, b, count, va, vb = pending.pop()
++        if count == 0:
++            continue
++        if count == 1 and b - a <= tolerance:
+             roots.append((a + b) / 2)
+-    return roots
++            continue
++
++        m = (a + b) / 2
++        vm = _variations(chain, m)
++        left = va - vm
++        right = vm - vb
++        if left:
++            pending.append((a, m, left, va, vm))
++        if right:
++            pending.append((m, b, right, vm, vb))
++
++    return [float(x) for x in sorted(roots)]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..6bcbbb2 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,20 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_close_roots(self):
++        # (x - 1)(1000000x - 1000001)
++        self.assertRoots(
++            real_roots([1000000, -2000001, 1000001], 0, 2), [1, 1.000001]
++        )
++
++    def test_roots_on_boundaries(self):
++        # (x - 1)(x - 2)
++        self.assertRoots(real_roots([1, -3, 2], 1, 2), [1, 2])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

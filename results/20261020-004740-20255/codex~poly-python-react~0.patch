@@ -1,0 +1,104 @@
+diff --git a/react.py b/react.py
+index ab6be31..b788ece 100644
+--- a/react.py
++++ b/react.py
+@@ -1,15 +1,93 @@
+ class InputCell:
+     def __init__(self, initial_value):
+-        self.value = None
++        self._value = initial_value
++        self._dependents = []
++
++    @property
++    def value(self):
++        return self._value
++
++    @value.setter
++    def value(self, new_value):
++        if new_value == self._value:
++            return
++        self._value = new_value
++        _propagate_from(self)
+ 
+ 
+ class ComputeCell:
+     def __init__(self, inputs, compute_function):
+-        self.value = None
++        self._inputs = list(inputs)
++        self._compute_function = compute_function
++        self._dependents = []
++        self._callbacks = []
++        self._value = compute_function([cell.value for cell in self._inputs])
++
++        for cell in self._inputs:
++            cell._dependents.append(self)
++
++    @property
++    def value(self):
++        return self._value
+ 
+     def add_callback(self, callback):
+-        pass
++        self._callbacks.append(callback)
+ 
+     def remove_callback(self, callback):
+-        pass
+-    
+\ No newline at end of file
++        self._callbacks = [
++            registered for registered in self._callbacks if registered is not callback
++        ]
++
++
++def _affected_compute_cells(start):
++    affected = set()
++    stack = list(start._dependents)
++
++    while stack:
++        cell = stack.pop()
++        if cell in affected:
++            continue
++        affected.add(cell)
++        stack.extend(cell._dependents)
++
++    return affected
++
++
++def _topological_order(cells):
++    ordered = []
++    visited = set()
++    visiting = set()
++
++    def visit(cell):
++        if cell in visited:
++            return
++        if cell in visiting:
++            raise ValueError("cyclic dependency detected")
++
++        visiting.add(cell)
++        for dependency in cell._inputs:
++            if dependency in cells:
++                visit(dependency)
++        visiting.remove(cell)
++        visited.add(cell)
++        ordered.append(cell)
++
++    for cell in cells:
++        visit(cell)
++
++    return ordered
++
++
++def _propagate_from(source):
++    affected = _affected_compute_cells(source)
++    changed = []
++
++    for cell in _topological_order(affected):
++        new_value = cell._compute_function([item.value for item in cell._inputs])
++        if new_value != cell._value:
++            cell._value = new_value
++            changed.append(cell)
++
++    for cell in changed:
++        for callback in list(cell._callbacks):
++            callback(cell.value)

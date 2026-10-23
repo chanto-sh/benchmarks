@@ -1,0 +1,49 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..dda9aff 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,42 @@
+-def total(basket):
+-    pass
++from functools import lru_cache
++from typing import List
++
++BOOK_PRICE = 800  # cents
++
++# Discount (in percent) applied per distinct title in a group of size n.
++_GROUP_SIZE_DISCOUNTS = {1: 0, 2: 5, 3: 10, 4: 20, 5: 25}
++
++
++def _group_cost(size):
++    """Cost in cents of a group of `size` distinct books."""
++    return int(size * BOOK_PRICE * (100 - _GROUP_SIZE_DISCOUNTS[size]) / 100)
++
++
++@lru_cache(maxsize=None)
++def _best_price(counts):
++    """Cheapest price (cents) for a basket described by per-title counts."""
++    if not any(counts):
++        return 0
++
++    best = None
++    # Try every possible group of distinct titles (all subsets of available
++    # titles) as the first group and recurse on the remainder.
++    available = [i for i, c in enumerate(counts) if c > 0]
++    n = len(available)
++    for mask in range(1, 1 << n):
++        group = [available[i] for i in range(n) if mask & (1 << i)]
++        remainder = list(counts)
++        for idx in group:
++            remainder[idx] -= 1
++        cost = _group_cost(len(group)) + _best_price(tuple(remainder))
++        if best is None or cost < best:
++            best = cost
++    return best
++
++
++def total(basket: List[int]) -> int:
++    """Calculate the price in cents of a basket of books, maximizing discount."""
++    counts = [0] * 5
++    for book in basket:
++        counts[book - 1] += 1
++    return _best_price(tuple(counts))

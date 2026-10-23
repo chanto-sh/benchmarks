@@ -1,0 +1,122 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..0932288 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,115 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return the driving frequency response and its cosine/sine coefficients.
++
++    The particular solution is written as
++
++        x_p(t) = X cos(omega t) + Y sin(omega t).
++
++    ``a * a + b * b`` is the squared denominator of the response.  Factoring
++    ``a = k - m omega**2`` avoids cancellation when the drive is close to the
++    natural frequency.
++    """
++    if m > 0.0 and k >= 0.0:
++        root_k = math.sqrt(k)
++        root_m_omega = math.sqrt(m) * omega
++        a = (root_k - root_m_omega) * (root_k + root_m_omega)
++    else:
++        a = k - m * omega * omega
++
++    b = c * omega
++    denominator = math.hypot(a, b)
++    if denominator == 0.0:
++        raise ValueError("undamped resonance has no finite steady-state amplitude")
++
++    response = F0 / denominator
++    return response, response * (a / denominator), response * (b / denominator)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    response, _, _ = _steady_state(m, k, c, F0, omega)
++    return response
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    _, x_p0, y_p0 = _steady_state(m, k, c, F0, omega)
++
++    gamma = c / (2.0 * m)
++    if m > 0.0 and k >= 0.0:
++        critical_c = 2.0 * math.sqrt(k) * math.sqrt(m)
++        discriminant = (c - critical_c) * (c + critical_c) / (4.0 * m * m)
++    else:
++        discriminant = gamma * gamma - k / m
++
++    if discriminant < 0.0:
++        # Underdamped (including the undamped case c == 0).  Split the answer
++        # into the free response and the response to the drive with zero
++        # initial conditions.  The latter is a difference of two nearby
++        # oscillations near resonance, so evaluate it with a stable
++        # exponential difference rather than subtracting large terms.
++        omega_d = math.sqrt(-discriminant)
++        z_d = omega_d * t
++        decay = math.exp(-gamma * t)
++        cd = math.cos(z_d)
++        sd = math.sin(z_d)
++        sinc_d = 1.0 if z_d == 0.0 else sd / z_d
++
++        free = decay * (x0 * cd + (v0 + gamma * x0) * t * sinc_d)
++
++        delta = omega - omega_d
++        z = gamma * t
++        if abs(z) <= 0.5:
++            # exp(z + i*delta*t) - 1, with a cancellation-free real part.
++            expm1_z = math.expm1(z)
++            phase = delta * t
++            cp = math.cos(phase)
++            sp = math.sin(phase)
++            e_re = expm1_z * cp - 2.0 * math.sin(0.5 * phase) ** 2
++            e_im = (1.0 + expm1_z) * sp
++            d_re = decay * (e_re * cd - e_im * sd)
++            d_im = decay * (e_re * sd + e_im * cd)
++        else:
++            d_re = math.cos(omega * t) - decay * cd
++            d_im = math.sin(omega * t) - decay * sd
++
++        forced = x_p0 * d_re + y_p0 * d_im - (
++            y_p0 * delta + gamma * x_p0
++        ) * decay * sinc_d * t
++        return free + forced
++
++    # Initial values of the homogeneous part.
++    h0 = x0 - x_p0
++    h1 = v0 - y_p0 * omega
++    b = h1 + gamma * h0
++
++    if discriminant > 0.0:
++        # Overdamped.  Near critical damping, use the sinh form; farther away,
++        # the two real exponentials are both accurate and avoid overflow in
++        # exp(-gamma*t) * cosh(s*t).
++        s = math.sqrt(discriminant)
++        z = s * t
++        if abs(z) < 1.0:
++            decay = math.exp(-gamma * t)
++            sinhc = 1.0 if z == 0.0 else math.sinh(z) / z
++            homogeneous = decay * (h0 * math.cosh(z) + b * t * sinhc)
++        else:
++            # Compute the slowly decaying root without cancellation.
++            omega0_sq = k / m
++            r1 = -omega0_sq / (gamma + s) if gamma + s != 0.0 else 0.0
++            r2 = -gamma - s
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            homogeneous = 0.5 * h0 * (e1 + e2) + 0.5 * b * (e1 - e2) / s
++    else:
++        # Critically damped.
++        decay = math.exp(-gamma * t)
++        homogeneous = decay * (h0 + b * t)
++
++    steady = x_p0 * math.cos(omega * t) + y_p0 * math.sin(omega * t)
++    return homogeneous + steady

@@ -1,0 +1,59 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index b3ab8b1..a24a7dc 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,11 +1,51 @@
+ pub fn encode(key: &str, s: &str) -> Option<String> {
+-    todo!("Use {key} to encode {s} using shift cipher")
++    transform(key, s, false)
+ }
+ 
+ pub fn decode(key: &str, s: &str) -> Option<String> {
+-    todo!("Use {key} to decode {s} using shift cipher")
++    transform(key, s, true)
+ }
+ 
+ pub fn encode_random(s: &str) -> (String, String) {
+-    todo!("Generate random key with only a-z chars and encode {s}. Return tuple (key, encoded s)")
++    use rand::Rng;
++
++    let mut rng = rand::thread_rng();
++    let key: String = (0..100)
++        .map(|_| rng.gen_range(b'a'..=b'z') as char)
++        .collect();
++    let encoded = encode(&key, s).expect("generated keys are always valid");
++
++    (key, encoded)
++}
++
++fn transform(key: &str, s: &str, decode: bool) -> Option<String> {
++    if key.is_empty() || !key.bytes().all(|byte| byte.is_ascii_lowercase()) {
++        return None;
++    }
++
++    let mut shifts = key.bytes().cycle();
++    let result = s
++        .chars()
++        .map(|character| {
++            let shift = (shifts.next().expect("the key is not empty") - b'a') as i32;
++
++            if character.is_ascii_lowercase() {
++                let offset = if decode { -shift } else { shift };
++                shift_letter(character, b'a', offset)
++            } else if character.is_ascii_uppercase() {
++                let offset = if decode { -shift } else { shift };
++                shift_letter(character, b'A', offset)
++            } else {
++                character
++            }
++        })
++        .collect();
++
++    Some(result)
++}
++
++fn shift_letter(character: char, base: u8, shift: i32) -> char {
++    let position = (character as u8 - base) as i32;
++    let shifted = (position + shift).rem_euclid(26);
++    (base + shifted as u8) as char
+ }

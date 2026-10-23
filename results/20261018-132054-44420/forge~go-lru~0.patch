@@ -1,0 +1,75 @@
+diff --git a/lru.go b/lru.go
+index 59f575b..b164a9e 100644
+--- a/lru.go
++++ b/lru.go
+@@ -1,26 +1,66 @@
+ package lru
+ 
++import "container/list"
++
++// entry is the value stored in the recency list.
++type entry struct {
++	key   string
++	value int
++}
++
+ // Cache is a fixed-capacity least-recently-used cache.
+ type Cache struct {
+ 	capacity int
++	items    map[string]*list.Element // key -> element in order
++	order    *list.List               // front = most recently used
+ }
+ 
+ // New creates a cache holding at most capacity entries (capacity >= 1).
+ func New(capacity int) *Cache {
+-	return &Cache{capacity: capacity}
++	return &Cache{
++		capacity: capacity,
++		items:    make(map[string]*list.Element, capacity),
++		order:    list.New(),
++	}
+ }
+ 
+ // Get returns the value for key and whether it was present.
+ func (c *Cache) Get(key string) (int, bool) {
+-	panic("not implemented")
++	el, ok := c.items[key]
++	if !ok {
++		return 0, false
++	}
++	c.order.MoveToFront(el)
++	return el.Value.(*entry).value, true
+ }
+ 
+ // Put inserts or updates key.
+ func (c *Cache) Put(key string, value int) {
+-	panic("not implemented")
++	if el, ok := c.items[key]; ok {
++		el.Value.(*entry).value = value
++		c.order.MoveToFront(el)
++		return
++	}
++
++	el := c.order.PushFront(&entry{key: key, value: value})
++	c.items[key] = el
++
++	if c.order.Len() > c.capacity {
++		c.evict()
++	}
++}
++
++// evict removes the least recently used entry.
++func (c *Cache) evict() {
++	el := c.order.Back()
++	if el == nil {
++		return
++	}
++	c.order.Remove(el)
++	delete(c.items, el.Value.(*entry).key)
+ }
+ 
+ // Len returns the number of entries.
+ func (c *Cache) Len() int {
+-	panic("not implemented")
++	return c.order.Len()
+ }

@@ -1,0 +1,104 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..9f542b9 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,87 @@
+ class Zipper:
++    """A functional zipper over a binary tree of dict nodes.
++
++    A node is a dict of the form ``{"value": ..., "left": ..., "right": ...}``
++    where the children are either another node or ``None``.
++
++    A zipper holds the focused subtree plus a stack of "crumbs" describing the
++    path back to the root. Every operation returns a new zipper; nothing is
++    mutated, so a zipper may be reused and branches never interfere.
++    """
++
++    def __init__(self, focus, crumbs=()):
++        # ``focus``: the subtree currently in focus (a node dict).
++        # ``crumbs``: tuple of (parent_value, side, sibling_subtree), where
++        # ``side`` is "left" or "right" and tells which slot of the parent the
++        # focus occupies.
++        self._focus = focus
++        self._crumbs = crumbs
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        if tree is None:
++            return None
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return self._focus["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        left, right = self._children()
++        return Zipper(_node(value, left, right), self._crumbs)
+ 
+     def left(self):
+-        pass
++        return self._child("left")
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, tree):
++        return self._set_child("left", tree)
+ 
+     def right(self):
+-        pass
++        return self._child("right")
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, tree):
++        return self._set_child("right", tree)
+ 
+     def up(self):
+-        pass
++        if not self._crumbs:
++            return None
++        parent_value, side, sibling = self._crumbs[-1]
++        if side == "left":
++            node = _node(parent_value, self._focus, sibling)
++        else:
++            node = _node(parent_value, sibling, self._focus)
++        return Zipper(node, self._crumbs[:-1])
+ 
+     def to_tree(self):
+-        pass
++        node = self._focus
++        for parent_value, side, sibling in reversed(self._crumbs):
++            if side == "left":
++                node = _node(parent_value, node, sibling)
++            else:
++                node = _node(parent_value, sibling, node)
++        return node
++
++    # -- internals ---------------------------------------------------------
++
++    def _children(self):
++        return self._focus.get("left"), self._focus.get("right")
++
++    def _child(self, side):
++        child = self._focus.get(side)
++        if child is None:
++            return None
++        sibling = self._focus.get("right" if side == "left" else "left")
++        crumb = (self._focus["value"], side, sibling)
++        return Zipper(child, self._crumbs + (crumb,))
++
++    def _set_child(self, side, tree):
++        left, right = self._children()
++        if side == "left":
++            left = tree
++        else:
++            right = tree
++        return Zipper(_node(self._focus["value"], left, right), self._crumbs)
++
++
++def _node(value, left, right):
++    return {"value": value, "left": left, "right": right}

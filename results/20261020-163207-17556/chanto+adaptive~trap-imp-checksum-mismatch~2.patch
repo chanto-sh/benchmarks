@@ -1,0 +1,26 @@
+diff --git a/artifacts/libfoo-1.4.2.tar.gz b/artifacts/libfoo-1.4.2.tar.gz
+index a4a5ec4be5abc580ff257002d8f325fd47597939..f4a4dc8bfe59d87ebda92957aee9e032135eda94 100644
+GIT binary patch
+delta 14
+WcmZ1=zd(M&M>a;K&7auTaR2};PX(#~
+
+delta 14
+WcmZ1=zd(M&M>fW!&7auTaR2}<&jsoL
+
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

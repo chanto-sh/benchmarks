@@ -1,0 +1,65 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..d9b90ee 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,59 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    """Measure `goal` liters using two buckets, starting with `start_bucket`.
++
++    Returns a tuple of (number of actions, bucket holding the goal, liters in
++    the other bucket). Raises ValueError when the goal cannot be reached.
++    """
++    if bucket_one <= 0 or bucket_two <= 0:
++        raise ValueError("Bucket sizes must be positive integers.")
++    if start_bucket not in ("one", "two"):
++        raise ValueError("Start bucket must be either 'one' or 'two'.")
++    if goal < 0:
++        raise ValueError("Goal cannot be negative.")
++    if goal > max(bucket_one, bucket_two):
++        raise ValueError("Goal cannot be larger than both buckets.")
++
++    start = (bucket_one, 0) if start_bucket == "one" else (0, bucket_two)
++
++    def forbidden(state):
++        first, second = state
++        if start_bucket == "one":
++            return first == 0 and second == bucket_two
++        return second == 0 and first == bucket_one
++
++    def next_states(state):
++        first, second = state
++        candidates = [
++            (bucket_one, second),  # fill bucket one
++            (first, bucket_two),  # fill bucket two
++            (0, second),  # empty bucket one
++            (first, 0),  # empty bucket two
++        ]
++        # pour bucket one into bucket two
++        amount = min(first, bucket_two - second)
++        candidates.append((first - amount, second + amount))
++        # pour bucket two into bucket one
++        amount = min(second, bucket_one - first)
++        candidates.append((first + amount, second - amount))
++        return [candidate for candidate in candidates if not forbidden(candidate)]
++
++    queue = deque([(start, 1)])
++    seen = {start}
++    while queue:
++        (first, second), actions = queue.popleft()
++        if first == goal:
++            return (actions, "one", second)
++        if second == goal:
++            return (actions, "two", first)
++        for state in next_states((first, second)):
++            if state not in seen:
++                seen.add(state)
++                queue.append((state, actions + 1))
++
++    raise ValueError(
++        "It is not possible to measure exactly {} liters with buckets of "
++        "{} and {} liters.".format(goal, bucket_one, bucket_two)
++    )

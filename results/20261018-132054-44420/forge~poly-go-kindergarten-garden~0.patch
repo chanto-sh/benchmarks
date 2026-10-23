@@ -1,0 +1,97 @@
+diff --git a/kindergarten_garden.go b/kindergarten_garden.go
+index 0db500b..20ca0dc 100644
+--- a/kindergarten_garden.go
++++ b/kindergarten_garden.go
+@@ -1,19 +1,85 @@
+ package kindergarten
+ 
+-// Define the Garden type here.
++import (
++	"errors"
++	"sort"
++	"strings"
++)
++
++// Garden maps each child's name to the plants they are responsible for.
++type Garden struct {
++	plants map[string][]string
++}
++
++// plantNames maps the diagram encoding of each seed to its plant name.
++var plantNames = map[byte]string{
++	'G': "grass",
++	'C': "clover",
++	'R': "radishes",
++	'V': "violets",
++}
+ 
+ // The diagram argument starts each row with a '\n'.  This allows Go's
+ // raw string literals to present diagrams in source code nicely as two
+ // rows flush left, for example,
+ //
+-//     diagram := `
+-//     VVCCGG
+-//     VVCCGG`
+-
++//	diagram := `
++//	VVCCGG
++//	VVCCGG`
+ func NewGarden(diagram string, children []string) (*Garden, error) {
+-	panic("Please implement the NewGarden function")
++	if len(diagram) == 0 || diagram[0] != '\n' {
++		return nil, errors.New("diagram must begin with a newline")
++	}
++
++	rows := strings.Split(diagram[1:], "\n")
++	if len(rows) != 2 {
++		return nil, errors.New("diagram must consist of exactly two rows")
++	}
++	if len(rows[0]) != len(rows[1]) {
++		return nil, errors.New("diagram rows must be the same length")
++	}
++	if len(rows[0])%2 != 0 {
++		return nil, errors.New("diagram must provide an even number of cups per row")
++	}
++	if len(rows[0])/2 != len(children) {
++		return nil, errors.New("diagram must provide four cups for each child")
++	}
++
++	// Work on a copy so the caller's slice is never modified.
++	names := make([]string, len(children))
++	copy(names, children)
++	sort.Strings(names)
++
++	g := &Garden{plants: make(map[string][]string, len(names))}
++	for i, name := range names {
++		if _, ok := g.plants[name]; ok {
++			return nil, errors.New("duplicate child: " + name)
++		}
++		plants := make([]string, 0, 4)
++		for _, row := range rows {
++			for j := 2 * i; j < 2*i+2; j++ {
++				plant, ok := plantNames[row[j]]
++				if !ok {
++					return nil, errors.New("invalid cup code in diagram")
++				}
++				plants = append(plants, plant)
++			}
++		}
++		g.plants[name] = plants
++	}
++
++	return g, nil
+ }
+ 
++// Plants returns the plants belonging to child, and whether that child
++// exists in this garden.
+ func (g *Garden) Plants(child string) ([]string, bool) {
+-	panic("Please implement the Plants function")
++	plants, ok := g.plants[child]
++	if !ok {
++		return nil, false
++	}
++	// Return a copy so callers cannot mutate the garden's internal state.
++	out := make([]string, len(plants))
++	copy(out, plants)
++	return out, true
+ }

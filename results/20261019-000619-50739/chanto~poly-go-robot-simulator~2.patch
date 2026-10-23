@@ -1,0 +1,205 @@
+diff --git a/robot_simulator.go b/robot_simulator.go
+index d5d5b1c..8d4f94f 100644
+--- a/robot_simulator.go
++++ b/robot_simulator.go
+@@ -1,44 +1,189 @@
+ package robot
+ 
++import "fmt"
++
+ // See defs.go for other definitions
+ 
+ // Step 1
+-// Define N, E, S, W here.
++const (
++	N Dir = iota
++	E
++	S
++	W
++)
+ 
+ func Right() {
+-	panic("Please implement the Right function")
++	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
+ }
+ 
+ func Left() {
+-	panic("Please implement the Left function")
++	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
+ }
+ 
+ func Advance() {
+-	panic("Please implement the Advance function")
++	switch Step1Robot.Dir {
++	case N:
++		Step1Robot.Y++
++	case E:
++		Step1Robot.X++
++	case S:
++		Step1Robot.Y--
++	case W:
++		Step1Robot.X--
++	}
+ }
+ 
+ func (d Dir) String() string {
+-	panic("Please implement the String function")
++	switch d {
++	case N:
++		return "N"
++	case E:
++		return "E"
++	case S:
++		return "S"
++	case W:
++		return "W"
++	}
++	return fmt.Sprintf("Dir(%d)", int(d))
+ }
+ 
+ // Step 2
+-// Define Action type here.
++type Action struct {
++	Command
++}
+ 
+ func StartRobot(command chan Command, action chan Action) {
+-	panic("Please implement the StartRobot function")
++	for c := range command {
++		action <- Action{Command: c}
++	}
++	// A zero command signals that the robot has shut down.
++	action <- Action{}
+ }
+ 
+ func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
+-	panic("Please implement the Room function")
++	for a := range action {
++		if a.Command == 0 {
++			break
++		}
++		switch a.Command {
++		case 'R', 'L':
++			robot.Dir = turn(robot.Dir, a.Command)
++		case 'A':
++			p := move(robot.Pos, robot.Dir)
++			if extent.contains(p) {
++				robot.Pos = p
++			}
++		}
++	}
++	report <- robot
+ }
+ 
+ // Step 3
+-// Define Action3 type here.
++type Action3 struct {
++	Name string
++	Command
++}
+ 
+ func StartRobot3(name, script string, action chan Action3, log chan string) {
+-	panic("Please implement the StartRobot3 function")
++	if name == "" {
++		log <- "robot without a name"
++	}
++	for _, c := range script {
++		switch cmd := Command(c); cmd {
++		case 'R', 'L', 'A':
++			action <- Action3{Name: name, Command: cmd}
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", name, c)
++			action <- Action3{Name: name}
++			return
++		}
++	}
++	// A zero command signals that the robot has shut down.
++	action <- Action3{Name: name}
+ }
+ 
+ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
+-	panic("Please implement the Room3 function")
++	byName := make(map[string]*Step3Robot, len(robots))
++	occupied := make(map[Pos]string, len(robots))
++	for i := range robots {
++		r := &robots[i]
++		if _, ok := byName[r.Name]; ok {
++			log <- fmt.Sprintf("duplicate robot name %q", r.Name)
++		} else {
++			byName[r.Name] = r
++		}
++		if other, ok := occupied[r.Pos]; ok {
++			log <- fmt.Sprintf("robots %q and %q placed at the same position %v",
++				other, r.Name, r.Pos)
++		} else {
++			occupied[r.Pos] = r.Name
++		}
++		if !extent.contains(r.Pos) {
++			log <- fmt.Sprintf("robot %q placed outside the room at %v", r.Name, r.Pos)
++		}
++	}
++
++	// Every launched robot, known or not, reports its shutdown.
++	for remaining := len(robots); remaining > 0; {
++		a := <-action
++		if a.Command == 0 {
++			remaining--
++			continue
++		}
++		r, ok := byName[a.Name]
++		if !ok {
++			log <- fmt.Sprintf("action from unknown robot %q", a.Name)
++			continue
++		}
++		switch a.Command {
++		case 'R', 'L':
++			r.Dir = turn(r.Dir, a.Command)
++		case 'A':
++			p := move(r.Pos, r.Dir)
++			if !extent.contains(p) {
++				log <- fmt.Sprintf("robot %q attempted to advance into a wall", r.Name)
++				continue
++			}
++			if other, ok := occupied[p]; ok {
++				log <- fmt.Sprintf("robot %q attempted to advance into robot %q",
++					r.Name, other)
++				continue
++			}
++			delete(occupied, r.Pos)
++			r.Pos = p
++			occupied[p] = r.Name
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", r.Name, byte(a.Command))
++		}
++	}
++	rep <- robots
++}
++
++func turn(d Dir, c Command) Dir {
++	switch c {
++	case 'R':
++		return (d + 1) % 4
++	case 'L':
++		return (d + 3) % 4
++	}
++	return d
++}
++
++func move(p Pos, d Dir) Pos {
++	switch d {
++	case N:
++		p.Northing++
++	case E:
++		p.Easting++
++	case S:
++		p.Northing--
++	case W:
++		p.Easting--
++	}
++	return p
++}
++
++func (r Rect) contains(p Pos) bool {
++	return p.Easting >= r.Min.Easting && p.Easting <= r.Max.Easting &&
++		p.Northing >= r.Min.Northing && p.Northing <= r.Max.Northing
+ }

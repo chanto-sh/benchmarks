@@ -1,0 +1,92 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..b74e16f 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,33 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses a fourth-order symplectic kick-drift-kick composition, so the energy
++    error stays bounded over long integrations instead of drifting secularly.
++    """
++    n = len(masses)
++    pos = [[p[0], p[1]] for p in positions]
++    vel = [[v[0], v[1]] for v in velocities]
++
++    cbrt2 = 2.0 ** (1.0 / 3.0)
++    w1 = 1.0 / (2.0 - cbrt2)
++    w0 = -cbrt2 * w1
++    kicks = (0.5 * w1, 0.5 * (w0 + w1), 0.5 * (w0 + w1), 0.5 * w1)
++    drifts = (w1, w0, w1)
++
++    for _ in range(steps):
++        for stage in range(4):
++            acc = accelerations(masses, pos, G)
++            h = kicks[stage] * dt
++            for i in range(n):
++                vel[i][0] += h * acc[i][0]
++                vel[i][1] += h * acc[i][1]
++
++            if stage < 3:
++                h = drifts[stage] * dt
++                for i in range(n):
++                    pos[i][0] += h * vel[i][0]
++                    pos[i][1] += h * vel[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..c24dacd 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -17,6 +17,47 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_binary_energy_is_bounded(self):
++        # e = 0.5 orbit with semi-major axis 1 and total mass 2
++        m = [1.0, 1.0]
++        r = 0.5
++        v = math.sqrt(2.0 * 1.5 / 0.5)
++        pos = [[-r / 2, 0.0], [r / 2, 0.0]]
++        vel = [[0.0, -v / 2], [0.0, v / 2]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-6)
++
++    def test_figure_eight_energy_is_bounded(self):
++        m = [1.0, 1.0, 1.0]
++        x, y = 0.97000436, -0.24308753
++        vx, vy = 0.466203685, 0.43236573
++        pos = [[x, y], [-x, -y], [0.0, 0.0]]
++        vel = [[vx, vy], [vx, vy], [-2.0 * vx, -2.0 * vy]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.002, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-6)
++
++    def test_momentum_is_conserved(self):
++        m = [2.0, 0.5]
++        pos = [[-1.0, 0.0], [1.0, 0.0]]
++        vel = [[0.1, -0.3], [0.1, 1.2]]
++        p0 = [sum(mi * vi[k] for mi, vi in zip(m, vel)) for k in range(2)]
++        p, q = simulate(m, pos, vel, 0.01, 20000)
++        p1 = [sum(mi * vi[k] for mi, vi in zip(m, q)) for k in range(2)]
++        self.assertAlmostEqual(p1[0], p0[0], places=10)
++        self.assertAlmostEqual(p1[1], p0[1], places=10)
++
++    def test_inputs_are_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[-1.0, 0.5], [2.0, -0.25]]
++        vel = [[0.0, -0.4], [0.0, 0.2]]
++        pos0 = [[x, y] for x, y in pos]
++        vel0 = [[x, y] for x, y in vel]
++        simulate(m, pos, vel, 0.01, 100)
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

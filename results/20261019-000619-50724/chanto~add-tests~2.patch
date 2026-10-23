@@ -1,0 +1,175 @@
+diff --git a/test_roman.py b/test_roman.py
+new file mode 100644
+index 0000000..68350e0
+--- /dev/null
++++ b/test_roman.py
+@@ -0,0 +1,169 @@
++import unittest
++
++from roman import to_roman
++
++
++class TestToRomanNormalValues(unittest.TestCase):
++    def test_single_symbols(self):
++        cases = {
++            1: "I",
++            5: "V",
++            10: "X",
++            50: "L",
++            100: "C",
++            500: "D",
++            1000: "M",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_known_values(self):
++        cases = {
++            2: "II",
++            3: "III",
++            6: "VI",
++            7: "VII",
++            8: "VIII",
++            11: "XI",
++            13: "XIII",
++            14: "XIV",
++            15: "XV",
++            18: "XVIII",
++            19: "XIX",
++            20: "XX",
++            24: "XXIV",
++            30: "XXX",
++            42: "XLII",
++            49: "XLIX",
++            58: "LVIII",
++            99: "XCIX",
++            444: "CDXLIV",
++            999: "CMXCIX",
++            1666: "MDCLXVI",
++            1987: "MCMLXXXVII",
++            2024: "MMXXIV",
++            3999: "MMMCMXCIX",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanBoundaries(unittest.TestCase):
++    def test_lower_bound(self):
++        self.assertEqual(to_roman(1), "I")
++
++    def test_upper_bound(self):
++        self.assertEqual(to_roman(3999), "MMMCMXCIX")
++
++    def test_near_lower_bound(self):
++        self.assertEqual(to_roman(2), "II")
++
++    def test_near_upper_bound(self):
++        self.assertEqual(to_roman(3998), "MMMCMXCVIII")
++
++    def test_powers_of_ten(self):
++        cases = {
++            1: "I",
++            10: "X",
++            100: "C",
++            1000: "M",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanSubtractiveForms(unittest.TestCase):
++    def test_subtractive_symbols(self):
++        cases = {
++            4: "IV",
++            9: "IX",
++            40: "XL",
++            90: "XC",
++            400: "CD",
++            900: "CM",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_subtractive_forms_in_context(self):
++        cases = {
++            14: "XIV",
++            19: "XIX",
++            44: "XLIV",
++            49: "XLIX",
++            94: "XCIV",
++            99: "XCIX",
++            104: "CIV",
++            109: "CIX",
++            140: "CXL",
++            190: "CXC",
++            404: "CDIV",
++            409: "CDIX",
++            440: "CDXL",
++            490: "CDXC",
++            900: "CM",
++            904: "CMIV",
++            940: "CMXL",
++            990: "CMXC",
++            1994: "MCMXCIV",
++            3999: "MMMCMXCIX",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanInvalidInputs(unittest.TestCase):
++    def test_zero(self):
++        with self.assertRaises(ValueError):
++            to_roman(0)
++
++    def test_negative_values(self):
++        for value in (-1, -4, -100):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_above_upper_bound(self):
++        for value in (4000, 4001, 10000):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_non_integer_numbers(self):
++        for value in (1.0, 1.5, 4.0, 3999.0):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_non_numeric_types(self):
++        for value in ("1", "IV", b"I", None, [1], (1,), {1}, {"n": 1}):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_booleans_are_rejected(self):
++        # bool is a subclass of int, but True/False are not valid Roman inputs.
++        for value in (True, False):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_exception_type_is_exactly_value_error(self):
++        self.assertIs(type(self._capture_exception(0)), ValueError)
++        self.assertIs(type(self._capture_exception("I")), ValueError)
++
++    def _capture_exception(self, value):
++        try:
++            to_roman(value)
++        except Exception as exc:  # noqa: BLE001 - intentionally capturing any exception
++            return exc
++        self.fail(f"to_roman({value!r}) did not raise")
++
++
++if __name__ == "__main__":
++    unittest.main()

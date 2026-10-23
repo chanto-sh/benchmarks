@@ -1,0 +1,63 @@
+diff --git a/stats.py b/stats.py
+index add4f59..07a5165 100644
+--- a/stats.py
++++ b/stats.py
+@@ -1,21 +1,52 @@
+ """Summary statistics for the sensor pipeline."""
+ import math
++import sys
+ 
+ 
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++
++    # Work relative to the first value so that a large common offset does
++    # not consume the precision of the deviations, and use the two-pass
++    # formula (rather than sum(x*x) - n*mean*mean) to avoid cancellation.
++    #
++    # Near the float limits a difference of two finite values can itself
++    # overflow; scaling by a power of two is exact and keeps it finite.
++    scale = 1.0
++    if max(abs(x) for x in xs) > sys.float_info.max / 2:
++        scale = 0.5
++    shift = xs[0] * scale
++
++    try:
++        mean_shifted = math.fsum(x * scale - shift for x in xs) / n
++    except OverflowError:
++        # The sum of the deviations exceeded the float range; dividing each
++        # term first keeps the (finite) mean representable.
++        mean_shifted = math.fsum((x * scale - shift) / n for x in xs)
++
++    def squared_deviation(x):
++        d = x * scale - shift - mean_shifted
++        return d * d
++
++    m2 = math.fsum(map(squared_deviation, xs))
++    return (shift + mean_shifted) / scale, (m2 / n) / (scale * scale)
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    # Factor out the maximum so every exponent is <= 0 (no overflow), and
++    # use an accurately rounded sum for the remaining terms.
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # For x > 0 use log1p(exp(-x)), for x <= 0 use log1p(exp(x)).  Both
++    # keep the argument of log1p away from 1, so small results stay accurate;
++    # exp of a non-positive argument cannot overflow, and large |x| simply
++    # saturates to x (positive) or 0 (negative).
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

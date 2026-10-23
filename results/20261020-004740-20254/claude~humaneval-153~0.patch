@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index c95594c..533833a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -16,3 +16,11 @@ def Strongest_Extension(class_name, extensions):
+     Example:
+     for Strongest_Extension('my_class', ['AA', 'Be', 'CC']) == 'my_class.AA'
+     """
++    def strength(ext):
++        return sum(1 if c.isupper() else -1 for c in ext if c.isalpha())
++
++    best = extensions[0]
++    for ext in extensions[1:]:
++        if strength(ext) > strength(best):
++            best = ext
++    return f"{class_name}.{best}"

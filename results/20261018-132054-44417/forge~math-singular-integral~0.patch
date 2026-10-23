@@ -1,0 +1,111 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..662186b 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,95 @@
+-"""Frequency response of the detector model."""
++"""Frequency response of the detector model.
++
++The response is the integral
++
++    I(t, b) = int_0^b cos(t*x) / sqrt(x) dx
++
++which is finite but whose integrand has an inverse-square-root singularity at
++x = 0, so no quadrature rule applied directly on [0, b] can converge quickly.
++The substitution x = u^2 removes the singularity exactly:
++
++    dx = 2*u*du,  sqrt(x) = u  =>  I(t, b) = 2 * int_0^sqrt(b) cos(t*u^2) du
++
++The transformed integrand is entire, so a panel-wise Gauss-Legendre rule
++converges spectrally.  Panels are chosen to have a bounded phase change
++t*du^2, i.e. their edges sit at t*u^2 = 0, d, 2d, ... for d = pi/2, which
++keeps every panel to an eighth of a period or less even at the fastest
++oscillation.  With 24 nodes per panel the relative error is at the level of
++double-precision round-off (~1e-15) across the whole parameter range.
++"""
++import functools
+ import math
+ 
++# Largest change of the phase t*u**2 allowed across one quadrature panel.
++_PANEL_PHASE = math.pi / 2.0
++# Gauss-Legendre nodes per panel.
++_NODES_PER_PANEL = 24
++
++
++@functools.lru_cache(maxsize=None)
++def _gauss_legendre(n):
++    """Nodes and weights of the n-point Gauss-Legendre rule on [-1, 1]."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        # Standard starting guess; Newton's method then converges quadratically.
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        for _ in range(100):
++            p0, p1 = 1.0, z
++            for k in range(2, n + 1):
++                p0, p1 = p1, ((2 * k - 1) * z * p1 - (k - 1) * p0) / k
++            # p1 is P_n(z) and p0 is P_{n-1}(z); dp is P_n'(z).
++            dp = n * (z * p1 - p0) / (z * z - 1.0)
++            step = p1 / dp
++            z -= step
++            if abs(step) <= 1e-16 * max(1.0, abs(z)):
++                break
++
++        p0, p1 = 1.0, z
++        for k in range(2, n + 1):
++            p0, p1 = p1, ((2 * k - 1) * z * p1 - (k - 1) * p0) / k
++        dp = n * (z * p1 - p0) / (z * z - 1.0)
++        weight = 2.0 / ((1.0 - z * z) * dp * dp)
++
++        nodes[i] = -z
++        weights[i] = weight
++        nodes[n - 1 - i] = z
++        weights[n - 1 - i] = weight
++    return tuple(nodes), tuple(weights)
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Accurate to ~1e-15 relative for 0 <= t and 0 < b, in O(t*b) work.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b < 0.0:
++        raise ValueError("b must be non-negative")
++    if b == 0.0:
++        return 0.0
++    t = abs(t)  # the integrand is even in t
++    if t == 0.0:
++        # int_0^b x**(-1/2) dx, evaluated exactly.
++        return 2.0 * math.sqrt(b)
++
++    u_max = math.sqrt(b)
++    # Phase budget: panel k spans t*u**2 in [k*_PANEL_PHASE, (k+1)*_PANEL_PHASE].
++    n_panels = max(1, int(math.ceil(t * b / _PANEL_PHASE)))
++    nodes, weights = _gauss_legendre(_NODES_PER_PANEL)
++
++    total = 0.0
++    u0 = 0.0
++    for k in range(n_panels):
++        if k == n_panels - 1:
++            u1 = u_max
++        else:
++            u1 = math.sqrt((k + 1) * _PANEL_PHASE / t)
++        half = 0.5 * (u1 - u0)
++        mid = 0.5 * (u1 + u0)
++        s = 0.0
++        for node, weight in zip(nodes, weights):
++            u = mid + half * node
++            s += weight * math.cos(t * u * u)
++        total += 2.0 * half * s  # factor 2 from x = u**2
++        u0 = u1
++    return total

@@ -1,0 +1,41 @@
+diff --git a/bottle_song.py b/bottle_song.py
+index 9a5e67f..8e21b40 100644
+--- a/bottle_song.py
++++ b/bottle_song.py
+@@ -1,2 +1,35 @@
++NUMBERS = {
++    10: "Ten",
++    9: "Nine",
++    8: "Eight",
++    7: "Seven",
++    6: "Six",
++    5: "Five",
++    4: "Four",
++    3: "Three",
++    2: "Two",
++    1: "One",
++    0: "no",
++}
++
++
++def _verse(count):
++    current = NUMBERS[count]
++    remaining = NUMBERS[count - 1].lower()
++    current_noun = "bottle" if count == 1 else "bottles"
++    remaining_noun = "bottle" if count - 1 == 1 else "bottles"
++    return [
++        f"{current} green {current_noun} hanging on the wall,",
++        f"{current} green {current_noun} hanging on the wall,",
++        "And if one green bottle should accidentally fall,",
++        f"There'll be {remaining} green {remaining_noun} hanging on the wall.",
++    ]
++
++
+ def recite(start, take=1):
+-    pass
++    lyrics = []
++    for count in range(start, start - take, -1):
++        if lyrics:
++            lyrics.append("")
++        lyrics.extend(_verse(count))
++    return lyrics

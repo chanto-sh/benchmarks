@@ -1,0 +1,281 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..1daa22d 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,274 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++_RTOL = 1e-11
++_ATOL = 1e-11
++_SAFETY = 0.9
++_MIN_FACTOR = 0.2
++_MAX_FACTOR = 5.0
++_MAX_STEPS = 1_000_000
++
++
++def _derivs(state, drag, g):
++    """State derivative for (x, y, vx, vy).
++
++    ``drag`` is k / mass, so the drag acceleration is -drag * |v| * v.
++    """
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    factor = drag * speed
++    return (vx, vy, -factor * vx, -g - factor * vy)
++
++
++def _rk45_step(state, dt, drag, g):
++    """Take one Dormand-Prince 5(4) step.
++
++    Returns (new_state, error_estimate, derivative_at_start, derivative_at_end).
++    """
++    k1 = _derivs(state, drag, g)
++
++    s2 = tuple(state[i] + dt * (1.0 / 5.0) * k1[i] for i in range(4))
++    k2 = _derivs(s2, drag, g)
++
++    s3 = tuple(
++        state[i] + dt * ((3.0 / 40.0) * k1[i] + (9.0 / 40.0) * k2[i])
++        for i in range(4)
++    )
++    k3 = _derivs(s3, drag, g)
++
++    s4 = tuple(
++        state[i]
++        + dt
++        * (
++            (44.0 / 45.0) * k1[i]
++            - (56.0 / 15.0) * k2[i]
++            + (32.0 / 9.0) * k3[i]
++        )
++        for i in range(4)
++    )
++    k4 = _derivs(s4, drag, g)
++
++    s5 = tuple(
++        state[i]
++        + dt
++        * (
++            (19372.0 / 6561.0) * k1[i]
++            - (25360.0 / 2187.0) * k2[i]
++            + (64448.0 / 6561.0) * k3[i]
++            - (212.0 / 729.0) * k4[i]
++        )
++        for i in range(4)
++    )
++    k5 = _derivs(s5, drag, g)
++
++    s6 = tuple(
++        state[i]
++        + dt
++        * (
++            (9017.0 / 3168.0) * k1[i]
++            - (355.0 / 33.0) * k2[i]
++            + (46732.0 / 5247.0) * k3[i]
++            + (49.0 / 176.0) * k4[i]
++            - (5103.0 / 18656.0) * k5[i]
++        )
++        for i in range(4)
++    )
++    k6 = _derivs(s6, drag, g)
++
++    high = tuple(
++        state[i]
++        + dt
++        * (
++            (35.0 / 384.0) * k1[i]
++            + (500.0 / 1113.0) * k3[i]
++            + (125.0 / 192.0) * k4[i]
++            - (2187.0 / 6784.0) * k5[i]
++            + (11.0 / 84.0) * k6[i]
++        )
++        for i in range(4)
++    )
++    k7 = _derivs(high, drag, g)
++
++    low = tuple(
++        state[i]
++        + dt
++        * (
++            (5179.0 / 57600.0) * k1[i]
++            + (7571.0 / 16695.0) * k3[i]
++            + (393.0 / 640.0) * k4[i]
++            - (92097.0 / 339200.0) * k5[i]
++            + (187.0 / 2100.0) * k6[i]
++            + (1.0 / 40.0) * k7[i]
++        )
++        for i in range(4)
++    )
++
++    error = tuple(high[i] - low[i] for i in range(4))
++    return high, error, k1, k7
++
++
++def _hermite(y0, d0, y1, d1, s, h):
++    """Cubic Hermite interpolation over a step, with s in [0, 1]."""
++    s2 = s * s
++    s3 = s2 * s
++    return (
++        (2.0 * s3 - 3.0 * s2 + 1.0) * y0
++        + (s3 - 2.0 * s2 + s) * h * d0
++        + (-2.0 * s3 + 3.0 * s2) * y1
++        + (s3 - s2) * h * d1
++    )
++
++
++def _bisect(f, lo, hi, iterations=80):
++    """Find a root of f in the bracketing interval [lo, hi]."""
++    f_lo = f(lo)
++    if f_lo == 0.0:
++        return lo
++    f_hi = f(hi)
++    if f_hi == 0.0:
++        return hi
++    if (f_lo < 0.0) == (f_hi < 0.0):
++        # The event should have been bracketed; return the endpoint rather
++        # than silently leaving the flight loop in a bad state.
++        return hi
++
++    for _ in range(iterations):
++        mid = 0.5 * (lo + hi)
++        f_mid = f(mid)
++        if f_mid == 0.0:
++            return mid
++        if (f_lo < 0.0) != (f_mid < 0.0):
++            hi = mid
++            f_hi = f_mid
++        else:
++            lo = mid
++            f_lo = f_mid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` with speed ``v0`` at
++    ``angle_deg`` above the horizontal.  Quadratic drag is modelled as
++    F = -k * |v| * v.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    state = (0.0, float(h0), v0 * math.cos(theta), v0 * math.sin(theta))
++    t = 0.0
++    vy0 = state[3]
++
++    # With no height and no upward velocity there is no flight to measure.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    apex = float(h0) if vy0 <= 0.0 else None
++    drag = k / mass
++
++    # Choose a conservative starting step from the physically relevant time
++    # scales: the ballistic flight time and the drag relaxation time.  The
++    # adaptive controller then grows or shrinks it as needed.
++    time_scales = []
++    if g > 0.0 and (h0 > 0.0 or vy0 > 0.0):
++        time_scales.append(
++            (vy0 + math.sqrt(vy0 * vy0 + 2.0 * g * h0)) / g
++        )
++    if v0 > 0.0 and drag > 0.0:
++        time_scales.append(1.0 / (drag * v0))
++    time_scale = min(time_scales) if time_scales else 1.0
++    dt = min(0.05, max(1e-12, 0.01 * time_scale))
++
++    for _ in range(_MAX_STEPS):
++        accepted = False
++        while not accepted:
++            new_state, error, d_start, d_end = _rk45_step(state, dt, drag, g)
++
++            scale = tuple(
++                _ATOL + _RTOL * max(abs(state[i]), abs(new_state[i]))
++                for i in range(4)
++            )
++            err_norm = math.sqrt(
++                sum((error[i] / scale[i]) ** 2 for i in range(4)) / 4.0
++            )
++
++            if err_norm <= 1.0:
++                accepted = True
++            else:
++                factor = max(
++                    _MIN_FACTOR,
++                    _SAFETY * err_norm ** (-0.2),
++                )
++                dt *= factor
++
++        x0, y0, _, vy0 = state
++        x1, y1, _, vy1 = new_state
++
++        s_apex = None
++        if apex is None and vy0 > 0.0 and vy1 <= 0.0:
++            s_apex = _bisect(
++                lambda s: _hermite(vy0, d_start[3], vy1, d_end[3], s, dt),
++                0.0,
++                1.0,
++            )
++            apex = _hermite(y0, d_start[1], y1, d_end[1], s_apex, dt)
++            if apex < h0:
++                apex = float(h0)
++
++        s_land = None
++        if y1 <= 0.0:
++            if y0 > 0.0:
++                s_land = _bisect(
++                    lambda s: _hermite(y0, d_start[1], y1, d_end[1], s, dt),
++                    0.0,
++                    1.0,
++                )
++            elif t == 0.0 and h0 == 0.0 and vy0 > 0.0:
++                # The first step started exactly at ground level.  Look for
++                # the landing crossing after the launch (and after the apex
++                # if the step also contains the whole tiny arc).
++                if s_apex is not None:
++                    s_land = _bisect(
++                        lambda s: _hermite(
++                            y0, d_start[1], y1, d_end[1], s, dt
++                        ),
++                        s_apex,
++                        1.0,
++                    )
++                elif apex is not None:
++                    s_land = _bisect(
++                        lambda s: _hermite(
++                            y0, d_start[1], y1, d_end[1], s, dt
++                        ),
++                        0.0,
++                        1.0,
++                    )
++
++        if s_land is not None:
++            x_land = _hermite(x0, d_start[0], x1, d_end[0], s_land, dt)
++            time = t + s_land * dt
++
++            if apex is None:
++                # This can only be reached for a first step that lands almost
++                # immediately; use the highest ground-level sample available.
++                apex = max(
++                    h0,
++                    _hermite(y0, d_start[1], y1, d_end[1], 0.5, dt),
++                )
++
++            return {"range": x_land, "apex": apex, "time": time}
++
++        t += dt
++        state = new_state
++
++        factor = _MAX_FACTOR
++        if err_norm > 0.0:
++            factor = min(_MAX_FACTOR, max(_MIN_FACTOR, _SAFETY * err_norm ** (-0.2)))
++        dt *= factor
++
++    raise RuntimeError("projectile flight did not reach the ground")

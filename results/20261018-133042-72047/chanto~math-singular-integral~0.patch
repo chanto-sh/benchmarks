@@ -1,0 +1,83 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..d82b089 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,68 @@
+ import math
+ 
+ 
++# Positive abscissae and weights for 16-point Gauss-Legendre quadrature on
++# [-1, 1].  The negative abscissae are not stored because they are used in
++# mirrored pairs below.
++_GL_X = (
++    0.0950125098376374,
++    0.2816035507792589,
++    0.4580167776572274,
++    0.6178762444026438,
++    0.7554044083550030,
++    0.8656312023878318,
++    0.9445750230732326,
++    0.9894009349916499,
++)
++_GL_W = (
++    0.1894506104550685,
++    0.1826034150449236,
++    0.1691565193950025,
++    0.1495959888165767,
++    0.1246289712555339,
++    0.0951585116824928,
++    0.0622535239386479,
++    0.0271524594117541,
++)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    The substitution x = y**2 removes the endpoint singularity, leaving
++    2 * cos(t*y**2) to integrate over [0, sqrt(b)].  That integrand is split
++    at the half-periods y = sqrt(k*pi/t), so each piece is smooth and
++    non-oscillatory, then integrated with 16-point Gauss-Legendre quadrature.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b == 0.0:
++        return 0.0
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    y_end = math.sqrt(b)
++    parts = []
++    y_lo = 0.0
++    k = 1
++
++    while True:
++        y_hi = math.sqrt(k * math.pi / t)
++        last = y_hi >= y_end
++        if last:
++            y_hi = y_end
++
++        mid = 0.5 * (y_lo + y_hi)
++        half = 0.5 * (y_hi - y_lo)
++        subtotal = 0.0
++        for x, w in zip(_GL_X, _GL_W):
++            subtotal += w * (
++                math.cos(t * (mid + half * x) ** 2)
++                + math.cos(t * (mid - half * x) ** 2)
++            )
++        parts.append(half * subtotal)
++
++        if last:
++            break
++        y_lo = y_hi
++        k += 1
++
++    return 2.0 * math.fsum(parts)

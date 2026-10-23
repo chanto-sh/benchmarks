@@ -1,0 +1,36 @@
+diff --git a/beer_song.py b/beer_song.py
+index 9a5e67f..c30757b 100644
+--- a/beer_song.py
++++ b/beer_song.py
+@@ -1,2 +1,30 @@
++def _bottles(count):
++    if count == 0:
++        return "no more bottles"
++    if count == 1:
++        return "1 bottle"
++    return f"{count} bottles"
++
++
++def _verse(number):
++    if number == 0:
++        return [
++            "No more bottles of beer on the wall, no more bottles of beer.",
++            "Go to the store and buy some more, 99 bottles of beer on the wall.",
++        ]
++
++    current = _bottles(number)
++    action = "Take it down" if number == 1 else "Take one down"
++    return [
++        f"{current} of beer on the wall, {current} of beer.",
++        f"{action} and pass it around, {_bottles(number - 1)} of beer on the wall.",
++    ]
++
++
+ def recite(start, take=1):
+-    pass
++    lines = []
++    for index, number in enumerate(range(start, start - take, -1)):
++        if index:
++            lines.append("")
++        lines.extend(_verse(number))
++    return lines

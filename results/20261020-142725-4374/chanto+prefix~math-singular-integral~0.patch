@@ -1,0 +1,73 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..11d4685 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,58 @@
+ """Frequency response of the detector model."""
+ import math
+ 
++_PANEL_PHASE = math.pi / 2.0
++
++
++def _gauss_legendre(n):
++    """Nodes and weights for n-point Gauss-Legendre quadrature on [-1, 1]."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        while True:
++            p_prev, p = 1.0, z
++            for k in range(2, n + 1):
++                p_prev, p = p, ((2 * k - 1) * z * p - (k - 1) * p_prev) / k
++            derivative = n * (z * p - p_prev) / (z * z - 1.0)
++            z_new = z - p / derivative
++            if z_new == z:
++                z = z_new
++                break
++            z = z_new
++        nodes[i], nodes[n - 1 - i] = -z, z
++        weights[i] = weights[n - 1 - i] = 2.0 / ((1.0 - z * z) * derivative * derivative)
++    return nodes, weights
++
++
++_NODES, _WEIGHTS = _gauss_legendre(16)
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the singularity at zero:
++        integral = 2 * integral(cos(t*u**2) du, 0, sqrt(b)).
++    The remaining integrand is smooth, so it is integrated with Gauss-Legendre
++    panels small enough that the phase changes by at most pi/2 per panel.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b == 0.0:
++        return 0.0
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    upper = math.sqrt(b)
++    phase_change = t * b
++    panels = max(1, math.ceil(2.0 * phase_change / _PANEL_PHASE))
++    h = upper / panels
++    half = 0.5 * h
++
++    total = 0.0
++    for j in range(panels):
++        center = (j + 0.5) * h
++        subtotal = 0.0
++        for node, weight in zip(_NODES, _WEIGHTS):
++            u = center + half * node
++            subtotal += weight * math.cos(t * u * u)
++        total += subtotal
++    return h * total

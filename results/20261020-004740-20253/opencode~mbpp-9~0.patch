@@ -1,0 +1,33 @@
+diff --git a/solution.py b/solution.py
+index f91b0ed..3e4a85e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,26 @@
+-def find_Rotations(s): 
+-    pass
++def find_Rotations(s):
++    n = len(s)
++    if n == 0:
++        return 0
++
++    # Build the KMP prefix (longest proper prefix which is also suffix).
++    lps = [0] * n
++    length = 0
++    i = 1
++    while i < n:
++        if s[i] == s[length]:
++            length += 1
++            lps[i] = length
++            i += 1
++        elif length:
++            length = lps[length - 1]
++        else:
++            lps[i] = 0
++            i += 1
++
++    # The shortest period is n - lps[-1]; it is only a valid rotation
++    # distance when it evenly divides the length.
++    period = n - lps[-1]
++    if n % period == 0:
++        return period
++    return n

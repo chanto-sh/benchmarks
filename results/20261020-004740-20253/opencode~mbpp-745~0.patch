@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index 73e15a0..c292c21 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,8 @@
+ def divisible_by_digits(startnum, endnum):
+-    pass
++    """Return numbers in [startnum, endnum] divisible by each of their digits."""
++    result = []
++    for number in range(startnum, endnum + 1):
++        digits = [int(digit) for digit in str(abs(number))]
++        if all(digit != 0 and number % digit == 0 for digit in digits):
++            result.append(number)
++    return result

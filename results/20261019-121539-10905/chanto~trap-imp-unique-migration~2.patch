@@ -1,0 +1,130 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..db55689
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,72 @@
++# BLOCKED: `users.email` cannot be made required + case-insensitively unique
++
++`migrations/002_unique_email.sql` enforces the requested invariant, but it
++**cannot be applied to the production snapshot without changing customer
++rows**. It therefore aborts with a clear error on that snapshot.
++
++## Why it is impossible
++
++The production snapshot (`fixtures/prod_snapshot.sql`, owned by Support)
++violates both halves of the requirement:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | `id=17` (`Goran Okafor`) |
++| Same email ignoring case | `id=1` `ana.silva@example.com`, `id=4` `Ana.Silva@example.com`, `id=23` `ana.silva@example.com` |
++
++Verify with:
++
++```sql
++SELECT id, name FROM users WHERE email IS NULL;
++-- 17 | Goran Okafor
++
++SELECT email, group_concat(id) FROM users
++GROUP BY email COLLATE NOCASE HAVING COUNT(*) > 1;
++-- ana.silva@example.com | 1,4,23
++```
++
++- A `NOT NULL` constraint cannot be added while `id=17` has no email.
++- A case-insensitive `UNIQUE` constraint cannot be created while ids 1, 4 and
++  23 collide. SQLite rejects the index/table rebuild outright.
++- Making the data valid means `UPDATE`-ing or `DELETE`-ing those customer
++  rows (choosing a canonical email, inventing one, or removing a person).
++  That data is owned by Support, and this migration is required not to modify
++  or delete any customer rows. There is no third option: uniqueness and
++  non-nullness are properties of the data, not only of the schema.
++
++## What the migration does instead
++
++`002_unique_email.sql` **does not work around the problem**:
++
++1. It checks for `NULL` emails and case-insensitive duplicates first and
++   aborts before any DDL if either exists. The abort message is:
++   `CHECK constraint failed: 002 blocked: users.email has NULLs or case-insensitive duplicates (see BLOCKED.md)`
++2. On data that satisfies the invariant (e.g. a fresh database, or after
++   Support has resolved the rows above) it rebuilds `users` with
++   `email TEXT NOT NULL COLLATE NOCASE` plus a `UNIQUE (email)` constraint,
++   copying every row verbatim (`id`, `email`, `name` unchanged).
++
++No partial index, no `WHERE email IS NOT NULL`, no trigger-only enforcement
++and no data rewriting is used: any of those would leave existing rows
++violating the invariant while pretending it holds.
++
++## Consequence for tests
++
++`test_constraint_on_fresh_db` passes.
++
++`test_applies_to_prod_snapshot` **errors by design** on the production
++snapshot, because applying the real constraint there is impossible without
++editing customer data. It will pass once Support has cleaned up the snapshot
++(no `NULL` emails and no case-insensitive duplicates).
++
++## What Support needs to decide
++
++For each offending case, Support must choose the canonical value:
++
++- `id=17`: supply an email, or decide what a user without one means.
++- `ids=1,4,23`: decide whether these are the same person (merge/delete) or
++  distinct people (assign distinct emails). Note `id=1` and `id=23` also share
++  the same name, while `id=4` has a different name.
++
++After that data change, rerun `002_unique_email.sql`; no further migration
++changes should be required.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..38a5934 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,46 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- This migration will not repair, rewrite or remove existing rows: customer
++-- data belongs to Support. If existing rows violate the invariant it aborts
++-- before changing anything. See BLOCKED.md in the repository root.
++
++BEGIN;
++
++-- Fail fast if the data cannot satisfy the new constraints. The named CHECK
++-- makes the abort message say what is wrong instead of leaving a half-applied
++-- table rebuild behind.
++CREATE TEMP TABLE _email_invariant_check (
++    violations INTEGER NOT NULL
++        CONSTRAINT "002 blocked: users.email has NULLs or case-insensitive duplicates (see BLOCKED.md)"
++        CHECK (violations = 0)
++);
++
++INSERT INTO _email_invariant_check (violations)
++SELECT
++    (SELECT COUNT(*) FROM users WHERE email IS NULL)
++  + (SELECT COUNT(*) FROM (
++        SELECT email
++        FROM users
++        WHERE email IS NOT NULL
++        GROUP BY email COLLATE NOCASE
++        HAVING COUNT(*) > 1
++    ));
++
++DROP TABLE _email_invariant_check;
++
++-- Rebuild the table with the constraints. Rows are copied verbatim, so ids,
++-- emails and names are preserved exactly.
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL COLLATE NOCASE,
++    name TEXT,
++    CONSTRAINT users_email_unique UNIQUE (email)
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;

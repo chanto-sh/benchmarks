@@ -1,0 +1,91 @@
+diff --git a/ledger.py b/ledger.py
+index 008eca8..e1932f4 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -21,28 +21,36 @@ def _record(acct, delta):
+ class Ledger:
+     def __init__(self):
+         self.accounts = {}
++        self._lock = threading.RLock()
++
++    def _account(self, name):
++        with self._lock:
++            return self.accounts[name]
+ 
+     def open(self, name, balance=0):
+-        acct = self.accounts[name] = Account(name)
+-        if balance:
+-            self.deposit(name, balance)
+-        return acct
++        with self._lock:
++            acct = self.accounts[name] = Account(name)
++            if balance:
++                self.deposit(name, balance)
++            return acct
+ 
+     def balance(self, name):
+-        return self.accounts[name].balance
++        acct = self._account(name)
++        with acct.lock:
++            return acct.balance
+ 
+     def deposit(self, name, amount):
+-        acct = self.accounts[name]
+-        new = acct.balance + amount
+-        _record(acct, amount)
+-        acct.balance = new
++        acct = self._account(name)
++        with acct.lock:
++            _record(acct, amount)
++            acct.balance += amount
+ 
+     def withdraw(self, name, amount):
+         """Take money out; raises InsufficientFunds (changing nothing) if the balance is too low."""
+-        acct = self.accounts[name]
+-        if acct.balance < amount:
+-            raise InsufficientFunds(name)
++        acct = self._account(name)
+         with acct.lock:
++            if acct.balance < amount:
++                raise InsufficientFunds(name)
+             _record(acct, -amount)
+             acct.balance -= amount
+ 
+@@ -51,9 +59,20 @@ class Ledger:
+ 
+         A transfer from an account to itself is allowed and leaves the balance as it is.
+         """
+-        a, b = self.accounts[src], self.accounts[dst]
+-        with a.lock:
+-            with b.lock:
++        with self._lock:
++            a, b = self.accounts[src], self.accounts[dst]
++        if a is b:
++            with a.lock:
++                if a.balance < amount:
++                    raise InsufficientFunds(src)
++                _record(a, -amount)
++                a.balance -= amount
++                _record(a, amount)
++                a.balance += amount
++            return
++        first, second = sorted((a, b), key=id)
++        with first.lock:
++            with second.lock:
+                 if a.balance < amount:
+                     raise InsufficientFunds(src)
+                 _record(a, -amount)
+@@ -62,4 +81,12 @@ class Ledger:
+                 b.balance += amount
+ 
+     def total(self):
+-        return sum(a.balance for a in self.accounts.values())
++        with self._lock:
++            accounts = sorted(self.accounts.values(), key=id)
++            for acct in accounts:
++                acct.lock.acquire()
++            try:
++                return sum(a.balance for a in accounts)
++            finally:
++                for acct in reversed(accounts):
++                    acct.lock.release()

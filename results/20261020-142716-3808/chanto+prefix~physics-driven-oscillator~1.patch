@@ -1,0 +1,86 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..ee16f42 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,79 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(z):
++    """sin(z) / z, with the continuous value at z = 0."""
++    if abs(z) < 1e-4:
++        z2 = z * z
++        return 1.0 - z2 / 6.0 + z2 * z2 / 120.0
++    return math.sin(z) / z
++
++
++def _decayed_sinhc(z):
++    """(1 - exp(-2z)) / (2z), with the continuous value at z = 0."""
++    if z == 0.0:
++        return 1.0
++    return -math.expm1(-2.0 * z) / (2.0 * z)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    damping = c * omega
++    return abs(F0) / math.hypot(detuning, damping)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    damping = c * omega
++    size = math.hypot(detuning, damping)
++
++    if size == 0.0:
++        raise ValueError("undamped oscillator driven exactly at resonance has no finite steady state")
++
++    # Particular solution x_p(t) = (F0 / size) * cos(omega*t - phi), where
++    # cos(phi) = detuning / size and sin(phi) = damping / size.
++    drive_amplitude = F0 / size
++    cos_phi = detuning / size
++    sin_phi = damping / size
++
++    phase = omega * t
++    cos_phase = math.cos(phase)
++    sin_phase = math.sin(phase)
++
++    xp = drive_amplitude * (cos_phi * cos_phase + sin_phi * sin_phase)
++    vp = drive_amplitude * omega * (sin_phi * cos_phase - cos_phi * sin_phase)
++
++    xp0 = drive_amplitude * cos_phi
++    vp0 = drive_amplitude * omega * sin_phi
++
++    # Homogeneous part, chosen to satisfy the initial conditions.
++    y0 = x0 - xp0
++    vy0 = v0 - vp0
++
++    decay = c / (2.0 * m)
++    discriminant = decay * decay - k / m
++
++    if discriminant < 0.0:
++        # Underdamped: y = exp(-decay*t) * (y0*cos(w*t) + (vy0+decay*y0)*sin(w*t)/w)
++        w = math.sqrt(-discriminant)
++        z = w * t
++        homogeneous = math.exp(-decay * t) * (
++            y0 * math.cos(z) + (vy0 + decay * y0) * t * _sinc(z)
++        )
++    else:
++        # Overdamped or critically damped.  Written with exp(-(decay-q)*t)
++        # so that the large-t limit cannot overflow, and with a cancellation-
++        # free (1 - exp(-2z))/(2z) factor so that it also covers q = 0.
++        q = math.sqrt(discriminant)
++        z = q * t
++        e1 = math.exp(-(decay - q) * t)
++        e2 = math.exp(-(decay + q) * t)
++        homogeneous = 0.5 * y0 * (e1 + e2) + (
++            (vy0 + decay * y0) * e1 * t * _decayed_sinhc(z)
++        )
++
++    return xp + homogeneous

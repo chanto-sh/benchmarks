@@ -1,0 +1,97 @@
+diff --git a/simple_linked_list.go b/simple_linked_list.go
+index 22fe8fc..882851b 100644
+--- a/simple_linked_list.go
++++ b/simple_linked_list.go
+@@ -1,27 +1,85 @@
+ package linkedlist
+ 
+-// Define the List and Element types here.
++import "errors"
+ 
++// Element is a node of the singly linked list.
++type Element struct {
++	data int
++	next *Element
++}
++
++// List is a singly linked list of integers.
++type List struct {
++	head *Element
++	size int
++}
++
++// New creates a list containing the given elements in order.
+ func New(elements []int) *List {
+-	panic("Please implement the New function")
++	l := &List{}
++	for _, e := range elements {
++		l.Push(e)
++	}
++	return l
+ }
+ 
++// Size returns the number of elements in the list.
+ func (l *List) Size() int {
+-	panic("Please implement the Size function")
++	return l.size
+ }
+ 
++// Push appends an element to the end of the list.
+ func (l *List) Push(element int) {
+-	panic("Please implement the Push function")
++	node := &Element{data: element}
++	if l.head == nil {
++		l.head = node
++		l.size++
++		return
++	}
++	current := l.head
++	for current.next != nil {
++		current = current.next
++	}
++	current.next = node
++	l.size++
+ }
+ 
++// Pop removes and returns the last element of the list.
+ func (l *List) Pop() (int, error) {
+-	panic("Please implement the Pop function")
++	if l.head == nil {
++		return 0, errors.New("pop from empty list")
++	}
++	if l.head.next == nil {
++		data := l.head.data
++		l.head = nil
++		l.size--
++		return data, nil
++	}
++	current := l.head
++	for current.next.next != nil {
++		current = current.next
++	}
++	data := current.next.data
++	current.next = nil
++	l.size--
++	return data, nil
+ }
+ 
++// Array returns the elements of the list as a slice.
+ func (l *List) Array() []int {
+-	panic("Please implement the Array function")
++	array := make([]int, 0, l.size)
++	for current := l.head; current != nil; current = current.next {
++		array = append(array, current.data)
++	}
++	return array
+ }
+ 
++// Reverse returns a new list with the elements in reverse order.
+ func (l *List) Reverse() *List {
+-	panic("Please implement the Reverse function")
++	reversed := &List{}
++	for current := l.head; current != nil; current = current.next {
++		reversed.head = &Element{data: current.data, next: reversed.head}
++		reversed.size++
++	}
++	return reversed
+ }

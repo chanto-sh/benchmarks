@@ -1,0 +1,23 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..cbcff17
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1 @@
++Show fixture scopes in the output of ``pytest --fixtures``.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..b51a94c 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1343,9 +1343,9 @@ def _showfixtures_main(config, session):
+         if verbose <= 0 and argname[0] == "_":
+             continue
+         if verbose > 0:
+-            funcargspec = "%s -- %s" % (argname, bestrel)
++            funcargspec = "%s [%s scope] -- %s" % (argname, fixturedef.scope, bestrel)
+         else:
+-            funcargspec = argname
++            funcargspec = "%s [%s scope]" % (argname, fixturedef.scope)
+         tw.line(funcargspec, green=True)
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""

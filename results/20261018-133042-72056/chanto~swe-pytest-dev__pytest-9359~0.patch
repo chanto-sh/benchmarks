@@ -1,0 +1,52 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..4eaa5c7
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1 @@
++Fixed the source line shown in tracebacks including the decorator of the following statement when using Python 3.8 and later.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..5d0d6a0 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,14 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Before Python 3.8, the lineno of a decorated function
++            # pointed to the decorator, but since Python 3.8 it points to
++            # the `def` line. Add the decorator line to keep the previous
++            # behavior of not including decorators in the preceding
++            # statement.
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                if x.decorator_list:
++                    values.append(x.decorator_list[0].lineno - 1)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..383c2cd 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -193,6 +193,21 @@ class TestSourceParsing:
+         assert len(source) == 9
+         assert source.getstatementrange(5) == (0, 9)
+ 
++    def test_getstatementrange_with_decorator(self) -> None:
++        # Regression test for #9359: the decorator line of the following
++        # statement must not be included in the current statement's range.
++        source = Source(
++            """\
++            def test():
++                assert 1 == 1
++
++                @decorator
++                def inner():
++                    return 2
++        """
++        )
++        assert source.getstatementrange(1) == (1, 2)
++
+     def test_getstatementrange_ast_issue58(self) -> None:
+         source = Source(
+             """\

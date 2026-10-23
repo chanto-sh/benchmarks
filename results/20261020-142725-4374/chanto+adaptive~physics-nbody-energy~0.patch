@@ -1,0 +1,123 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..f902249 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -30,4 +30,24 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+     """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    n = len(masses)
++    pos = [[p[0], p[1]] for p in positions]
++    vel = [[v[0], v[1]] for v in velocities]
++
++    # Velocity Verlet (kick-drift-kick).  Being a symplectic method, its energy
++    # error stays bounded instead of growing secularly over long integrations.
++    acc = accelerations(masses, pos, G)
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++            pos[i][0] += dt * vel[i][0]
++            pos[i][1] += dt * vel[i][1]
++
++        acc = accelerations(masses, pos, G)
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..b0c09ab 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,6 +4,10 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def total_momentum(masses, velocities):
++    return [sum(m * v[d] for m, v in zip(masses, velocities)) for d in range(2)]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +21,77 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_inputs_are_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[0.0, 0.0], [1.0, 0.0]]
++        vel = [[0.0, 0.0], [0.0, 1.0]]
++        pos0 = [row[:] for row in pos]
++        vel0 = [row[:] for row in vel]
++
++        p, q = simulate(m, pos, vel, 0.001, 100)
++
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        self.assertIsNot(p, pos)
++        self.assertIsNot(q, vel)
++
++    def test_eccentric_unequal_mass_orbit(self):
++        # Circular COM motion plus an eccentric relative orbit.
++        m = [2.0, 1.0]
++        separation = 1.5
++        v_rel = 1.1 * math.sqrt(sum(m) / separation)
++        vcm = [0.05, -0.03]
++        pos = [[-0.5, 0.0], [1.0, 0.0]]
++        vel = [
++            [vcm[0], vcm[1] - (1.0 / 3.0) * v_rel],
++            [vcm[0], vcm[1] + (2.0 / 3.0) * v_rel],
++        ]
++        e0 = energy(m, pos, vel)
++        p0 = total_momentum(m, vel)
++        max_energy_error = 0.0
++
++        cur_pos, cur_vel = pos, vel
++        for _ in range(20):
++            cur_pos, cur_vel = simulate(m, cur_pos, cur_vel, 0.001, 1000)
++            max_energy_error = max(
++                max_energy_error,
++                abs(energy(m, cur_pos, cur_vel) - e0) / abs(e0),
++            )
++
++        p1 = total_momentum(m, cur_vel)
++        self.assertLess(max_energy_error, 1e-6)
++        for d in range(2):
++            self.assertLess(abs(p1[d] - p0[d]), 1e-9)
++
++    def test_three_body_figure_eight(self):
++        m = [1.0, 1.0, 1.0]
++        pos = [
++            [0.97000436, -0.24308753],
++            [-0.97000436, 0.24308753],
++            [0.0, 0.0],
++        ]
++        vel = [
++            [0.4662036850, 0.4323657300],
++            [0.4662036850, 0.4323657300],
++            [-0.93240737, -0.86473146],
++        ]
++        e0 = energy(m, pos, vel)
++        p0 = total_momentum(m, vel)
++        max_energy_error = 0.0
++
++        cur_pos, cur_vel = pos, vel
++        for _ in range(20):
++            cur_pos, cur_vel = simulate(m, cur_pos, cur_vel, 0.001, 1000)
++            max_energy_error = max(
++                max_energy_error,
++                abs(energy(m, cur_pos, cur_vel) - e0) / abs(e0),
++            )
++
++        p1 = total_momentum(m, cur_vel)
++        self.assertLess(max_energy_error, 1e-5)
++        for d in range(2):
++            self.assertLess(abs(p1[d] - p0[d]), 1e-9)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,30 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..0b7c1d6
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,24 @@
++# Migrating from `app/legacy_db.py` to `app/db/session.py`
++
++## Call sites
++
++- `app/admin/tools.py` — imports `query_raw` as `qr`; `purge_test_customers()` deletes customers whose email ends in `@example.test`.
++- `app/billing/invoices.py` — imports the `legacy_db` module and calls `legacy_db.query_raw`; `unpaid(customer_id)` selects unpaid invoice IDs and amounts and returns them paired with the configured billing currency.
++- `app/orders/service.py` — imports `query_raw` directly; `open_orders(customer_id)` reads open orders for a customer, and `cancel(order_id)` updates an order's status to `cancelled`.
++
++## Schema
++
++Current schema version: 14
++
++This migration does not need a new schema version. Switching call sites to `Session.fetch_all` is a code-only change; it does not alter tables, columns, indexes, or data. The planned version 15 (dropping the legacy views once `legacy_db` is gone) is a separate follow-up and is not part of this switch. Note that the current `Session.fetch_all` is still a stub (`NotImplementedError`), so the cutover cannot complete until it is implemented.
++
++## Environment
++
++- `ORDERS_DB_URL` — required by `app/settings.py`; the new session layer still needs it as `settings.DB_URL`.
++- `ORDERS_DB_POOL` — optional, defaults to `5`, read by `app/settings.py`; the new session layer still needs it as `settings.DB_POOL_SIZE`.
++- `LEGACY_DB_TIMEOUT_S` — optional, defaults to `30`, read only by `app/legacy_db.py`; the new session layer does not need it.
++- `BILLING_CURRENCY` — optional, defaults to `EUR`, read by `app/billing/invoices.py`; it is not a database setting and the session layer does not need it, but the application still does.
++
++## Rollback
++
++Keep `app/legacy_db.py` in place until the new path has been verified. To back out, revert the cutover commit (or restore the original imports and calls at the three call sites above) and redeploy; no database rollback is required because this migration makes no schema changes. Do not drop the legacy views or delete `legacy_db.py` until the session-based path has run successfully in production and the rollback window has closed.

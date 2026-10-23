@@ -1,0 +1,54 @@
+diff --git a/stats.py b/stats.py
+index add4f59..27481f6 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,43 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    x0 = xs[0]
++    shifted = [x - x0 for x in xs]
++
++    if not all(math.isfinite(d) for d in shifted):
++        # The spread is too large for a finite variance.  Scale the values
++        # before averaging so that computing the mean cannot overflow.
++        scale = max(abs(x) for x in xs)
++        mean = scale * (math.fsum(x / scale for x in xs) / n) if scale else 0.0
++        return mean, math.inf
++
++    scale = max(abs(d) for d in shifted)
++    if scale == 0.0:
++        return x0, 0.0
++
++    mean_shift = scale * (math.fsum(d / scale for d in shifted) / n)
++    mean = x0 + mean_shift
++
++    max_dev = max(abs(d - mean_shift) for d in shifted)
++    if max_dev == 0.0:
++        return mean, 0.0
++
++    sum_sq = math.fsum(
++        ((d - mean_shift) / max_dev) ** 2
++        for d in shifted
++    )
++    variance = max_dev * (max_dev * (sum_sq / n))
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

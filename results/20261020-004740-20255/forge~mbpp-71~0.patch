@@ -1,0 +1,42 @@
+diff --git a/solution.py b/solution.py
+index 00f4dd4..55150a4 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,36 @@
+ def comb_sort(nums):
+-    pass
++    """Sort a list of elements in ascending order using comb sort.
++
++    The algorithm is an improvement on bubble sort: instead of comparing
++    adjacent elements, it compares elements separated by a shrinking gap,
++    which starts at the length of the list and is divided by the shrink
++    factor 1.3 on every pass until it reaches 1.  A final pass with a gap
++    of 1 (essentially a bubble sort pass) guarantees the result is sorted.
++
++    Args:
++        nums: A list (or other sequence) of comparable elements.
++
++    Returns:
++        A new list containing the elements of ``nums`` in ascending order.
++    """
++    arr = list(nums)
++    n = len(arr)
++    if n < 2:
++        return arr
++
++    shrink = 1.3
++    gap = n
++    swapped = True
++
++    while gap > 1 or swapped:
++        gap = int(gap / shrink)
++        if gap < 1:
++            gap = 1
++
++        swapped = False
++        for i in range(n - gap):
++            if arr[i] > arr[i + gap]:
++                arr[i], arr[i + gap] = arr[i + gap], arr[i]
++                swapped = True
++
++    return arr

@@ -1,0 +1,63 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..60ca54e 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,56 @@
++from collections import deque
++
++# Offsets to the six neighbouring cells on a Hex board.  Successive rows of the
++# board are indented by half a cell, so a cell also touches the two cells of
++# the row above that straddle it: (r-1, c) and (r-1, c+1).
++NEIGHBOURS = ((0, -1), (0, 1), (-1, 0), (-1, 1), (1, -1), (1, 0))
++
+ 
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        # Every line is one row; indentation only reflects the board's slant.
++        self.rows = [line.split() for line in board.splitlines() if line.strip()]
+ 
+     def get_winner(self):
+-        pass
++        if self._connects("X"):
++            return "X"
++        if self._connects("O"):
++            return "O"
++        return ""
++
++    def _neighbours(self, row, col):
++        for dr, dc in NEIGHBOURS:
++            r, c = row + dr, col + dc
++            if 0 <= r < len(self.rows) and 0 <= c < len(self.rows[r]):
++                yield r, c
++
++    def _connects(self, player):
++        """True if `player` links their two opposite sides."""
++        if not self.rows:
++            return False
++        height = len(self.rows)
++
++        if player == "X":
++            # X joins the left edge (column 0) to the right edge of each row.
++            starts = [(r, 0) for r in range(height) if self.rows[r][0] == player]
++
++            def reached(r, c):
++                return c == len(self.rows[r]) - 1
++        else:
++            # O joins the top row to the bottom row.
++            starts = [(0, c) for c, cell in enumerate(self.rows[0]) if cell == player]
++
++            def reached(r, c):
++                return r == height - 1
++
++        seen = set(starts)
++        queue = deque(starts)
++        while queue:
++            row, col = queue.popleft()
++            if reached(row, col):
++                return True
++            for r, c in self._neighbours(row, col):
++                if (r, c) not in seen and self.rows[r][c] == player:
++                    seen.add((r, c))
++                    queue.append((r, c))
++        return False

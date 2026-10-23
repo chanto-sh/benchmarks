@@ -1,0 +1,120 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..f23f71b 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,114 @@
+ package twobucket
+ 
++import (
++	"errors"
++	"fmt"
++)
++
++type state struct {
++	one, two int
++}
++
++// Solve determines the fewest number of actions needed to measure goalAmount
++// liters using two buckets of the given sizes, starting by filling startBucket.
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++
++	// After an action the starting bucket may not be empty while the other is full.
++	forbidden := func(s state) bool {
++		if startBucket == "one" {
++			return s.one == 0 && s.two == sizeBucketTwo
++		}
++		return s.two == 0 && s.one == sizeBucketOne
++	}
++
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, fmt.Errorf("impossible: goal %d exceeds both buckets", goalAmount)
++	}
++
++	type node struct {
++		s     state
++		steps int
++	}
++
++	// The first action is always filling the start bucket.
++	var first state
++	if startBucket == "one" {
++		first = state{sizeBucketOne, 0}
++	} else {
++		first = state{0, sizeBucketTwo}
++	}
++
++	if !forbidden(first) {
++		if first.one == goalAmount {
++			return "one", 1, first.two, nil
++		}
++		if first.two == goalAmount {
++			return "two", 1, first.one, nil
++		}
++	}
++
++	visited := map[state]bool{first: true}
++	queue := []node{{first, 1}}
++
++	done := func(s state) (string, int, int, bool) {
++		if s.one == goalAmount {
++			return "one", 0, s.two, true
++		}
++		if s.two == goalAmount {
++			return "two", 0, s.one, true
++		}
++		return "", 0, 0, false
++	}
++
++	transitions := func(s state) []state {
++		candidates := []state{
++			{sizeBucketOne, s.two}, // fill one
++			{s.one, sizeBucketTwo}, // fill two
++			{0, s.two},             // empty one
++			{s.one, 0},             // empty two
++		}
++		// pour one -> two
++		amount := sizeBucketTwo - s.two
++		if amount > s.one {
++			amount = s.one
++		}
++		candidates = append(candidates, state{s.one - amount, s.two + amount})
++		// pour two -> one
++		amount = sizeBucketOne - s.one
++		if amount > s.two {
++			amount = s.two
++		}
++		candidates = append(candidates, state{s.one + amount, s.two - amount})
++		return candidates
++	}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		for _, next := range transitions(cur.s) {
++			if next == cur.s || forbidden(next) || visited[next] {
++				continue
++			}
++			visited[next] = true
++			if bucket, _, other, ok := done(next); ok {
++				return bucket, cur.steps + 1, other, nil
++			}
++			queue = append(queue, node{next, cur.steps + 1})
++		}
++	}
++
++	return "", 0, 0, fmt.Errorf("no solution: cannot measure %d litres with buckets of %d and %d", goalAmount, sizeBucketOne, sizeBucketTwo)
+ }

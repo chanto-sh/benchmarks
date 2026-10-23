@@ -1,0 +1,51 @@
+diff --git a/sublist.go b/sublist.go
+index d6af72d..62e2115 100644
+--- a/sublist.go
++++ b/sublist.go
+@@ -3,5 +3,45 @@ package sublist
+ // Relation type is defined in relations.go file.
+ 
+ func Sublist(l1, l2 []int) Relation {
+-	panic("Please implement the Sublist function")
++	if equal(l1, l2) {
++		return RelationEqual
++	}
++	if contains(l2, l1) {
++		return RelationSublist
++	}
++	if contains(l1, l2) {
++		return RelationSuperlist
++	}
++	return RelationUnequal
++}
++
++func equal(l1, l2 []int) bool {
++	if len(l1) != len(l2) {
++		return false
++	}
++	for i := range l1 {
++		if l1[i] != l2[i] {
++			return false
++		}
++	}
++	return true
++}
++
++func contains(list, sublist []int) bool {
++	if len(sublist) > len(list) {
++		return false
++	}
++	for start := 0; start <= len(list)-len(sublist); start++ {
++		match := true
++		for i := range sublist {
++			if list[start+i] != sublist[i] {
++				match = false
++				break
++			}
++		}
++		if match {
++			return true
++		}
++	}
++	return false
+ }

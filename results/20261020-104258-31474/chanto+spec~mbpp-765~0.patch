@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index d7fd595..6cc694a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,7 @@
+-import math 
+-def is_polite(n): 
+-    pass
++def is_polite(n):
++    n = int(n)
++    m = n + 1
++    result = m + m.bit_length()
++    while result > 1 and (result - 1) - (result - 1).bit_length() >= n:
++        result -= 1
++    return result

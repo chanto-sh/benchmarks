@@ -1,0 +1,23 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..95d7389 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,17 @@
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())
++
++
++def _translate_word(word):
++    if word[0] in "aeiou" or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    for index, letter in enumerate(word):
++        if letter == "q" and word[index + 1 : index + 2] == "u":
++            return word[index + 2 :] + word[: index + 2] + "ay"
++        if letter == "y" and index > 0:
++            return word[index:] + word[:index] + "ay"
++        if letter in "aeiou":
++            return word[index:] + word[:index] + "ay"
++
++    return word + "ay"

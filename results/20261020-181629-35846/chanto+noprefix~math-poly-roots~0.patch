@@ -1,0 +1,211 @@
+diff --git a/roots.py b/roots.py
+index d624667..a7d331f 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,11 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
++
++_TOLERANCE = Fraction(1, 10 ** 12)
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +15,179 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    i = 0
++    while i < len(p) and p[i] == 0:
++        i += 1
++    return p[i:]
++
++
++def _derivative(p):
++    degree = len(p) - 1
++    if degree <= 0:
++        return []
++    return [p[i] * (degree - i) for i in range(degree)]
++
++
++def _primitive_integer(p):
++    """Scale a rational polynomial to primitive integer coefficients."""
++    p = _trim([Fraction(c) for c in p])
++    if not p:
++        return []
++
++    denominator = 1
++    for c in p:
++        denominator = denominator * c.denominator // gcd(denominator, c.denominator)
++    coefficients = [int(c * denominator) for c in p]
++
++    content = 0
++    for c in coefficients:
++        content = gcd(content, abs(c))
++    if content > 1:
++        coefficients = [c // content for c in coefficients]
++    return coefficients
++
++
++def _divmod(a, b):
++    """Polynomial division, highest degree first, with exact coefficients."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++
++    degree = len(a) - len(b)
++    quotient = [Fraction(0)] * (degree + 1)
++    while len(a) >= len(b):
++        shift = len(a) - len(b)
++        factor = a[0] / b[0]
++        quotient[degree - shift] += factor
++        for i in range(len(b)):
++            a[i] -= factor * b[i]
++        a = _trim(a)
++    return _trim(quotient), a
++
++
++def _gcd(a, b):
++    a, b = _primitive_integer(a), _primitive_integer(b)
++    while b:
++        _, remainder = _divmod(a, b)
++        a, b = b, _primitive_integer(remainder)
++    return a
++
++
++def _squarefree_part(p):
++    """Polynomial with the same roots as p, but all roots simple."""
++    p = _primitive_integer(p)
++    derivative = _derivative(p)
++    if not derivative:
++        return p
++    common = _gcd(p, derivative)
++    squarefree, _ = _divmod(p, common)
++    return _primitive_integer(squarefree)
++
++
++def _sturm_sequence(p):
++    p = _primitive_integer(p)
++    derivative = _primitive_integer(_derivative(p))
++    sequence = [p, derivative]
++    if not sequence[1]:
++        return sequence[:1]
++    while True:
++        _, remainder = _divmod(sequence[-2], sequence[-1])
++        if not remainder:
++            return sequence
++        remainder = _primitive_integer(remainder)
++        sequence.append([-c for c in remainder])
++
++
++def _sign_changes(sequence, x):
++    changes = 0
++    previous = 0
++    for polynomial in sequence:
++        value = evaluate(polynomial, x)
++        sign = (value > 0) - (value < 0)
++        if sign:
++            if previous and sign != previous:
++                changes += 1
++            previous = sign
++    return changes
++
++
++def _deflate_linear(p, root):
++    quotient, _ = _divmod(p, [Fraction(1), -root])
++    return quotient
++
++
++def _isolate(p, sequence, a, b, count, roots):
++    if count <= 0:
++        return
++
++    if count == 1:
++        fa, fb = evaluate(p, a), evaluate(p, b)
++        while b - a > _TOLERANCE:
++            midpoint = (a + b) / 2
++            fm = evaluate(p, midpoint)
++            if fm == 0:
++                a = b = midpoint
++                break
++            if (fa > 0) == (fm > 0):
++                a, fa = midpoint, fm
++            else:
++                b, fb = midpoint, fm
++        roots.append((a + b) / 2)
++        return
++
++    # Pick an interior split point that is not itself a root.
++    degree = len(p) - 1
++    midpoint = (a + b) / 2
++    if evaluate(p, midpoint) == 0:
++        midpoint = None
++        for k in range(1, degree + 2):
++            candidate = a + (b - a) * Fraction(k, degree + 2)
++            if evaluate(p, candidate) != 0:
++                midpoint = candidate
++                break
++
++    left_count = _sign_changes(sequence, a) - _sign_changes(sequence, midpoint)
++    _isolate(p, sequence, a, midpoint, left_count, roots)
++    _isolate(p, sequence, midpoint, b, count - left_count, roots)
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    p = _trim([Fraction(c) for c in coeffs])
++    lo, hi = Fraction(lo), Fraction(hi)
++    if not p:
++        return []
++    if lo > hi:
++        lo, hi = hi, lo
++
++    if lo == hi:
++        return [float(lo)] if evaluate(p, lo) == 0 else []
++
++    p = _squarefree_part(p)
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Sturm's theorem counts roots in an open interval, so handle endpoints
++    # explicitly and remove those factors before isolating interior roots.
++    if evaluate(p, lo) == 0:
++        roots.append(lo)
++        p = _deflate_linear(p, lo)
++    if evaluate(p, hi) == 0:
++        roots.append(hi)
++        p = _deflate_linear(p, hi)
++
++    p = _primitive_integer(p)
++    if len(p) > 1:
++        sequence = _sturm_sequence(p)
++        count = _sign_changes(sequence, lo) - _sign_changes(sequence, hi)
++        if count > 0:
++            _isolate(p, sequence, lo, hi, count, roots)
++
++    roots.sort()
++    return [float(root) for root in roots]

@@ -1,0 +1,106 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..089737f 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,99 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _detuning(m, k, omega):
++    """Return k - m*omega**2, factored for accuracy near resonance."""
++    if m > 0.0 and k > 0.0:
++        omega_n = math.sqrt(k / m)
++        return m * (omega_n - omega) * (omega_n + omega)
++    return k - m * omega * omega
++
++
++def _steady_coefficients(m, k, c, F0, omega):
++    """Coefficients C, S of the steady state C*cos(omega t) + S*sin(omega t)."""
++    detuning = _detuning(m, k, omega)
++    c_omega = c * omega
++    denominator = detuning * detuning + c_omega * c_omega
++    if denominator == 0.0:
++        raise ValueError("steady state is unbounded at resonance with zero damping")
++    return F0 * detuning / denominator, F0 * c_omega / denominator
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at zero handled accurately."""
++    if abs(x) < 1e-6:
++        return 1.0 - x * x / 6.0
++    return math.sin(x) / x
++
++
++def _undamped_displacement(m, k, F0, omega, x0, v0, t):
++    """Undamped solution, grouped to avoid cancellation near resonance."""
++    omega_n = math.sqrt(k / m)
++    free = x0 * math.cos(omega_n * t) + (v0 / omega_n) * math.sin(omega_n * t)
++
++    half_difference = 0.5 * (omega - omega_n) * t
++    half_sum = 0.5 * (omega + omega_n) * t
++    driven = (
++        F0
++        / (2.0 * m)
++        * (t * _sinc(half_difference))
++        * (t * _sinc(half_sum))
++    )
++    return free + driven
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = _detuning(m, k, omega)
++    return abs(F0) / math.hypot(detuning, c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    if c == 0.0 and m > 0.0 and k > 0.0:
++        return _undamped_displacement(m, k, F0, omega, x0, v0, t)
++
++    C, S = _steady_coefficients(m, k, c, F0, omega)
++
++    # Subtract the steady state to get homogeneous initial conditions.
++    y0 = x0 - C
++    y1 = v0 - S * omega
++
++    # x'' + (c/m) x' + (k/m) x = 0, written as roots -h +/- sqrt(h^2 - k/m).
++    h = c / (2.0 * m)
++    c_critical = 2.0 * math.sqrt(m * k)
++    discriminant = (c - c_critical) * (c + c_critical)
++
++    if discriminant < 0.0:  # underdamped
++        delta = math.sqrt(-discriminant) / (2.0 * m)
++        phase = delta * t
++        coefficient = y1 + h * y0
++        sin_over_delta = t * _sinc(phase)
++        transient = math.exp(-h * t) * (
++            y0 * math.cos(phase) + coefficient * sin_over_delta
++        )
++    elif discriminant == 0.0:  # critically damped
++        transient = math.exp(-h * t) * (y0 + (y1 + h * y0) * t)
++    else:  # overdamped
++        gamma = math.sqrt(discriminant) / (2.0 * m)
++        r_slow = -(k / m) / (h + gamma)
++        r_fast = -(h + gamma)
++
++        slow = math.exp(r_slow * t)
++        fast = math.exp(r_fast * t)
++        cosh_part = 0.5 * (slow + fast)
++
++        root_gap = r_slow - r_fast
++        if abs(root_gap * t) < 0.5:
++            sinh_part = fast * math.expm1(root_gap * t) / root_gap
++        else:
++            sinh_part = (slow - fast) / root_gap
++
++        transient = y0 * cosh_part + (y1 + h * y0) * sinh_part
++
++    return C * math.cos(omega * t) + S * math.sin(omega * t) + transient

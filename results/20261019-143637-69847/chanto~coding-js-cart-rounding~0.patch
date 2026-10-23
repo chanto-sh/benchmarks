@@ -1,0 +1,122 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..9e44650 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,15 +1,16 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+-const { fmt } = require("./format");
++const { parseCents, fmtCents } = require("./format");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
++// All arithmetic is in integer cents so rounding is exact.
+ function checkout(cart) {
+-  let subtotal = 0;
+-  let discount = 0;
+-  let taxable = 0;
++  let subtotal = 0n;
++  let discount = 0n;
++  let taxable = 0n;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = parseCents(item.price) * BigInt(item.qty);
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+@@ -17,7 +18,12 @@ function checkout(cart) {
+   }
+   const tax = taxFor(taxable, cart.taxRate || 0);
+   const total = subtotal - discount + tax;
+-  return { subtotal: fmt(subtotal), discount: fmt(discount), tax: fmt(tax), total: fmt(total) };
++  return {
++    subtotal: fmtCents(subtotal),
++    discount: fmtCents(discount),
++    tax: fmtCents(tax),
++    total: fmtCents(total),
++  };
+ }
+ 
+ module.exports = { checkout };
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..4c5fb6c 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,8 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++const { pctCents } = require("./format");
++
++// Per-line percentage discounts, rounded half up to the cent on their own.
++function discountFor(lineCents, pct) {
++  return pctCents(lineCents, pct);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..38ab4f1 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -3,4 +3,45 @@ function fmt(amount) {
+   return amount.toFixed(2);
+ }
+ 
+-module.exports = { fmt };
++// Parse a decimal number (number or string, e.g. "19.99", 7.375) exactly.
++// Returns the fraction { num, den }.
++function decimal(value) {
++  const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(value).trim());
++  if (!m || (m[2] === "" && !m[3])) throw new TypeError(`not a decimal: ${value}`);
++  const sign = m[1] === "-" ? -1n : 1n;
++  const digits = (m[2] || "") + (m[3] || "");
++  const exp = (m[4] ? Number(m[4]) : 0) - (m[3] ? m[3].length : 0);
++  const num = sign * BigInt(digits || "0");
++  return exp >= 0
++    ? { num: num * 10n ** BigInt(exp), den: 1n }
++    : { num, den: 10n ** BigInt(-exp) };
++}
++
++// Round num/den to the nearest integer, halves away from zero.
++function roundHalfUp(num, den) {
++  if (den <= 0n) throw new RangeError("denominator must be positive");
++  const sign = num < 0n ? -1n : 1n;
++  const abs = num < 0n ? -num : num;
++  return sign * ((2n * abs + den) / (2n * den));
++}
++
++// Money as an integer number of cents.
++function parseCents(value) {
++  const { num, den } = decimal(value);
++  return roundHalfUp(num * 100n, den);
++}
++
++// `pct` percent of an amount in cents, rounded half up to the cent.
++function pctCents(amountCents, pct) {
++  const { num, den } = decimal(pct);
++  return roundHalfUp(amountCents * num, den * 100n);
++}
++
++// Format integer cents as a plain "1234.50" string.
++function fmtCents(cents) {
++  const sign = cents < 0n ? "-" : "";
++  const abs = cents < 0n ? -cents : cents;
++  return `${sign}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
++}
++
++module.exports = { fmt, parseCents, pctCents, roundHalfUp, fmtCents };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..c6f611c 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,8 @@
++const { pctCents } = require("./format");
++
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++function taxFor(amountCents, rate) {
++  return pctCents(amountCents, rate);
+ }
+ 
+ module.exports = { taxFor };

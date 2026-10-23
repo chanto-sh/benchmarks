@@ -1,0 +1,81 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..f0ade49 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,75 @@
++RANK_VALUES = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++
++def _parse_hand(hand):
++    cards = hand.split()
++    ranks = [RANK_VALUES[card[:-1]] for card in cards]
++    suits = [card[-1] for card in cards]
++    return ranks, suits
++
++
++def _straight_high(ranks):
++    unique_ranks = sorted(set(ranks))
++    if len(unique_ranks) != 5:
++        return None
++    if unique_ranks == [2, 3, 4, 5, 14]:
++        return 5
++    if all(b - a == 1 for a, b in zip(unique_ranks, unique_ranks[1:])):
++        return unique_ranks[-1]
++    return None
++
++
++def _hand_rank(hand):
++    ranks, suits = _parse_hand(hand)
++    is_flush = len(set(suits)) == 1
++    straight_high = _straight_high(ranks)
++
++    counts = {}
++    for rank in ranks:
++        counts[rank] = counts.get(rank, 0) + 1
++
++    # Sort by frequency first, then by rank, so the most important
++    # grouping is always first.
++    grouped = sorted(counts.items(), key=lambda item: (-item[1], -item[0]))
++    frequencies = [count for _, count in grouped]
++    ordered_ranks = [rank for rank, _ in grouped]
++    ranks_desc = sorted(ranks, reverse=True)
++
++    if is_flush and straight_high is not None:
++        return (8, straight_high)
++    if frequencies == [4, 1]:
++        return (7, ordered_ranks[0], ordered_ranks[1])
++    if frequencies == [3, 2]:
++        return (6, ordered_ranks[0], ordered_ranks[1])
++    if is_flush:
++        return (5, *ranks_desc)
++    if straight_high is not None:
++        return (4, straight_high)
++    if frequencies == [3, 1, 1]:
++        return (3, ordered_ranks[0], *sorted(ordered_ranks[1:], reverse=True))
++    if frequencies == [2, 2, 1]:
++        pairs = sorted(ordered_ranks[:2], reverse=True)
++        return (2, *pairs, ordered_ranks[2])
++    if frequencies == [2, 1, 1, 1]:
++        return (1, ordered_ranks[0], *sorted(ordered_ranks[1:], reverse=True))
++    return (0, *ranks_desc)
++
++
+ def best_hands(hands):
+-    pass
++    ranked_hands = [(_hand_rank(hand), hand) for hand in hands]
++    best_rank = max(rank for rank, _ in ranked_hands)
++    return [hand for rank, hand in ranked_hands if rank == best_rank]

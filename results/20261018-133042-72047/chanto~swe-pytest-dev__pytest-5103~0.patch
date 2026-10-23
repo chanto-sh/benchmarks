@@ -1,0 +1,180 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..924d0a8
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1 @@
++Assertion rewriting now unrolls generator expressions and list comprehensions used with ``all()`` and ``any()``, producing more useful failure messages which show the item that failed the check.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..7696d5a 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -534,6 +534,34 @@ def _format_boolop(explanations, is_or):
+         return explanation.replace(b"%", b"%%")
+ 
+ 
++def _should_unroll(call, variables):
++    """Return True if the call can be unrolled into a for loop.
++
++    Only simple ``all``/``any`` calls over a generator expression or a list
++    comprehension are unrolled.  Anything else is left untouched to avoid
++    changing the semantics of the expression being rewritten.
++    """
++    if not isinstance(call.func, ast.Name):
++        return False
++    if call.func.id not in ("all", "any"):
++        return False
++    if len(call.args) != 1 or call.keywords:
++        return False
++    arg = call.args[0]
++    if not isinstance(arg, (ast.GeneratorExp, ast.ListComp)):
++        return False
++    if len(arg.generators) != 1:
++        return False
++    gen = arg.generators[0]
++    if gen.ifs or getattr(gen, "is_async", 0):
++        return False
++    if not isinstance(gen.target, ast.Name):
++        return False
++    if gen.target.id in variables:
++        return False
++    return True
++
++
+ def _call_reprcompare(ops, results, expls, each_obj):
+     for i, res, expl in zip(range(len(ops)), results, expls):
+         try:
+@@ -964,10 +992,83 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _visit_call_all_any(self, call):
++        """Unroll an ``all``/``any`` call over a comprehension.
++
++        The comprehension is rewritten into an equivalent for loop so that
++        the failure report can show the value which made the assertion fail,
++        just like the equivalent explicit for loop would.
++        """
++        is_all = call.func.id == "all"
++        comp = call.args[0]
++        gen = comp.generators[0]
++        result_var = self.variable()
++        explanation_var = self.variable()
++        has_values_var = self.variable()
++
++        # Visit the element expression while collecting its statements (and
++        # the statements needed to format its explanation) separately, so the
++        # evaluation ends up inside the loop body.  The explanation itself is
++        # only formatted when the assertion actually fails.
++        self.push_format_context()
++        saved_statements = self.statements
++        saved_on_failure = self.on_failure
++        self.statements = []
++        self.on_failure = []
++        res, expl = self.visit(comp.elt)
++        body = self.statements
++        format_body = self.on_failure
++        current = self.stack.pop()
++        if self.stack:
++            self.explanation_specifiers = self.stack[-1]
++        keys = [ast.Str(key) for key in current.keys()]
++        format_dict = ast.Dict(keys, list(current.values()))
++        self.statements = saved_statements
++        self.on_failure = saved_on_failure
++
++        body.append(ast.Assign([ast.Name(result_var, ast.Store())], res))
++        body.append(
++            ast.Assign([ast.Name(has_values_var, ast.Store())], _NameConstant(True))
++        )
++        result = ast.Name(result_var, ast.Load())
++        if is_all:
++            break_cond = ast.UnaryOp(ast.Not(), result)
++        else:
++            break_cond = result
++        body.append(ast.If(break_cond, [ast.Break()], []))
++
++        format_expl = ast.BinOp(ast.Str(expl), ast.Mod(), format_dict)
++        format_body.append(
++            ast.Assign([ast.Name(explanation_var, ast.Store())], format_expl)
++        )
++        self.on_failure.append(
++            ast.If(ast.Name(has_values_var, ast.Load()), format_body, [])
++        )
++
++        # If the iterable is empty the element expression is never visited, so
++        # fall back to the value of the (empty) all/any result.
++        self.statements.append(
++            ast.Assign([ast.Name(has_values_var, ast.Store())], _NameConstant(False))
++        )
++        self.statements.append(
++            ast.Assign(
++                [ast.Name(explanation_var, ast.Store())],
++                ast.Str("True" if is_all else "False"),
++            )
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(result_var, ast.Store())], _NameConstant(is_all))
++        )
++        self.statements.append(ast.For(gen.target, gen.iter, body, []))
++        explanation = self.explanation_param(ast.Name(explanation_var, ast.Load()))
++        return ast.Name(result_var, ast.Load()), explanation
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if _should_unroll(call, self.variables):
++            return self._visit_call_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1102,8 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        if _should_unroll(call, self.variables):
++            return self._visit_call_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index 87dada2..ffd95f3 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -525,6 +525,36 @@ class TestAssertionRewrite(object):
+  +  where False = g(**{'a': 2})"""
+         )
+ 
++    def test_all_generator(self):
++        def f():
++            assert all(x == 0 for x in [0, 1])
++
++        assert getmsg(f) == "assert 1 == 0"
++
++    def test_all_list_comprehension(self):
++        def f():
++            assert all([x == 0 for x in [0, 1]])
++
++        assert getmsg(f) == "assert 1 == 0"
++
++    def test_any_generator(self):
++        def f():
++            assert any(x == 0 for x in [1, 2])
++
++        assert getmsg(f) == "assert 2 == 0"
++
++    def test_any_empty_generator(self):
++        def f():
++            assert any(x == 0 for x in [])
++
++        assert getmsg(f) == "assert False"
++
++    def test_all_empty_generator(self):
++        def f():
++            assert all(x == 0 for x in [])
++
++        getmsg(f, must_pass=True)
++
+     def test_attribute(self):
+         class X(object):
+             g = 3

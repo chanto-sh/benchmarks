@@ -1,0 +1,19 @@
+diff --git a/solution.py b/solution.py
+index c5a4193..e593fc5 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,4 +1,3 @@
+-
+ def strange_sort_list(lst):
+     '''
+     Given list of integers, return list in strange order.
+@@ -10,3 +9,9 @@ def strange_sort_list(lst):
+     strange_sort_list([5, 5, 5, 5]) == [5, 5, 5, 5]
+     strange_sort_list([]) == []
+     '''
++    res, tmp = [], sorted(lst)
++    while tmp:
++        res.append(tmp.pop(0))
++        if tmp:
++            res.append(tmp.pop())
++    return res

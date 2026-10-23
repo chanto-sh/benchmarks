@@ -1,0 +1,71 @@
+diff --git a/tree_building.go b/tree_building.go
+index 0b789a5..b383200 100644
+--- a/tree_building.go
++++ b/tree_building.go
+@@ -1,5 +1,14 @@
+ package tree
+ 
++import "errors"
++
++var (
++	errDuplicateNode = errors.New("duplicate node")
++	errNonContinuous = errors.New("non-continuous node ids")
++	errRootHasParent = errors.New("root node has a parent")
++	errInvalidParent = errors.New("parent id is not lower than node id")
++)
++
+ type Record struct {
+ 	ID     int
+ 	Parent int
+@@ -13,5 +22,50 @@ type Node struct {
+ }
+ 
+ func Build(records []Record) (*Node, error) {
+-	panic("Please implement the Build function")
++	if len(records) == 0 {
++		return nil, nil
++	}
++
++	n := len(records)
++	parents := make([]int, n)
++	seen := make([]bool, n)
++
++	for _, r := range records {
++		if r.ID < 0 || r.ID >= n {
++			return nil, errNonContinuous
++		}
++		if seen[r.ID] {
++			return nil, errDuplicateNode
++		}
++		seen[r.ID] = true
++		parents[r.ID] = r.Parent
++	}
++
++	for _, ok := range seen {
++		if !ok {
++			return nil, errNonContinuous
++		}
++	}
++
++	if parents[0] != 0 {
++		return nil, errRootHasParent
++	}
++
++	nodes := make([]Node, n)
++	for id := range nodes {
++		nodes[id].ID = id
++	}
++
++	// Since every non-root parent id must be lower than its own id, and ids
++	// cover 0..n-1 exactly once, a single ascending pass links every child to
++	// an already-created parent and produces children in ascending id order.
++	for id := 1; id < n; id++ {
++		parent := parents[id]
++		if parent < 0 || parent >= id {
++			return nil, errInvalidParent
++		}
++		nodes[parent].Children = append(nodes[parent].Children, &nodes[id])
++	}
++
++	return &nodes[0], nil
+ }

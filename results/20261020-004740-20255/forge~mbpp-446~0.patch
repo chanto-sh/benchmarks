@@ -1,0 +1,19 @@
+diff --git a/solution.py b/solution.py
+index 145d7d4..e60c6bf 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,11 @@
+-from collections import Counter 
+-def count_Occurrence(tup, lst): 
+-    pass
++from collections import Counter
++
++
++def count_Occurrence(tup, lst):
++    """Count how many times the elements of ``lst`` occur in ``tup``.
++
++    Each element of ``lst`` is looked up in ``tup``; the matching counts are
++    summed. Elements of ``lst`` that never occur in ``tup`` contribute 0.
++    """
++    counts = Counter(tup)
++    return sum(counts[element] for element in lst)

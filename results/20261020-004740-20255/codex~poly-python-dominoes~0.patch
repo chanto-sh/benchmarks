@@ -1,0 +1,40 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..566ba53 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,34 @@
+ def can_chain(dominoes):
+-    pass
++    if not dominoes:
++        return []
++
++    adjacency = {}
++    for edge_index, (left, right) in enumerate(dominoes):
++        adjacency.setdefault(left, []).append((right, edge_index))
++        adjacency.setdefault(right, []).append((left, edge_index))
++
++    if any(len(edges) % 2 for edges in adjacency.values()):
++        return None
++
++    start = next(iter(adjacency))
++    stack = [start]
++    used_edges = set()
++    vertices = []
++
++    while stack:
++        vertex = stack[-1]
++        while adjacency[vertex] and adjacency[vertex][-1][1] in used_edges:
++            adjacency[vertex].pop()
++
++        if adjacency[vertex]:
++            neighbor, edge_index = adjacency[vertex].pop()
++            used_edges.add(edge_index)
++            stack.append(neighbor)
++        else:
++            vertices.append(stack.pop())
++
++    if len(used_edges) != len(dominoes):
++        return None
++
++    vertices.reverse()
++    return list(zip(vertices, vertices[1:]))

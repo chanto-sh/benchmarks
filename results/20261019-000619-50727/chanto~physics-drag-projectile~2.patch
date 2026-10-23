@@ -1,0 +1,169 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..bd539fa 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,163 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_BHAT = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++         -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_RTOL = 1.0e-11
++_ATOL = 1.0e-12
++
++
++def _derivs(state, g, drag):
++    """Time derivative of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    ax = -drag * speed * vx
++    ay = -g - drag * speed * vy
++    return (vx, vy, ax, ay)
++
++
++def _rk45_step(state, h, g, drag):
++    """One Dormand-Prince step, returning the 5th-order state and error."""
++    stages = []
++    for i in range(6):
++        if i == 0:
++            stage_state = state
++        else:
++            row = _A[i]
++            stage_state = tuple(
++                state[j] + h * sum(row[l] * stages[l][j] for l in range(i))
++                for j in range(4)
++            )
++        stages.append(_derivs(stage_state, g, drag))
++
++    new_state = tuple(
++        state[j] + h * sum(_B[l] * stages[l][j] for l in range(6))
++        for j in range(4)
++    )
++    stages.append(_derivs(new_state, g, drag))
++
++    lower_order = tuple(
++        state[j] + h * sum(_BHAT[l] * stages[l][j] for l in range(7))
++        for j in range(4)
++    )
++    error = tuple(new_state[j] - lower_order[j] for j in range(4))
++    return new_state, error
++
++
++def _hermite(s, p0, p1, d0, d1, h):
++    """Cubic Hermite interpolation for a coordinate over one step."""
++    s2 = s * s
++    s3 = s2 * s
++    return ((2.0 * s3 - 3.0 * s2 + 1.0) * p0
++            + (s3 - 2.0 * s2 + s) * h * d0
++            + (-2.0 * s3 + 3.0 * s2) * p1
++            + (s3 - s2) * h * d1)
++
++
++def _hermite_derivative(s, p0, p1, d0, d1, h):
++    """Derivative with respect to normalized step position s."""
++    s2 = s * s
++    return ((6.0 * s2 - 6.0 * s) * p0
++            + (3.0 * s2 - 4.0 * s + 1.0) * h * d0
++            + (-6.0 * s2 + 6.0 * s) * p1
++            + (3.0 * s2 - 2.0 * s) * h * d1)
++
++
++def _event_root(function):
++    """Find the root in [0, 1] of a function positive at 0 and <= 0 at 1."""
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if function(mid) > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    vx0 = v0 * math.cos(theta)
++    vy0 = v0 * math.sin(theta)
++    drag = k / mass
++
++    # A projectile released at ground level with no upward velocity has
++    # already completed its flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    state = (0.0, h0, vx0, vy0)
++    t = 0.0
++    apex = h0
++    apex_found = vy0 <= 0.0
++
++    # Start small enough for strong-drag cases; the error controller grows
++    # the step quickly when the motion is smooth.
++    h = 1.0e-3
++    max_steps = 1_000_000
++    for _ in range(max_steps):
++        new_state, error = _rk45_step(state, h, g, drag)
++
++        error_norm = 0.0
++        for j in range(4):
++            scale = _ATOL + _RTOL * max(abs(state[j]), abs(new_state[j]))
++            error_norm = max(error_norm, abs(error[j]) / scale)
++
++        if not math.isfinite(error_norm):
++            error_norm = math.inf
++
++        if error_norm <= 1.0:
++            # Locate the apex if the vertical velocity changed sign.
++            if not apex_found and state[3] > 0.0 and new_state[3] <= 0.0:
++                s = _event_root(lambda q: _hermite_derivative(
++                    q, state[1], new_state[1], state[3], new_state[3], h))
++                y_apex = _hermite(s, state[1], new_state[1],
++                                  state[3], new_state[3], h)
++                apex = max(apex, y_apex)
++                apex_found = True
++
++            # Locate the first return to y = 0.
++            if state[1] > 0.0 and new_state[1] <= 0.0:
++                s = _event_root(lambda q: _hermite(
++                    q, state[1], new_state[1], state[3], new_state[3], h))
++                x_end = _hermite(s, state[0], new_state[0],
++                                 state[2], new_state[2], h)
++                return {"range": x_end, "apex": apex, "time": t + s * h}
++
++            state = new_state
++            t += h
++
++        if error_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * error_norm ** (-0.2)
++        factor = min(5.0, max(0.2, factor))
++        h *= factor
++
++        if h <= 0.0 or not math.isfinite(h):
++            raise RuntimeError("projectile integration failed")
++
++    raise RuntimeError("projectile integration did not reach the ground")

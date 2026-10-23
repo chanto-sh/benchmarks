@@ -1,0 +1,182 @@
+diff --git a/test_roman.py b/test_roman.py
+new file mode 100644
+index 0000000..2d8e894
+--- /dev/null
++++ b/test_roman.py
+@@ -0,0 +1,176 @@
++import re
++import unittest
++
++from roman import to_roman
++
++
++# Canonical form of a Roman numeral in [1, 3999].
++VALID_ROMAN = re.compile(
++    r"^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$"
++)
++
++
++class TestToRomanKnownValues(unittest.TestCase):
++    """Spot-check the standard values, including every subtractive pair."""
++
++    def test_ones(self):
++        cases = {
++            1: "I",
++            2: "II",
++            3: "III",
++            4: "IV",
++            5: "V",
++            6: "VI",
++            7: "VII",
++            8: "VIII",
++            9: "IX",
++        }
++        for number, expected in cases.items():
++            with self.subTest(number=number):
++                self.assertEqual(to_roman(number), expected)
++
++    def test_tens(self):
++        cases = {
++            10: "X",
++            14: "XIV",
++            19: "XIX",
++            20: "XX",
++            39: "XXXIX",
++            40: "XL",
++            44: "XLIV",
++            49: "XLIX",
++            50: "L",
++            89: "LXXXIX",
++            90: "XC",
++            99: "XCIX",
++        }
++        for number, expected in cases.items():
++            with self.subTest(number=number):
++                self.assertEqual(to_roman(number), expected)
++
++    def test_hundreds(self):
++        cases = {
++            100: "C",
++            400: "CD",
++            444: "CDXLIV",
++            500: "D",
++            900: "CM",
++            999: "CMXCIX",
++        }
++        for number, expected in cases.items():
++            with self.subTest(number=number):
++                self.assertEqual(to_roman(number), expected)
++
++    def test_thousands_and_mixed(self):
++        cases = {
++            1000: "M",
++            1666: "MDCLXVI",
++            2024: "MMXXIV",
++            3000: "MMM",
++            3888: "MMMDCCCLXXXVIII",
++            3999: "MMMCMXCIX",
++        }
++        for number, expected in cases.items():
++            with self.subTest(number=number):
++                self.assertEqual(to_roman(number), expected)
++
++    def test_all_subtractive_forms(self):
++        cases = {
++            4: "IV",
++            9: "IX",
++            40: "XL",
++            90: "XC",
++            400: "CD",
++            900: "CM",
++        }
++        for number, expected in cases.items():
++            with self.subTest(number=number):
++                self.assertEqual(to_roman(number), expected)
++
++
++class TestToRomanBoundaries(unittest.TestCase):
++    def test_lower_boundary(self):
++        self.assertEqual(to_roman(1), "I")
++
++    def test_upper_boundary(self):
++        self.assertEqual(to_roman(3999), "MMMCMXCIX")
++
++    def test_just_outside_boundaries(self):
++        for number in (0, -1, -3999, 4000, 4001):
++            with self.subTest(number=number):
++                with self.assertRaises(ValueError):
++                    to_roman(number)
++
++    def test_boundary_neighbours(self):
++        self.assertEqual(to_roman(2), "II")
++        self.assertEqual(to_roman(3998), "MMMCMXCVIII")
++
++
++class TestToRomanInvalidInputs(unittest.TestCase):
++    def test_zero_and_negatives(self):
++        for number in (0, -1, -10, -4000):
++            with self.subTest(number=number):
++                with self.assertRaises(ValueError):
++                    to_roman(number)
++
++    def test_above_range(self):
++        for number in (4000, 5000, 10**6):
++            with self.subTest(number=number):
++                with self.assertRaises(ValueError):
++                    to_roman(number)
++
++    def test_non_integers(self):
++        for value in (1.5, 4.0, 3999.0, "1", "IV", None, [], [1], (1,), {}, object()):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_booleans_are_rejected(self):
++        # bool is a subclass of int, but True/False are not valid inputs.
++        for value in (True, False):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_error_message_mentions_value(self):
++        with self.assertRaisesRegex(ValueError, "out of range"):
++            to_roman(4000)
++        with self.assertRaises(ValueError) as ctx:
++            to_roman(0)
++        self.assertIn("0", str(ctx.exception))
++
++
++class TestToRomanInvariants(unittest.TestCase):
++    def test_returns_str(self):
++        for number in (1, 4, 3999):
++            with self.subTest(number=number):
++                self.assertIsInstance(to_roman(number), str)
++
++    def test_every_value_in_range_is_canonical(self):
++        for number in range(1, 4000):
++            with self.subTest(number=number):
++                result = to_roman(number)
++                self.assertRegex(result, VALID_ROMAN)
++                self.assertTrue(result)
++                self.assertLessEqual(len(result), 15)
++
++    def test_no_character_repeats_four_times_in_a_row(self):
++        for number in range(1, 4000):
++            with self.subTest(number=number):
++                result = to_roman(number)
++                self.assertIsNone(re.search(r"(.)\1{3}", result))
++                self.assertNotIn("IIII", result)
++                self.assertNotIn("XXXX", result)
++                self.assertNotIn("CCCC", result)
++                self.assertNotIn("MMMM", result)
++
++    def test_no_subtractive_character_repeats(self):
++        for number in range(1, 4000):
++            with self.subTest(number=number):
++                result = to_roman(number)
++                for char in "VLD":
++                    self.assertLessEqual(result.count(char), 1)
++
++
++if __name__ == "__main__":
++    unittest.main()

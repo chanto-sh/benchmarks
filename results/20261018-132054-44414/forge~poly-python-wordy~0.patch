@@ -1,0 +1,81 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..1a08f7a 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,75 @@
++"""Parse and evaluate simple math word problems, left-to-right."""
++
++_PREFIX = "what is"
++
++
++def _divide(x, y):
++    """Integer division truncating toward zero."""
++    quotient = abs(x) // abs(y)
++    return -quotient if (x < 0) != (y < 0) else quotient
++
++
++_BINARY_OPS = {
++    "plus": lambda x, y: x + y,
++    "minus": lambda x, y: x - y,
++    "multiplied": lambda x, y: x * y,
++    "divided": _divide,
++}
++
++
++def _tokenize(text):
++    """Split the question body into numbers and operations.
++
++    Raises ValueError("unknown operation") for words outside the vocabulary
++    and ValueError("syntax error") for malformed multi-word operations.
++    """
++    tokens = []
++    words = text.split()
++    index = 0
++    while index < len(words):
++        word = words[index]
++        if word in ("multiplied", "divided"):
++            if index + 1 >= len(words) or words[index + 1] != "by":
++                raise ValueError("syntax error")
++            tokens.append(word)
++            index += 2
++            continue
++        if word in ("plus", "minus"):
++            tokens.append(word)
++            index += 1
++            continue
++        if word == "by":
++            raise ValueError("syntax error")
++        try:
++            tokens.append(int(word))
++        except ValueError:
++            raise ValueError("unknown operation")
++        index += 1
++    return tokens
++
++
+ def answer(question):
+-    pass
++    text = question.strip()
++    if not text.lower().startswith(_PREFIX):
++        raise ValueError("unknown operation")
++
++    body = text[len(_PREFIX):].strip()
++    if body.endswith("?"):
++        body = body[:-1].strip()
++
++    tokens = _tokenize(body)
++
++    if not tokens or len(tokens) % 2 == 0:
++        raise ValueError("syntax error")
++    for position, token in enumerate(tokens):
++        if position % 2 == 0:
++            if not isinstance(token, int):
++                raise ValueError("syntax error")
++        elif isinstance(token, int):
++            raise ValueError("syntax error")
++
++    result = tokens[0]
++    for position in range(1, len(tokens), 2):
++        operation = _BINARY_OPS[tokens[position]]
++        result = operation(result, tokens[position + 1])
++    return result

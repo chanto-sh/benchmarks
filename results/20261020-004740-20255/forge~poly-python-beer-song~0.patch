@@ -1,0 +1,43 @@
+diff --git a/beer_song.py b/beer_song.py
+index 9a5e67f..1f596fb 100644
+--- a/beer_song.py
++++ b/beer_song.py
+@@ -1,2 +1,37 @@
++def _bottles(count):
++    """Return the noun phrase for a given number of bottles."""
++    if count == 0:
++        return "no more bottles"
++    if count == 1:
++        return "1 bottle"
++    return f"{count} bottles"
++
++
++def _verse(number):
++    """Return the two lines of the verse for the given number of bottles."""
++    if number == 0:
++        return [
++            f"{_bottles(0).capitalize()} of beer on the wall, {_bottles(0)} of beer.",
++            f"Go to the store and buy some more, {_bottles(99)} of beer on the wall.",
++        ]
++
++    if number == 1:
++        take_down = "Take it down"
++    else:
++        take_down = "Take one down"
++
++    remaining = number - 1
++    return [
++        f"{_bottles(number)} of beer on the wall, {_bottles(number)} of beer.",
++        f"{take_down} and pass it around, {_bottles(remaining)} of beer on the wall.",
++    ]
++
++
+ def recite(start, take=1):
+-    pass
++    """Recite `take` verses of the song, starting at `start` bottles."""
++    lines = []
++    for index, number in enumerate(range(start, start - take, -1)):
++        if index:
++            lines.append("")
++        lines.extend(_verse(number))
++    return lines

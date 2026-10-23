@@ -1,0 +1,29 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..3ac7555
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1 @@
++The scope of fixtures is now displayed in the output of ``pytest --fixtures``.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..fce91a3 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1263,6 +1263,8 @@ def _show_fixtures_per_test(config, session):
+             funcargspec = "{} -- {}".format(argname, bestrel)
+         else:
+             funcargspec = argname
++        if fixture_def.scope != "function":
++            funcargspec += " [{} scope]".format(fixture_def.scope)
+         tw.line(funcargspec, green=True)
+         fixture_doc = fixture_def.func.__doc__
+         if fixture_doc:
+@@ -1346,6 +1348,8 @@ def _showfixtures_main(config, session):
+             funcargspec = "%s -- %s" % (argname, bestrel)
+         else:
+             funcargspec = argname
++        if fixturedef.scope != "function":
++            funcargspec += " [%s scope]" % fixturedef.scope
+         tw.line(funcargspec, green=True)
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""

@@ -1,0 +1,101 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..d536d20 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,95 @@
+ package bookstore
+ 
++import (
++	"sort"
++	"strconv"
++	"strings"
++)
++
++const bookPrice = 800
++
++// discountByGroupSize holds the percentage discount applied to a group
++// containing exactly that many different books.
++var discountByGroupSize = [...]int{0, 0, 5, 10, 20, 25}
++
++// Cost returns the lowest possible total price, in cents, for the given basket.
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	countsByTitle := make(map[int]int, len(books))
++	for _, book := range books {
++		countsByTitle[book]++
++	}
++
++	counts := make([]int, 0, len(countsByTitle))
++	for _, count := range countsByTitle {
++		counts = append(counts, count)
++	}
++	sortCounts(counts)
++
++	return lowestCost(counts, make(map[string]int))
++}
++
++// lowestCost explores every way of forming a discounted group from the
++// remaining copies, returning the cheapest total. States are memoized by the
++// sorted multiset of remaining copy counts.
++func lowestCost(counts []int, memo map[string]int) int {
++	if len(counts) == 0 {
++		return 0
++	}
++
++	key := encodeState(counts)
++	if cost, ok := memo[key]; ok {
++		return cost
++	}
++
++	n := len(counts)
++	best := -1
++
++	// Each subset of available titles forms one group; a group may contain at
++	// most five books.
++	for mask := 1; mask < 1<<n; mask++ {
++		size := 0
++		remaining := make([]int, 0, n)
++
++		for i := 0; i < n; i++ {
++			if mask&(1<<i) != 0 {
++				size++
++				if counts[i] > 1 {
++					remaining = append(remaining, counts[i]-1)
++				}
++				continue
++			}
++			remaining = append(remaining, counts[i])
++		}
++
++		if size > 5 {
++			continue
++		}
++
++		sortCounts(remaining)
++		total := groupCost(size) + lowestCost(remaining, memo)
++		if best < 0 || total < best {
++			best = total
++		}
++	}
++
++	memo[key] = best
++	return best
++}
++
++// groupCost is the price in cents of a group of size distinct books.
++func groupCost(size int) int {
++	return size * bookPrice * (100 - discountByGroupSize[size]) / 100
++}
++
++func sortCounts(counts []int) {
++	sort.Sort(sort.Reverse(sort.IntSlice(counts)))
++}
++
++func encodeState(counts []int) string {
++	var sb strings.Builder
++	for _, count := range counts {
++		sb.WriteString(strconv.Itoa(count))
++		sb.WriteByte(',')
++	}
++	return sb.String()
+ }

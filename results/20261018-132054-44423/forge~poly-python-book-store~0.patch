@@ -1,0 +1,65 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..01ef750 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,59 @@
++"""Pricing for a bookshop that discounts sets of distinct books.
++
++One copy of any book in the five-book series costs $8 (800 cents). A set of
++``n`` *different* books is discounted by 5%, 10%, 20% or 25% for n = 2..5.
++The goal is to split the basket into sets so that the total price is as low
++as possible.
++"""
++
++from functools import lru_cache
++from itertools import combinations
++
++#: Price in cents of a set of ``n`` distinct books, after the discount.
++SET_PRICES = {
++    1: 800,   # no discount
++    2: 1520,  # 5% off 2 * 800
++    3: 2160,  # 10% off 3 * 800
++    4: 2560,  # 20% off 4 * 800
++    5: 3000,  # 25% off 5 * 800
++}
++
++BOOKS = 5
++
++
++@lru_cache(maxsize=None)
++def _price(counts):
++    """Return the cheapest price (in cents) for the given book counts.
++
++    ``counts`` is a tuple of per-title counts sorted in descending order, which
++    keeps symmetric baskets sharing a single memo entry.
++    """
++    if not any(counts):
++        return 0
++
++    # Each recursion step forms one set out of some non-empty selection of the
++    # titles that still have copies left. Because titles within a set are
++    # interchangeable as far as pricing goes, we only need to try every
++    # distinct combination of available titles.
++    available = [i for i, count in enumerate(counts) if count]
++    best = None
++    for size in range(1, len(available) + 1):
++        for chosen in combinations(available, size):
++            remaining = list(counts)
++            for index in chosen:
++                remaining[index] -= 1
++            # Normalising the counts collapses symmetric states together.
++            remaining.sort(reverse=True)
++            cost = SET_PRICES[size] + _price(tuple(remaining))
++            if best is None or cost < best:
++                best = cost
++    return best
++
++
+ def total(basket):
+-    pass
++    """Return the lowest possible price, in cents, for ``basket``."""
++    counts = [0] * BOOKS
++    for book in basket:
++        counts[book - 1] += 1
++    counts.sort(reverse=True)
++    return _price(tuple(counts))

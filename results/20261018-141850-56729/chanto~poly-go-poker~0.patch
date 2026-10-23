@@ -1,0 +1,239 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..9b8ddde 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,233 @@
+ package poker
+ 
++import (
++	"errors"
++	"sort"
++	"strings"
++)
++
++var errInvalidHand = errors.New("invalid hand")
++
++type card struct {
++	rank int
++	suit rune
++}
++
++// handValue is a lexicographically comparable score. The first element is the
++// hand category and the remaining elements are the tie-breaking ranks, from
++// most to least significant.
++type handValue []int
++
++const (
++	highCard = iota
++	onePair
++	twoPair
++	threeOfAKind
++	straight
++	flush
++	fullHouse
++	fourOfAKind
++	straightFlush
++)
++
++func parseCard(s string) (card, error) {
++	runes := []rune(s)
++	if len(runes) < 2 {
++		return card{}, errInvalidHand
++	}
++
++	suit := runes[len(runes)-1]
++	switch suit {
++	case '♤', '♡', '♢', '♧':
++	default:
++		return card{}, errInvalidHand
++	}
++
++	var rank int
++	switch string(runes[:len(runes)-1]) {
++	case "2":
++		rank = 2
++	case "3":
++		rank = 3
++	case "4":
++		rank = 4
++	case "5":
++		rank = 5
++	case "6":
++		rank = 6
++	case "7":
++		rank = 7
++	case "8":
++		rank = 8
++	case "9":
++		rank = 9
++	case "10":
++		rank = 10
++	case "J":
++		rank = 11
++	case "Q":
++		rank = 12
++	case "K":
++		rank = 13
++	case "A":
++		rank = 14
++	default:
++		return card{}, errInvalidHand
++	}
++
++	return card{rank: rank, suit: suit}, nil
++}
++
++func parseHand(hand string) ([]card, error) {
++	var cards []card
++	for _, s := range strings.Split(hand, " ") {
++		c, err := parseCard(s)
++		if err != nil {
++			return nil, err
++		}
++		cards = append(cards, c)
++	}
++	if len(cards) != 5 {
++		return nil, errInvalidHand
++	}
++	return cards, nil
++}
++
++func evaluate(cards []card) handValue {
++	ranks := make([]int, len(cards))
++	counts := make(map[int]int)
++	suit := cards[0].suit
++	isFlush := true
++	for i, c := range cards {
++		ranks[i] = c.rank
++		counts[c.rank]++
++		if c.suit != suit {
++			isFlush = false
++		}
++	}
++
++	sort.Sort(sort.Reverse(sort.IntSlice(ranks)))
++
++	straightHigh, isStraight := straightHighCard(cards)
++
++	// Group ranks by how often they occur, ordering by count then rank.
++	type group struct {
++		rank  int
++		count int
++	}
++	var groups []group
++	for rank, count := range counts {
++		groups = append(groups, group{rank, count})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count != groups[j].count {
++			return groups[i].count > groups[j].count
++		}
++		return groups[i].rank > groups[j].rank
++	})
++
++	switch {
++	case isStraight && isFlush:
++		return handValue{straightFlush, straightHigh}
++	case groups[0].count == 4:
++		return handValue{fourOfAKind, groups[0].rank, groups[1].rank}
++	case groups[0].count == 3 && groups[1].count == 2:
++		return handValue{fullHouse, groups[0].rank, groups[1].rank}
++	case isFlush:
++		return append(handValue{flush}, ranks...)
++	case isStraight:
++		return handValue{straight, straightHigh}
++	case groups[0].count == 3:
++		return handValue{threeOfAKind, groups[0].rank, groups[1].rank, groups[2].rank}
++	case groups[0].count == 2 && groups[1].count == 2:
++		return handValue{twoPair, groups[0].rank, groups[1].rank, groups[2].rank}
++	case groups[0].count == 2:
++		return handValue{onePair, groups[0].rank, groups[1].rank, groups[2].rank, groups[3].rank}
++	}
++	return append(handValue{highCard}, ranks...)
++}
++
++// straightHighCard returns the high card of a five-card straight (5 for the
++// ace-low straight A-2-3-4-5) and whether the cards form a straight.
++func straightHighCard(cards []card) (int, bool) {
++	seen := make(map[int]bool)
++	for _, c := range cards {
++		seen[c.rank] = true
++	}
++	if len(seen) != 5 {
++		return 0, false
++	}
++
++	ranks := make([]int, 0, 5)
++	for r := range seen {
++		ranks = append(ranks, r)
++	}
++	sort.Ints(ranks)
++
++	consecutive := true
++	for i := 1; i < len(ranks); i++ {
++		if ranks[i] != ranks[i-1]+1 {
++			consecutive = false
++			break
++		}
++	}
++	if consecutive {
++		return ranks[len(ranks)-1], true
++	}
++
++	// Ace-low straight: A, 2, 3, 4, 5.
++	if ranks[0] == 2 && ranks[1] == 3 && ranks[2] == 4 && ranks[3] == 5 && ranks[4] == 14 {
++		return 5, true
++	}
++	return 0, false
++}
++
++func compare(a, b handValue) int {
++	for i := 0; i < len(a) && i < len(b); i++ {
++		if a[i] != b[i] {
++			if a[i] < b[i] {
++				return -1
++			}
++			return 1
++		}
++	}
++	switch {
++	case len(a) < len(b):
++		return -1
++	case len(a) > len(b):
++		return 1
++	}
++	return 0
++}
++
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	type evaluated struct {
++		hand  string
++		value handValue
++	}
++
++	best := make([]evaluated, 0, len(hands))
++	for _, hand := range hands {
++		cards, err := parseHand(hand)
++		if err != nil {
++			return nil, err
++		}
++		v := evaluate(cards)
++		if len(best) == 0 {
++			best = append(best, evaluated{hand, v})
++			continue
++		}
++		cmp := compare(v, best[0].value)
++		if cmp > 0 {
++			best = []evaluated{{hand, v}}
++		} else if cmp == 0 {
++			best = append(best, evaluated{hand, v})
++		}
++	}
++
++	result := make([]string, len(best))
++	for i, e := range best {
++		result[i] = e.hand
++	}
++	return result, nil
+ }

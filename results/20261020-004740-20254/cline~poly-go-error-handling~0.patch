@@ -1,0 +1,46 @@
+diff --git a/error_handling.go b/error_handling.go
+index ac66fe0..a2190a6 100644
+--- a/error_handling.go
++++ b/error_handling.go
+@@ -1,5 +1,39 @@
+ package erratum
+ 
+-func Use(opener ResourceOpener, input string) error {
+-	panic("Please implement the Use function")
++import "fmt"
++
++func Use(opener ResourceOpener, input string) (err error) {
++	var res Resource
++	for {
++		res, err = opener()
++		if err == nil {
++			break
++		}
++		if _, ok := err.(TransientError); !ok {
++			return err
++		}
++	}
++
++	// Close must happen exactly once, after any Defrob call made while
++	// handling a panic from Frob.
++	defer res.Close()
++
++	defer func() {
++		r := recover()
++		if r == nil {
++			return
++		}
++		if frobErr, ok := r.(FrobError); ok {
++			res.Defrob(frobErr.defrobTag)
++		}
++		if e, ok := r.(error); ok {
++			err = e
++		} else {
++			err = fmt.Errorf("%v", r)
++		}
++	}()
++
++	res.Frob(input)
++
++	return nil
+ }

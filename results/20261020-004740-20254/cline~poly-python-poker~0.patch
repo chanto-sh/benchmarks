@@ -1,0 +1,84 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..3e5ba68 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,78 @@
++from collections import Counter
++
++RANKS = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++STRAIGHT_FLUSH = 8
++FOUR_OF_A_KIND = 7
++FULL_HOUSE = 6
++FLUSH = 5
++STRAIGHT = 4
++THREE_OF_A_KIND = 3
++TWO_PAIR = 2
++ONE_PAIR = 1
++HIGH_CARD = 0
++
++
++def _straight_high(ranks):
++    """Return the high card of a straight made from distinct ranks, else None."""
++    distinct = sorted(set(ranks), reverse=True)
++    if len(distinct) != 5:
++        return None
++    if distinct[0] - distinct[-1] == 4:
++        return distinct[0]
++    if distinct == [14, 5, 4, 3, 2]:
++        return 5
++    return None
++
++
++def _score(hand):
++    """Return a sortable score tuple for a five card hand."""
++    cards = hand.split()
++    ranks = sorted((RANKS[card[:-1]] for card in cards), reverse=True)
++    same_suit = len({card[-1] for card in cards}) == 1
++
++    counts = Counter(ranks)
++    groups = sorted(counts.items(), key=lambda item: (-item[1], -item[0]))
++    group_ranks = tuple(rank for rank, _ in groups)
++    shape = tuple(count for _, count in groups)
++    straight_high = _straight_high(ranks)
++
++    if same_suit and straight_high is not None:
++        return (STRAIGHT_FLUSH, straight_high)
++    if shape == (4, 1):
++        return (FOUR_OF_A_KIND,) + group_ranks
++    if shape == (3, 2):
++        return (FULL_HOUSE,) + group_ranks
++    if same_suit:
++        return (FLUSH,) + tuple(ranks)
++    if straight_high is not None:
++        return (STRAIGHT, straight_high)
++    if shape == (3, 1, 1):
++        return (THREE_OF_A_KIND,) + group_ranks
++    if shape == (2, 2, 1):
++        return (TWO_PAIR,) + group_ranks
++    if shape == (2, 1, 1, 1):
++        return (ONE_PAIR,) + group_ranks
++    return (HIGH_CARD,) + tuple(ranks)
++
++
+ def best_hands(hands):
+-    pass
++    """Return the best hand(s) from a list of poker hands."""
++    scores = [_score(hand) for hand in hands]
++    best = max(scores)
++    return [hand for hand, score in zip(hands, scores) if score == best]
++

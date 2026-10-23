@@ -1,0 +1,75 @@
+diff --git a/food_chain.go b/food_chain.go
+index b46ea45..14e22bc 100644
+--- a/food_chain.go
++++ b/food_chain.go
+@@ -1,13 +1,67 @@
+ package foodchain
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++// animal describes one verse's animal: its name, the additional remark made
++// about it, and the phrase used when another animal swallows it.
++type animal struct {
++	name    string
++	remark  string
++	catchAs string
++}
++
++var animals = []animal{
++	{"fly", "", "fly"},
++	{"spider", "It wriggled and jiggled and tickled inside her.", "spider that wriggled and jiggled and tickled inside her"},
++	{"bird", "How absurd to swallow a bird!", "bird"},
++	{"cat", "Imagine that, to swallow a cat!", "cat"},
++	{"dog", "What a hog, to swallow a dog!", "dog"},
++	{"goat", "Just opened her throat and swallowed a goat!", "goat"},
++	{"cow", "I don't know how she swallowed a cow!", "cow"},
++	{"horse", "She's dead, of course!", "horse"},
++}
++
++// Verse returns the nth verse of the song, without a trailing newline.
+ func Verse(v int) string {
+-	panic("Please implement the Verse function")
++	if v < 1 || v > len(animals) {
++		return ""
++	}
++
++	current := animals[v-1]
++
++	var b strings.Builder
++	fmt.Fprintf(&b, "I know an old lady who swallowed a %s.\n", current.name)
++	if current.remark != "" {
++		b.WriteString(current.remark)
++		b.WriteString("\n")
++	}
++
++	// The horse verse ends abruptly; it has no cumulative chain.
++	if v == len(animals) {
++		return strings.TrimSuffix(b.String(), "\n")
++	}
++
++	for i := v - 1; i > 0; i-- {
++		fmt.Fprintf(&b, "She swallowed the %s to catch the %s.\n", animals[i].name, animals[i-1].catchAs)
++	}
++	b.WriteString("I don't know why she swallowed the fly. Perhaps she'll die.")
++
++	return b.String()
+ }
+ 
++// Verses returns verses start through end inclusive, separated by blank lines.
+ func Verses(start, end int) string {
+-	panic("Please implement the Verses function")
++	verses := make([]string, 0, end-start+1)
++	for v := start; v <= end; v++ {
++		verses = append(verses, Verse(v))
++	}
++	return strings.Join(verses, "\n\n")
+ }
+ 
++// Song returns the complete song.
+ func Song() string {
+-	panic("Please implement the Song function")
++	return Verses(1, len(animals))
+ }

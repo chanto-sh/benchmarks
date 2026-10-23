@@ -1,0 +1,135 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..46ad160 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,129 @@
+ package connect
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++// cell identifies a single field on the board.
++type cell struct {
++	row, col int
++}
++
++// hexNeighbours lists the six fields adjacent to a given field when the
++// board is drawn as a parallelogram whose rows are shifted to the right:
++//
++//	. O . X .
++//	 . X X O .
++//	  O O O X .
++//
++// Rows shifted right means a field below another one can be found either in
++// the same column or one column to the left; above it, either in the same
++// column or one column to the right.
++var hexNeighbours = [6]cell{
++	{0, -1}, {0, 1},
++	{-1, 0}, {-1, 1},
++	{1, 0}, {1, -1},
++}
++
++// ResultOf determines the winner of the given game of Hex. Board lines may
++// contain spaces used only for readability; all spaces are ignored.
++// "X" is returned when X connects left to right, "O" when O connects top to
++// bottom, and the empty string when nobody has won.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	board := make([][]byte, len(lines))
++	for r, line := range lines {
++		line = strings.ReplaceAll(line, " ", "")
++		board[r] = []byte(line)
++		for _, c := range board[r] {
++			if c != '.' && c != 'X' && c != 'O' {
++				return "", fmt.Errorf("invalid character %q on row %d", c, r)
++			}
++		}
++	}
++
++	if connects(board, 'X') {
++		return "X", nil
++	}
++	if connects(board, 'O') {
++		return "O", nil
++	}
++	return "", nil
++}
++
++// connects reports whether player has a connected chain of stones joining
++// the two sides that belong to that player. X owns the left and right sides,
++// O owns the top and bottom sides.
++func connects(board [][]byte, player byte) bool {
++	rows := len(board)
++	columns := 0
++	for _, row := range board {
++		if len(row) > columns {
++			columns = len(row)
++		}
++	}
++	if rows == 0 || columns == 0 {
++		return false
++	}
++
++	// goalSide reports whether the cell lies on the opposite side.
++	goalSide := func(c cell) bool {
++		if player == 'X' {
++			return c.col == columns-1
++		}
++		return c.row == rows-1
++	}
++
++	visited := make([][]bool, rows)
++	for r := range visited {
++		visited[r] = make([]bool, len(board[r]))
++	}
++
++	var queue []cell
++	if player == 'X' {
++		// X starts from the left side, i.e. the first column of every row.
++		for r := range board {
++			if len(board[r]) > 0 && board[r][0] == player {
++				visited[r][0] = true
++				queue = append(queue, cell{r, 0})
++			}
++		}
++	} else {
++		// O starts from the top side, i.e. every column of the first row.
++		for c := 0; c < len(board[0]); c++ {
++			if board[0][c] == player {
++				visited[0][c] = true
++				queue = append(queue, cell{0, c})
++			}
++		}
++	}
++
++	for len(queue) > 0 {
++		current := queue[0]
++		queue = queue[1:]
++
++		if goalSide(current) {
++			return true
++		}
++
++		for _, offset := range hexNeighbours {
++			next := cell{current.row + offset.row, current.col + offset.col}
++			if next.row < 0 || next.row >= rows {
++				continue
++			}
++			if next.col < 0 || next.col >= len(board[next.row]) {
++				continue
++			}
++			if visited[next.row][next.col] {
++				continue
++			}
++			if board[next.row][next.col] != player {
++				continue
++			}
++			visited[next.row][next.col] = true
++			queue = append(queue, next)
++		}
++	}
++
++	return false
+ }

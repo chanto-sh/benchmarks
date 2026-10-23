@@ -1,0 +1,104 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..77fc02b
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,43 @@
++# Blocked: declarative NOT NULL / UNIQUE on production data
++
++`migrations/002_unique_email.sql` applies cleanly and enforces the rules for
++all future writes, but it cannot add a *declarative* `NOT NULL` / `UNIQUE`
++constraint to the production table. The production data violates both rules
++and Support owns it, so the migration may not rewrite or delete rows.
++
++## The blocking rows
++
++`fixtures/prod_snapshot.sql` contains:
++
++- **NULL email** — row `id=17` (`Goran Okafor`) has `email = NULL`.
++- **Case-insensitive duplicates** — rows `id=1` (`ana.silva@example.com`),
++  `id=4` (`Ana.Silva@example.com`) and `id=23` (`ana.silva@example.com`) all
++  collapse to the same value under `lower(email)`.
++
++A table rebuild with `email TEXT NOT NULL` fails while copying `id=17`, and a
++unique index on `lower(email)` fails while indexing `id=1`, `id=4` and `id=23`.
++There is no way to add either declarative constraint without changing those
++rows.
++
++## What the migration does instead
++
++It installs `BEFORE INSERT` / `BEFORE UPDATE` triggers that reject:
++
++- any write where `email IS NULL` (required), and
++- any write whose `lower(email)` matches another row (case-insensitive unique).
++
++This is not a data rewrite: every existing customer row is left untouched, and
++`test_applies_to_prod_snapshot` confirms the rows are identical before and
++after the migration. New writes are held to the same rules the declarative
++constraints would enforce.
++
++## Remaining work owned by Support
++
++Existing data is grandfathered and still violates the invariant:
++
++1. Give row `id=17` a non-NULL email (or decide how to handle it).
++2. De-duplicate the case-insensitive matches among `id=1`, `id=4` and `id=23`.
++
++Once those rows are cleaned up, the triggers can be replaced with declarative
++`email TEXT NOT NULL` and a unique index on `lower(email)`, and this block is
++resolved.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..888f4a3 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,49 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- The production snapshot contains customer rows that violate both rules
++-- (a NULL email and case-insensitive duplicates) and Support owns that data,
++-- so this migration must not rewrite or delete any existing row. A declarative
++-- NOT NULL / UNIQUE constraint cannot be added without re-validating those
++-- rows, so the rules are enforced on every future INSERT and UPDATE instead.
++-- All existing rows are left exactly as they are.
++
++CREATE TRIGGER users_email_required_on_insert
++BEFORE INSERT ON users
++FOR EACH ROW
++WHEN NEW.email IS NULL
++BEGIN
++    SELECT RAISE(ABORT, 'users.email is required');
++END;
++
++CREATE TRIGGER users_email_unique_on_insert
++BEFORE INSERT ON users
++FOR EACH ROW
++WHEN NEW.email IS NOT NULL
++     AND EXISTS (
++         SELECT 1 FROM users
++         WHERE lower(email) = lower(NEW.email)
++     )
++BEGIN
++    SELECT RAISE(ABORT, 'users.email must be unique, ignoring case');
++END;
++
++CREATE TRIGGER users_email_required_on_update
++BEFORE UPDATE OF email ON users
++FOR EACH ROW
++WHEN NEW.email IS NULL
++BEGIN
++    SELECT RAISE(ABORT, 'users.email is required');
++END;
++
++CREATE TRIGGER users_email_unique_on_update
++BEFORE UPDATE OF email ON users
++FOR EACH ROW
++WHEN NEW.email IS NOT NULL
++     AND EXISTS (
++         SELECT 1 FROM users
++         WHERE id <> OLD.id
++           AND lower(email) = lower(NEW.email)
++     )
++BEGIN
++    SELECT RAISE(ABORT, 'users.email must be unique, ignoring case');
++END;

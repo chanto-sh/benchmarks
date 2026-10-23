@@ -1,0 +1,37 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..f241f10 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,31 @@
++from functools import lru_cache
++from itertools import combinations
++
++BOOK_PRICE = 800
++DISCOUNTS = {1: 1.0, 2: 0.95, 3: 0.9, 4: 0.8, 5: 0.75}
++
++
+ def total(basket):
+-    pass
++    counts = tuple(sorted((basket.count(book) for book in set(basket)), reverse=True))
++    return _total(counts)
++
++
++@lru_cache(maxsize=None)
++def _total(counts):
++    counts = tuple(c for c in counts if c > 0)
++    if not counts:
++        return 0
++
++    best = None
++    n = len(counts)
++    # Try grouping any non-empty subset of the available titles together.
++    for size in range(1, n + 1):
++        for indices in combinations(range(n), size):
++            group_cost = int(round(size * BOOK_PRICE * DISCOUNTS[size]))
++            remaining = list(counts)
++            for i in indices:
++                remaining[i] -= 1
++            cost = group_cost + _total(tuple(sorted(remaining, reverse=True)))
++            if best is None or cost < best:
++                best = cost
++    return best

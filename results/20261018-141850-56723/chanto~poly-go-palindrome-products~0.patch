@@ -1,0 +1,70 @@
+diff --git a/palindrome_products.go b/palindrome_products.go
+index 892101c..9249760 100644
+--- a/palindrome_products.go
++++ b/palindrome_products.go
+@@ -1,7 +1,63 @@
+ package palindrome
+ 
+-// Define Product type here.
++import (
++	"fmt"
++	"strconv"
++)
++
++// Product is a palindromic product together with all of its factorizations
++// within the requested range.
++type Product struct {
++	Value          int
++	Factorizations [][2]int
++}
++
++func isPalindrome(n int) bool {
++	if n < 0 {
++		n = -n
++	}
++	s := strconv.Itoa(n)
++	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
++		if s[i] != s[j] {
++			return false
++		}
++	}
++	return true
++}
+ 
+ func Products(fmin, fmax int) (Product, Product, error) {
+-	panic("Please implement the Products function")
++	if fmin > fmax {
++		return Product{}, Product{}, fmt.Errorf("fmin > fmax: %d > %d", fmin, fmax)
++	}
++
++	factors := make(map[int][][2]int)
++	minVal, maxVal := 0, 0
++	found := false
++
++	for i := fmin; i <= fmax; i++ {
++		for j := i; j <= fmax; j++ {
++			p := i * j
++			if !isPalindrome(p) {
++				continue
++			}
++			factors[p] = append(factors[p], [2]int{i, j})
++			if !found {
++				minVal, maxVal = p, p
++				found = true
++				continue
++			}
++			if p < minVal {
++				minVal = p
++			}
++			if p > maxVal {
++				maxVal = p
++			}
++		}
++	}
++
++	if !found {
++		return Product{}, Product{}, fmt.Errorf("no palindromes in range [%d, %d]", fmin, fmax)
++	}
++
++	return Product{minVal, factors[minVal]}, Product{maxVal, factors[maxVal]}, nil
+ }

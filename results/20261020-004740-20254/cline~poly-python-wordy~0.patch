@@ -1,0 +1,64 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..227963a 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,58 @@
+ def answer(question):
+-    pass
++    if not question.startswith("What is") or not question.endswith("?"):
++        raise ValueError("unknown operation")
++
++    words = question[len("What is"):-1].split()
++    if not words:
++        raise ValueError("syntax error")
++
++    operations = {
++        "plus": lambda a, b: a + b,
++        "minus": lambda a, b: a - b,
++        "multiplied by": lambda a, b: a * b,
++        "divided by": lambda a, b: a // b,
++    }
++
++    def is_number(word):
++        try:
++            int(word)
++        except ValueError:
++            return False
++        return True
++
++    # Validate that every word is a number or part of a known operation.
++    index = 0
++    while index < len(words):
++        word = words[index]
++        if is_number(word):
++            index += 1
++            continue
++        if index + 1 < len(words) and f"{word} {words[index + 1]}" in operations:
++            index += 2
++            continue
++        if word in ("plus", "minus"):
++            index += 1
++            continue
++        raise ValueError("unknown operation")
++
++    # Parse the now-known-valid words, checking the left-to-right syntax.
++    index = 0
++    try:
++        result = int(words[index])
++        index += 1
++        while index < len(words):
++            word = words[index]
++            if word in ("plus", "minus"):
++                operation = operations[word]
++                index += 1
++            elif f"{word} {words[index + 1]}" in operations:
++                operation = operations[f"{word} {words[index + 1]}"]
++                index += 2
++            else:
++                raise ValueError
++            operand = int(words[index])
++            index += 1
++            result = operation(result, operand)
++        return result
++    except (IndexError, ValueError):
++        raise ValueError("syntax error")

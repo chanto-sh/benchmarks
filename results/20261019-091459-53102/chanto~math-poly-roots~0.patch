@@ -1,0 +1,263 @@
+diff --git a/roots.py b/roots.py
+index d624667..b18f310 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,7 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +11,192 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++# Internally polynomials are lists of Fraction coefficients in ascending
++# degree order, with no trailing (high-degree) zeros.
++
++def _trim(p):
++    while p and p[-1] == 0:
++        p.pop()
++    return p
++
++
++def _from_desc(coeffs):
++    return _trim([Fraction(c) for c in reversed(coeffs)])
++
++
++def _eval(p, x):
++    y = Fraction(0)
++    for c in reversed(p):
++        y = y * x + c
++    return y
++
++
++def _derivative(p):
++    return _trim([i * p[i] for i in range(1, len(p))])
++
++
++def _divmod(a, b):
++    """Exact polynomial division, returning (quotient, remainder)."""
++    a = list(a)
++    b = _trim(list(b))
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    _trim(a)
++    if len(a) < len(b):
++        return [], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    while len(a) >= len(b):
++        shift = len(a) - len(b)
++        coeff = a[-1] / b[-1]
++        q[shift] = coeff
++        for i, c in enumerate(b):
++            a[shift + i] -= coeff * c
++        _trim(a)
++    return _trim(q), a
++
++
++def _monic(p):
++    p = _trim(list(p))
++    if not p:
++        return []
++    lead = p[-1]
++    return [c / lead for c in p]
++
++
++def _gcd(a, b):
++    a = _trim(list(a))
++    b = _trim(list(b))
++    while b:
++        _, r = _divmod(a, b)
++        a, b = b, r
++    return _monic(a)
++
++
++def _square_free_part(p):
++    """Product of the distinct irreducible factors of p, made monic."""
++    p = _trim(list(p))
++    if len(p) <= 1:
++        return p
++    g = _gcd(p, _derivative(p))
++    q, _ = _divmod(p, g)
++    return _monic(q)
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a square-free polynomial p."""
++    seq = [_monic(p)]
++    d = _derivative(seq[0])
++    if not d:
++        return seq
++    seq.append(d)
++    while True:
++        _, r = _divmod(seq[-2], seq[-1])
++        if not r:
++            break
++        seq.append([-c for c in r])
++    return seq
++
++
++def _variations(seq, x):
++    """Number of sign changes in the Sturm sequence at x, ignoring zeros."""
++    prev = 0
++    count = 0
++    for p in seq:
++        y = _eval(p, x)
++        if y == 0:
++            continue
++        sign = 1 if y > 0 else -1
++        if prev and sign != prev:
++            count += 1
++        prev = sign
++    return count
++
++
++_ROOT_TOL = Fraction(1, 10 ** 12)
++
++
++def _count_open(seq, p, a, b):
++    """Number of distinct roots strictly between a and b."""
++    if a == b:
++        return 0
++    count = _variations(seq, a) - _variations(seq, b)
++    # V(a) - V(b) counts roots in (a, b]; exclude b if it is a root.
++    if _eval(p, b) == 0:
++        count -= 1
++    return count
++
++
++def _refine(seq, p, a, b):
++    """Refine an interval known to contain exactly one root in (a, b)."""
++    va = _variations(seq, a)
++    while b - a > _ROOT_TOL:
++        mid = (a + b) / 2
++        if _eval(p, mid) == 0:
++            return mid
++        vm = _variations(seq, mid)
++        # There is no root at mid, so this is the count in (a, mid).
++        if va - vm > 0:
++            b = mid
++        else:
++            a, va = mid, vm
++    return (a + b) / 2
++
++
++def _roots_in_interval(p, lo, hi):
++    """All distinct roots of square-free p in [lo, hi], exactly."""
++    if hi < lo:
++        return []
++    if hi == lo:
++        return [lo] if _eval(p, lo) == 0 else []
++
++    seq = _sturm_sequence(p)
++    roots = []
++    if _eval(p, lo) == 0:
++        roots.append(lo)
++    if _eval(p, hi) == 0:
++        roots.append(hi)
++
++    # Isolate the roots strictly inside the interval.  Exact rational
++    # bisection separates even very close roots; no sampling grid is used.
++    stack = [(lo, hi, _count_open(seq, p, lo, hi))]
++    while stack:
++        a, b, count = stack.pop()
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine(seq, p, a, b))
++            continue
++
++        mid = (a + b) / 2
++        if _eval(p, mid) == 0:
++            roots.append(mid)
++            left = _count_open(seq, p, a, mid)
++            right = _count_open(seq, p, mid, b)
++            stack.append((mid, b, right))
++            stack.append((a, mid, left))
++        else:
++            left = _count_open(seq, p, a, mid)
++            stack.append((mid, b, count - left))
++            stack.append((a, mid, left))
++
++    roots.sort()
++    return roots
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: ints or fractions.Fraction.
+     """
+-    n = 1000
+-    roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    p = _from_desc(coeffs)
++    if len(p) <= 1:
++        return []
++
++    p = _square_free_part(p)
++    if len(p) <= 1:
++        return []
++
++    roots = _roots_in_interval(p, Fraction(lo), Fraction(hi))
++    return [float(r) for r in sorted(set(roots))]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..29a69e5 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -1,5 +1,6 @@
+ import math
+ import unittest
++from fractions import Fraction
+ 
+ from roots import real_roots
+ 
+@@ -20,6 +21,30 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++        # (x - 1)^2 = x^2 - 2x + 1 has a repeated root but only one distinct root.
++        self.assertRoots(real_roots([1, -2, 1], -5, 5), [1])
++
++    def test_close_roots(self):
++        # (x - 1)(100000000x - 100000001): roots are 1 and 1.00000001.
++        self.assertRoots(
++            real_roots([100000000, -200000001, 100000001], 0, 2),
++            [1, 1.00000001],
++        )
++
++    def test_boundary_roots(self):
++        # x(x - 2) = x^2 - 2x.
++        self.assertRoots(real_roots([1, -2, 0], 0, 2), [0, 2])
++        self.assertRoots(real_roots([1, -2, 0], 0, 1), [0])
++        self.assertRoots(real_roots([1, -2, 0], 1, 2), [2])
++        # (x - 1/2)(x - 3/2) = 4x^2 - 8x + 3.
++        self.assertRoots(
++            real_roots([4, -8, 3], Fraction(1, 2), Fraction(3, 2)),
++            [0.5, 1.5],
++        )
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,122 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..6ed24f8 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,116 @@
+ package twobucket
+ 
++import "errors"
++
++type state struct{ one, two int }
++
++// Solve determines the sequence of actions needed to measure goalAmount
++// liters using two buckets of the given sizes.
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, errors.New("impossible to reach the goal")
++	}
++	if goalAmount%gcd(sizeBucketOne, sizeBucketTwo) != 0 {
++		return "", 0, 0, errors.New("impossible to reach the goal")
++	}
++
++	// The first action must fill the starting bucket.
++	start := state{sizeBucketOne, 0}
++	if startBucket == "two" {
++		start = state{0, sizeBucketTwo}
++	}
++
++	// After an action it is forbidden for the starting bucket to be empty
++	// while the other bucket is full.
++	forbidden := func(s state) bool {
++		if startBucket == "one" {
++			return s.one == 0 && s.two == sizeBucketTwo
++		}
++		return s.two == 0 && s.one == sizeBucketOne
++	}
++
++	// check reports whether the goal has been reached in state s.
++	check := func(s state, steps int) (goalBucket string, numSteps, other int, ok bool) {
++		if s.one == goalAmount {
++			return "one", steps, s.two, true
++		}
++		if s.two == goalAmount {
++			return "two", steps, s.one, true
++		}
++		return "", 0, 0, false
++	}
++
++	if bucket, steps, other, ok := check(start, 1); ok {
++		return bucket, steps, other, nil
++	}
++
++	type node struct {
++		s     state
++		steps int
++	}
++
++	visited := map[state]bool{start: true}
++	queue := []node{{start, 1}}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		// fill one, fill two, empty one, empty two,
++		// pour one into two, pour two into one.
++		pouredOne, pouredTwo := pour(cur.s.one, cur.s.two, sizeBucketTwo)
++		pouredTwoBack, pouredOneBack := pour(cur.s.two, cur.s.one, sizeBucketOne)
++		nextStates := []state{
++			{sizeBucketOne, cur.s.two},
++			{cur.s.one, sizeBucketTwo},
++			{0, cur.s.two},
++			{cur.s.one, 0},
++			{pouredOne, pouredTwo},
++			{pouredOneBack, pouredTwoBack},
++		}
++
++		for _, next := range nextStates {
++			if next == cur.s || forbidden(next) || visited[next] {
++				continue
++			}
++			visited[next] = true
++			steps := cur.steps + 1
++			if bucket, st, other, ok := check(next, steps); ok {
++				return bucket, st, other, nil
++			}
++			queue = append(queue, node{next, steps})
++		}
++	}
++
++	return "", 0, 0, errors.New("no solution")
++}
++
++// pour transfers as much as possible from the source bucket into the
++// destination bucket, whose capacity is destinationSize. It returns the
++// resulting (source, destination) levels.
++func pour(source, destination, destinationSize int) (int, int) {
++	amount := destinationSize - destination
++	if source < amount {
++		amount = source
++	}
++	return source - amount, destination + amount
++}
++
++func gcd(a, b int) int {
++	for b != 0 {
++		a, b = b, a%b
++	}
++	return a
+ }

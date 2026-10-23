@@ -1,0 +1,45 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..949d6fb 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,38 @@
+-def find_kth(arr1, arr2, k):
+-    pass
++def find_kth(arr1, arr2, k, *args):
++    """Return the k-th (1-indexed) element of two sorted arrays.
++
++    Also accepts the legacy ``find_kth(arr1, arr2, m, n, k)`` call form.
++    """
++    # Support the original MBPP signature, where m and n are also passed.
++    if args:
++        k = args[-1]
++
++    a, b = arr1, arr2
++    if len(a) > len(b):
++        a, b = b, a
++
++    total = len(a) + len(b)
++    if not 1 <= k <= total:
++        raise IndexError("k is out of range")
++
++    # cut_a + cut_b == k; binary-search the partition in the shorter array.
++    lo = max(0, k - len(b))
++    hi = min(k, len(a))
++
++    while lo <= hi:
++        cut_a = (lo + hi) // 2
++        cut_b = k - cut_a
++
++        left_a = a[cut_a - 1] if cut_a > 0 else float("-inf")
++        right_a = a[cut_a] if cut_a < len(a) else float("inf")
++        left_b = b[cut_b - 1] if cut_b > 0 else float("-inf")
++        right_b = b[cut_b] if cut_b < len(b) else float("inf")
++
++        if left_a <= right_b and left_b <= right_a:
++            return max(left_a, left_b)
++        if left_a > right_b:
++            hi = cut_a - 1
++        else:
++            lo = cut_a + 1
++
++    raise ValueError("Input arrays must be sorted")

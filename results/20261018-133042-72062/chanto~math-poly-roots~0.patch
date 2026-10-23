@@ -1,0 +1,258 @@
+diff --git a/roots.py b/roots.py
+index d624667..84308cf 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,12 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd as _gcd
++
++# Bisection stops once the isolating interval is this narrow.  The returned
++# midpoint is then within _TOL / 2 of the root.
++_TOL = Fraction(1, 10**12)
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +16,179 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Drop leading zero coefficients and make every coefficient a Fraction."""
++    i = 0
++    while i < len(p) and p[i] == 0:
++        i += 1
++    return [Fraction(c) for c in p[i:]]
++
++
++def _derivative(p):
++    n = len(p) - 1
++    return _trim([p[i] * (n - i) for i in range(n)])
++
++
++def _primitive(p, positive_leading=False):
++    """Clear denominators and common integer factors.
++
++    Scaling a polynomial by a positive constant does not change any signs, so
++    this is safe inside a Sturm sequence.  `positive_leading` is only used
++    where an arbitrary nonzero scaling is allowed (gcds and square-free
++    parts).
++    """
++    p = _trim(p)
++    if not p:
++        return []
++    den = 1
++    for c in p:
++        den = den * c.denominator // _gcd(den, c.denominator)
++    ints = [int(c * den) for c in p]
++    g = 0
++    for v in ints:
++        g = _gcd(g, abs(v))
++    if g:
++        ints = [v // g for v in ints]
++    if positive_leading and ints[0] < 0:
++        ints = [-v for v in ints]
++    return [Fraction(v) for v in ints]
++
++
++def _divmod(a, b):
++    """Polynomial division, highest degree first."""
++    a, b = _trim(a), _trim(b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    r = a[:]
++    while r and len(r) >= len(b):
++        factor = r[0] / b[0]
++        q[len(a) - len(r)] = factor
++        for i in range(len(b)):
++            r[i] -= factor * b[i]
++        r = _trim(r)
++    return q, r
++
++
++def _gcd_poly(a, b):
++    a, b = _trim(a), _trim(b)
++    while b:
++        _, r = _divmod(a, b)
++        a, b = b, r
++    return _primitive(a, positive_leading=True)
++
++
++def _square_free(p):
++    """Product of the distinct irreducible factors of p."""
++    p = _primitive(p, positive_leading=True)
++    if len(p) <= 1:
++        return p
++    g = _gcd_poly(p, _derivative(p))
++    q, _ = _divmod(p, g)
++    return _primitive(q, positive_leading=True)
++
++
++def _sturm(p):
++    """Sturm sequence for a square-free polynomial p."""
++    p = _primitive(p, positive_leading=True)
++    seq = [p, _derivative(p)]
++    while seq[-1]:
++        _, r = _divmod(seq[-2], seq[-1])
++        if not r:
++            break
++        # Exact recurrence requires -remainder.  _primitive must not flip the
++        # sign here, only scale by a positive constant.
++        seq.append(_primitive([-c for c in r]))
++    return seq
++
++
++def _sign(x):
++    return (x > 0) - (x < 0)
++
++
++def _variations(seq, x):
++    """Number of sign changes in the Sturm sequence evaluated at x."""
++    changes = 0
++    previous = 0
++    for poly in seq:
++        s = _sign(evaluate(poly, x))
++        if s:
++            if previous and s != previous:
++                changes += 1
++            previous = s
++    return changes
++
++
++def _refine(p, seq, a, b):
++    """Narrow an interval known to contain exactly one root in (a, b]."""
++    while True:
++        if evaluate(p, b) == 0:
++            return b
++        if b - a <= _TOL:
++            return (a + b) / 2
++        m = (a + b) / 2
++        fm = evaluate(p, m)
++        if fm == 0:
++            return m
++        fa = evaluate(p, a)
++        if fa != 0:
++            # No root at either endpoint, so the signs differ and ordinary
++            # bisection is valid.
++            if _sign(fa) != _sign(fm):
++                b = m
++            else:
++                a = m
++        else:
++            # a itself is a root (the interval is open at a).  Use the
++            # Sturm count to decide which half holds the wanted root.
++            if _variations(seq, a) - _variations(seq, m) > 0:
++                b = m
++            else:
++                a = m
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: ints or fractions.Fraction.
+     """
+-    n = 1000
++    lo, hi = Fraction(lo), Fraction(hi)
++    p = _square_free(coeffs)
++    if len(p) <= 1:          # zero or nonzero constant polynomial
++        return []
++    if lo == hi:
++        return [float(lo)] if evaluate(p, lo) == 0 else []
++
++    seq = _sturm(p)
++    # Sturm's theorem on a square-free polynomial: V(a) - V(b) counts the
++    # distinct roots in (a, b], which includes a root at the right boundary.
++    va = _variations(seq, lo)
++    vb = _variations(seq, hi)
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    stack = [(lo, hi, va - vb, va, vb)]
++    while stack:
++        a, b, count, va, vb = stack.pop()
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine(p, seq, a, b))
++            continue
++        m = (a + b) / 2
++        vm = _variations(seq, m)
++        left = va - vm      # roots in (a, m]
++        right = count - left
++        if right > 0:
++            stack.append((m, b, right, vm, vb))
++        if left > 0:
++            stack.append((a, m, left, va, vm))
++
++    # The interval above is open at lo, so a root exactly at lo needs adding.
++    if evaluate(p, lo) == 0:
++        roots.append(lo)
++
++    roots.sort()
++    return [float(r) for r in roots]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..7b7d518 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,41 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_close_roots(self):
++        # (x - 1)(1000000x - 1000001), roots 1 and 1.000001
++        self.assertRoots(
++            real_roots([1000000, -2000001, 1000001], 0, 2), [1, 1.000001]
++        )
++
++    def test_roots_on_boundaries(self):
++        # x^2 - 1 with both roots exactly on the interval endpoints
++        self.assertRoots(real_roots([1, 0, -1], -1, 1), [-1, 1])
++        self.assertRoots(real_roots([1, 0, -1], 1, 2), [1])
++        self.assertRoots(real_roots([1, 0, -1], -2, -1), [-1])
++        self.assertRoots(real_roots([1, 0, -1], 1, 1), [1])
++
++    def test_large_coefficients(self):
++        # 10^12 (x - 3)(x + 1)
++        coeffs = [10**12, -2 * 10**12, -3 * 10**12]
++        self.assertRoots(real_roots(coeffs, -5, 5), [-1, 3])
++
++    def test_high_degree_with_repeated_roots(self):
++        # 10^8 (x - 1)^2 (x - 2)^2 ... (x - 7)^2, degree 14
++        coeffs = [1]
++        for r in range(1, 8):
++            for _ in range(2):
++                new = [0] * (len(coeffs) + 1)
++                for i, a in enumerate(coeffs):
++                    new[i] += a
++                    new[i + 1] -= r * a
++                coeffs = new
++        coeffs = [10**8 * c for c in coeffs]
++        self.assertRoots(real_roots(coeffs, 0, 8), [float(r) for r in range(1, 8)])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,70 @@
+diff --git a/word_search.go b/word_search.go
+index c0e26bd..c14d269 100644
+--- a/word_search.go
++++ b/word_search.go
+@@ -1,5 +1,64 @@
+ package wordsearch
+ 
++import "fmt"
++
+ func Solve(words []string, puzzle []string) (map[string][2][2]int, error) {
+-	panic("Please implement the Solve function")
++	results := make(map[string][2][2]int, len(words))
++	missing := [2][2]int{{-1, -1}, {-1, -1}}
++
++	directions := [][2]int{
++		{1, 0},
++		{-1, 0},
++		{0, 1},
++		{0, -1},
++		{1, 1},
++		{-1, -1},
++		{1, -1},
++		{-1, 1},
++	}
++
++	for _, word := range words {
++		results[word] = missing
++
++		if word == "" {
++			continue
++		}
++
++		for row := 0; row < len(puzzle); row++ {
++			for col := 0; col < len(puzzle[row]); col++ {
++				for _, direction := range directions {
++					endRow := row + direction[1]*(len(word)-1)
++					endCol := col + direction[0]*(len(word)-1)
++					if endRow < 0 || endRow >= len(puzzle) || endCol < 0 || endCol >= len(puzzle[endRow]) {
++						continue
++					}
++
++					matches := true
++					for i := 0; i < len(word); i++ {
++						currentRow := row + direction[1]*i
++						currentCol := col + direction[0]*i
++						if currentCol < 0 || currentCol >= len(puzzle[currentRow]) || puzzle[currentRow][currentCol] != word[i] {
++							matches = false
++							break
++						}
++					}
++
++					if matches {
++						results[word] = [2][2]int{{col, row}, {endCol, endRow}}
++						goto nextWord
++					}
++				}
++			}
++		}
++
++	nextWord:
++	}
++
++	for _, word := range words {
++		if results[word] == missing {
++			return results, fmt.Errorf("word %q not found in puzzle", word)
++		}
++	}
++
++	return results, nil
+ }

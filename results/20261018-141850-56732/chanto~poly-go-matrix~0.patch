@@ -1,0 +1,76 @@
+diff --git a/matrix.go b/matrix.go
+index 1d957d5..cb69161 100644
+--- a/matrix.go
++++ b/matrix.go
+@@ -1,20 +1,66 @@
+ package matrix
+ 
+-// Define the Matrix type here.
++import (
++	"fmt"
++	"strconv"
++	"strings"
++)
++
++// Matrix is a rectangular grid of integers.
++type Matrix [][]int
+ 
+ func New(s string) (Matrix, error) {
+-	panic("Please implement the New function")
++	lines := strings.Split(s, "\n")
++	m := make(Matrix, 0, len(lines))
++	for i, line := range lines {
++		fields := strings.Fields(line)
++		if len(fields) == 0 {
++			return nil, fmt.Errorf("row %d is empty", i)
++		}
++		if i > 0 && len(fields) != len(m[0]) {
++			return nil, fmt.Errorf("row %d has %d columns, want %d", i, len(fields), len(m[0]))
++		}
++		row := make([]int, len(fields))
++		for j, field := range fields {
++			n, err := strconv.Atoi(field)
++			if err != nil {
++				return nil, fmt.Errorf("row %d, column %d: %w", i, j, err)
++			}
++			row[j] = n
++		}
++		m = append(m, row)
++	}
++	return m, nil
+ }
+ 
+ // Cols and Rows must return the results without affecting the matrix.
+ func (m Matrix) Cols() [][]int {
+-	panic("Please implement the Cols function")
++	if len(m) == 0 {
++		return [][]int{}
++	}
++	cols := make([][]int, len(m[0]))
++	for c := range cols {
++		cols[c] = make([]int, len(m))
++		for r := range m {
++			cols[c][r] = m[r][c]
++		}
++	}
++	return cols
+ }
+ 
+ func (m Matrix) Rows() [][]int {
+-	panic("Please implement the Rows function")
++	rows := make([][]int, len(m))
++	for r := range m {
++		rows[r] = make([]int, len(m[r]))
++		copy(rows[r], m[r])
++	}
++	return rows
+ }
+ 
+ func (m Matrix) Set(row, col, val int) bool {
+-	panic("Please implement the Set function")
++	if row < 0 || row >= len(m) || col < 0 || col >= len(m[row]) {
++		return false
++	}
++	m[row][col] = val
++	return true
+ }

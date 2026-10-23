@@ -1,0 +1,122 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..37b8876 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -26,4 +26,116 @@ class SgfTree:
+ 
+ 
+ def parse(input_string):
+-    pass
++    if not input_string or input_string[0] != "(":
++        raise ValueError("tree missing")
++    parser = _Parser(input_string)
++    return parser.parse_tree()
++
++
++class _Parser:
++    def __init__(self, text):
++        self.text = text
++        self.pos = 0
++
++    def _peek(self):
++        if self.pos >= len(self.text):
++            return None
++        return self.text[self.pos]
++
++    def parse_tree(self):
++        if self._peek() != "(":
++            raise ValueError("tree missing")
++        self.pos += 1
++
++        # A game tree is a sequence of nodes, followed by optional subtrees.
++        nodes = []
++        while self._peek() == ";":
++            nodes.append(self._parse_node())
++
++        if not nodes:
++            raise ValueError("tree with no nodes")
++
++        # Sequential nodes form a linear chain.
++        root = SgfTree(properties=nodes[0])
++        current = root
++        for properties in nodes[1:]:
++            child = SgfTree(properties=properties)
++            current.children.append(child)
++            current = child
++
++        # Subtrees are variations branching off the last node.
++        while self._peek() == "(":
++            current.children.append(self.parse_tree())
++
++        if self._peek() != ")":
++            raise ValueError("tree missing")
++        self.pos += 1
++        return root
++
++    def _parse_node(self):
++        # Consume the node marker.
++        self.pos += 1
++        properties = {}
++
++        while True:
++            char = self._peek()
++            if char is None or char in ";()":
++                break
++            if not char.isalpha():
++                raise ValueError("tree missing")
++
++            start = self.pos
++            while self._peek() is not None and self._peek().isalpha():
++                self.pos += 1
++            identifier = self.text[start:self.pos]
++
++            if identifier != identifier.upper():
++                raise ValueError("property must be in uppercase")
++
++            if self._peek() != "[":
++                raise ValueError("properties without delimiter")
++
++            values = []
++            while self._peek() == "[":
++                values.append(self._parse_value())
++            properties[identifier] = values
++
++        return properties
++
++    def _parse_value(self):
++        # Consume the opening bracket.
++        self.pos += 1
++        value = []
++
++        while self.pos < len(self.text):
++            char = self.text[self.pos]
++
++            if char == "]":
++                self.pos += 1
++                break
++
++            if char == "\\":
++                self.pos += 1
++                if self.pos >= len(self.text):
++                    break
++                escaped = self.text[self.pos]
++                if escaped == "\n":
++                    # Escaped newlines are removed entirely.
++                    self.pos += 1
++                    continue
++                if escaped.isspace():
++                    value.append(" ")
++                else:
++                    value.append(escaped)
++                self.pos += 1
++                continue
++
++            if char == "\n":
++                value.append("\n")
++            elif char.isspace():
++                value.append(" ")
++            else:
++                value.append(char)
++            self.pos += 1
++
++        return "".join(value)

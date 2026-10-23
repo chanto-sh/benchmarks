@@ -1,0 +1,80 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..447c55d 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,65 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, n + 1):
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(100):
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p1, p2 = (
++                    ((2 * j - 1) * x * p1 - (j - 1) * p2) / j,
++                    p1,
++                )
++            pp = n * (x * p1 - p2) / (x * x - 1.0)
++            dx = p1 / pp
++            x -= dx
++            if abs(dx) < 1e-15:
++                break
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * pp * pp))
++    return tuple(nodes), tuple(weights)
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(16)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    The substitution x = u**2 removes the singularity at zero:
++
++        integral = 2 * integral_0^sqrt(b) cos(t*u**2) du.
++
++    The remaining integrand is smooth.  The interval is split so that the
++    phase changes by at most pi/4 per piece, and each piece is integrated with
++    16-point Gauss-Legendre quadrature.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0.0:
++        return 0.0
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    t = abs(t)
++    length = math.sqrt(b)
++    max_phase_step = math.pi / 4.0
++    pieces = []
++    u = 0.0
++    while u < length:
++        # Solve t * ((u + h)**2 - u**2) = max_phase_step for h.
++        h = math.sqrt(u * u + max_phase_step / t) - u
++        if h <= 0.0 or u + h > length:
++            h = length - u
++        mid = u + 0.5 * h
++        half = 0.5 * h
++        piece = math.fsum(
++            w * math.cos(t * (mid + half * x) ** 2)
++            for x, w in zip(_GL_NODES, _GL_WEIGHTS)
++        )
++        pieces.append(half * piece)
++        u += h
++
++    return 2.0 * math.fsum(pieces)

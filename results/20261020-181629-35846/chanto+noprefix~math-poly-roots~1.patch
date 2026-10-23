@@ -1,0 +1,202 @@
+diff --git a/roots.py b/roots.py
+index d624667..b8b61ae 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,9 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++
++_TOL = Fraction(1, 10**12)
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +13,171 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Drop leading zero coefficients (coefficients are highest degree first)."""
++    while len(p) > 1 and p[0] == 0:
++        p.pop(0)
++    return p
++
++
++def _derivative(p):
++    n = len(p) - 1
++    if n == 0:
++        return [Fraction(0)]
++    return [p[i] * (n - i) for i in range(n)]
++
++
++def _divmod(a, b):
++    a, b = _trim(list(a)), _trim(list(b))
++    if b == [0]:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [Fraction(0)], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    r = list(a)
++    while len(r) >= len(b) and r != [0]:
++        shift = len(r) - len(b)
++        c = r[0] / b[0]
++        q[len(q) - 1 - shift] = c
++        for i in range(len(b)):
++            r[i] -= c * b[i]
++        _trim(r)
++    return q, r
++
++
++def _gcd(a, b):
++    a, b = _trim(list(a)), _trim(list(b))
++    while b != [0]:
++        _, r = _divmod(a, b)
++        a, b = b, r
++    lead = a[0]
++    return [c / lead for c in a]
++
++
++def _squarefree(p):
++    """Square-free part of p; it has exactly the same distinct roots as p."""
++    p = _trim(p)
++    if len(p) == 1:
++        return p
++    g = _gcd(p, _derivative(p))
++    q, _ = _divmod(p, g)
++    return _trim(q)
++
++
++def _normalise(p):
++    """Scale by a positive constant to keep the exact Sturm coefficients small."""
++    p = _trim(p)
++    if p == [0]:
++        return p
++    factor = abs(p[0])
++    return [c / factor for c in p]
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a square-free polynomial."""
++    p = _trim(list(p))
++    seq = [p]
++    if len(p) == 1:
++        return seq
++    seq.append(_normalise(_derivative(p)))
++    while seq[-1] != [0]:
++        _, r = _divmod(seq[-2], seq[-1])
++        if r == [0]:
++            break
++        seq.append(_normalise([-c for c in r]))
++    return seq
++
++
++def _eval(p, x):
++    y = Fraction(0)
++    for c in p:
++        y = y * x + c
++    return y
++
++
++def _variation(seq, x):
++    """Number of sign changes in the Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    previous = 0
++    for p in seq:
++        y = _eval(p, x)
++        sign = 1 if y > 0 else -1 if y < 0 else 0
++        if sign:
++            if previous and sign != previous:
++                changes += 1
++            previous = sign
++    return changes
++
++
++def _count_open(seq, q, a, b):
++    """Number of distinct roots of square-free q strictly between a and b.
++
++    Sturm's variation difference counts roots in (a, b]; removing a root at b
++    gives the open interval, which also handles roots at either endpoint.
++    """
++    return _variation(seq, a) - _variation(seq, b) - (1 if _eval(q, b) == 0 else 0)
++
++
++def _isolate(seq, q, a, b, count, intervals, exact):
++    stack = [(a, b, count)]
++    while stack:
++        a, b, count = stack.pop()
++        if count <= 0:
++            continue
++        if count == 1:
++            intervals.append((a, b))
++            continue
++
++        m = (a + b) / 2
++        if _eval(q, m) == 0:
++            exact.append(m)
++        left = _count_open(seq, q, a, m)
++        right = _count_open(seq, q, m, b)
++        stack.append((a, m, left))
++        stack.append((m, b, right))
++
++
++def _refine(seq, q, a, b):
++    while b - a > _TOL:
++        m = (a + b) / 2
++        if _eval(q, m) == 0:
++            return m
++        if _count_open(seq, q, a, m):
++            b = m
++        else:
++            a = m
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
+-    roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    p = [Fraction(c) for c in coeffs]
++    p = _trim(p)
++    if p == [0] or len(p) == 1:
++        return []
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++    if lo == hi:
++        return [float(lo)] if _eval(p, lo) == 0 else []
++
++    q = _normalise(_squarefree(p))
++    seq = _sturm_sequence(q)
++
++    exact = []
++    if _eval(q, lo) == 0:
++        exact.append(lo)
++    if _eval(q, hi) == 0:
++        exact.append(hi)
++
++    intervals = []
++    _isolate(seq, q, lo, hi, _count_open(seq, q, lo, hi), intervals, exact)
++
++    roots = exact + [_refine(seq, q, a, b) for a, b in intervals]
++    roots.sort()
++    return [float(r) for r in roots]

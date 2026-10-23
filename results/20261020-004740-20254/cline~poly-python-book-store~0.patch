@@ -1,0 +1,37 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..25b7fb1 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,31 @@
++from functools import lru_cache
++
++BOOK_PRICE = 800
++
++# Discount percentage for a set of 1..5 different books.
++DISCOUNTS = {1: 0, 2: 5, 3: 10, 4: 20, 5: 25}
++
++
++@lru_cache(maxsize=None)
++def _price(counts):
++    """Return the cheapest price in cents for the given book counts."""
++    counts = tuple(sorted((count for count in counts if count > 0), reverse=True))
++    if not counts:
++        return 0
++
++    best = None
++    # A group can contain at most one copy of each of the five books.
++    for size in range(1, min(len(counts), 5) + 1):
++        remaining = list(counts)
++        for i in range(size):
++            remaining[i] -= 1
++        group_cost = size * BOOK_PRICE * (100 - DISCOUNTS[size]) // 100
++        candidate = group_cost + _price(tuple(sorted(remaining, reverse=True)))
++        if best is None or candidate < best:
++            best = candidate
++    return best
++
++
+ def total(basket):
+-    pass
++    counts = [basket.count(book) for book in range(1, 6)]
++    return _price(tuple(sorted(counts, reverse=True)))

@@ -1,0 +1,209 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..40b2518 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -1,10 +1,203 @@
+ package zebra
+ 
++// Solution holds the answers to the two questions posed by the zebra puzzle.
+ type Solution struct {
+ 	DrinksWater string
+ 	OwnsZebra   string
+ }
+ 
++// The five houses are indexed 0 (leftmost) through 4 (rightmost).
++const houseCount = 5
++
++// Category indices, used as the first index of the assignment table.
++const (
++	catNationality = iota
++	catColor
++	catDrink
++	catSmoke
++	catPet
++	categoryCount
++)
++
++// Value indices within each category.
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++var nationalities = [houseCount]string{"Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese"}
++
++// catOrder is the order in which categories are assigned. Placing colors and
++// nationalities first lets the most restrictive constraints prune the search
++// almost immediately.
++var catOrder = [categoryCount]int{catColor, catNationality, catDrink, catSmoke, catPet}
++
++// assignment maps [category][house] to a value index.
++type assignment [categoryCount][houseCount]int
++
++// constraint is a rule that can be evaluated once every category it mentions
++// has been assigned. depth is the index in catOrder of the last such category.
++type constraint struct {
++	depth int
++	ok    func(*assignment) bool
++}
++
++func houseOf(a *assignment, category, value int) int {
++	for house := 0; house < houseCount; house++ {
++		if a[category][house] == value {
++			return house
++		}
++	}
++	return -1
++}
++
++func adjacent(a, b int) bool {
++	d := a - b
++	return d == 1 || d == -1
++}
++
++// constraints encodes the 15 statements of the puzzle. Each rule references
++// only the categories assigned up to and including its depth.
++var constraints = []constraint{
++	// The green house is immediately to the right of the ivory house.
++	{0, func(a *assignment) bool {
++		return houseOf(a, catColor, green) == houseOf(a, catColor, ivory)+1
++	}},
++	// The Norwegian lives in the first house.
++	{1, func(a *assignment) bool {
++		return a[catNationality][0] == norwegian
++	}},
++	// The Englishman lives in the red house.
++	{1, func(a *assignment) bool {
++		return a[catColor][houseOf(a, catNationality, englishman)] == red
++	}},
++	// The Norwegian lives next to the blue house.
++	{1, func(a *assignment) bool {
++		return adjacent(houseOf(a, catNationality, norwegian), houseOf(a, catColor, blue))
++	}},
++	// Coffee is drunk in the green house.
++	{2, func(a *assignment) bool {
++		return a[catDrink][houseOf(a, catColor, green)] == coffee
++	}},
++	// The Ukrainian drinks tea.
++	{2, func(a *assignment) bool {
++		return a[catDrink][houseOf(a, catNationality, ukrainian)] == tea
++	}},
++	// Milk is drunk in the middle house.
++	{2, func(a *assignment) bool {
++		return a[catDrink][houseCount/2] == milk
++	}},
++	// Kools are smoked in the yellow house.
++	{3, func(a *assignment) bool {
++		return a[catColor][houseOf(a, catSmoke, kools)] == yellow
++	}},
++	// The Lucky Strike smoker drinks orange juice.
++	{3, func(a *assignment) bool {
++		return a[catDrink][houseOf(a, catSmoke, luckyStrike)] == orangeJuice
++	}},
++	// The Japanese smokes Parliaments.
++	{3, func(a *assignment) bool {
++		return a[catSmoke][houseOf(a, catNationality, japanese)] == parliaments
++	}},
++	// The Spaniard owns the dog.
++	{4, func(a *assignment) bool {
++		return a[catPet][houseOf(a, catNationality, spaniard)] == dog
++	}},
++	// The Old Gold smoker owns snails.
++	{4, func(a *assignment) bool {
++		return a[catPet][houseOf(a, catSmoke, oldGold)] == snails
++	}},
++	// The man who smokes Chesterfields lives next to the man with the fox.
++	{4, func(a *assignment) bool {
++		return adjacent(houseOf(a, catSmoke, chesterfields), houseOf(a, catPet, fox))
++	}},
++	// Kools are smoked next to the house where the horse is kept.
++	{4, func(a *assignment) bool {
++		return adjacent(houseOf(a, catSmoke, kools), houseOf(a, catPet, horse))
++	}},
++}
++
++// permute calls visit with every permutation of vals, stopping early if visit
++// returns true.
++func permute(vals []int, k int, visit func([]int) bool) bool {
++	if k == len(vals) {
++		return visit(vals)
++	}
++	for i := k; i < len(vals); i++ {
++		vals[k], vals[i] = vals[i], vals[k]
++		if permute(vals, k+1, visit) {
++			return true
++		}
++		vals[k], vals[i] = vals[i], vals[k]
++	}
++	return false
++}
++
++// search assigns the category at position depth and all following categories,
++// pruning branches as soon as a rule becomes checkable and fails.
++func search(a *assignment, depth int) bool {
++	if depth == len(catOrder) {
++		return true
++	}
++	category := catOrder[depth]
++	values := make([]int, houseCount)
++	for i := range values {
++		values[i] = i
++	}
++	return permute(values, 0, func(p []int) bool {
++		copy(a[category][:], p)
++		for _, c := range constraints {
++			if c.depth == depth && !c.ok(a) {
++				return false
++			}
++		}
++		return search(a, depth+1)
++	})
++}
++
++// SolvePuzzle derives the answers from the puzzle's constraints.
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	var a assignment
++	if !search(&a, 0) {
++		return Solution{}
++	}
++	return Solution{
++		DrinksWater: nationalities[a[catNationality][houseOf(&a, catDrink, water)]],
++		OwnsZebra:   nationalities[a[catNationality][houseOf(&a, catPet, zebra)]],
++	}
+ }

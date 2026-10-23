@@ -1,0 +1,71 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..980ba42 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,65 @@
+ package bookstore
+ 
++import "sort"
++
++// discounts[n] is the price in cents of a set of n distinct books.
++var discounts = [6]int{0, 800, 1520, 2160, 2560, 3000}
++
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	counts := make([]int, 5)
++	for _, book := range books {
++		if book >= 1 && book <= 5 {
++			counts[book-1]++
++		}
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(counts)))
++	return minCost(counts, make(map[[5]int]int))
++}
++
++// minCost returns the cheapest price for the given non-increasing counts.
++func minCost(counts []int, memo map[[5]int]int) int {
++	var key [5]int
++	copy(key[:], counts)
++	if cost, ok := memo[key]; ok {
++		return cost
++	}
++
++	best := -1
++	// Try every possible set of distinct titles to form the next group.
++	for mask := 1; mask < 1<<5; mask++ {
++		size := 0
++		valid := true
++		for i := range counts {
++			if mask&(1<<i) != 0 {
++				if counts[i] == 0 {
++					valid = false
++					break
++				}
++				size++
++			}
++		}
++		if !valid {
++			continue
++		}
++
++		next := make([]int, len(counts))
++		copy(next, counts)
++		for i := range next {
++			if mask&(1<<i) != 0 {
++				next[i]--
++			}
++		}
++		sort.Sort(sort.Reverse(sort.IntSlice(next)))
++
++		cost := discounts[size] + minCost(next, memo)
++		if best == -1 || cost < best {
++			best = cost
++		}
++	}
++
++	if best == -1 {
++		best = 0
++	}
++	memo[key] = best
++	return best
+ }

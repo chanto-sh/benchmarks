@@ -1,0 +1,220 @@
+diff --git a/robot_simulator.go b/robot_simulator.go
+index d5d5b1c..cfa22c1 100644
+--- a/robot_simulator.go
++++ b/robot_simulator.go
+@@ -5,40 +5,207 @@ package robot
+ // Step 1
+ // Define N, E, S, W here.
+ 
++const (
++	N Dir = iota
++	E
++	S
++	W
++)
++
+ func Right() {
+-	panic("Please implement the Right function")
++	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
+ }
+ 
+ func Left() {
+-	panic("Please implement the Left function")
++	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
+ }
+ 
+ func Advance() {
+-	panic("Please implement the Advance function")
++	switch Step1Robot.Dir {
++	case N:
++		Step1Robot.Y++
++	case E:
++		Step1Robot.X++
++	case S:
++		Step1Robot.Y--
++	case W:
++		Step1Robot.X--
++	}
+ }
+ 
+ func (d Dir) String() string {
+-	panic("Please implement the String function")
++	switch d {
++	case N:
++		return "north"
++	case E:
++		return "east"
++	case S:
++		return "south"
++	case W:
++		return "west"
++	}
++	return "unknown"
+ }
+ 
+ // Step 2
+ // Define Action type here.
+ 
++// Action is a command the robot is attempting to perform.
++type Action struct {
++	Command
++}
++
+ func StartRobot(command chan Command, action chan Action) {
+-	panic("Please implement the StartRobot function")
++	for c := range command {
++		action <- Action{c}
++	}
++	close(action)
+ }
+ 
+ func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
+-	panic("Please implement the Room function")
++	for a := range action {
++		robot = move(extent, robot, a.Command)
++	}
++	report <- robot
++}
++
++// move applies one command to a robot, leaving it in place when it would
++// leave the room.
++func move(extent Rect, robot Step2Robot, c Command) Step2Robot {
++	switch c {
++	case 'R':
++		robot.Dir = (robot.Dir + 1) % 4
++	case 'L':
++		robot.Dir = (robot.Dir + 3) % 4
++	case 'A':
++		if p := ahead(robot.Pos, robot.Dir); inside(extent, p) {
++			robot.Pos = p
++		}
++	}
++	return robot
++}
++
++func ahead(p Pos, d Dir) Pos {
++	switch d {
++	case N:
++		p.Northing++
++	case E:
++		p.Easting++
++	case S:
++		p.Northing--
++	case W:
++		p.Easting--
++	}
++	return p
++}
++
++func inside(extent Rect, p Pos) bool {
++	return p.Easting >= extent.Min.Easting && p.Easting <= extent.Max.Easting &&
++		p.Northing >= extent.Min.Northing && p.Northing <= extent.Max.Northing
+ }
+ 
+ // Step 3
+ // Define Action3 type here.
+ 
++// Action3 is an action sent by a named robot. When End is true the robot has
++// finished running its script.
++type Action3 struct {
++	Name string
++	Comm Command
++	End  bool
++}
++
+ func StartRobot3(name, script string, action chan Action3, log chan string) {
+-	panic("Please implement the StartRobot3 function")
++	for i := 0; i < len(script); i++ {
++		c := Command(script[i])
++		switch c {
++		case 'R', 'L', 'A':
++			action <- Action3{Name: name, Comm: c}
++		default:
++			log <- "robot " + name + ": undefined command " + string(c)
++			action <- Action3{Name: name, End: true}
++			return
++		}
++	}
++	action <- Action3{Name: name, End: true}
+ }
+ 
+ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
+-	panic("Please implement the Room3 function")
++	room := make([]Step3Robot, len(robots))
++	copy(room, robots)
++
++	// Index robots by name so actions can be attributed. Duplicate names are
++	// reported and only the first robot of each name is addressable.
++	index := make(map[string]int, len(room))
++	for i, r := range room {
++		if r.Name == "" {
++			log <- "robot without a name"
++		}
++		if _, ok := index[r.Name]; ok {
++			if r.Name != "" {
++				log <- "duplicate robot name " + r.Name
++			}
++		} else {
++			index[r.Name] = i
++		}
++		if !inside(extent, r.Pos) {
++			log <- "robot " + r.Name + " placed outside the room"
++		}
++		for j := 0; j < i; j++ {
++			if room[j].Pos == r.Pos {
++				log <- "robot " + r.Name + " placed at the same position as " + room[j].Name
++				break
++			}
++		}
++	}
++
++	finished := 0
++	for {
++		a, ok := <-action
++		if !ok {
++			rep <- room
++			return
++		}
++		if a.End {
++			finished++
++			if finished >= len(room) {
++				rep <- room
++				return
++			}
++			continue
++		}
++
++		i, known := index[a.Name]
++		if !known {
++			log <- "action from unknown robot " + a.Name
++			continue
++		}
++
++		switch a.Comm {
++		case 'R':
++			room[i].Dir = (room[i].Dir + 1) % 4
++		case 'L':
++			room[i].Dir = (room[i].Dir + 3) % 4
++		case 'A':
++			p := ahead(room[i].Pos, room[i].Dir)
++			if !inside(extent, p) {
++				log <- "robot " + a.Name + " attempted to advance into a wall"
++				continue
++			}
++			blocked := false
++			for j := range room {
++				if j != i && room[j].Pos == p {
++					blocked = true
++					break
++				}
++			}
++			if blocked {
++				log <- "robot " + a.Name + " attempted to advance into another robot"
++			} else {
++				room[i].Pos = p
++			}
++		default:
++			log <- "robot " + a.Name + ": undefined command " + string(a.Comm)
++		}
++	}
+ }

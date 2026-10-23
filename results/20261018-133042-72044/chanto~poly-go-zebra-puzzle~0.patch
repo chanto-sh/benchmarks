@@ -1,0 +1,166 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..594befd 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,160 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++const (
++	Englishman = iota
++	Spaniard
++	Ukrainian
++	Norwegian
++	Japanese
++)
++
++const (
++	Red = iota
++	Green
++	Ivory
++	Yellow
++	Blue
++)
++
++const (
++	Coffee = iota
++	Tea
++	Milk
++	OrangeJuice
++	Water
++)
++
++const (
++	OldGold = iota
++	Kools
++	Chesterfields
++	LuckyStrike
++	Parliaments
++)
++
++const (
++	Dog = iota
++	Snails
++	Fox
++	Horse
++	Zebra
++)
++
++var nationalities = [...]string{
++	"Englishman",
++	"Spaniard",
++	"Ukrainian",
++	"Norwegian",
++	"Japanese",
++}
++
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	all := permutations()
++
++	for _, national := range all {
++		if national[Norwegian] != 0 {
++			continue
++		}
++
++		for _, color := range all {
++			if !nextTo(color[Blue], national[Norwegian]) {
++				continue
++			}
++			if color[Green] != color[Ivory]+1 {
++				continue
++			}
++			if color[Red] != national[Englishman] {
++				continue
++			}
++
++			for _, drink := range all {
++				if drink[Milk] != 2 {
++					continue
++				}
++				if drink[Coffee] != color[Green] {
++					continue
++				}
++				if drink[Tea] != national[Ukrainian] {
++					continue
++				}
++
++				for _, smoke := range all {
++					if smoke[Kools] != color[Yellow] {
++						continue
++					}
++					if smoke[Parliaments] != national[Japanese] {
++						continue
++					}
++					if smoke[LuckyStrike] != drink[OrangeJuice] {
++						continue
++					}
++
++					for _, pet := range all {
++						if pet[Dog] != national[Spaniard] {
++							continue
++						}
++						if pet[Snails] != smoke[OldGold] {
++							continue
++						}
++						if !nextTo(smoke[Chesterfields], pet[Fox]) {
++							continue
++						}
++						if !nextTo(smoke[Kools], pet[Horse]) {
++							continue
++						}
++
++						return Solution{
++							DrinksWater: nationalities[resident(national, drink[Water])],
++							OwnsZebra:   nationalities[resident(national, pet[Zebra])],
++						}
++					}
++				}
++			}
++		}
++	}
++
++	return Solution{}
++}
++
++func permutations() [][5]int {
++	var result [][5]int
++	var values [5]int
++	for i := range values {
++		values[i] = i
++	}
++
++	var generate func(int)
++	generate = func(index int) {
++		if index == len(values) {
++			result = append(result, values)
++			return
++		}
++
++		for i := index; i < len(values); i++ {
++			values[index], values[i] = values[i], values[index]
++			generate(index + 1)
++			values[index], values[i] = values[i], values[index]
++		}
++	}
++
++	generate(0)
++	return result
++}
++
++func nextTo(a, b int) bool {
++	if a > b {
++		a, b = b, a
++	}
++	return b-a == 1
++}
++
++// resident returns the nationality living in the given house.
++func resident(national [5]int, house int) int {
++	for nationality, position := range national {
++		if position == house {
++			return nationality
++		}
++	}
++	return -1
+ }

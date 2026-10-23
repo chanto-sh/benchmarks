@@ -1,0 +1,67 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 2c8b539..4f0cf1f 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,7 @@
+ # Changelog
+ 
+ ## Unreleased
++- Added slugify()
+ 
+ ## 1.2.0
+ - Added title_case()
+diff --git a/test_core.py b/test_core.py
+index 61fc19c..64a40de 100644
+--- a/test_core.py
++++ b/test_core.py
+@@ -1,12 +1,17 @@
+ import unittest
+ 
+-from textkit import title_case, wrap
++from textkit import slugify, title_case, wrap
+ 
+ 
+ class CoreTest(unittest.TestCase):
+     def test_title_case(self):
+         self.assertEqual(title_case("hello wORLD"), "Hello World")
+ 
++    def test_slugify(self):
++        self.assertEqual(slugify("  Hello, World! "), "hello-world")
++        self.assertEqual(slugify("A--B__C"), "a-b-c")
++        self.assertEqual(slugify("!!!"), "")
++
+     def test_wrap(self):
+         self.assertEqual(wrap("a bb ccc dddd", 6), ["a bb", "ccc", "dddd"])
+ 
+diff --git a/textkit/__init__.py b/textkit/__init__.py
+index fa67317..f4ae204 100644
+--- a/textkit/__init__.py
++++ b/textkit/__init__.py
+@@ -1,3 +1,3 @@
+-from .core import title_case, wrap
++from .core import slugify, title_case, wrap
+ 
+-__all__ = ["title_case", "wrap"]
++__all__ = ["slugify", "title_case", "wrap"]
+diff --git a/textkit/core.py b/textkit/core.py
+index b96d126..c5ac299 100644
+--- a/textkit/core.py
++++ b/textkit/core.py
+@@ -1,3 +1,17 @@
++def slugify(text: str) -> str:
++    chars: list[str] = []
++    pending_dash = False
++    for ch in text.lower():
++        if ch.isascii() and ch.isalnum():
++            if pending_dash and chars:
++                chars.append("-")
++            chars.append(ch)
++            pending_dash = False
++        else:
++            pending_dash = True
++    return "".join(chars)
++
++
+ def title_case(text: str) -> str:
+     return " ".join(w[:1].upper() + w[1:].lower() for w in text.split())
+ 

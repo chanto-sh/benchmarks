@@ -1,0 +1,60 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..7c966ec 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,54 @@
+ def answer(question):
+-    pass
++    if not isinstance(question, str):
++        raise ValueError("syntax error")
++
++    question = question.strip()
++    if not question.startswith("What is") or not question.endswith("?"):
++        raise ValueError("unknown operation")
++
++    body = question[len("What is"):-1].strip()
++    words = body.split()
++    if not words:
++        raise ValueError("syntax error")
++
++    binary_operations = {
++        "plus": lambda a, b: a + b,
++        "minus": lambda a, b: a - b,
++    }
++    compound_operations = {
++        "multiplied": ("by", lambda a, b: a * b),
++        "divided": ("by", lambda a, b: a // b),
++    }
++    operation_words = set(binary_operations) | set(compound_operations)
++
++    def number_at(index):
++        if index >= len(words):
++            raise ValueError("syntax error")
++        try:
++            return int(words[index])
++        except ValueError:
++            if words[index] in operation_words:
++                raise ValueError("syntax error")
++            raise ValueError("unknown operation")
++
++    result = number_at(0)
++    index = 1
++    while index < len(words):
++        word = words[index]
++        if word in binary_operations:
++            result = binary_operations[word](result, number_at(index + 1))
++            index += 2
++        elif word in compound_operations:
++            suffix, operation = compound_operations[word]
++            if index + 1 >= len(words) or words[index + 1] != suffix:
++                raise ValueError("syntax error")
++            result = operation(result, number_at(index + 2))
++            index += 3
++        else:
++            try:
++                int(word)
++            except ValueError:
++                raise ValueError("unknown operation")
++            raise ValueError("syntax error")
++
++    return result

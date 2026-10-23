@@ -1,0 +1,82 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..0f08e82 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,67 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Nodes and weights for n-point Gauss-Legendre quadrature on [-1, 1]."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        while True:
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p1, p2 = ((2 * j - 1) * z * p1 - (j - 1) * p2) / j, p1
++            derivative = n * (z * p1 - p2) / (z * z - 1.0)
++            z_next = z - p1 / derivative
++            if abs(z_next - z) < 1e-15:
++                z = z_next
++                break
++            z = z_next
++        nodes[i] = -z
++        nodes[n - 1 - i] = z
++        weights[i] = 2.0 / ((1.0 - z * z) * derivative * derivative)
++        weights[n - 1 - i] = weights[i]
++    return nodes, weights
++
++
++_NODES, _WEIGHTS = _gauss_legendre(12)
++_PHASE_STEP = math.pi / 4.0
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity:
++
++        integral = 2 * integral_0^sqrt(b) cos(t*u**2) du.
++
++    The interval is split into panels spanning at most pi/4 of the phase
++    t*u**2, and each panel is integrated with 12-point Gauss-Legendre
++    quadrature. This keeps the oscillation well resolved.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    length = math.sqrt(b)
++    if t == 0.0:
++        return 2.0 * length
++
++    total_phase = t * length * length
++    panels = max(1, int(math.ceil(total_phase / _PHASE_STEP)))
++
++    total = 0.0
++    left = 0.0
++    for k in range(1, panels + 1):
++        if k == panels:
++            right = length
++        else:
++            right = length * math.sqrt((k * _PHASE_STEP) / total_phase)
++
++        half = 0.5 * (right - left)
++        middle = 0.5 * (right + left)
++        subtotal = 0.0
++        for node, weight in zip(_NODES, _WEIGHTS):
++            u = middle + half * node
++            subtotal += weight * math.cos(t * u * u)
++
++        total += half * subtotal
++        left = right
++
++    return 2.0 * total

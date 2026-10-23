@@ -1,0 +1,108 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..a35adf7 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,102 @@
+ package scale
+ 
++import "strings"
++
++// The chromatic scale spelled with sharps and with flats.
++var sharpNotes = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
++var flatNotes = []string{"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
++
++// Scale generates the chromatic scale starting at tonic when interval is empty,
++// or a diatonic (or other) scale following the given interval pattern.
++// 'm' is a half step, 'M' a whole step and 'A' an augmented second.
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	chromatic := chromaticFrom(tonic)
++
++	if interval == "" {
++		return chromatic
++	}
++
++	result := make([]string, 0, len(interval)+1)
++	result = append(result, chromatic[0])
++	index := 0
++	for _, step := range interval {
++		switch step {
++		case 'm':
++			index++
++		case 'M':
++			index += 2
++		case 'A':
++			index += 3
++		}
++		result = append(result, chromatic[index%len(chromatic)])
++	}
++	return result
++}
++
++// chromaticFrom returns the twelve chromatic notes in order, starting at tonic.
++func chromaticFrom(tonic string) []string {
++	base := sharpNotes
++	if useFlats(tonic) {
++		base = flatNotes
++	}
++
++	normalized := normalizeTonic(tonic)
++	start := 0
++	for i, note := range base {
++		if note == normalized {
++			start = i
++			break
++		}
++	}
++
++	notes := make([]string, len(base))
++	for i := range base {
++		notes[i] = base[(start+i)%len(base)]
++	}
++	return notes
++}
++
++// normalizeTonic uppercases the note letter and lowercases any accidental
++// (only the 'b' of a flat is lowercase).
++func normalizeTonic(tonic string) string {
++	if tonic == "" {
++		return ""
++	}
++	runes := []rune(tonic)
++	var b strings.Builder
++	b.WriteString(strings.ToUpper(string(runes[0])))
++	for _, r := range runes[1:] {
++		b.WriteString(strings.ToLower(string(r)))
++	}
++	return b.String()
++}
++
++// useFlats reports whether the scale for the given tonic should be spelled
++// with flats. Accidentals decide it directly; natural notes follow the key
++// signature conventions for major (uppercase) and minor (lowercase) keys.
++func useFlats(tonic string) bool {
++	if tonic == "" {
++		return false
++	}
++	runes := []rune(tonic)
++	letter := strings.ToUpper(string(runes[0]))
++
++	if len(runes) > 1 {
++		switch string(runes[1]) {
++		case "#":
++			return false
++		case "b":
++			return true
++		}
++	}
++
++	if runes[0] >= 'a' && runes[0] <= 'z' {
++		switch letter {
++		case "C", "D", "F", "G":
++			return true
++		}
++		return false
++	}
++
++	return letter == "F"
+ }

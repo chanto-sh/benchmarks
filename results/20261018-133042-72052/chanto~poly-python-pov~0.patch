@@ -1,0 +1,41 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..a2cd64b 100644
+--- a/pov.py
++++ b/pov.py
+@@ -18,8 +18,34 @@ class Tree:
+     def __eq__(self, other):
+         return self.__dict__() == other.__dict__()
+ 
++    def _find_path(self, target):
++        if self.label == target:
++            return [self]
++        for child in self.children:
++            path = child._find_path(target)
++            if path is not None:
++                return [self] + path
++        return None
++
+     def from_pov(self, from_node):
+-        pass
++        path = self._find_path(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++
++        node = Tree(path[-1].label, list(path[-1].children))
++        parent_node = node
++        for index in range(len(path) - 2, -1, -1):
++            parent = path[index]
++            child = path[index + 1]
++            siblings = [c for c in parent.children if c is not child]
++            ancestor = Tree(parent.label, siblings)
++            parent_node.children.append(ancestor)
++            parent_node = ancestor
++        return node
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        rerooted = self.from_pov(from_node)
++        path = rerooted._find_path(to_node)
++        if path is None:
++            raise ValueError("No path found")
++        return [node.label for node in path]

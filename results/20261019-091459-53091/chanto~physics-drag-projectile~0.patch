@@ -1,0 +1,154 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..f92be16 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,148 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = _A[6] + (0.0,)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++_E = tuple(b5 - b4 for b5, b4 in zip(_B5, _B4))
++
++_RTOL = 1.0e-12
++_ATOL = 1.0e-12
++
++
++def _derivs(state, k_over_m, g):
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    drag = -k_over_m * speed
++    return (vx, vy, drag * vx, -g + drag * vy)
++
++
++def _rk_step(state, h, k_over_m, g):
++    """One Dormand-Prince 5(4) step plus its local error estimate."""
++    k1 = _derivs(state, k_over_m, g)
++    ks = [k1]
++    for stage in range(1, 7):
++        a = _A[stage]
++        y = tuple(state[i] + h * sum(a[j] * ks[j][i] for j in range(stage))
++                  for i in range(4))
++        ks.append(_derivs(y, k_over_m, g))
++
++    y5 = tuple(state[i] + h * sum(_B5[j] * ks[j][i] for j in range(7))
++               for i in range(4))
++    err = tuple(h * sum(_E[j] * ks[j][i] for j in range(7)) for i in range(4))
++    return y5, err
++
++
++def _error_norm(state, state_new, err):
++    total = 0.0
++    for old, new, e in zip(state, state_new, err):
++        scale = _ATOL + _RTOL * max(abs(old), abs(new))
++        total = max(total, abs(e) / scale)
++    return total
++
++
++def _bisect_event(f, lo, hi, f_lo, f_hi):
++    """Locate a sign-changing event to near machine precision."""
++    if f_lo == 0.0:
++        return lo
++    if f_hi == 0.0:
++        return hi
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        f_mid = f(mid)
++        if f_mid == 0.0:
++            return mid
++        if (f_lo > 0.0) == (f_mid > 0.0):
++            lo, f_lo = mid, f_mid
++        else:
++            hi, f_hi = mid, f_mid
++    return 0.5 * (lo + hi)
++
++
++def _vacuum_flight(v0, angle_deg, g, h0):
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    disc = vy * vy + 2.0 * g * h0
++    t = (vy + math.sqrt(disc)) / g
++    apex = h0 + (vy * vy / (2.0 * g) if vy > 0.0 else 0.0)
++    return {"range": vx * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if k == 0.0:
++        return _vacuum_flight(v0, angle_deg, g, h0)
++
++    theta = math.radians(angle_deg)
++    state = (0.0, float(h0), v0 * math.cos(theta), v0 * math.sin(theta))
++
++    # If the projectile starts on the ground and is not launched upward,
++    # it has no flight to integrate.
++    if h0 == 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    k_over_m = k / mass
++    time = 0.0
++    apex = state[1]
++    apex_found = state[3] <= 0.0
++    h = 1.0e-3
++
++    while True:
++        new_state, err = _rk_step(state, h, k_over_m, g)
++
++        if not all(math.isfinite(e) for e in err):
++            h *= 0.1
++            continue
++
++        error = _error_norm(state, new_state, err)
++        if error > 1.0:
++            h *= max(0.2, 0.9 * error ** -0.2)
++            continue
++
++        y0, y1 = state[1], new_state[1]
++        vy0, vy1 = state[3], new_state[3]
++
++        apex_crossed = not apex_found and vy0 > 0.0 and vy1 <= 0.0
++        ground_crossed = y0 > 0.0 and y1 <= 0.0
++
++        def state_at(fraction):
++            return _rk_step(state, fraction * h, k_over_m, g)[0]
++
++        if apex_crossed:
++            fraction = _bisect_event(
++                lambda f: state_at(f)[3], 0.0, 1.0, vy0, vy1
++            )
++            apex = state_at(fraction)[1]
++            apex_found = True
++
++        if ground_crossed:
++            fraction = _bisect_event(
++                lambda f: state_at(f)[1], 0.0, 1.0, y0, y1
++            )
++            final = state_at(fraction)
++            return {"range": final[0], "apex": apex,
++                    "time": time + fraction * h}
++
++        state = new_state
++        time += h
++
++        # Dormand-Prince's error estimate is fifth order, so the step-size
++        # exponent is 1/5.
++        factor = 0.9 * error ** -0.2 if error > 0.0 else 5.0
++        h *= min(5.0, max(0.2, factor))

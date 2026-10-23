@@ -1,0 +1,100 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..fc87ae1 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,94 @@
+ package connect
+ 
++import "fmt"
++
++// neighbours lists the six cells adjacent to a stone on a board whose rows
++// are offset to the right as the row index grows.
++var neighbours = [6][2]int{
++	{-1, 0}, {-1, 1},
++	{0, -1}, {0, 1},
++	{1, -1}, {1, 0},
++}
++
++// ResultOf returns the winner of the game of Hex, or an empty string when
++// neither player has connected their sides yet.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	height := len(lines)
++	if height == 0 {
++		return "", nil
++	}
++	for r, line := range lines {
++		for c, ch := range line {
++			if ch != '.' && ch != 'X' && ch != 'O' {
++				return "", fmt.Errorf("invalid stone %q at row %d, column %d", ch, r, c)
++			}
++		}
++	}
++
++	if connects(lines, 'X') {
++		return "X", nil
++	}
++	if connects(lines, 'O') {
++		return "O", nil
++	}
++	return "", nil
++}
++
++// connects reports whether player has joined the two sides they own.
++// X owns the left and right sides, O owns the top and bottom sides.
++func connects(lines []string, player rune) bool {
++	height := len(lines)
++	width := len(lines[0])
++
++	isStart := func(r, c int) bool {
++		if player == 'X' {
++			return c == 0
++		}
++		return r == 0
++	}
++	isGoal := func(r, c int) bool {
++		if player == 'X' {
++			return c == width-1
++		}
++		return r == height-1
++	}
++
++	visited := make([][]bool, height)
++	for r := range visited {
++		visited[r] = make([]bool, width)
++	}
++
++	queue := make([][2]int, 0)
++	for r := 0; r < height; r++ {
++		for c := 0; c < width && c < len(lines[r]); c++ {
++			if lines[r][c] == byte(player) && isStart(r, c) {
++				visited[r][c] = true
++				queue = append(queue, [2]int{r, c})
++			}
++		}
++	}
++
++	for len(queue) > 0 {
++		cell := queue[0]
++		queue = queue[1:]
++		r, c := cell[0], cell[1]
++
++		if isGoal(r, c) {
++			return true
++		}
++
++		for _, d := range neighbours {
++			nr, nc := r+d[0], c+d[1]
++			if nr < 0 || nr >= height || nc < 0 || nc >= width || nc >= len(lines[nr]) {
++				continue
++			}
++			if visited[nr][nc] || lines[nr][nc] != byte(player) {
++				continue
++			}
++			visited[nr][nc] = true
++			queue = append(queue, [2]int{nr, nc})
++		}
++	}
++
++	return false
+ }

@@ -1,0 +1,70 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..83a2eb7 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,64 @@
+ package bottlesong
+ 
++import "fmt"
++
++var numberWords = []string{
++	"no", "one", "two", "three", "four",
++	"five", "six", "seven", "eight", "nine", "ten",
++}
++
++// numberWord returns the lowercase English word for n (0 <= n <= 10).
++func numberWord(n int) string {
++	if n < 0 || n >= len(numberWords) {
++		return fmt.Sprintf("%d", n)
++	}
++	return numberWords[n]
++}
++
++// capitalize upper-cases the first letter of s.
++func capitalize(s string) string {
++	if s == "" {
++		return s
++	}
++	return string(s[0]-'a'+'A') + s[1:]
++}
++
++// bottleNoun returns "bottle" or "bottles" depending on the count.
++func bottleNoun(n int) string {
++	if n == 1 {
++		return "bottle"
++	}
++	return "bottles"
++}
++
++// verse recites a single verse starting with n bottles.
++func verse(n int) []string {
++	count := capitalize(numberWord(n))
++	remaining := numberWord(n - 1)
++
++	return []string{
++		fmt.Sprintf("%s green %s hanging on the wall,", count, bottleNoun(n)),
++		fmt.Sprintf("%s green %s hanging on the wall,", count, bottleNoun(n)),
++		"And if one green bottle should accidentally fall,",
++		fmt.Sprintf("There'll be %s green %s hanging on the wall.", remaining, bottleNoun(n-1)),
++	}
++}
++
++// Recite recites the song starting with startBottles bottles and taking
++// down takeDown bottles, returning the lines of the resulting verses.
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	lines := []string{}
++
++	for i := 0; i < takeDown; i++ {
++		n := startBottles - i
++		if n < 0 {
++			break
++		}
++		if i > 0 {
++			lines = append(lines, "")
++		}
++		lines = append(lines, verse(n)...)
++	}
++
++	return lines
+ }

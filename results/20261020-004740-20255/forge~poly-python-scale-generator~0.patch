@@ -1,0 +1,76 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..5bd5875 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,68 @@
+ class Scale:
++    """Generate chromatic and interval-based (diatonic and other) scales."""
++
++    # The twelve pitches, spelled with sharps and with flats.
++    SHARP_CHROMATIC = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++    FLAT_CHROMATIC = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++    # Tonics whose scales are written with sharps (uppercase = major, lower = minor).
++    SHARP_TONICS = {
++        "C", "G", "D", "A", "E", "B", "F#", "C#",
++        "a", "e", "b", "f#", "c#", "g#", "d#",
++    }
++    # Tonics whose scales are written with flats.
++    FLAT_TONICS = {
++        "F", "Bb", "Eb", "Ab", "Db", "Gb",
++        "d", "g", "c", "f", "bb", "eb",
++    }
++
++    # Interval sizes measured in half steps.
++    INTERVALS = {"m": 1, "M": 2, "A": 3}
++
+     def __init__(self, tonic):
+-        pass
++        # Normalise unicode accidentals and keep the case (case carries the mode).
++        normalised = tonic.strip().replace("\u266f", "#").replace("\u266d", "b")
++        letter = normalised[0]
++        self.is_minor = letter.islower()
++        self.tonic_key = letter if self.is_minor else letter.upper()
++        self.tonic_key += normalised[1:]
++        # The pitch spelling used to look the tonic up in the chromatic scale.
++        self.tonic_note = normalised[0].upper() + normalised[1:]
++
++    def _chromatic_notes(self):
++        if self.tonic_key in self.SHARP_TONICS:
++            return list(self.SHARP_CHROMATIC)
++        if self.tonic_key in self.FLAT_TONICS:
++            return list(self.FLAT_CHROMATIC)
++        # Fall back on the accidental itself.
++        if "b" in self.tonic_note:
++            return list(self.FLAT_CHROMATIC)
++        return list(self.SHARP_CHROMATIC)
++
++    def _tonic_index(self, notes):
++        note = self.tonic_note
++        if note in notes:
++            return notes.index(note)
++        # Enharmonic fallback: the sharp and flat spellings are both ordered
++        # chromatically from A, so an index is valid in either list.
++        other = self.FLAT_CHROMATIC if note in self.FLAT_CHROMATIC else self.SHARP_CHROMATIC
++        if note in other:
++            return other.index(note)
++        raise ValueError("Invalid tonic: {}".format(note))
+ 
+     def chromatic(self):
+-        pass
++        """Return the 12-note chromatic scale starting on the tonic."""
++        notes = self._chromatic_notes()
++        start = self._tonic_index(notes)
++        return notes[start:] + notes[:start]
+ 
+     def interval(self, intervals):
+-        pass
++        """Return the scale built from `intervals` starting on the tonic."""
++        notes = self._chromatic_notes()
++        start = self._tonic_index(notes)
++        scale = [notes[start]]
++        index = start
++        for interval in intervals:
++            index = (index + self.INTERVALS[interval]) % len(notes)
++            scale.append(notes[index])
++        return scale

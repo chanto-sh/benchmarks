@@ -1,0 +1,121 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..66faf86
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,90 @@
++# BLOCKED: vendored `ratelimit` has no native async support
++
++## What was asked
++
++- Add `Client.fetch_all_async(urls)` that awaits `limiter.acquire_async()` before
++  each request.
++- Drop `_ThreadedLimiter` (the thread-pool workaround).
++- Do not edit `vendor/`, which is synced from the platform repo.
++
++## Why it can't be done
++
++`vendor/ratelimit.py` is **ratelimit 2.4.1**, and its `RateLimiter` exposes only
++the synchronous methods `acquire()` and `try_acquire()`. There is no
++`acquire_async` — no native async support of any kind:
++
++```
++$ python -c "import vendor.ratelimit as r; print(r.__version__, [n for n in dir(r.RateLimiter) if not n.startswith('_')])"
++2.4.1 ['acquire', 'try_acquire']
++```
++
++The vendored changelog confirms this: the newest entry is 2.4.1 (a refill-drift
++fix), 2.4.0 added `try_acquire()` and injectable `clock`/`sleep`, and 2.3.0
++added thread-safe `acquire()`. No release mentions async.
++
++Running the new tests shows the same thing:
++
++```
++test_client.py::ClientTests::test_limiter_is_natively_async
++    AttributeError: type object 'RateLimiter' has no attribute 'acquire_async'
++test_client.py::ClientTests::test_fetch_all_async_uses_native_limiter
++    AttributeError: 'RateLimiter' object has no attribute 'acquire_async'
++```
++
++So the platform team's statement — "ratelimit now has native async support,
++`RateLimiter.acquire_async()`" — does not match the code that is actually
++synced into this repo.
++
++## Why I did not work around it
++
++- **Can't update vendor/**: it is generated from platform-libs. This repo has no
++  `make vendor` target (no Makefile), and hand-editing vendored code is
++  explicitly forbidden. Even a one-line `async def acquire_async` added there
++  would be overwritten by the next sync and would diverge from upstream.
++- **Can't shim it in client.py**: defining/monkeypatching `acquire_async` on top
++  of the blocking `acquire()` would fake the platform API. It would pass
++  `test_limiter_is_natively_async` while not being native async, hide the
++  version mismatch, and block on the event loop thread. That is exactly the
++  workaround I was told not to write.
++- **Can't implement `fetch_all_async` on `_ThreadedLimiter`**: that is the
++  existing workaround under a new name; it is explicitly not what was asked for
++  (the tests also assert the native coroutine is called).
++
++Adding a `fetch_all_async` that calls the non-existent `acquire_async` would
++ship code that raises `AttributeError` on every call, so I did not add it.
++
++## What was done instead
++
++- Removed `_ThreadedLimiter` from `client.py` (and its now-unused `asyncio`
++  import). It was dead code — nothing referenced it; `fetch_all` already uses
++  `limiter.acquire()` directly — so this is a no-op for current behaviour and
++  completes the part of the request that does not depend on the missing API.
++- Left the synchronous `Client.fetch_all` path unchanged.
++- Did not touch `vendor/` or `test_client.py`.
++
++Current test status: `test_fetch_all_keeps_order` passes; the two tests that
++require `acquire_async` still fail for the reason above.
++
++## To unblock
++
++1. Platform publishes a ratelimit (or platform-libs snapshot) whose `RateLimiter`
++   has a real coroutine `acquire_async()`, compatible with the injectable
++   `clock`/`sleep` used by the tests.
++2. Sync it in with `make vendor` (or the equivalent platform sync).
++3. Then add to `Client`:
++
++   ```python
++   async def fetch_all_async(self, urls):
++       out = []
++       for url in urls:
++           await self.limiter.acquire_async()
++           out.append(await self.fetch(url))
++       return out
++   ```
++
++   plus whatever handling is needed for a synchronous `fetch` (the existing
++   `fetch_all` calls it synchronously; the async tests pass an async `fetch`,
++   so awaiting the result or supporting both would need to be decided).
++
++Once the vendored API exists, the two failing tests should pass without any
++further changes to `vendor/` or the tests.
+diff --git a/client.py b/client.py
+index 2b319e5..9ceb24d 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch

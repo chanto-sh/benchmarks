@@ -1,0 +1,57 @@
+diff --git a/grep.py b/grep.py
+index 3c8a8e1..7baa338 100644
+--- a/grep.py
++++ b/grep.py
+@@ -1,2 +1,51 @@
+ def grep(pattern, flags, files):
+-    pass
++    flag_set = set()
++    for flag in flags.split():
++        flag_set.update(flag.lstrip("-"))
++
++    case_insensitive = "i" in flag_set
++    invert = "v" in flag_set
++    entire_line = "x" in flag_set
++    line_numbers = "n" in flag_set
++    file_names_only = "l" in flag_set
++
++    search_for = pattern.lower() if case_insensitive else pattern
++
++    multiple_files = len(files) > 1
++    output = []
++
++    for filename in files:
++        with open(filename) as f:
++            matched_any = False
++            for line_number, line in enumerate(f, start=1):
++                # Keep the line's own terminator (if any) for the output.
++                if line.endswith("\n"):
++                    content, terminator = line[:-1], "\n"
++                else:
++                    content, terminator = line, ""
++
++                haystack = content.lower() if case_insensitive else content
++                if entire_line:
++                    matched = haystack == search_for
++                else:
++                    matched = search_for in haystack
++
++                if matched == invert:
++                    continue
++
++                matched_any = True
++                if file_names_only:
++                    continue
++
++                prefix = ""
++                if multiple_files:
++                    prefix += filename + ":"
++                if line_numbers:
++                    prefix += str(line_number) + ":"
++
++                output.append(prefix + content + terminator)
++
++            if file_names_only and matched_any:
++                output.append(filename + "\n")
++
++    return "".join(output)

@@ -1,0 +1,233 @@
+diff --git a/roots.py b/roots.py
+index d624667..1c95706 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,205 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Remove zero coefficients above the leading term (low degree first)."""
++    p = list(p)
++    while p and not p[-1]:
++        p.pop()
++    return p
++
++
++def _derivative(p):
++    return _trim([i * p[i] for i in range(1, len(p))])
++
++
++def _primitive(p, positive_leading=True):
++    """Scale a rational polynomial to primitive integer coefficients.
++
++    The scaling factor is positive, so signs are preserved.  Unless
++    ``positive_leading`` is false, the leading coefficient is also made
++    positive.
++    """
++    p = _trim(p)
++    if not p:
++        return []
++
++    den = 1
++    for c in p:
++        c = Fraction(c)
++        den = den * c.denominator // gcd(den, c.denominator)
++
++    ints = [int(Fraction(c) * den) for c in p]
++    common = 0
++    for c in ints:
++        common = gcd(common, abs(c))
++    if common > 1:
++        ints = [c // common for c in ints]
++    if positive_leading and ints[-1] < 0:
++        ints = [-c for c in ints]
++    return _trim(ints)
++
++
++def _divmod_poly(a, b):
++    """Polynomial division over the rationals; low degree first."""
++    a = [Fraction(c) for c in _trim(a)]
++    b = [Fraction(c) for c in _trim(b)]
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++
++    if len(a) < len(b):
++        return [], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    while a and len(a) >= len(b):
++        shift = len(a) - len(b)
++        factor = a[-1] / b[-1]
++        q[shift] = factor
++        for i, c in enumerate(b):
++            a[i + shift] -= factor * c
++        a = _trim(a)
++    return q, a
++
++
++def _gcd_poly(a, b):
++    """Primitive integer gcd over Q[x]."""
++    a = _trim(a)
++    b = _trim(b)
++    while b:
++        _, r = _divmod_poly(a, b)
++        a, b = b, r
++    return _primitive(a)
++
++
++def _square_free_part(p):
++    """p divided by gcd(p, p'), i.e. the polynomial with the same roots."""
++    p = _trim(p)
++    if len(p) <= 1:
++        return p
++    g = _gcd_poly(p, _derivative(p))
++    q, _ = _divmod_poly(p, g)
++    return _primitive(q)
++
++
++def _sign_at(p, x):
++    """Exact sign of p(x), for integer p in low-to-high order."""
++    if not p:
++        return 0
++    x = Fraction(x)
++    n, d = x.numerator, x.denominator
++
++    # y = d ** degree * p(n / d), so its sign is p(x)'s sign.
++    y = p[-1]
++    d_power = 1
++    for c in reversed(p[:-1]):
++        d_power *= d
++        y = y * n + c * d_power
++    return (y > 0) - (y < 0)
++
++
++def _sturm_chain(p):
++    """Sturm sequence for a square-free integer polynomial."""
++    p = _primitive(p)
++    chain = [p, _derivative(p)]
++    while len(chain[-1]) > 1:
++        _, r = _divmod_poly(chain[-2], chain[-1])
++        if not r:
++            break
++        chain.append(_primitive([-c for c in r], positive_leading=False))
++    return chain
++
++
++def _variations(chain, x, left=False):
++    """Number of sign changes at x; for a root, ``left`` selects the limit."""
++    signs = []
++    for p in chain:
++        s = _sign_at(p, x)
++        if s:
++            signs.append(s)
++
++    changes = sum(1 for i in range(1, len(signs)) if signs[i] != signs[i - 1])
++    if left and _sign_at(chain[0], x) == 0:
++        # A simple root of p flips p's sign, adding one change on the left.
++        changes += 1
++    return changes
++
++
++def _refine_root(chain, a, b, va, vb, tolerance):
++    """Bisect an interval known to contain exactly one root in (a, b)."""
++    while b - a > tolerance:
++        m = (a + b) / 2
++        if _sign_at(chain[0], m) == 0:
++            return float(m)
++
++        vm = _variations(chain, m)
++        left_count = va - vm
++        right_count = vm - vb
++        if left_count == 1 and right_count == 0:
++            b, vb = m, vm
++        elif right_count == 1 and left_count == 0:
++            a, va = m, vm
++        else:
++            # The Sturm count makes this unreachable for a square-free p.
++            break
++    return float((a + b) / 2)
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: integers or fractions.Fraction.
+     """
+-    n = 1000
++    p = _primitive(list(reversed(coeffs)))
++    lo, hi = Fraction(lo), Fraction(hi)
++    if not p or lo > hi:
++        return []
++
++    # Repeated roots do not change sign, so work with the square-free part.
++    p = _square_free_part(p)
++    if len(p) <= 1:
++        return []
++
++    chain = _sturm_chain(p)
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
++
++    # Boundary roots are included exactly; interior counts below exclude them.
++    lo_is_root = _sign_at(p, lo) == 0
++    hi_is_root = _sign_at(p, hi) == 0
++    if lo_is_root:
++        roots.append(float(lo))
++    if hi_is_root and hi != lo:
++        roots.append(float(hi))
++
++    if lo == hi:
++        return sorted(roots)
++
++    v_lo = _variations(chain, lo)          # right-hand limit at lo
++    v_hi = _variations(chain, hi, True)    # left-hand limit at hi
++    stack = [(lo, hi, v_lo, v_hi)]
++
++    while stack:
++        a, b, va, vb = stack.pop()
++        count = va - vb
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine_root(chain, a, b, va, vb, Fraction(1, 10**13)))
++            continue
++
++        m = (a + b) / 2
++        m_is_root = _sign_at(p, m) == 0
++        vm = _variations(chain, m)
++        left_vb = vm + int(m_is_root)      # left-hand limit at m
++        left_count = va - left_vb
++        right_count = vm - vb
++
++        if m_is_root:
++            roots.append(float(m))
++        if left_count:
++            stack.append((a, m, va, left_vb))
++        if right_count:
++            stack.append((m, b, vm, vb))
++
++    roots.sort()
+     return roots

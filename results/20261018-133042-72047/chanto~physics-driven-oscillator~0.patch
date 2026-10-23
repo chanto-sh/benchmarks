@@ -1,0 +1,94 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..0858540 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,87 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (signed amplitude, cos-like, sin-like) for the particular solution.
++
++    The steady-state displacement is
++
++        x_p(t) = A * (ca * cos(omega t) + cb * sin(omega t))
++
++    with A = F0 / sqrt((k - m omega^2)^2 + (c omega)^2).
++    """
++    a = k - m * omega * omega
++    b = c * omega
++    s = math.hypot(a, b)
++    inv = 1.0 / s
++    return F0 * inv, a * inv, b * inv
++
++
++def _sinhc(z):
++    """sin(z) / z, with the continuous value 1 at z == 0."""
++    return 1.0 if z == 0.0 else math.sin(z) / z
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    a = k - m * omega * omega
++    b = c * omega
++    return abs(F0) / math.hypot(a, b)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, ca, cb = _steady_state(m, k, c, F0, omega)
++
++    wt = omega * t
++    xp = A * (ca * math.cos(wt) + cb * math.sin(wt))
++    # x_p(0) and x_p'(0), evaluated without subtracting large quantities.
++    xp0 = A * ca
++    vp0 = A * cb * omega
++
++    # Initial conditions for the homogeneous part x_h = x - x_p.
++    d0 = x0 - xp0
++    e0 = v0 - vp0
++
++    mu = -c / (2.0 * m)          # real part of both characteristic roots
++    disc = c * c - 4.0 * m * k   # discriminant
++
++    if disc < 0.0:
++        # Underdamped: x_h = e^(mu t) (d0 cos(z) + (e0 - mu d0) sin(z)/beta).
++        beta = math.sqrt(-disc) / (2.0 * m)
++        z = beta * t
++        xh = math.exp(mu * t) * (
++            d0 * math.cos(z) + (e0 - mu * d0) * t * _sinhc(z)
++        )
++    elif disc > 0.0:
++        # Overdamped.  Use the stable form of the slowly decaying root to
++        # avoid cancellation when c^2 >> 4 m k.
++        sqrt_disc = math.sqrt(disc)
++        r1 = -2.0 * k / (c + sqrt_disc)
++        r2 = -(c + sqrt_disc) / (2.0 * m)
++        gamma = sqrt_disc / (2.0 * m)
++        z = gamma * t
++
++        if abs(z) <= 1.0:
++            # Near the critically damped limit sinh(z)/gamma is well
++            # conditioned, so use the hyperbolic form.
++            sinh_over_gamma = t if z == 0.0 else math.sinh(z) / gamma
++            xh = math.exp(mu * t) * (
++                d0 * math.cosh(z) + (e0 - mu * d0) * sinh_over_gamma
++            )
++        else:
++            # Exponential form: no cancellation and no overflow, since both
++            # roots are non-positive for physical parameters.
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            xh = (
++                0.5 * d0 * (e1 + e2)
++                + (e0 - mu * d0) * (e1 - e2) / (r1 - r2)
++            )
++    else:
++        # Critically damped: x_h = e^(mu t) (d0 + (e0 - mu d0) t).
++        xh = math.exp(mu * t) * (d0 + (e0 - mu * d0) * t)
++
++    return xp + xh

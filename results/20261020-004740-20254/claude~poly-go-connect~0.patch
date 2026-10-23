@@ -1,0 +1,98 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..9d90912 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,92 @@
+ package connect
+ 
++// ResultOf determines the winner of a game of Hex.
++//
++// Player "X" plays from left to right, and player "O" plays from top to
++// bottom. It returns the winning player's letter, or the empty string when
++// neither player has connected their two sides.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	if connects(lines, 'X') {
++		return "X", nil
++	}
++	if connects(lines, 'O') {
++		return "O", nil
++	}
++	return "", nil
++}
++
++// neighbours lists the six hexagonal neighbours of a cell as (row, column)
++// offsets. The odd rows of a Hex board are shifted half a cell to the right
++// with respect to the preceding row, so the diagonal neighbours are offset in
++// the same direction.
++var neighbours = [6][2]int{
++	{0, -1}, {0, 1}, // left and right on the same row
++	{-1, 0}, {-1, 1}, // up-left and up-right
++	{1, -1}, {1, 0}, // down-left and down-right
++}
++
++// connects reports whether player's stones form an unbroken path between the
++// player's two sides of the board.
++func connects(board []string, player byte) bool {
++	height := len(board)
++	if height == 0 {
++		return false
++	}
++
++	width := 0
++	for _, row := range board {
++		if len(row) > width {
++			width = len(row)
++		}
++	}
++	if width == 0 {
++		return false
++	}
++
++	visited := make([][]bool, height)
++	for r, row := range board {
++		visited[r] = make([]bool, len(row))
++	}
++
++	var queue [][2]int
++	add := func(r, c int) {
++		if r < 0 || r >= height || c < 0 || c >= len(board[r]) {
++			return
++		}
++		if visited[r][c] || board[r][c] != player {
++			return
++		}
++		visited[r][c] = true
++		queue = append(queue, [2]int{r, c})
++	}
++
++	// Seed the search with every stone on the player's starting side.
++	if player == 'X' {
++		// X starts on the left edge.
++		for r := 0; r < height; r++ {
++			add(r, 0)
++		}
++	} else {
++		// O starts on the top edge.
++		for c := 0; c < width; c++ {
++			add(0, c)
++		}
++	}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++		r, c := cur[0], cur[1]
++
++		// Reaching the opposite side means the player has won.
++		if (player == 'X' && c == width-1) || (player == 'O' && r == height-1) {
++			return true
++		}
++
++		for _, d := range neighbours {
++			add(r+d[0], c+d[1])
++		}
++	}
++
++	return false
+ }

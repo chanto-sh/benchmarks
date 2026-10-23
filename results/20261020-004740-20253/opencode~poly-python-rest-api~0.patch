@@ -1,0 +1,83 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..bc6b76e 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,75 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        self.database = database if database is not None else {"users": []}
++        self.database.setdefault("users", [])
++
++    def _users(self):
++        return self.database["users"]
++
++    def _find(self, name):
++        for user in self._users():
++            if user["name"] == name:
++                return user
++        return None
++
++    def _update_balance(self, user):
++        user["balance"] = sum(user["owed_by"].values()) - sum(user["owes"].values())
++
++    def _set_owe(self, debtor, creditor, amount):
++        """Make `debtor` owe `creditor` `amount` more, netting out existing debts."""
++        debtor_user = self._find(debtor)
++        creditor_user = self._find(creditor)
++
++        # Current net: positive means debtor owes creditor.
++        owed = debtor_user["owes"].get(creditor, 0.0)
++        owed_by = debtor_user["owed_by"].get(creditor, 0.0)
++        net = owed + amount - owed_by
++
++        debtor_user["owes"].pop(creditor, None)
++        debtor_user["owed_by"].pop(creditor, None)
++        creditor_user["owes"].pop(debtor, None)
++        creditor_user["owed_by"].pop(debtor, None)
++
++        if net > 0:
++            debtor_user["owes"][creditor] = net
++            creditor_user["owed_by"][debtor] = net
++        elif net < 0:
++            debtor_user["owed_by"][creditor] = -net
++            creditor_user["owes"][debtor] = -net
++
++        self._update_balance(debtor_user)
++        self._update_balance(creditor_user)
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            users = self._users()
++            if payload is not None:
++                data = json.loads(payload) if isinstance(payload, str) else payload
++                names = set(data.get("users", []))
++                users = [u for u in users if u["name"] in names]
++            users = sorted(users, key=lambda u: u["name"])
++            return json.dumps({"users": users})
++        raise ValueError("Unknown URL: {}".format(url))
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = json.loads(payload) if isinstance(payload, str) else (payload or {})
++
++        if url == "/add":
++            name = data["user"]
++            user = {"name": name, "owes": {}, "owed_by": {}, "balance": 0.0}
++            self._users().append(user)
++            return json.dumps(user)
++
++        if url == "/iou":
++            lender = data["lender"]
++            borrower = data["borrower"]
++            amount = data["amount"]
++            self._set_owe(borrower, lender, amount)
++            users = [self._find(lender), self._find(borrower)]
++            users = sorted(users, key=lambda u: u["name"])
++            return json.dumps({"users": users})
++
++        raise ValueError("Unknown URL: {}".format(url))

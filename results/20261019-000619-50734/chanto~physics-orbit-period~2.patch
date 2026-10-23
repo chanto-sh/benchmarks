@@ -1,0 +1,213 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..c7228d9 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,199 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) tableau.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_E = (
++    71 / 57600,
++    0.0,
++    -71 / 16695,
++    71 / 1920,
++    -17253 / 339200,
++    22 / 525,
++    -1 / 40,
++)
++
++
++def _derivative(accel, state):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _dopri_step(accel, state, step):
++    stages = []
++    for stage, row in enumerate(_A):
++        if stage == 0:
++            trial = state
++        else:
++            weighted = [0.0, 0.0, 0.0, 0.0]
++            for coefficient, previous in zip(row, stages):
++                for i in range(4):
++                    weighted[i] += coefficient * previous[i]
++            trial = tuple(state[i] + step * weighted[i] for i in range(4))
++        stages.append(_derivative(accel, trial))
++
++    # The seventh stage is the fifth-order solution; its derivative is k7.
++    new_state = trial
++    error = [0.0, 0.0, 0.0, 0.0]
++    for coefficient, stage in zip(_E, stages):
++        for i in range(4):
++            error[i] += coefficient * stage[i]
++    for i in range(4):
++        error[i] *= step
++    return new_state, error, stages[0], stages[-1]
++
++
++def _quintic_pair(f0, f1, m0, m1, q0, q1, s):
++    """Value and s-derivative of a quintic matching endpoint data."""
++    s2 = s * s
++    s3 = s2 * s
++    s4 = s3 * s
++    s5 = s4 * s
++
++    value = (
++        (1 - 10 * s3 + 15 * s4 - 6 * s5) * f0
++        + (s - 6 * s3 + 8 * s4 - 3 * s5) * m0
++        + (0.5 * s2 - 1.5 * s3 + 1.5 * s4 - 0.5 * s5) * q0
++        + (10 * s3 - 15 * s4 + 6 * s5) * f1
++        + (-4 * s3 + 7 * s4 - 3 * s5) * m1
++        + (0.5 * s3 - s4 + 0.5 * s5) * q1
++    )
++    derivative = (
++        (-30 * s2 + 60 * s3 - 30 * s4) * f0
++        + (1 - 18 * s2 + 32 * s3 - 15 * s4) * m0
++        + (s - 4.5 * s2 + 6 * s3 - 2.5 * s4) * q0
++        + (30 * s2 - 60 * s3 + 30 * s4) * f1
++        + (-12 * s2 + 28 * s3 - 15 * s4) * m1
++        + (1.5 * s2 - 4 * s3 + 2.5 * s4) * q1
++    )
++    return value, derivative
++
++
++def _radial_velocity_at_fraction(y0, y1, d0, d1, step, s):
++    x0, y0p, vx0, vy0 = y0
++    x1, y1p, vx1, vy1 = y1
++    ax0, ay0 = d0[2], d0[3]
++    ax1, ay1 = d1[2], d1[3]
++
++    x, dx = _quintic_pair(
++        x0, x1, step * vx0, step * vx1,
++        step * step * ax0, step * step * ax1, s,
++    )
++    y, dy = _quintic_pair(
++        y0p, y1p, step * vy0, step * vy1,
++        step * step * ay0, step * step * ay1, s,
++    )
++    return x * dx / step + y * dy / step
++
++
++def _event_fraction(y0, y1, d0, d1, step):
++    """Locate the outward radial-velocity zero inside an accepted step."""
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if _radial_velocity_at_fraction(y0, y1, d0, d1, step, mid) < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _local_step_limit(state, derivative):
++    x, y, vx, vy = state
++    radius = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    acceleration = math.hypot(derivative[2], derivative[3])
++
++    limits = []
++    if speed > 0.0:
++        limits.append(0.05 * radius / speed)
++    if acceleration > 0.0:
++        limits.append(0.05 * math.sqrt(radius / acceleration))
++    return min(limits) if limits else math.inf
++
++
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    state = (float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1]))
++    derivative = _derivative(accel, state)
++
++    radius = math.hypot(state[0], state[1])
++    speed = math.hypot(state[2], state[3])
++    acceleration = math.hypot(derivative[2], derivative[3])
++
++    # Initial tolerances should follow the natural length and speed scales.
++    if speed == 0.0 and acceleration > 0.0:
++        speed = math.sqrt(acceleration * radius)
++    if radius == 0.0:
++        radius = 1.0
++    if speed == 0.0:
++        speed = 1.0
++
++    rtol = 1e-12
++    atol_pos = 1e-13 * radius
++    atol_vel = 1e-13 * speed
++
++    step = 1e-3 * min(
++        radius / speed if speed > 0.0 else math.inf,
++        math.sqrt(radius / acceleration) if acceleration > 0.0 else math.inf,
++    )
++    if not math.isfinite(step) or step == 0.0:
++        step = 1e-3
++
++    time = 0.0
++    previous_radial_velocity = (
++        state[0] * state[2] + state[1] * state[3]
++    )
++    event_times = []
++
++    for _ in range(200000):
++        step = min(step, _local_step_limit(state, derivative))
++        new_state, error, old_derivative, new_derivative = _dopri_step(
++            accel, state, step
++        )
++
++        error_norm = 0.0
++        for i in range(4):
++            scale = (
++                atol_pos + rtol * max(abs(state[i]), abs(new_state[i]))
++                if i < 2
++                else atol_vel + rtol * max(abs(state[i]), abs(new_state[i]))
++            )
++            error_norm = max(error_norm, abs(error[i]) / scale)
++
++        if error_norm <= 1.0:
++            radial_velocity = (
++                new_state[0] * new_state[2] + new_state[1] * new_state[3]
++            )
++            if previous_radial_velocity < 0.0 <= radial_velocity:
++                fraction = _event_fraction(
++                    state, new_state, old_derivative, new_derivative, step
++                )
++                event_times.append(time + fraction * step)
++                if len(event_times) == 2:
++                    return event_times[1] - event_times[0]
++
++            time += step
++            state = new_state
++            derivative = new_derivative
++            previous_radial_velocity = radial_velocity
++
++            if error_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = min(5.0, max(0.2, 0.9 * error_norm ** -0.2))
++            step *= factor
++        else:
++            factor = max(0.1, 0.9 * error_norm ** -0.2)
++            step *= factor
++
++    raise RuntimeError("could not find two successive closest approaches")

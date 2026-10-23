@@ -1,0 +1,74 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..4fe5acd
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,43 @@
++# Blocked: native async ratelimit API is not available
++
++## What is blocked
++
++Migrating `Client` to `RateLimiter.acquire_async()` — both adding
++`Client.fetch_all_async(urls)` and removing `_ThreadedLimiter` in favour of the
++native coroutine API.
++
++## Why
++
++The premise that `ratelimit` has native async support does not hold for the
++version vendored in this repository:
++
++- `vendor/ratelimit.py` is `ratelimit 2.4.1` and defines only `try_acquire()`
++  and the blocking `acquire()`. There is no `acquire_async()`.
++- `vendor/CHANGELOG.md` lists 2.4.0 and 2.4.1 and neither mentions async
++  support, so this is not just a stale checkout of an otherwise-released API.
++- `vendor/` is synced from the platform repo and must not be hand-edited, so we
++  cannot add the method here.
++- Consequently the supplied tests fail against the real vendored code:
++  - `test_limiter_is_natively_async` — `RateLimiter` has no `acquire_async`.
++  - `test_fetch_all_async_uses_native_limiter` — assigning `acquire_async` on
++    the instance fails, and any `fetch_all_async` calling it would raise
++    `AttributeError` with a real limiter.
++
++Implementing `fetch_all_async` against a method that does not exist, or
++emulating it with the threaded workaround, would only hide the problem and
++would not be the requested native async migration, so neither was done.
++
++## Unblocking
++
++Sync a `vendor/ratelimit.py` that actually exports a coroutine
++`RateLimiter.acquire_async()` from the platform repo. Once that lands,
++`Client.fetch_all_async` can be implemented as a straightforward
++`await self.limiter.acquire_async()` before each `await self.fetch(url)`, and
++`_ThreadedLimiter` can stay deleted.
++
++## Completed meanwhile
++
++- Removed the unused `_ThreadedLimiter` workaround and its `asyncio` import
++  from `client.py`.
++- The existing synchronous `Client.fetch_all` behaviour is unchanged and its
++  test still passes.
+diff --git a/client.py b/client.py
+index 2b319e5..9ceb24d 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch

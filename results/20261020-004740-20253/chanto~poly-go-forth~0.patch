@@ -1,0 +1,206 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..0015d4b 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,200 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// op is a single executable operation.
++type op func(*stack) error
++
++type stack struct {
++	data []int
++}
++
++func (s *stack) push(n int) {
++	s.data = append(s.data, n)
++}
++
++func (s *stack) pop() (int, error) {
++	if len(s.data) == 0 {
++		return 0, errors.New("empty stack")
++	}
++	n := s.data[len(s.data)-1]
++	s.data = s.data[:len(s.data)-1]
++	return n, nil
++}
++
++func (s *stack) popTwo() (int, int, error) {
++	if len(s.data) == 0 {
++		return 0, 0, errors.New("empty stack")
++	}
++	if len(s.data) == 1 {
++		return 0, 0, errors.New("only one value on the stack")
++	}
++	b, _ := s.pop()
++	a, _ := s.pop()
++	return a, b, nil
++}
++
++func parseNumber(token string) (int, bool) {
++	start := 0
++	if strings.HasPrefix(token, "-") {
++		start = 1
++	}
++	if len(token) == start {
++		return 0, false
++	}
++	for i := start; i < len(token); i++ {
++		if token[i] < '0' || token[i] > '9' {
++			return 0, false
++		}
++	}
++	n, err := strconv.Atoi(token)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++func binary(f func(a, b int) (int, error)) op {
++	return func(s *stack) error {
++		a, b, err := s.popTwo()
++		if err != nil {
++			return err
++		}
++		n, err := f(a, b)
++		if err != nil {
++			return err
++		}
++		s.push(n)
++		return nil
++	}
++}
++
++var builtins = map[string]op{
++	"+": binary(func(a, b int) (int, error) { return a + b, nil }),
++	"-": binary(func(a, b int) (int, error) { return a - b, nil }),
++	"*": binary(func(a, b int) (int, error) { return a * b, nil }),
++	"/": binary(func(a, b int) (int, error) {
++		if b == 0 {
++			return 0, errors.New("divide by zero")
++		}
++		return a / b, nil
++	}),
++	"dup": func(s *stack) error {
++		n, err := s.pop()
++		if err != nil {
++			return err
++		}
++		s.push(n)
++		s.push(n)
++		return nil
++	},
++	"drop": func(s *stack) error {
++		_, err := s.pop()
++		return err
++	},
++	"swap": func(s *stack) error {
++		a, b, err := s.popTwo()
++		if err != nil {
++			return err
++		}
++		s.push(b)
++		s.push(a)
++		return nil
++	},
++	"over": func(s *stack) error {
++		a, b, err := s.popTwo()
++		if err != nil {
++			return err
++		}
++		s.push(a)
++		s.push(b)
++		s.push(a)
++		return nil
++	},
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	s := &stack{data: []int{}}
++	words := map[string][]op{}
++
++	// resolve compiles a token into an operation. User-defined words are looked
++	// up first, so they can override built-ins, and are bound at definition
++	// time, so a word may refer to a previous version of itself.
++	resolve := func(token string) (op, error) {
++		if n, ok := parseNumber(token); ok {
++			return func(s *stack) error {
++				s.push(n)
++				return nil
++			}, nil
++		}
++		name := strings.ToLower(token)
++		if body, ok := words[name]; ok {
++			return func(s *stack) error {
++				for _, o := range body {
++					if err := o(s); err != nil {
++						return err
++					}
++				}
++				return nil
++			}, nil
++		}
++		if o, ok := builtins[name]; ok {
++			return o, nil
++		}
++		return nil, errors.New("undefined operation")
++	}
++
++	defining := false
++	needName := false
++	var name string
++	var body []op
++
++	for _, line := range input {
++		for _, token := range strings.Fields(line) {
++			switch {
++			case defining && needName:
++				if _, isNum := parseNumber(token); isNum {
++					return nil, errors.New("illegal operation")
++				}
++				name = strings.ToLower(token)
++				needName = false
++			case defining:
++				if token == ";" {
++					words[name] = body
++					defining = false
++					name = ""
++					body = nil
++					continue
++				}
++				o, err := resolve(token)
++				if err != nil {
++					return nil, err
++				}
++				body = append(body, o)
++			case token == ":":
++				defining = true
++				needName = true
++				name = ""
++				body = nil
++			case token == ";":
++				return nil, errors.New("illegal operation")
++			default:
++				o, err := resolve(token)
++				if err != nil {
++					return nil, err
++				}
++				if err := o(s); err != nil {
++					return nil, err
++				}
++			}
++		}
++	}
++	if defining {
++		return nil, errors.New("illegal operation")
++	}
++	return s.data, nil
+ }

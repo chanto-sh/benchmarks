@@ -1,0 +1,26 @@
+diff --git a/transpose.py b/transpose.py
+index 24b60af..5b2914b 100644
+--- a/transpose.py
++++ b/transpose.py
+@@ -1,2 +1,20 @@
+ def transpose(text):
+-    pass
++    rows = text.splitlines()
++    if not rows:
++        return ""
++
++    width = max(len(row) for row in rows)
++    transposed = []
++
++    for column in range(width):
++        last_row = max(
++            index for index, row in enumerate(rows) if column < len(row)
++        )
++        transposed.append(
++            "".join(
++                row[column] if column < len(row) else " "
++                for row in rows[: last_row + 1]
++            )
++        )
++
++    return "\n".join(transposed)

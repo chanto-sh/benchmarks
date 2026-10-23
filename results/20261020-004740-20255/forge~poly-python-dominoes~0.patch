@@ -1,0 +1,82 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..943b566 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,76 @@
++from collections import Counter, defaultdict
++
++
+ def can_chain(dominoes):
+-    pass
++    """Return a valid domino chain using every stone exactly once, else None.
++
++    A valid chain is an ordering of the given stones such that touching halves
++    match and the two free halves (first stone's left, last stone's right) also
++    match.  This is exactly an Eulerian circuit in the multigraph whose
++    vertices are the numbers on the halves and whose edges are the stones.
++    """
++    stones = [tuple(domino) for domino in dominoes]
++    if not stones:
++        return []
++
++    graph = defaultdict(list)
++    degree = Counter()
++    for index, (left, right) in enumerate(stones):
++        graph[left].append((right, index))
++        graph[right].append((left, index))
++        degree[left] += 1
++        degree[right] += 1
++
++    # An Eulerian circuit requires every vertex to have even degree.
++    if any(deg % 2 for deg in degree.values()):
++        return None
++
++    # All stones must belong to a single connected component.
++    start = stones[0][0]
++    visited = set()
++    stack = [start]
++    while stack:
++        node = stack.pop()
++        if node in visited:
++            continue
++        visited.add(node)
++        for neighbor, _ in graph[node]:
++            if neighbor not in visited:
++                stack.append(neighbor)
++    if any(node not in visited for node in degree):
++        return None
++
++    # Hierholzer's algorithm: walk until stuck, then splice in cycles.
++    used = [False] * len(stones)
++    next_edge = defaultdict(int)
++    walk = [(start, None)]
++    reversed_edges = []
++    while walk:
++        node = walk[-1][0]
++        edges = graph[node]
++        while next_edge[node] < len(edges) and used[edges[next_edge[node]][1]]:
++            next_edge[node] += 1
++        if next_edge[node] < len(edges):
++            neighbor, index = edges[next_edge[node]]
++            used[index] = True
++            walk.append((neighbor, index))
++        else:
++            _, via = walk.pop()
++            if via is not None:
++                reversed_edges.append(via)
++
++    if len(reversed_edges) != len(stones):
++        return None
++
++    # Orient every stone in traversal order so ends keep matching.
++    chain = []
++    current = start
++    for index in reversed(reversed_edges):
++        left, right = stones[index]
++        if left == current:
++            chain.append((left, right))
++            current = right
++        else:
++            chain.append((right, left))
++            current = left
++    return chain

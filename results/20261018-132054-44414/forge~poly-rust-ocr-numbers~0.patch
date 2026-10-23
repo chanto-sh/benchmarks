@@ -1,0 +1,85 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index fd08ada..d4a4984 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -7,6 +7,79 @@ pub enum Error {
+     InvalidColumnCount(usize),
+ }
+ 
++/// The canonical 3 x 4 representation of each digit (0 through 9).
++const DIGITS: [(&str, [&str; 4]); 10] = [
++    ("0", [" _ ", "| |", "|_|", "   "]),
++    ("1", ["   ", "  |", "  |", "   "]),
++    ("2", [" _ ", " _|", "|_ ", "   "]),
++    ("3", [" _ ", " _|", " _|", "   "]),
++    ("4", ["   ", "|_|", "  |", "   "]),
++    ("5", [" _ ", "|_ ", " _|", "   "]),
++    ("6", [" _ ", "|_ ", "|_|", "   "]),
++    ("7", [" _ ", "  |", "  |", "   "]),
++    ("8", [" _ ", "|_|", "|_|", "   "]),
++    ("9", [" _ ", "|_|", " _|", "   "]),
++];
++
++/// Extract the three characters of `row` that make up the glyph starting at
++/// `start`, padding with spaces if the row is shorter than expected.
++fn slice3(row: &str, start: usize) -> String {
++    let mut s: String = row.chars().skip(start).take(3).collect();
++    while s.chars().count() < 3 {
++        s.push(' ');
++    }
++    s
++}
++
++/// Identify the digit encoded by a single 3 x 4 glyph, or `?` if unknown.
++fn decode_glyph(rows: [&str; 4], start: usize) -> char {
++    let glyph = [
++        slice3(rows[0], start),
++        slice3(rows[1], start),
++        slice3(rows[2], start),
++        slice3(rows[3], start),
++    ];
++
++    DIGITS
++        .iter()
++        .find(|(_, pattern)| pattern.iter().zip(glyph.iter()).all(|(p, g)| *p == g))
++        .map(|(digit, _)| digit.chars().next().expect("digit is non-empty"))
++        .unwrap_or('?')
++}
++
+ pub fn convert(input: &str) -> Result<String, Error> {
+-    todo!("Convert the input '{input}' to a string");
++    let mut lines: Vec<&str> = input.split('\n').collect();
++
++    // A trailing newline only marks the end of the last row; it is not a row.
++    if input.ends_with('\n') {
++        lines.pop();
++    }
++
++    if lines.len() % 4 != 0 {
++        return Err(Error::InvalidRowCount(lines.len()));
++    }
++
++    let width = lines.first().map_or(0, |line| line.chars().count());
++    if width % 3 != 0 {
++        return Err(Error::InvalidColumnCount(width));
++    }
++
++    for line in &lines {
++        let len = line.chars().count();
++        if len != width {
++            return Err(Error::InvalidColumnCount(len));
++        }
++    }
++
++    let mut numbers = Vec::with_capacity(lines.len() / 4);
++    for rows in lines.chunks(4) {
++        let glyph_rows = [rows[0], rows[1], rows[2], rows[3]];
++        let mut number = String::with_capacity(width / 3);
++        for start in (0..width).step_by(3) {
++            number.push(decode_glyph(glyph_rows, start));
++        }
++        numbers.push(number);
++    }
++
++    Ok(numbers.join(","))
+ }

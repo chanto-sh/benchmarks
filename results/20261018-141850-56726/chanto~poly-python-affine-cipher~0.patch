@@ -1,0 +1,50 @@
+diff --git a/affine_cipher.py b/affine_cipher.py
+index 2d41e04..ad01bde 100644
+--- a/affine_cipher.py
++++ b/affine_cipher.py
+@@ -1,6 +1,43 @@
++import re
++from math import gcd
++
++_M = 26
++_GROUP_SIZE = 5
++
++
++def _clean(text):
++    return re.sub(r"[^a-z0-9]", "", text.lower())
++
++
++def _check_coprime(a):
++    if gcd(a, _M) != 1:
++        raise ValueError("a and m must be coprime.")
++
++
+ def encode(plain_text, a, b):
+-    pass
++    _check_coprime(a)
++    cleaned = _clean(plain_text)
++    encoded = []
++    for char in cleaned:
++        if char.isdigit():
++            encoded.append(char)
++        else:
++            index = ord(char) - ord("a")
++            encoded.append(chr((a * index + b) % _M + ord("a")))
++    return " ".join(
++        "".join(encoded[i : i + _GROUP_SIZE])
++        for i in range(0, len(encoded), _GROUP_SIZE)
++    )
+ 
+ 
+ def decode(ciphered_text, a, b):
+-    pass
++    _check_coprime(a)
++    inverse = pow(a, -1, _M)
++    decoded = []
++    for char in _clean(ciphered_text):
++        if char.isdigit():
++            decoded.append(char)
++        else:
++            index = ord(char) - ord("a")
++            decoded.append(chr((inverse * (index - b)) % _M + ord("a")))
++    return "".join(decoded)

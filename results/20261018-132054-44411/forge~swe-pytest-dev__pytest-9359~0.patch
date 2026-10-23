@@ -1,0 +1,53 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..b05d62c
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1,2 @@
++Fixed source code being included in the traceback of a failing statement when
++the following statement is decorated, on Python 3.8 and later.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..9ae1dbf 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,14 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Before Python 3.8, the lineno of a decorated function
++            # pointed at the decorator, while the decorator lines were
++            # not included in the statement.  Since Python 3.8 the lineno
++            # points at the `def`/`class` line instead, so add the
++            # decorator lines explicitly to avoid them being included in
++            # the preceding statement.
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                values.extend(d.lineno - 1 for d in x.decorator_list)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..480ad8d 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -466,6 +466,21 @@ def test_comment_in_statement() -> None:
+         )
+ 
+ 
++def test_statement_with_decorated_nested_function() -> None:
++    """Decorator lines of a following statement must not be included (#9359)."""
++    source = Source(
++        [
++            "def test_right_statement():",
++            "    assert 1 == 2",
++            "",
++            "    @decorator",
++            "    def inner():",
++            "        return 2",
++        ]
++    )
++    assert str(source.getstatement(1)) == "    assert 1 == 2"
++
++
+ def test_source_with_decorator() -> None:
+     """Test behavior with Source / Code().source with regard to decorators."""
+     from _pytest.compat import get_real_func

@@ -1,0 +1,118 @@
+diff --git a/pov.go b/pov.go
+index 48e2477..1ebb030 100644
+--- a/pov.go
++++ b/pov.go
+@@ -1,24 +1,25 @@
+ package pov
+ 
+ type Tree struct {
+-	// Add the needed fields here
++	value    string
++	children []*Tree
+ }
+ 
+ // New creates and returns a new Tree with the given root value and children.
+ func New(value string, children ...*Tree) *Tree {
+-	panic("Please implement this function")
++	return &Tree{value: value, children: children}
+ }
+ 
+ // Value returns the value at the root of a tree.
+ func (tr *Tree) Value() string {
+-	panic("Please implement this function")
++	return tr.value
+ }
+ 
+ // Children returns a slice containing the children of a tree.
+ // There is no need to sort the elements in the result slice,
+ // they can be in any order.
+ func (tr *Tree) Children() []*Tree {
+-	panic("Please implement this function")
++	return tr.children
+ }
+ 
+ // String describes a tree in a compact S-expression format.
+@@ -38,14 +39,81 @@ func (tr *Tree) String() string {
+ 	return "(" + result + ")"
+ }
+ 
++// pathToNode returns the sequence of nodes from the receiver down to the
++// first node whose value equals value, or nil if no such node exists.
++func (tr *Tree) pathToNode(value string) []*Tree {
++	if tr == nil {
++		return nil
++	}
++	if tr.value == value {
++		return []*Tree{tr}
++	}
++	for _, ch := range tr.children {
++		if p := ch.pathToNode(value); p != nil {
++			return append([]*Tree{tr}, p...)
++		}
++	}
++	return nil
++}
++
+ // POV problem-specific functions
+ 
+ // FromPov returns the pov from the node specified in the argument.
+ func (tr *Tree) FromPov(from string) *Tree {
+-	panic("Please implement this function")
++	path := tr.pathToNode(from)
++	if path == nil {
++		return nil
++	}
++
++	// Start with the target node, keeping all of its children.
++	root := &Tree{value: path[len(path)-1].value}
++	root.children = append(root.children, path[len(path)-1].children...)
++
++	// Walk back up the path, re-parenting each ancestor as a child of the
++	// node below it. Each ancestor keeps all of its children except the one
++	// we came from.
++	current := root
++	for i := len(path) - 2; i >= 0; i-- {
++		ancestor := path[i]
++		child := path[i+1]
++		next := &Tree{value: ancestor.value}
++		for _, ch := range ancestor.children {
++			if ch != child {
++				next.children = append(next.children, ch)
++			}
++		}
++		current.children = append(current.children, next)
++		current = next
++	}
++
++	return root
+ }
+ 
+ // PathTo returns the shortest path between two nodes in the tree.
+ func (tr *Tree) PathTo(from, to string) []string {
+-	panic("Please implement this function")
++	fromPath := tr.pathToNode(from)
++	toPath := tr.pathToNode(to)
++	if fromPath == nil || toPath == nil {
++		return nil
++	}
++
++	// Find the lowest common ancestor by comparing the root paths.
++	i := 0
++	for i < len(fromPath) && i < len(toPath) && fromPath[i] == toPath[i] {
++		i++
++	}
++	// i is the index of the first differing node; the LCA is at i-1.
++	lca := i - 1
++
++	var result []string
++	// From the source up to the LCA (inclusive).
++	for j := len(fromPath) - 1; j >= lca; j-- {
++		result = append(result, fromPath[j].value)
++	}
++	// From the child of the LCA down to the destination.
++	for j := lca + 1; j < len(toPath); j++ {
++		result = append(result, toPath[j].value)
++	}
++
++	return result
+ }

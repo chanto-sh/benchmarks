@@ -1,0 +1,58 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..b146a19 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,52 @@
++from collections import defaultdict
++
++
+ def can_chain(dominoes):
+-    pass
++    if not dominoes:
++        return []
++
++    adjacency = defaultdict(list)
++    degree = defaultdict(int)
++
++    for edge_id, (left, right) in enumerate(dominoes):
++        adjacency[left].append((right, edge_id))
++        adjacency[right].append((left, edge_id))
++        degree[left] += 1
++        degree[right] += 1
++
++    if any(value % 2 for value in degree.values()):
++        return None
++
++    start = next(iter(adjacency))
++    seen = set()
++    stack = [start]
++    while stack:
++        vertex = stack.pop()
++        if vertex in seen:
++            continue
++        seen.add(vertex)
++        stack.extend(neighbor for neighbor, _ in adjacency[vertex])
++
++    if any(vertex not in seen for vertex in adjacency):
++        return None
++
++    # Hierholzer's algorithm: build an Eulerian circuit using every domino.
++    vertex_stack = [start]
++    circuit = []
++    used_edges = set()
++
++    while vertex_stack:
++        vertex = vertex_stack[-1]
++        while adjacency[vertex]:
++            neighbor, edge_id = adjacency[vertex].pop()
++            if edge_id in used_edges:
++                continue
++            used_edges.add(edge_id)
++            vertex_stack.append(neighbor)
++            break
++        else:
++            circuit.append(vertex_stack.pop())
++
++    circuit.reverse()
++
++    return [(left, right) for left, right in zip(circuit, circuit[1:])]

@@ -1,0 +1,245 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..987b51e 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,238 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51, _A52, _A53, _A54 = (
++    19372.0 / 6561.0,
++    -25360.0 / 2187.0,
++    64448.0 / 6561.0,
++    -212.0 / 729.0,
++)
++_A61, _A62, _A63, _A64, _A65 = (
++    9017.0 / 3168.0,
++    -355.0 / 33.0,
++    46732.0 / 5247.0,
++    49.0 / 176.0,
++    -5103.0 / 18656.0,
++)
++_B1, _B3, _B4, _B5, _B6 = (
++    35.0 / 384.0,
++    500.0 / 1113.0,
++    125.0 / 192.0,
++    -2187.0 / 6784.0,
++    11.0 / 84.0,
++)
++_C1, _C3, _C4, _C5, _C6, _C7 = (
++    5179.0 / 57600.0,
++    7571.0 / 16695.0,
++    393.0 / 640.0,
++    -92097.0 / 339200.0,
++    187.0 / 2100.0,
++    1.0 / 40.0,
++)
++
++_RTOL = 1.0e-11
++_ATOL = 1.0e-12
++_MAX_STEP = 1.0
++
++
++def _deriv(state, drag, g):
++    """Derivative of (x, y, vx, vy) under quadratic drag and gravity."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    a = drag * speed
++    return (vx, vy, -a * vx, -a * vy - g)
++
++
++def _step(state, h, drag, g):
++    """One embedded Dormand-Prince 5(4) step.
++
++    Returns the fifth-order solution and the difference from the fourth-order
++    solution, used for adaptive step-size control.
++    """
++    k1 = _deriv(state, drag, g)
++
++    s = tuple(state[i] + h * _A21 * k1[i] for i in range(4))
++    k2 = _deriv(s, drag, g)
++
++    s = tuple(
++        state[i] + h * (_A31 * k1[i] + _A32 * k2[i]) for i in range(4)
++    )
++    k3 = _deriv(s, drag, g)
++
++    s = tuple(
++        state[i] + h * (_A41 * k1[i] + _A42 * k2[i] + _A43 * k3[i])
++        for i in range(4)
++    )
++    k4 = _deriv(s, drag, g)
++
++    s = tuple(
++        state[i]
++        + h * (_A51 * k1[i] + _A52 * k2[i] + _A53 * k3[i] + _A54 * k4[i])
++        for i in range(4)
++    )
++    k5 = _deriv(s, drag, g)
++
++    s = tuple(
++        state[i]
++        + h
++        * (
++            _A61 * k1[i]
++            + _A62 * k2[i]
++            + _A63 * k3[i]
++            + _A64 * k4[i]
++            + _A65 * k5[i]
++        )
++        for i in range(4)
++    )
++    k6 = _deriv(s, drag, g)
++
++    y5 = tuple(
++        state[i]
++        + h
++        * (
++            _B1 * k1[i]
++            + _B3 * k3[i]
++            + _B4 * k4[i]
++            + _B5 * k5[i]
++            + _B6 * k6[i]
++        )
++        for i in range(4)
++    )
++    k7 = _deriv(y5, drag, g)
++
++    y4 = tuple(
++        state[i]
++        + h
++        * (
++            _C1 * k1[i]
++            + _C3 * k3[i]
++            + _C4 * k4[i]
++            + _C5 * k5[i]
++            + _C6 * k6[i]
++            + _C7 * k7[i]
++        )
++        for i in range(4)
++    )
++
++    return y5, tuple(y5[i] - y4[i] for i in range(4))
++
++
++def _error_norm(state, candidate, error):
++    """Scaled max norm of the local error estimate."""
++    norm = 0.0
++    for i in range(4):
++        scale = _ATOL + _RTOL * max(abs(state[i]), abs(candidate[i]))
++        norm = max(norm, abs(error[i]) / scale)
++    return norm
++
++
++def _step_factor(err):
++    """Step-size multiplier for the next step."""
++    if err == 0.0:
++        return 5.0
++    return min(5.0, max(0.2, 0.9 * err ** -0.2))
++
++
++def _locate_event(state, h, event, drag, g):
++    """Bisect for the first event in (0, h], given event(start) > 0."""
++    lo = 0.0
++    hi = h
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        candidate, _ = _step(state, mid, drag, g)
++        if event(candidate) > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    dt = 0.5 * (lo + hi)
++    candidate, _ = _step(state, dt, drag, g)
++    return candidate, dt
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg``.  Quadratic drag is ``F = -k |v| v``, so the
++    acceleration due to drag is ``-(k / mass) |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    # Launched at ground level and not moving upward: flight ends immediately.
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, float(h0), vx, vy)
++    t = 0.0
++    apex = float(h0)
++
++    # Free-flight estimate used only to choose a safe initial step.
++    t_estimate = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    h = max(1.0e-9, min(0.01, 1.0e-3 * t_estimate))
++
++    while True:
++        candidate, error = _step(state, h, drag, g)
++        err = _error_norm(state, candidate, error)
++
++        if err > 1.0:
++            h *= max(0.2, 0.9 * err ** -0.2)
++            continue
++
++        y = candidate[1]
++        vy_end = candidate[3]
++        vy_start = state[3]
++
++        if y <= 0.0:
++            # If the trajectory turned over during this step, handle the apex
++            # first so it is not skipped by the ground event.
++            if vy_start > 0.0:
++                apex_state, dt_apex = _locate_event(
++                    state, h, lambda s: s[3], drag, g
++                )
++                apex = max(apex, apex_state[1])
++                state = apex_state
++                t += dt_apex
++                h *= _step_factor(err)
++                h = min(h, _MAX_STEP)
++                continue
++
++            ground_state, dt_ground = _locate_event(
++                state, h, lambda s: s[1], drag, g
++            )
++            return {
++                "range": ground_state[0],
++                "apex": apex,
++                "time": t + dt_ground,
++            }
++
++        if vy_start > 0.0 and vy_end <= 0.0:
++            apex_state, dt_apex = _locate_event(
++                state, h, lambda s: s[3], drag, g
++            )
++            apex = max(apex, apex_state[1])
++            state = apex_state
++            t += dt_apex
++        else:
++            state = candidate
++            t += h
++            if state[1] > apex:
++                apex = state[1]
++
++        h *= _step_factor(err)
++        h = min(h, _MAX_STEP)

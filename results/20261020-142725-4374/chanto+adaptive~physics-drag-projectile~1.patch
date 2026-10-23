@@ -1,0 +1,167 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..d450037 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,160 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++def _stage(state, h, coefficients, stages):
++    return tuple(
++        state[i] + h * sum(c * stage[i] for c, stage in zip(coefficients, stages))
++        for i in range(4)
++    )
++
++
++def _rk_step(state, h, derivative):
++    """One Dormand-Prince 5(4) step; return the 5th and 4th order states."""
++    k1 = derivative(state)
++    k2 = derivative(_stage(state, h, (1 / 5,), (k1,)))
++    k3 = derivative(_stage(state, h, (3 / 40, 9 / 40), (k1, k2)))
++    k4 = derivative(
++        _stage(state, h, (44 / 45, -56 / 15, 32 / 9), (k1, k2, k3))
++    )
++    k5 = derivative(
++        _stage(
++            state,
++            h,
++            (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++            (k1, k2, k3, k4),
++        )
++    )
++    k6 = derivative(
++        _stage(
++            state,
++            h,
++            (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++            (k1, k2, k3, k4, k5),
++        )
++    )
++    k7 = derivative(
++        _stage(
++            state,
++            h,
++            (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++            (k1, k2, k3, k4, k5, k6),
++        )
++    )
++    fifth = _stage(
++        state,
++        h,
++        (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0),
++        (k1, k2, k3, k4, k5, k6, k7),
++    )
++    fourth = _stage(
++        state,
++        h,
++        (
++            5179 / 57600,
++            0.0,
++            7571 / 16695,
++            393 / 640,
++            -92097 / 339200,
++            187 / 2100,
++            1 / 40,
++        ),
++        (k1, k2, k3, k4, k5, k6, k7),
++    )
++    return fifth, fourth
++
++
++def _event(state, h, derivative, component):
++    """Bisect for the first zero of one state component inside a step."""
++    low = 0.0
++    high = h
++    for _ in range(60):
++        mid = 0.5 * (low + high)
++        value = _rk_step(state, mid, derivative)[0][component]
++        if value > 0.0:
++            low = mid
++        else:
++            high = mid
++    root_h = 0.5 * (low + high)
++    return root_h, _rk_step(state, root_h, derivative)[0]
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The drag force is ``F = -k * |v| * v``.  A zero drag coefficient uses the
++    vacuum solution; otherwise the trajectory is integrated adaptively and the
++    apex and ground crossing are located by bisection within the final step.
++    """
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++    if abs(math.cos(theta)) < 1e-15:
++        vx = 0.0
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    if k == 0.0:
++        time = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++        apex = h0 + vy * vy / (2.0 * g) if vy > 0.0 else h0
++        return {"range": vx * time, "apex": apex, "time": time}
++
++    drag = k / mass
++
++    def derivative(state):
++        _x, _y, vx, vy = state
++        factor = drag * math.hypot(vx, vy)
++        return vx, vy, -factor * vx, -factor * vy - g
++
++    rtol = 1e-12
++    atol = 1e-12
++    scale_time = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    h = 1e-3 * max(scale_time, abs(v0) / g, 1e-6)
++    state = (0.0, h0, vx, vy)
++    time = 0.0
++    apex = h0
++
++    while True:
++        # Keep a single explicit step well inside the drag time scale.  This
++        # also prevents intermediate stage values from overflowing when the
++        # drag coefficient is large.
++        characteristic_speed = max(
++            math.hypot(state[2], state[3]), math.sqrt(g / drag)
++        )
++        h = min(h, 0.1 / (drag * characteristic_speed))
++
++        fifth, fourth = _rk_step(state, h, derivative)
++
++        error_squared = 0.0
++        for i in range(4):
++            ratio = (fifth[i] - fourth[i]) / (
++                atol + rtol * max(abs(fifth[i]), abs(state[i]))
++            )
++            error_squared += ratio * ratio
++        error = math.sqrt(error_squared / 4.0)
++
++        if not math.isfinite(error):
++            factor = 0.2
++        elif error <= 1.0:
++            if state[3] > 0.0 and fifth[3] <= 0.0:
++                _apex_h, apex_state = _event(state, h, derivative, 3)
++                apex = max(apex, apex_state[1])
++
++            if fifth[1] <= 0.0:
++                landing_h, landing_state = _event(state, h, derivative, 1)
++                return {
++                    "range": landing_state[0],
++                    "apex": apex,
++                    "time": time + landing_h,
++                }
++
++            time += h
++            state = fifth
++
++            factor = 5.0 if error == 0.0 else 0.9 * error ** -0.2
++        else:
++            factor = 0.9 * error ** -0.2
++
++        h *= min(5.0, max(0.2, factor))

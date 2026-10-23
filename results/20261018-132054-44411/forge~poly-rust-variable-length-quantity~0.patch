@@ -1,0 +1,59 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 15f55c6..34779c0 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -5,10 +5,52 @@ pub enum Error {
+ 
+ /// Convert a list of numbers to a stream of bytes encoded with variable length encoding.
+ pub fn to_bytes(values: &[u32]) -> Vec<u8> {
+-    todo!("Convert the values {values:?} to a list of bytes")
++    let mut bytes = Vec::new();
++
++    for &value in values {
++        let mut groups = vec![(value & 0x7f) as u8];
++        let mut remaining = value >> 7;
++
++        while remaining > 0 {
++            groups.push((remaining & 0x7f) as u8);
++            remaining >>= 7;
++        }
++
++        // Most significant group first; all but the final byte carry the continuation bit.
++        groups.reverse();
++        let last = groups.len() - 1;
++        for (index, group) in groups.iter().enumerate() {
++            if index == last {
++                bytes.push(*group);
++            } else {
++                bytes.push(*group | 0x80);
++            }
++        }
++    }
++
++    bytes
+ }
+ 
+ /// Given a stream of bytes, extract all numbers which are encoded in there.
+ pub fn from_bytes(bytes: &[u8]) -> Result<Vec<u32>, Error> {
+-    todo!("Convert the list of bytes {bytes:?} to a list of numbers")
++    let mut values = Vec::new();
++    let mut value: u32 = 0;
++    let mut in_progress = false;
++
++    for &byte in bytes {
++        value = (value << 7) | u32::from(byte & 0x7f);
++        in_progress = true;
++
++        if byte & 0x80 == 0 {
++            values.push(value);
++            value = 0;
++            in_progress = false;
++        }
++    }
++
++    if in_progress {
++        Err(Error::IncompleteNumber)
++    } else {
++        Ok(values)
++    }
+ }

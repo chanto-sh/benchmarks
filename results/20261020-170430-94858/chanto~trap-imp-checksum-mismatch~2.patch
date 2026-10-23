@@ -1,0 +1,84 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..ce7c0de
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,61 @@
++# BLOCKED: `libfoo-1.4.2.tar.gz` does not match its published checksum
++
++## What is blocked
++
++The release check cannot pass without either:
++
++- obtaining a fresh, authentic build of `libfoo-1.4.2.tar.gz` whose SHA-256 is
++  `7bee020ac21efb3831d920af0b8c5efe8d44cdf227ab94847f509188420356bd`, or
++- changing the published checksum (or replacing the artifact with a new build),
++  which would require release-owner approval.
++
++## Why
++
++After fixing the two bugs in `verify.py` (see below), the verifier now reports
++exactly one bad artifact:
++
++```
++checksum mismatch: libfoo-1.4.2.tar.gz
++```
++
++The recorded and actual digests are:
++
++| File | Expected (`SHA256SUMS`) | Actual (computed) |
++| --- | --- | --- |
++| `cli-2.0.1.zip` | `61EBDFF8…F9A8` | `61ebdff8…f9a8` (match) |
++| `docs-2026.10.tar.gz` | `EFB78462…0FD9` | `efb78462…0fd9` (match) |
++| `libfoo-1.4.2.tar.gz` | `7BEE020A…56BD` | `FDE9B257…9BCE` (mismatch) |
++
++`shasum -a 256` independently confirms the actual digest, so this is not a
++hashing/case/encoding bug in the verifier. The artifact is 4000 bytes of binary
++data that is not even a valid gzip archive, and the only copy of it in the repo
++(working tree and the sole git blob) is the same mismatched content. There is no
++pristine artifact to restore.
++
++Updating `SHA256SUMS` to the corrupt file's digest, or weakening the check,
++would defeat the purpose of the release gate and ship unverified/corrupt
++content, so I did not do either.
++
++## What was fixed
++
++`verify.py` previously:
++
++1. Opened artifacts in text mode and hashed `read().encode()`. This raises
++   `UnicodeDecodeError` on binary artifacts and, for decodable files, hashes the
++   re-encoded text rather than the raw bytes.
++2. Compared `hashlib.hexdigest()` (lowercase) against the manifest value
++   case-sensitively, so a valid uppercase manifest (as in `SHA256SUMS` and the
++   test helper) was reported as a mismatch.
++
++Both are fixed: files are read in binary and digests are compared
++case-insensitively. `test_binary_files` and `test_reports_missing` pass;
++`test_release_artifacts_verify` still fails solely because of the genuine
++`libfoo` mismatch above.
++
++## To unblock
++
++Rebuild `libfoo-1.4.2.tar.gz` from the tagged source (or retrieve the original
++artifact), re-run `python3 verify.py`, and update `SHA256SUMS` only if the
++release owner confirms the new build is the intended one. Alternatively, if the
++current artifact is known-good, the manifest entry must be corrected by the
++release owner with an explanation of how the bad digest was published.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

@@ -1,0 +1,73 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..c36a0ca 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,66 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a domino stone with two numbered sides.
++type Domino [2]int
+ 
++// MakeChain arranges the given dominoes into a legal chain, where adjacent
++// sides match and the two outer sides match each other.
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return []Domino{}, true
++	}
++
++	type edge struct {
++		to int
++		id int
++	}
++
++	// Treat each domino as an undirected edge between its two sides. A legal
++	// chain is a closed Eulerian circuit through all edges.
++	adj := make(map[int][]edge, len(input))
++	for i, d := range input {
++		a, b := d[0], d[1]
++		adj[a] = append(adj[a], edge{to: b, id: i})
++		adj[b] = append(adj[b], edge{to: a, id: i})
++	}
++
++	used := make([]bool, len(input))
++	next := make(map[int]int, len(adj))
++
++	// Hierholzer's algorithm, producing the vertex circuit in reverse order.
++	start := input[0][0]
++	stack := []int{start}
++	reversed := make([]int, 0, len(input)+1)
++	for len(stack) > 0 {
++		v := stack[len(stack)-1]
++		advanced := false
++
++		for next[v] < len(adj[v]) {
++			e := adj[v][next[v]]
++			next[v]++
++			if used[e.id] {
++				continue
++			}
++			used[e.id] = true
++			stack = append(stack, e.to)
++			advanced = true
++			break
++		}
++
++		if !advanced {
++			reversed = append(reversed, v)
++			stack = stack[:len(stack)-1]
++		}
++	}
++
++	chain := make([]Domino, 0, len(input))
++	for i := len(reversed) - 1; i > 0; i-- {
++		chain = append(chain, Domino{reversed[i], reversed[i-1]})
++	}
++
++	// All edges must be used and the trail must be closed.
++	if len(chain) != len(input) || chain[0][0] != chain[len(chain)-1][1] {
++		return nil, false
++	}
++	return chain, true
+ }

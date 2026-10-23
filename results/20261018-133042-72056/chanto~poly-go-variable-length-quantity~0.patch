@@ -1,0 +1,50 @@
+diff --git a/variable_length_quantity.go b/variable_length_quantity.go
+index 2ddd432..ead9b35 100644
+--- a/variable_length_quantity.go
++++ b/variable_length_quantity.go
+@@ -1,9 +1,43 @@
+ package variablelengthquantity
+ 
++import "errors"
++
+ func EncodeVarint(input []uint32) []byte {
+-	panic("Please implement the EncodeVarint function")
++	var output []byte
++	for _, value := range input {
++		var groups [5]byte
++		n := 0
++		for {
++			groups[n] = byte(value & 0x7f)
++			n++
++			value >>= 7
++			if value == 0 {
++				break
++			}
++		}
++		for i := n - 1; i >= 0; i-- {
++			b := groups[i]
++			if i != 0 {
++				b |= 0x80
++			}
++			output = append(output, b)
++		}
++	}
++	return output
+ }
+ 
+ func DecodeVarint(input []byte) ([]uint32, error) {
+-	panic("Please implement the DecodeVarint function")
++	var output []uint32
++	var value uint32
++	for _, b := range input {
++		value = value<<7 | uint32(b&0x7f)
++		if b&0x80 == 0 {
++			output = append(output, value)
++			value = 0
++		}
++	}
++	if len(input) > 0 && input[len(input)-1]&0x80 != 0 {
++		return nil, errors.New("incomplete variable length quantity sequence")
++	}
++	return output, nil
+ }

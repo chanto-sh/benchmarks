@@ -1,0 +1,117 @@
+diff --git a/react.py b/react.py
+index ab6be31..0acc58f 100644
+--- a/react.py
++++ b/react.py
+@@ -1,15 +1,104 @@
+-class InputCell:
++class _Cell:
++    """Common behaviour for reactive cells.
++
++    A cell owns a value and keeps track of the cells that depend on it.
++    When an input value changes, all reachable compute cells are
++    recalculated in dependency order, and callbacks are fired only for
++    compute cells whose value actually changed.
++    """
++
++    def __init__(self, value=None):
++        self._value = value
++        self._dependents = []
++        self._depth = 0
++
++    @property
++    def value(self):
++        return self._value
++
++    def _add_dependent(self, cell):
++        if cell not in self._dependents:
++            self._dependents.append(cell)
++
++    def _reachable_dependents(self):
++        """Return every compute cell that (transitively) depends on self."""
++        seen = []
++        seen_ids = set()
++        stack = list(self._dependents)
++        while stack:
++            cell = stack.pop()
++            if id(cell) in seen_ids:
++                continue
++            seen_ids.add(id(cell))
++            seen.append(cell)
++            stack.extend(cell._dependents)
++        return seen
++
++    def _propagate(self):
++        """Recalculate all dependent cells and notify callbacks."""
++        # Sorting by depth guarantees that every cell is recalculated after
++        # all of the cells it depends on, so each cell ends up with its
++        # final value in the new stable state.
++        cells = sorted(self._reachable_dependents(), key=lambda cell: cell._depth)
++
++        changed = []
++        for cell in cells:
++            previous = cell._value
++            cell._recompute()
++            if cell._value != previous:
++                changed.append(cell)
++
++        for cell in changed:
++            cell._fire_callbacks()
++
++    def _recompute(self):
++        raise NotImplementedError
++
++    def _fire_callbacks(self):
++        raise NotImplementedError
++
++
++class InputCell(_Cell):
+     def __init__(self, initial_value):
+-        self.value = None
++        super().__init__(initial_value)
++
++    @property
++    def value(self):
++        return self._value
++
++    @value.setter
++    def value(self, new_value):
++        self._value = new_value
++        self._propagate()
+ 
+ 
+-class ComputeCell:
++class ComputeCell(_Cell):
+     def __init__(self, inputs, compute_function):
+-        self.value = None
++        super().__init__()
++        self.inputs = list(inputs)
++        self.compute_function = compute_function
++        self._callbacks = []
++        self._depth = 1 + max((cell._depth for cell in self.inputs), default=0)
++
++        for cell in self.inputs:
++            cell._add_dependent(self)
++
++        self._recompute()
++
++    def _recompute(self):
++        self._value = self.compute_function([cell.value for cell in self.inputs])
++        return self._value
++
++    def _fire_callbacks(self):
++        for callback in list(self._callbacks):
++            callback(self._value)
+ 
+     def add_callback(self, callback):
+-        pass
++        self._callbacks.append(callback)
+ 
+     def remove_callback(self, callback):
+-        pass
+-    
+\ No newline at end of file
++        try:
++            self._callbacks.remove(callback)
++        except ValueError:
++            # Removing an unregistered callback is a no-op.
++            pass

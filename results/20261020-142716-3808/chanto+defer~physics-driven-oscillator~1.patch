@@ -1,0 +1,98 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..76e7a84 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,91 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++_FMA = getattr(math, "fma", None)
++
++
++def _stiffness_minus_inertia(m, k, omega):
++    """k - m * omega**2, computed without losing the near-resonance difference."""
++    if _FMA is None:
++        return k - m * omega * omega
++    square = omega * omega
++    square_error = _FMA(omega, omega, -square)
++    return _FMA(-m, square_error, _FMA(-m, square, k))
++
++
++def _discriminant(m, k, c):
++    """c**2 - 4 * m * k, accurate near critical damping."""
++    if _FMA is None:
++        return c * c - 4.0 * m * k
++    c_squared = c * c
++    c_squared_error = _FMA(c, c, -c_squared)
++    four_m = 4.0 * m
++    four_mk = four_m * k
++    four_mk_error = _FMA(four_m, k, -four_mk)
++    return math.fsum((c_squared, c_squared_error, -four_mk, -four_mk_error))
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    a = _stiffness_minus_inertia(m, k, omega)
++    b = c * omega
++    return abs(F0) / math.hypot(a, b)
++
++
++def _sinc(z):
++    """sin(z) / z, with the limiting value at z = 0."""
++    return 1.0 if z == 0.0 else math.sin(z) / z
++
++
++def _sinhc(z):
++    """sinh(z) / z, with the limiting value at z = 0."""
++    return 1.0 if z == 0.0 else math.sinh(z) / z
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    # Particular solution: cos_coeff * cos(omega t) + sin_coeff * sin(omega t).
++    a = _stiffness_minus_inertia(m, k, omega)
++    b = c * omega
++    scale = math.hypot(a, b)
++    signed_amp = F0 / scale
++    cos_coeff = signed_amp * (a / scale)
++    sin_coeff = signed_amp * (b / scale)
++
++    # Initial conditions for the homogeneous (transient) part.
++    x_p0 = cos_coeff
++    v_p0 = sin_coeff * omega
++    x_delta = x0 - x_p0
++    v_delta = v0 - v_p0
++
++    alpha = -c / (2.0 * m)
++    h = v_delta - alpha * x_delta
++    discriminant = _discriminant(m, k, c)
++
++    if discriminant > 0.0:
++        # Overdamped (including the near-critical limit without dividing by
++        # the small root separation).
++        delta = math.sqrt(discriminant) / (2.0 * m)
++        z = delta * t
++        if abs(z) <= 1.0:
++            transient = math.exp(alpha * t) * (
++                x_delta * math.cosh(z) + h * (t * _sinhc(z))
++            )
++        else:
++            e1 = math.exp((alpha + delta) * t)
++            e2 = math.exp((alpha - delta) * t)
++            transient = 0.5 * x_delta * (e1 + e2) + 0.5 * h * (e1 - e2) / delta
++    else:
++        # Underdamped, critically damped, and undamped cases.
++        beta = math.sqrt(-discriminant) / (2.0 * m)
++        z = beta * t
++        transient = math.exp(alpha * t) * (
++            x_delta * math.cos(z) + h * (t * _sinc(z))
++        )
++
++    return (
++        transient
++        + cos_coeff * math.cos(omega * t)
++        + sin_coeff * math.sin(omega * t)
++    )

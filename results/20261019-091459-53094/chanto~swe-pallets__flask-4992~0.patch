@@ -1,0 +1,65 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index 88bfbc6..6d7fc65 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -32,6 +32,9 @@ Unreleased
+     :issue:`4993`
+ -   Use modern packaging metadata with ``pyproject.toml`` instead of ``setup.cfg``.
+     :pr:`4947`
++-   ``Config.from_file`` opens the file in binary mode by default and accepts a
++    ``mode`` parameter. This allows using loaders such as ``tomllib.load`` that
++    require a binary file. :issue:`4992`
+ -   Ensure subdomains are applied with nested blueprints. :issue:`4834`
+ 
+ 
+diff --git a/src/flask/config.py b/src/flask/config.py
+index d4fc310..3966c8e 100644
+--- a/src/flask/config.py
++++ b/src/flask/config.py
+@@ -234,6 +234,7 @@ class Config(dict):
+         filename: str,
+         load: t.Callable[[t.IO[t.Any]], t.Mapping],
+         silent: bool = False,
++        mode: str = "rb",
+     ) -> bool:
+         """Update the values in the config from a file that is loaded
+         using the ``load`` parameter. The loaded data is passed to the
+@@ -244,8 +245,8 @@ class Config(dict):
+             import json
+             app.config.from_file("config.json", load=json.load)
+ 
+-            import toml
+-            app.config.from_file("config.toml", load=toml.load)
++            import tomllib
++            app.config.from_file("config.toml", load=tomllib.load)
+ 
+         :param filename: The path to the data file. This can be an
+             absolute path or relative to the config root path.
+@@ -254,14 +255,26 @@ class Config(dict):
+         :type load: ``Callable[[Reader], Mapping]`` where ``Reader``
+             implements a ``read`` method.
+         :param silent: Ignore the file if it doesn't exist.
++        :param mode: The mode used to open the file. Defaults to
++            ``"rb"`` so loaders such as ``tomllib.load`` that require
++            a binary file work. Use ``"r"`` for loaders that require a
++            text file.
+         :return: ``True`` if the file was loaded successfully.
+ 
++        .. versionchanged:: 2.3
++            The file is opened in binary mode by default, and the
++            ``mode`` parameter was added.
++
+         .. versionadded:: 2.0
+         """
+         filename = os.path.join(self.root_path, filename)
+ 
++        # ``"b"`` on its own is not a valid mode for open().
++        if mode == "b":
++            mode = "rb"
++
+         try:
+-            with open(filename) as f:
++            with open(filename, mode) as f:
+                 obj = load(f)
+         except OSError as e:
+             if silent and e.errno in (errno.ENOENT, errno.EISDIR):

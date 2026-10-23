@@ -1,0 +1,55 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..af84033 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,49 @@
+ package bottlesong
+ 
++import "fmt"
++
++var numberWords = []string{
++	"no", "one", "two", "three", "four", "five",
++	"six", "seven", "eight", "nine", "ten",
++}
++
++func capitalizedNumbers() []string {
++	capitalized := make([]string, len(numberWords))
++	for i, word := range numberWords {
++		capitalized[i] = string(word[0]-'a'+'A') + word[1:]
++	}
++	return capitalized
++}
++
++var capitalizedWord = capitalizedNumbers()
++
++func bottles(n int) string {
++	if n == 1 {
++		return "one green bottle"
++	}
++	return numberWords[n] + " green bottles"
++}
++
++func verse(n int) []string {
++	current := capitalizedWord[n] + " green bottles"
++	if n == 1 {
++		current = "One green bottle"
++	}
++	return []string{
++		fmt.Sprintf("%s hanging on the wall,", current),
++		fmt.Sprintf("%s hanging on the wall,", current),
++		"And if one green bottle should accidentally fall,",
++		fmt.Sprintf("There'll be %s hanging on the wall.", bottles(n-1)),
++	}
++}
++
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	var lines []string
++	for i := 0; i < takeDown; i++ {
++		if i > 0 {
++			lines = append(lines, "")
++		}
++		lines = append(lines, verse(startBottles-i)...)
++	}
++	return lines
+ }

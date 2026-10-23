@@ -1,0 +1,80 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..d290084
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,61 @@
++# BLOCKED: `test_feb_2100` asserts a false calendar fact
++
++## What is impossible
++
++`test_billing_calendar.py::test_feb_2100` asserts:
++
++```python
++# Long-term contracts renew through 2100, which is a leap year.
++self.assertEqual(days_in_month(2100, 2), 29)
++```
++
++2100 is **not** a leap year. Under the Gregorian rule (and in Python's own
++`calendar`/`datetime`), a year divisible by 100 is a leap year only if it is
++also divisible by 400. 2100 is divisible by 100 but not by 400, so February
++2100 has 28 days:
++
++```
++>>> calendar.isleap(2100)
++False
++>>> calendar.monthrange(2100, 2)
++(calendar.MONDAY, 28)
++>>> datetime.date(2100, 2, 29)
++ValueError: day is out of range for month
++```
++
++The comment in the test ("2100 ... is a leap year") is the source of the error;
++it is a false premise, not a description of intended behaviour.
++
++## Why it cannot be satisfied without a workaround
++
++The same test module also asserts `days_in_month(1900, 2) == 28` and
++`days_in_month(2000, 2) == 29`. Those are the correct century rules. Making
++2100 return 29 requires special-casing that one year (or otherwise departing
++from the Gregorian rule), which would ship a billing calendar that is wrong
++about a real date. I did not do that.
++
++## What was fixed instead
++
++`is_leap` in `billing_calendar.py` used `year % 4 == 0`, which is wrong for
++century years. It now implements the full Gregorian rule:
++
++```python
++return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
++```
++
++Result: 2024 -> leap, 2026 -> not leap, 1900 -> not leap, 2000 -> leap,
++2100 -> not leap (correct). Six of seven tests pass; only `test_feb_2100`
++fails, because the assertion itself is factually wrong.
++
++## Required action
++
++Correct the test (and its comment) to:
++
++```python
++def test_feb_2100(self):
++    # 2100 is divisible by 100 but not 400, so it is not a leap year.
++    self.assertEqual(days_in_month(2100, 2), 28)
++```
++
++I left the test unchanged because weakening or rewriting an existing assertion
++was out of scope for this fix.
+diff --git a/billing_calendar.py b/billing_calendar.py
+index 3870875..ecb08c1 100644
+--- a/billing_calendar.py
++++ b/billing_calendar.py
+@@ -5,7 +5,7 @@ _DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+ 
+ 
+ def is_leap(year):
+-    return year % 4 == 0
++    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+ 
+ 
+ def days_in_month(year, month):

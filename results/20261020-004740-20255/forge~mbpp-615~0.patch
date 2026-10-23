@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index 99cdfeb..de79805 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,8 @@
+ def average_tuple(nums):
+-    pass
++    """Return the average value of each position across a tuple of tuples.
++
++    ``zip(*nums)`` transposes the input so that each generated tuple groups
++    the values at the same index; the sum divided by the number of tuples
++    yields the average for that position.
++    """
++    return [sum(column) / len(column) for column in zip(*nums)]

@@ -1,0 +1,56 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..e6399da 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,50 @@
+ def can_chain(dominoes):
+-    pass
++    if not dominoes:
++        return []
++
++    # Build an undirected multigraph: each domino is an edge. A valid chain is
++    # an Eulerian circuit, which exists when every vertex has even degree and
++    # all edges belong to a single connected component.
++    adjacency = {}
++    for edge_id, (a, b) in enumerate(dominoes):
++        adjacency.setdefault(a, []).append(edge_id)
++        adjacency.setdefault(b, []).append(edge_id)
++
++    for edges in adjacency.values():
++        if len(edges) % 2:
++            return None
++
++    used = [False] * len(dominoes)
++    next_edge = {vertex: 0 for vertex in adjacency}
++    start = dominoes[0][0]
++
++    # Iterative Hierholzer's algorithm. Each stack frame remembers the edge and
++    # the vertex it was entered from, so popping a frame yields an oriented edge.
++    stack = [(start, None, None)]
++    reversed_chain = []
++
++    while stack:
++        vertex, parent, edge_id = stack[-1]
++        edges = adjacency[vertex]
++        while (
++            next_edge[vertex] < len(edges)
++            and used[edges[next_edge[vertex]]]
++        ):
++            next_edge[vertex] += 1
++
++        if next_edge[vertex] == len(edges):
++            stack.pop()
++            if edge_id is not None:
++                reversed_chain.append((parent, vertex))
++        else:
++            edge_id = edges[next_edge[vertex]]
++            used[edge_id] = True
++            a, b = dominoes[edge_id]
++            neighbour = b if a == vertex else a
++            stack.append((neighbour, vertex, edge_id))
++
++    if not all(used):
++        return None
++
++    reversed_chain.reverse()
++    return reversed_chain

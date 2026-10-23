@@ -1,0 +1,199 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..dbd84c1 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,193 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++// Category values, each indexed 0-4.
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++var nationalities = [5]string{"Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese"}
++
++// SolvePuzzle determines who drinks water and who owns the zebra by
++// assigning a permutation of each category to the five houses and checking
++// the puzzle's constraints, pruning as soon as a partial assignment violates
++// one of them.
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	// Each permutation maps house position -> value for that category.
++	allPermutations := permutations(5)
++
++	var natAt, colAt, drkAt, smkAt, petAt [5]int
++
++	for _, nat := range allPermutations {
++		// The Norwegian lives in the first house.
++		if nat[0] != norwegian {
++			continue
++		}
++		copy(natAt[:], nat)
++
++		for _, col := range allPermutations {
++			copy(colAt[:], col)
++			// The Englishman lives in the red house.
++			if position(natAt[:], englishman) != position(colAt[:], red) {
++				continue
++			}
++			// The green house is immediately to the right of the ivory house.
++			if position(colAt[:], green) != position(colAt[:], ivory)+1 {
++				continue
++			}
++			// The Norwegian lives next to the blue house.
++			if abs(position(natAt[:], norwegian)-position(colAt[:], blue)) != 1 {
++				continue
++			}
++
++			for _, drk := range allPermutations {
++				copy(drkAt[:], drk)
++				// Milk is drunk in the middle house.
++				if position(drkAt[:], milk) != 2 {
++					continue
++				}
++				// Coffee is drunk in the green house.
++				if position(drkAt[:], coffee) != position(colAt[:], green) {
++					continue
++				}
++				// The Ukrainian drinks tea.
++				if position(drkAt[:], tea) != position(natAt[:], ukrainian) {
++					continue
++				}
++
++				for _, smk := range allPermutations {
++					copy(smkAt[:], smk)
++					// Kools are smoked in the yellow house.
++					if position(smkAt[:], kools) != position(colAt[:], yellow) {
++						continue
++					}
++					// The Japanese smokes Parliaments.
++					if position(smkAt[:], parliaments) != position(natAt[:], japanese) {
++						continue
++					}
++					// The Lucky Strike smoker drinks orange juice.
++					if position(smkAt[:], luckyStrike) != position(drkAt[:], orangeJuice) {
++						continue
++					}
++
++					for _, pet := range allPermutations {
++						copy(petAt[:], pet)
++						// The Spaniard owns the dog.
++						if position(petAt[:], dog) != position(natAt[:], spaniard) {
++							continue
++						}
++						// The Old Gold smoker owns snails.
++						if position(petAt[:], snails) != position(smkAt[:], oldGold) {
++							continue
++						}
++						// Chesterfields are smoked next to the fox owner.
++						if abs(position(smkAt[:], chesterfields)-position(petAt[:], fox)) != 1 {
++							continue
++						}
++						// Kools are smoked next to the horse owner.
++						if abs(position(smkAt[:], kools)-position(petAt[:], horse)) != 1 {
++							continue
++						}
++
++						return Solution{
++							DrinksWater: nationalities[natAt[position(drkAt[:], water)]],
++							OwnsZebra:   nationalities[natAt[position(petAt[:], zebra)]],
++						}
++					}
++				}
++			}
++		}
++	}
++
++	return Solution{}
++}
++
++// permutations returns every permutation of the values 0..n-1.
++func permutations(n int) [][]int {
++	result := make([][]int, 0, factorial(n))
++	current := make([]int, n)
++	used := make([]bool, n)
++
++	var generate func(k int)
++	generate = func(k int) {
++		if k == n {
++			p := make([]int, n)
++			copy(p, current)
++			result = append(result, p)
++			return
++		}
++		for v := 0; v < n; v++ {
++			if used[v] {
++				continue
++			}
++			used[v] = true
++			current[k] = v
++			generate(k + 1)
++			used[v] = false
++		}
++	}
++	generate(0)
++
++	return result
++}
++
++func factorial(n int) int {
++	f := 1
++	for i := 2; i <= n; i++ {
++		f *= i
++	}
++	return f
++}
++
++// position returns the house index at which value v appears in at.
++func position(at []int, v int) int {
++	for i, x := range at {
++		if x == v {
++			return i
++		}
++	}
++	return -1
++}
++
++func abs(x int) int {
++	if x < 0 {
++		return -x
++	}
++	return x
+ }

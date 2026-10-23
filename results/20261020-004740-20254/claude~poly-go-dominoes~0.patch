@@ -1,0 +1,77 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..2908220 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,70 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino is a stone with two sides.
++type Domino [2]int
+ 
++// MakeChain attempts to arrange the input dominoes into a legal chain, where
++// adjacent sides match and the outer sides of the first and last domino match.
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return nil, true
++	}
++
++	used := make([]bool, len(input))
++	chain := make([]Domino, 0, len(input))
++
++	// Any domino may be the first one; try each in its given orientation.
++	// Reversing the direction of a closed chain gives an equally valid chain,
++	// so both orientations of the first domino do not need to be tried.
++	for i := range input {
++		used[i] = true
++		chain = append(chain, input[i])
++		if extendChain(input, used, &chain) {
++			return chain, true
++		}
++		chain = chain[:len(chain)-1]
++		used[i] = false
++	}
++
++	return nil, false
++}
++
++// extendChain performs a depth-first search for a completion of chain.
++// It grows the chain through the pointer so that a successful order is
++// visible to the caller.
++func extendChain(input []Domino, used []bool, chain *[]Domino) bool {
++	if len(*chain) == len(input) {
++		return (*chain)[0][0] == (*chain)[len(*chain)-1][1]
++	}
++
++	end := (*chain)[len(*chain)-1][1]
++	for i, d := range input {
++		if used[i] {
++			continue
++		}
++		next, ok := match(d, end)
++		if !ok {
++			continue
++		}
++		used[i] = true
++		*chain = append(*chain, next)
++		if extendChain(input, used, chain) {
++			return true
++		}
++		*chain = (*chain)[:len(*chain)-1]
++		used[i] = false
++	}
++	return false
++}
++
++// match returns d oriented so that its first side equals end.
++func match(d Domino, end int) (Domino, bool) {
++	switch {
++	case d[0] == end:
++		return d, true
++	case d[1] == end:
++		return Domino{d[1], d[0]}, true
++	default:
++		return Domino{}, false
++	}
+ }

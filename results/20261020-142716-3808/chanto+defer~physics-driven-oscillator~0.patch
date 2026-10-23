@@ -1,0 +1,74 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..ad8b912 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,67 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (amplitude, cosine coefficient, sine coefficient)."""
++    if F0 == 0.0:
++        return 0.0, 0.0, 0.0
++
++    detuning = k - m * omega * omega
++    damping = c * omega
++    denom = math.hypot(detuning, damping)
++    if denom == 0.0:
++        raise ValueError("no finite steady-state response at exact undamped resonance")
++
++    amp = F0 / denom
++    return amp, amp * detuning / denom, amp * damping / denom
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return _steady_state(m, k, c, F0, omega)[0]
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    _, cos_coeff, sin_coeff = _steady_state(m, k, c, F0, omega)
++
++    # The homogeneous part y = x - x_steady satisfies y(0) = y0, y'(0) = vy0.
++    y0 = x0 - cos_coeff
++    vy0 = v0 - omega * sin_coeff
++
++    gamma = c / (2.0 * m)
++    delta = gamma * gamma - k / m
++
++    if delta < 0.0:
++        # Underdamped (including the undamped case c = 0).
++        omega_d = math.sqrt(-delta)
++        u = omega_d * t
++        sinc = 1.0 if u == 0.0 else math.sin(u) / u
++        y = math.exp(-gamma * t) * (
++            y0 * math.cos(u) + (vy0 + gamma * y0) * t * sinc
++        )
++    elif delta > 0.0:
++        # Overdamped.  Evaluate the exponentials directly so that large times
++        # cannot overflow through cosh/sinh before the decaying factor is applied.
++        s = math.sqrt(delta)
++        u = s * t
++        exp_plus = math.exp((s - gamma) * t)
++        exp_minus = math.exp((-s - gamma) * t)
++        cosh_part = 0.5 * (exp_plus + exp_minus)
++        if u == 0.0:
++            sinh_over_s = exp_plus * t
++        else:
++            # equals exp(-gamma*t) * sinh(s*t) / s, with stable small-u behavior
++            sinh_over_s = exp_plus * t * 0.5 * (-math.expm1(-2.0 * u)) / u
++        y = y0 * cosh_part + (vy0 + gamma * y0) * sinh_over_s
++    else:
++        # Critically damped.
++        y = math.exp(-gamma * t) * (y0 + (vy0 + gamma * y0) * t)
++
++    return (
++        cos_coeff * math.cos(omega * t)
++        + sin_coeff * math.sin(omega * t)
++        + y
++    )

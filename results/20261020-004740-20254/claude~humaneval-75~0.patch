@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index b74ff86..4107801 100644
+--- a/solution.py
++++ b/solution.py
+@@ -2,8 +2,19 @@
+ def is_multiply_prime(a):
+     """Write a function that returns true if the given number is the multiplication of 3 prime numbers
+     and false otherwise.
+-    Knowing that (a) is less then 100. 
++    Knowing that (a) is less then 100.
+     Example:
+     is_multiply_prime(30) == True
+     30 = 2 * 3 * 5
+     """
++    factors = []
++    n = a
++    for i in range(2, n):
++        while n % i == 0:
++            factors.append(i)
++            n //= i
++            if len(factors) > 3:
++                return False
++    if n > 1:
++        factors.append(n)
++    return len(factors) == 3

@@ -1,0 +1,101 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..f90e07c 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,94 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    scale = math.hypot(detuning, c * omega)
++    if scale == 0.0:
++        return math.inf if F0 != 0.0 else 0.0
++    return abs(F0) / scale
++
++
++def _sinc(x):
++    """sin(x) / x, with its removable singularity handled accurately."""
++    if x == 0.0:
++        return 1.0
++    if abs(x) < 1.0e-3:
++        z = x * x
++        return 1.0 - z / 6.0 + z * z / 120.0 - z * z * z / 5040.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with its removable singularity handled accurately."""
++    if x == 0.0:
++        return 1.0
++    if abs(x) < 1.0e-3:
++        z = x * x
++        return 1.0 + z / 6.0 + z * z / 120.0 + z * z * z / 5040.0
++    return math.sinh(x) / x
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    # Particular solution x_p(t) = C cos(omega t) + D sin(omega t).
++    detuning = k - m * omega * omega
++    damping = c * omega
++    scale = math.hypot(detuning, damping)
++    if scale == 0.0:
++        # Undamped system driven exactly at its natural frequency.
++        w = math.sqrt(k / m)
++        if w == 0.0:
++            return x0 + v0 * t + 0.5 * (F0 / m) * t * t
++        return (
++            x0 * math.cos(w * t)
++            + (v0 / w) * math.sin(w * t)
++            + (F0 / (2.0 * m * w)) * t * math.sin(w * t)
++        )
++
++    f_over_scale = F0 / scale
++    C = f_over_scale * (detuning / scale)
++    D = f_over_scale * (damping / scale)
++
++    # The homogeneous part y = x - x_p starts with these values.
++    y0 = x0 - C
++    y0_prime = v0 - omega * D
++
++    p = c / (2.0 * m)
++    q = k / m
++    z = y0_prime + p * y0
++
++    discriminant = q - p * p
++    if discriminant > 0.0:
++        # Underdamped: y = exp(-p t) [y0 cos(w t) + z t sinc(w t)].
++        w = math.sqrt(discriminant)
++        homogeneous = math.exp(-p * t) * (
++            y0 * math.cos(w * t) + z * (t * _sinc(w * t))
++        )
++    elif discriminant < 0.0:
++        # Overdamped: y = exp(-p t) [y0 cosh(s t) + z t sinhc(s t)].
++        s = math.sqrt(-discriminant)
++        st = s * t
++        if abs(st) <= 1.0:
++            homogeneous = math.exp(-p * t) * (
++                y0 * math.cosh(st) + z * (t * _sinhc(st))
++            )
++        else:
++            # Use the decaying exponentials directly to avoid overflow.  The
++            # slower root is computed as -q / (p + s) to avoid cancellation.
++            r1 = -q / (p + s)
++            r2 = -(p + s)
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            homogeneous = 0.5 * ((y0 + z / s) * e1 + (y0 - z / s) * e2)
++    else:
++        # Critically damped: y = exp(-p t) (y0 + z t).
++        homogeneous = math.exp(-p * t) * (y0 + z * t)
++
++    return C * math.cos(omega * t) + D * math.sin(omega * t) + homogeneous

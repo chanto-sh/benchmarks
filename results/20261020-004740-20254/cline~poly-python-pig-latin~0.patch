@@ -1,0 +1,37 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..86e9e5a 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,31 @@
++import re
++
++VOWELS = "aeiou"
++
++
++def translate_word(word):
++    # Rule 1: begins with a vowel, or "xr"/"yt".
++    if word[0] in VOWELS or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    # Rule 3: consonants (if any) followed by "qu".
++    match = re.match(r"^([^aeiou]*qu)(.*)$", word)
++    if match:
++        return match.group(2) + match.group(1) + "ay"
++
++    # Rule 4: one or more consonants followed by "y".
++    match = re.match(r"^([^aeiou]+)y(.*)$", word)
++    if match:
++        return "y" + match.group(2) + match.group(1) + "ay"
++
++    # Rule 2: one or more leading consonants.
++    match = re.match(r"^([^aeiou]+)(.*)$", word)
++    if match:
++        return match.group(2) + match.group(1) + "ay"
++
++    return word + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(translate_word(word) for word in text.split())
++

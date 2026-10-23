@@ -1,0 +1,87 @@
+diff --git a/go_counting.py b/go_counting.py
+index d1c689e..801af4c 100644
+--- a/go_counting.py
++++ b/go_counting.py
+@@ -1,3 +1,7 @@
++WHITE = "W"
++BLACK = "B"
++NONE = ""
++
+ 
+ class Board:
+     """Count territories of each player in a Go game
+@@ -7,7 +11,9 @@ class Board:
+     """
+ 
+     def __init__(self, board):
+-        pass
++        self.board = board
++        self.width = len(board[0]) if board else 0
++        self.height = len(board)
+ 
+     def territory(self, x, y):
+         """Find the owner and the territories given a coordinate on
+@@ -23,7 +29,15 @@ class Board:
+                         second being a set of coordinates, representing
+                         the owner's territories.
+         """
+-        pass
++        if not (0 <= x < self.width and 0 <= y < self.height):
++            raise ValueError("Invalid coordinate")
++
++        if self.board[y][x] != " ":
++            return NONE, set()
++
++        region, borders = self._explore(x, y)
++        owner = borders.pop() if len(borders) == 1 else NONE
++        return owner, region
+ 
+     def territories(self):
+         """Find the owners and the territories of the whole board
+@@ -36,4 +50,45 @@ class Board:
+                         , i.e. "W", "B", "".  The value being a set
+                         of coordinates owned by the owner.
+         """
+-        pass
++        territories = {BLACK: set(), WHITE: set(), NONE: set()}
++        visited = set()
++
++        for y in range(self.height):
++            for x in range(self.width):
++                if self.board[y][x] != " " or (x, y) in visited:
++                    continue
++
++                region, borders = self._explore(x, y)
++                visited |= region
++                owner = borders.pop() if len(borders) == 1 else NONE
++                territories[owner] |= region
++
++        return territories
++
++    def _explore(self, x, y):
++        """Flood fill the empty region containing (x, y).
++
++        Returns the region's coordinates and the set of stone colors
++        bordering it.
++        """
++        region = set()
++        borders = set()
++        stack = [(x, y)]
++
++        while stack:
++            cx, cy = stack.pop()
++            if (cx, cy) in region:
++                continue
++            region.add((cx, cy))
++
++            for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
++                if not (0 <= nx < self.width and 0 <= ny < self.height):
++                    continue
++                value = self.board[ny][nx]
++                if value == " ":
++                    if (nx, ny) not in region:
++                        stack.append((nx, ny))
++                else:
++                    borders.add(value)
++
++        return region, borders

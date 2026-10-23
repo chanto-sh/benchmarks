@@ -1,0 +1,75 @@
+diff --git a/stats.py b/stats.py
+index add4f59..a9d4a2b 100644
+--- a/stats.py
++++ b/stats.py
+@@ -2,20 +2,64 @@
+ import math
+ 
+ 
++def _scaled_mean(xs, n):
++    """Mean of finite floats, scaling to avoid intermediate overflow."""
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0
++    return scale * (math.fsum(x / scale for x in xs) / n)
++
++
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires at least one value")
++
++    # Work with differences from the first reading: subtracting nearby values
++    # is exact, so a large common offset no longer destroys the deviations.
++    center = xs[0]
++    try:
++        mean_delta = math.fsum(x - center for x in xs) / n
++    except OverflowError:
++        mean_delta = math.nan
++
++    if not math.isfinite(mean_delta):
++        # Such an overflow implies a spread whose variance is not representable.
++        return _scaled_mean(xs, n), math.inf
++
++    size = 0.0
++    for x in xs:
++        d = (x - center) - mean_delta
++        if abs(d) > size:
++            size = abs(d)
++
++    if not math.isfinite(size):
++        return center + mean_delta, math.inf
++    if size == 0.0:
++        return center + mean_delta, 0.0
++
++    # Scale by the largest deviation so squaring cannot overflow before the
++    # final (representable) result is formed.
++    mean_square = math.fsum(
++        (((x - center) - mean_delta) / size) ** 2 for x in xs
++    ) / n
++    root = size * math.sqrt(mean_square)
++    return center + mean_delta, root * root
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    xs = list(xs)
++    if not xs:
++        raise ValueError("logsumexp() requires at least one value")
++
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

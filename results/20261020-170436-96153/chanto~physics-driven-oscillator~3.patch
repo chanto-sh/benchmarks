@@ -1,0 +1,85 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..11f1698 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,78 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _forcing_denominator(m, k, c, omega):
++    """Magnitude of k - m omega^2 + i c omega, computed without overflow."""
++    return math.hypot(k - m * omega * omega, c * omega)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    denominator = _forcing_denominator(m, k, c, omega)
++    if denominator == 0.0:
++        # Undamped exact resonance has no bounded steady state.
++        return 0.0 if F0 == 0.0 else math.inf
++    return abs(F0) / denominator
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    detuning = k - m * omega * omega
++    damping_term = c * omega
++    denominator = math.hypot(detuning, damping_term)
++
++    if denominator == 0.0:
++        if F0 != 0.0:
++            raise ValueError("undamped oscillator driven exactly at resonance")
++        particular0 = 0.0
++        particular_sine = 0.0
++    else:
++        # Particular solution:
++        #   F0 * ((k - m w^2) cos(wt) + c w sin(wt)) / denominator^2
++        particular0 = F0 * (detuning / denominator) / denominator
++        particular_sine = F0 * (damping_term / denominator) / denominator
++
++    particular_velocity0 = particular_sine * omega
++    wt = omega * t
++    particular = particular0 * math.cos(wt) + particular_sine * math.sin(wt)
++
++    # Initial conditions for the homogeneous part.
++    y0 = x0 - particular0
++    yd0 = v0 - particular_velocity0
++
++    alpha = c / (2.0 * m)
++    omega0 = math.sqrt(k / m) if k >= 0.0 else float("nan")
++    delta = (alpha - omega0) * (alpha + omega0)
++
++    scale = max(alpha * alpha, omega0 * omega0)
++    critical_tolerance = 1e-12 * scale
++
++    if abs(delta) <= critical_tolerance:
++        homogeneous = (y0 + (yd0 + alpha * y0) * t) * math.exp(-alpha * t)
++    elif delta < 0.0:
++        wd = math.sqrt(-delta)
++        homogeneous = math.exp(-alpha * t) * (
++            y0 * math.cos(wd * t)
++            + (yd0 + alpha * y0) / wd * math.sin(wd * t)
++        )
++    else:
++        s = math.sqrt(delta)
++        if alpha * t <= 700.0:
++            homogeneous = math.exp(-alpha * t) * (
++                y0 * math.cosh(s * t)
++                + (yd0 + alpha * y0) / s * math.sinh(s * t)
++            )
++        else:
++            # Split into the two real exponentials to avoid inf * 0 when
++            # exp(-alpha*t) underflows while cosh(s*t) overflows.
++            b = yd0 + alpha * y0
++            r1 = -alpha + s
++            r2 = -alpha - s
++            homogeneous = (
++                (0.5 * y0 + 0.5 * b / s) * math.exp(r1 * t)
++                + (0.5 * y0 - 0.5 * b / s) * math.exp(r2 * t)
++            )
++
++    return particular + homogeneous

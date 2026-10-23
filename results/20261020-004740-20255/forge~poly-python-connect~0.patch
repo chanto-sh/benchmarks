@@ -1,0 +1,60 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..1d00d43 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,52 @@
+-
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.board = [line.split() for line in board.splitlines() if line.split()]
++        self.height = len(self.board)
++
++    def _piece(self, row, col):
++        if 0 <= row < self.height and 0 <= col < len(self.board[row]):
++            return self.board[row][col]
++        return "."
++
++    def _neighbors(self, row, col):
++        # Each row is indented one space further than the one above, so the
++        # hex grid connects to the same row left/right, the row above at the
++        # same column and the next column, and the row below at the same
++        # column and the previous column.
++        return [
++            (row, col - 1),
++            (row, col + 1),
++            (row - 1, col),
++            (row - 1, col + 1),
++            (row + 1, col),
++            (row + 1, col - 1),
++        ]
++
++    def _has_path(self, player, starts, is_goal):
++        stack = [cell for cell in starts if self._piece(*cell) == player]
++        visited = set(stack)
++        while stack:
++            row, col = stack.pop()
++            if is_goal(row, col):
++                return True
++            for neighbor in self._neighbors(row, col):
++                if neighbor not in visited and self._piece(*neighbor) == player:
++                    visited.add(neighbor)
++                    stack.append(neighbor)
++        return False
+ 
+     def get_winner(self):
+-        pass
++        # "O" plays from top to bottom, "X" plays from left to right.
++        if self._has_path(
++            "O",
++            [(0, col) for col in range(len(self.board[0]))] if self.height else [],
++            lambda row, col: row == self.height - 1,
++        ):
++            return "O"
++        if self._has_path(
++            "X",
++            [(row, 0) for row in range(self.height)],
++            lambda row, col: col == len(self.board[row]) - 1,
++        ):
++            return "X"
++        return ""

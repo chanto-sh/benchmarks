@@ -1,0 +1,144 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..1fd796c 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,135 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
+ 
++// Game keeps track of the rolls of a single game of bowling.
++type Game struct {
++	rolls []int
++}
++
++// state describes where the game currently stands: which frame and ball are
++// next, how many pins are still standing, and whether the game is over.
++type state struct {
++	frame     int // current frame, 1..10
++	ball      int // current ball within the frame, 1..3
++	remaining int // pins available to knock down on the next roll
++	over      bool
++}
++
++// NewGame returns a fresh, unstarted Game.
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{}
+ }
+ 
++// currentState replays the recorded rolls to determine the position of the
++// next roll.
++func (g *Game) currentState() state {
++	s := state{frame: 1, ball: 1, remaining: 10}
++	firstBall := 0
++
++	for _, pins := range g.rolls {
++		if s.frame < 10 {
++			if s.ball == 1 {
++				if pins == 10 {
++					s.frame++
++					s.ball = 1
++					s.remaining = 10
++				} else {
++					s.ball = 2
++					s.remaining = 10 - pins
++				}
++				continue
++			}
++			s.frame++
++			s.ball = 1
++			s.remaining = 10
++			continue
++		}
++
++		// Tenth frame: up to three balls.
++		switch s.ball {
++		case 1:
++			firstBall = pins
++			s.ball = 2
++			if pins == 10 {
++				// Strike: the fill ball gets a fresh rack.
++				s.remaining = 10
++			} else {
++				s.remaining = 10 - pins
++			}
++		case 2:
++			switch {
++			case firstBall == 10:
++				// Fill ball after a strike: fresh rack of pins, and another
++				// fresh rack if this one is also a strike.
++				s.ball = 3
++				if pins == 10 {
++					s.remaining = 10
++				} else {
++					s.remaining = 10 - pins
++				}
++			case pins == 10-firstBall:
++				// Spare: one fill ball with a fresh rack.
++				s.ball = 3
++				s.remaining = 10
++			default:
++				s.over = true
++				s.remaining = 0
++			}
++		case 3:
++			s.over = true
++			s.remaining = 0
++		}
++	}
++
++	return s
++}
++
++// Roll records a single roll of the ball.
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if pins < 0 {
++		return errors.New("Negative roll is invalid")
++	}
++	if pins > 10 {
++		return errors.New("Pin count exceeds pins on the lane")
++	}
++
++	s := g.currentState()
++	if s.over {
++		return errors.New("Cannot roll after game is over")
++	}
++	if pins > s.remaining {
++		return errors.New("Pin count exceeds pins on the lane")
++	}
++
++	g.rolls = append(g.rolls, pins)
++	return nil
+ }
+ 
++// Score returns the total score for a completed game.
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	if !g.currentState().over {
++		return 0, errors.New("Score cannot be taken until the end of the game")
++	}
++
++	score := 0
++	i := 0
++	for frame := 0; frame < 10 && i < len(g.rolls); frame++ {
++		switch {
++		case g.rolls[i] == 10:
++			// Strike: 10 plus the next two rolls.
++			score += 10 + g.rolls[i+1] + g.rolls[i+2]
++			i++
++		case i+1 < len(g.rolls) && g.rolls[i]+g.rolls[i+1] == 10:
++			// Spare: 10 plus the next roll.
++			score += 10 + g.rolls[i+2]
++			i += 2
++		default:
++			// Open frame.
++			score += g.rolls[i] + g.rolls[i+1]
++			i += 2
++		}
++	}
++
++	return score, nil
+ }

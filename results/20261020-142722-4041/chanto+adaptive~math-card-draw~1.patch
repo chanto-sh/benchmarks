@@ -1,0 +1,53 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..9f94772 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,5 @@
+ from fractions import Fraction
++from math import comb
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +7,41 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or k > m:
++        return Fraction(0)
++
++    n = r + b + g
++
++    # No green in the deck: the deal simply stops after m cards (or at the end).
++    if g == 0:
++        length = min(m, n)
++        total = Fraction(0)
++        low = max(0, length - b, k)
++        high = min(length, r)
++        for i in range(low, high + 1):
++            total += Fraction(comb(r, i) * comb(b, length - i), comb(n, length))
++        return total
++
++    total = Fraction(0)
++
++    # First green at position s + 1, with s non-green cards before it.
++    for s in range(min(m - 1, r + b) + 1):
++        low = max(0, s - b, k)
++        high = min(s, r)
++        if low > high:
++            continue
++        prefix = Fraction(0)
++        for i in range(low, high + 1):
++            prefix += Fraction(comb(r, i) * comb(b, s - i), comb(n, s))
++        total += prefix * Fraction(g, n - s)
++
++    # No green among the first m cards: the deal stops after m cards.
++    if m <= r + b:
++        low = max(0, m - b, k)
++        high = min(m, r)
++        for i in range(low, high + 1):
++            total += Fraction(comb(r, i) * comb(b, m - i), comb(n, m))
++
++    return total

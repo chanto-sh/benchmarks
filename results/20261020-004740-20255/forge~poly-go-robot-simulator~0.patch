@@ -1,0 +1,238 @@
+diff --git a/robot_simulator.go b/robot_simulator.go
+index d5d5b1c..d3702e7 100644
+--- a/robot_simulator.go
++++ b/robot_simulator.go
+@@ -1,44 +1,221 @@
+ package robot
+ 
+-// See defs.go for other definitions
++import "fmt"
++
++// See defs.go for other definitions.
+ 
+ // Step 1
+-// Define N, E, S, W here.
+ 
++// Directions, listed clockwise so that turning right is a +1 step and
++// turning left is a +3 step, modulo 4.  N is Dir's zero value, so an
++// unoriented Step1Robot faces north.
++const (
++	N Dir = iota
++	E
++	S
++	W
++)
++
++// Right turns Step1Robot 90 degrees clockwise.
+ func Right() {
+-	panic("Please implement the Right function")
++	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
+ }
+ 
++// Left turns Step1Robot 90 degrees counterclockwise.
+ func Left() {
+-	panic("Please implement the Left function")
++	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
+ }
+ 
++// Advance moves Step1Robot one unit in the direction it faces.
+ func Advance() {
+-	panic("Please implement the Advance function")
++	switch Step1Robot.Dir {
++	case N:
++		Step1Robot.Y++
++	case E:
++		Step1Robot.X++
++	case S:
++		Step1Robot.Y--
++	case W:
++		Step1Robot.X--
++	}
+ }
+ 
+ func (d Dir) String() string {
+-	panic("Please implement the String function")
++	switch d {
++	case N:
++		return "north"
++	case E:
++		return "east"
++	case S:
++		return "south"
++	case W:
++		return "west"
++	}
++	return fmt.Sprintf("Dir(%d)", int(d))
+ }
+ 
+ // Step 2
+-// Define Action type here.
+ 
++// Action is an action a robot attempts.  The room, not the robot, decides
++// what the physical consequences of the action are.
++type Action struct {
++	Command
++}
++
++// StartRobot relays commands to the room as actions.  When it senses the
++// command channel closing, it shuts itself down; closing the action
++// channel tells the room the robot is gone.
+ func StartRobot(command chan Command, action chan Action) {
+-	panic("Please implement the StartRobot function")
++	for c := range command {
++		action <- Action{c}
++	}
++	close(action)
+ }
+ 
++// Room simulates a room with walls at the boundary of extent and a single
++// robot in it.  It applies the actions the robot attempts and, when the
++// robot shuts down, reports the robot's final state.
+ func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
+-	panic("Please implement the Room function")
++	for a := range action {
++		switch a.Command {
++		case 'R', 'L':
++			robot.Dir = turn(robot.Dir, a.Command)
++		case 'A':
++			if p := nextPos(robot.Pos, robot.Dir); inside(extent, p) {
++				robot.Pos = p
++			}
++		}
++	}
++	report <- robot
+ }
+ 
+ // Step 3
+-// Define Action3 type here.
+ 
++// Action3 is an action a robot attempts, tagged with the name of the robot
++// attempting it.  A zero Command signals that the robot has finished its
++// script and shut down.
++type Action3 struct {
++	Name string
++	Command
++}
++
++// StartRobot3 runs script as a sequence of actions of the named robot.  An
++// undefined command aborts the script, and the robot always shuts down
++// when it is done.
+ func StartRobot3(name, script string, action chan Action3, log chan string) {
+-	panic("Please implement the StartRobot3 function")
++	if name == "" {
++		log <- "robot has no name"
++	}
++	for _, c := range script {
++		if c != 'R' && c != 'L' && c != 'A' {
++			log <- fmt.Sprintf("robot %q: undefined command %q", name, c)
++			break
++		}
++		action <- Action3{name, Command(c)}
++	}
++	action <- Action3{Name: name} // shut down
+ }
+ 
++// Room3 simulates a room with walls at the boundary of extent and any
++// number of robots in it.  It applies the actions the robots attempt,
++// logging anything that goes wrong, and reports the robots' final states
++// once all of them have shut down.
+ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
+-	panic("Please implement the Room3 function")
++	// Check the initial placement of the robots.
++	names := make(map[string]bool, len(robots))
++	positions := make(map[Pos]bool, len(robots))
++	for _, r := range robots {
++		if names[r.Name] {
++			log <- fmt.Sprintf("duplicate robot name %q", r.Name)
++		}
++		names[r.Name] = true
++		if positions[r.Pos] {
++			log <- fmt.Sprintf("more than one robot at %v", r.Pos)
++		}
++		positions[r.Pos] = true
++		if !inside(extent, r.Pos) {
++			log <- fmt.Sprintf("robot %q placed outside the room at %v", r.Name, r.Pos)
++		}
++	}
++
++	// Index the robots so actions can be addressed by name.  The first
++	// robot of a duplicated name wins.
++	index := make(map[string]int, len(robots))
++	for i, r := range robots {
++		if _, ok := index[r.Name]; !ok {
++			index[r.Name] = i
++		}
++	}
++
++	for finished := 0; finished < len(robots); {
++		a := <-action
++		if a.Command == 0 {
++			finished++
++			continue
++		}
++		i, ok := index[a.Name]
++		if !ok {
++			log <- fmt.Sprintf("action %q from unknown robot %q", a.Command, a.Name)
++			continue
++		}
++		r := &robots[i]
++		switch a.Command {
++		case 'R', 'L':
++			r.Dir = turn(r.Dir, a.Command)
++		case 'A':
++			p := nextPos(r.Pos, r.Dir)
++			switch {
++			case !inside(extent, p):
++				log <- fmt.Sprintf("robot %q blocked by a wall", r.Name)
++			case occupied(robots, p):
++				log <- fmt.Sprintf("robot %q blocked by another robot", r.Name)
++			default:
++				r.Pos = p
++			}
++		}
++	}
++	rep <- robots
++}
++
++// turn returns the direction resulting from the robot turning as directed
++// by cmd.
++func turn(d Dir, cmd Command) Dir {
++	switch cmd {
++	case 'R':
++		return (d + 1) % 4
++	case 'L':
++		return (d + 3) % 4
++	}
++	return d
++}
++
++// nextPos returns the position one step from p in direction d.
++func nextPos(p Pos, d Dir) Pos {
++	switch d {
++	case N:
++		p.Northing++
++	case E:
++		p.Easting++
++	case S:
++		p.Northing--
++	case W:
++		p.Easting--
++	}
++	return p
++}
++
++// inside reports whether p is within the room of the given extent.
++func inside(extent Rect, p Pos) bool {
++	return p.Easting >= extent.Min.Easting && p.Easting <= extent.Max.Easting &&
++		p.Northing >= extent.Min.Northing && p.Northing <= extent.Max.Northing
++}
++
++// occupied reports whether any robot stands at p.
++func occupied(robots []Step3Robot, p Pos) bool {
++	for _, r := range robots {
++		if r.Pos == p {
++			return true
++		}
++	}
++	return false
+ }

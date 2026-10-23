@@ -1,0 +1,121 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..8dcb04d
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,69 @@
++# BLOCKED: 002 cannot be applied to the production snapshot
++
++`migrations/002_unique_email.sql` makes `users.email` `NOT NULL` and unique
++ignoring case. It works on a fresh database, but it cannot be applied to
++`fixtures/prod_snapshot.sql` without changing or deleting the customer rows
++Support owns — and the task forbids that. The two requirements are
++contradictory for the current data.
++
++## What blocks it
++
++The snapshot has 40 rows. Three groups violate the target constraints:
++
++| rows | problem |
++| --- | --- |
++| id 17 (`Goran Okafor`) | `email IS NULL` — violates `NOT NULL`. There is no non-NULL value to copy, and assigning one would modify a customer row. |
++| id 1 and id 23 (`Ana Silva`, both `ana.silva@example.com`) | Exactly identical email — violates `UNIQUE`. Deduplication means deleting or changing a customer row. |
++| id 4 (`Dev Silva`, `Ana.Silva@example.com`) | Case variant of id 1's address — violates the case-insensitive `UNIQUE`. This is a *different* customer, so it is not a duplicate account; either address has to change. |
++
++## Why there is no migration-only fix
++
++SQLite validates `NOT NULL` and `UNIQUE` against existing rows when the table is
++rebuilt or the unique index is created. A row that already violates the
++constraint cannot be left in place behind a real constraint. So applying 002 to
++this snapshot requires one of:
++
++- setting id 17's email (modifies a row),
++- deleting/merging id 1 and id 23 (deletes a row),
++- changing id 1's or id 4's address (modifies a row),
++
++all of which are Support's data decisions.
++
++Both direct approaches fail on the snapshot today:
++
++- `CREATE UNIQUE INDEX users_email_nocase ON users(lower(email))` ->
++  `UNIQUE constraint failed: index 'users_email_nocase'`
++- copying the rows into a `NOT NULL UNIQUE (email COLLATE NOCASE)` table ->
++  `UNIQUE constraint failed: u2.email` (id 17's NULL fails next)
++
++The remaining option would be to enforce the rules only for future writes —
++e.g. triggers that reject new NULL/duplicate inserts while leaving the existing
++violations in the table. That would make `test_applies_to_prod_snapshot` pass,
++but the table would still contain a NULL email and duplicate addresses, so it
++would not actually satisfy "email is required and unique". It also only guards
++writes that go through the trigger. That is a false pass, not a fix, so it was
++not done.
++
++## What is in place
++
++- `migrations/002_unique_email.sql` implements the real constraint: it rebuilds
++  `users` with `email TEXT NOT NULL` and `UNIQUE (email COLLATE NOCASE)`,
++  copying `id`, `email` and `name` verbatim. It neither modifies nor deletes
++  rows.
++- Before touching the schema, the migration checks the data and aborts with
++  `CHECK constraint failed: email_must_be_present_and_unique_ignoring_case`,
++  so a deployment against violating data fails without leaving a half-rebuilt
++  table.
++- Current verification:
++  - `test_constraint_on_fresh_db` — passes.
++  - `test_applies_to_prod_snapshot` — fails at `db.apply(...)` with the check
++    above. It cannot pass against this snapshot while the constraints are real
++    and the rows are untouched.
++
++## Unblocking it
++
++Support needs to resolve the three groups above: give id 17 an address (or
++remove/merge that account), decide which of ids 1/23 survives, and correct id 4
++(a distinct customer) to an address that does not collide. No code change is
++needed afterwards: rerun 002 and it will rebuild the table and enforce both
++constraints.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..e32a2b2 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,40 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL to an existing column, so the table is rebuilt.
++-- The rebuild copies every row verbatim: no customer row is modified or deleted.
++
++BEGIN;
++
++-- Refuse to touch the schema when existing data cannot satisfy the new
++-- constraints. Resolving such rows is Support's call, not the migration's.
++CREATE TEMP TABLE _email_constraint_precondition (
++    ok INTEGER NOT NULL,
++    CONSTRAINT email_must_be_present_and_unique_ignoring_case CHECK (ok = 1)
++);
++INSERT INTO _email_constraint_precondition (ok)
++SELECT CASE WHEN
++    (SELECT COUNT(*) FROM users WHERE email IS NULL) = 0
++    AND NOT EXISTS (
++        SELECT 1
++        FROM users
++        WHERE email IS NOT NULL
++        GROUP BY email COLLATE NOCASE
++        HAVING COUNT(*) > 1
++    )
++THEN 1 ELSE 0 END;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT,
++    UNIQUE (email COLLATE NOCASE)
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++DROP TABLE _email_constraint_precondition;
++
++COMMIT;

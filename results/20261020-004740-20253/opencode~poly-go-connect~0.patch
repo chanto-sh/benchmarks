@@ -1,0 +1,104 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..0f6dada 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,98 @@
+ package connect
+ 
++// ResultOf determines the winner of a game of Hex.
++//
++// Player "X" plays from left to right, player "O" plays from top to bottom.
++// It returns the winning player's stone ("X" or "O"), or an empty string if
++// nobody has won yet.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	if len(lines) == 0 {
++		return "", nil
++	}
++
++	// Neighbouring cells in the offset-row representation: each row is
++	// shifted half a cell to the right relative to the row above it.
++	neighbours := [][2]int{
++		{-1, 0}, {-1, 1},
++		{0, -1}, {0, 1},
++		{1, -1}, {1, 0},
++	}
++
++	// connected reports whether the stones of the given player connect the
++	// two sides assigned to that player.
++	//
++	// X wins by connecting the left and right edges; O wins by connecting
++	// the top and bottom edges.
++	connected := func(player byte) bool {
++		visited := make([][]bool, len(lines))
++		for r := range visited {
++			visited[r] = make([]bool, len(lines[r]))
++		}
++
++		type cell struct{ row, col int }
++		var queue []cell
++
++		// Seed the search from the player's starting edge.
++		for r, line := range lines {
++			var c int
++			switch player {
++			case 'X':
++				c = 0
++			case 'O':
++				if r != 0 {
++					continue
++				}
++				for col := range line {
++					if line[col] == player {
++						queue = append(queue, cell{r, col})
++						visited[r][col] = true
++					}
++				}
++				continue
++			}
++			if c < len(line) && line[c] == player {
++				queue = append(queue, cell{r, c})
++				visited[r][c] = true
++			}
++		}
++
++		for len(queue) > 0 {
++			cur := queue[0]
++			queue = queue[1:]
++
++			// Check whether the current cell touches the winning edge.
++			switch player {
++			case 'X':
++				if cur.col == len(lines[cur.row])-1 {
++					return true
++				}
++			case 'O':
++				if cur.row == len(lines)-1 {
++					return true
++				}
++			}
++
++			for _, d := range neighbours {
++				r, c := cur.row+d[0], cur.col+d[1]
++				if r < 0 || r >= len(lines) || c < 0 || c >= len(lines[r]) {
++					continue
++				}
++				if visited[r][c] || lines[r][c] != player {
++					continue
++				}
++				visited[r][c] = true
++				queue = append(queue, cell{r, c})
++			}
++		}
++
++		return false
++	}
++
++	if connected('X') {
++		return "X", nil
++	}
++	if connected('O') {
++		return "O", nil
++	}
++	return "", nil
+ }

@@ -1,0 +1,156 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..ef34d8b 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,141 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) Butcher tableau.  Rows for stages 2 through 7.
++_A = (
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B5 = (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0)
++_B4 = (5179 / 57600, 0.0, 7571 / 16695, 393 / 640,
++       -92097 / 339200, 187 / 2100, 1 / 40)
++
++
++def _derivative(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _combine(state, h, coefficients, stages):
++    """state + h * sum(coefficients[i] * stages[i])."""
++    out = []
++    for j in range(4):
++        total = 0.0
++        for c, k in zip(coefficients, stages):
++            total += c * k[j]
++        out.append(state[j] + h * total)
++    return tuple(out)
++
++
++def _rk_step(state, h, accel):
++    """One Dormand-Prince 5(4) step; return the 5th and 4th order states."""
++    stages = [_derivative(state, accel)]
++    for row in _A:
++        stages.append(_derivative(_combine(state, h, row, stages), accel))
++    return _combine(state, h, _B5, stages), _combine(state, h, _B4, stages)
++
++
++def _error_norm(state, high, low, rtol, atol):
++    error = 0.0
++    for a, b, y in zip(high, low, state):
++        scale = atol + rtol * max(abs(a), abs(y))
++        error = max(error, abs(a - b) / scale)
++    return error
++
++
++def _radial_velocity(state):
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
++
++def _pericenter_time(state, t, h, accel):
++    """Locate the radial-velocity zero inside an accepted step by bisection."""
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        mid_state, _ = _rk_step(state, h * mid, accel)
++        if _radial_velocity(mid_state) < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return t + h * 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    r0 and v0 are the initial position and velocity, and accel(x, y) returns
++    the (central) acceleration.  The starting point may be anywhere on the
++    orbit; the returned interval is independent of that choice.
++    """
++    x, y = float(r0[0]), float(r0[1])
++    vx, vy = float(v0[0]), float(v0[1])
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("the starting position must not be the origin")
++
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    a = math.hypot(ax, ay)
++    if speed == 0.0 and a == 0.0:
++        raise ValueError("no orbit: the particle is at rest in a zero field")
++
++    # A circular orbit has no distinct pericenters; use the angular period.
++    angular_momentum = x * vy - y * vx
++    if speed > 0.0 and angular_momentum != 0.0:
++        radial_accel = (x * ax + y * ay) / r
++        centripetal = (angular_momentum / r) ** 2 / r
++        g = _radial_velocity((x, y, vx, vy))
++        if (abs(g) <= 1e-12 * r * speed and
++                abs(radial_accel + centripetal) <=
++                1e-12 * (abs(radial_accel) + centripetal)):
++            return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    # Initial step based on the shortest local dynamical timescale.
++    scales = []
++    if speed > 0.0:
++        scales.append(r / speed)
++    if a > 0.0:
++        scales.append(math.sqrt(r / a))
++    h = 0.01 * min(scales) if scales else 0.01 * r
++
++    state = (x, y, vx, vy)
++    t = 0.0
++    g = _radial_velocity(state)
++    pericenters = []
++    rtol, atol = 1e-12, 1e-14
++
++    for _ in range(500000):
++        # Resolve at least ~60 steps per revolution in angle.  This keeps a
++        # pericenter from slipping between two accepted step endpoints.
++        if angular_momentum != 0.0:
++            r2 = state[0] * state[0] + state[1] * state[1]
++            max_h = 0.1 * r2 / abs(angular_momentum)
++            if h > max_h:
++                h = max_h
++
++        high, low = _rk_step(state, h, accel)
++        error = _error_norm(state, high, low, rtol, atol)
++
++        if error <= 1.0:
++            g_high = _radial_velocity(high)
++            if g < 0.0 and g_high >= 0.0:
++                pericenters.append(
++                    _pericenter_time(state, t, h, accel))
++                if len(pericenters) == 2:
++                    return pericenters[1] - pericenters[0]
++            state = high
++            t += h
++            g = g_high
++
++        factor = 5.0 if error == 0.0 else 0.9 * error ** -0.2
++        h *= min(5.0, max(0.2, factor))
++        if h <= 1e-14 * max(1.0, abs(t)):
++            raise RuntimeError("step size underflow in radial_period")
++
++    raise RuntimeError("no two successive closest approaches found")

@@ -1,0 +1,27 @@
+diff --git a/workdays.py b/workdays.py
+index da3c653..fd5c0dc 100644
+--- a/workdays.py
++++ b/workdays.py
+@@ -6,10 +6,19 @@ def business_days(start: date, end: date, holidays=()) -> int:
+ 
+     If end < start, returns the negated count for [end, start).
+     """
++    if start == end:
++        return 0
++
++    sign = 1
++    if end < start:
++        start, end = end, start
++        sign = -1
++
++    holiday_set = set(holidays)
+     days = 0
+     d = start
+-    while d <= end:
+-        if d.weekday() < 5:
++    while d < end:
++        if d.weekday() < 5 and d not in holiday_set:
+             days += 1
+         d += timedelta(days=1)
+-    return days
++    return sign * days

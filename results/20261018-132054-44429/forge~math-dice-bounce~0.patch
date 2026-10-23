@@ -1,0 +1,103 @@
+diff --git a/game.py b/game.py
+index 768dec9..8ca0dfc 100644
+--- a/game.py
++++ b/game.py
+@@ -2,5 +2,67 @@ from fractions import Fraction
+ 
+ 
+ def expected_turns(n, k):
+-    """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    """Exact expected number of turns from square 0 to land exactly on n.
++
++    Squares are 0..n, the walk starts at 0 and stops the moment it hits n.
++    Each turn rolls a fair k-sided die (faces 1..k).  A roll that would pass
++    n bounces back by the excess, so from square p a roll r lands on
++
++        p + r            if p + r <= n
++        2 * n - p - r    if p + r >  n
++
++    Every square in 0..n-1 is transient, so the expected hitting times are the
++    unique solution of the linear system
++
++        E[p] = 1 + (1/k) * sum_{r=1..k} E[next(p, r)],   E[n] = 0.
++
++    Multiplying through by k gives integer coefficients.  The system is solved
++    with exact rational Gaussian elimination, so the returned value is a
++    fractions.Fraction (no floating point anywhere).
++
++    Requires 1 <= k <= n <= 60.
++    """
++    if not (1 <= k <= n):
++        raise ValueError("require 1 <= k <= n")
++
++    def land(pos, roll):
++        target = pos + roll
++        return target if target <= n else 2 * n - target
++
++    # Unknowns are E[0], ..., E[n-1]; the absorbing square n contributes 0.
++    size = n
++    # Augmented matrix of k*E[p] - sum_r E[land(p, r)] = k.
++    mat = [[Fraction(0) for _ in range(size + 1)] for _ in range(size)]
++    for p in range(size):
++        mat[p][p] += k
++        for r in range(1, k + 1):
++            dest = land(p, r)
++            if dest != n:
++                mat[p][dest] -= 1
++        mat[p][size] = k
++
++    # Forward elimination (exact rationals, partial pivoting on magnitude to
++    # keep intermediate denominators small).
++    for col in range(size):
++        pivot = max(range(col, size), key=lambda r: abs(mat[r][col]))
++        if pivot != col:
++            mat[col], mat[pivot] = mat[pivot], mat[col]
++        pivot_row = mat[col]
++        pivot_val = pivot_row[col]
++        for row in range(col + 1, size):
++            row_val = mat[row][col]
++            if row_val != 0:
++                factor = row_val / pivot_val
++                current = mat[row]
++                for j in range(col, size + 1):
++                    current[j] -= factor * pivot_row[j]
++
++    # Back substitution.
++    solution = [Fraction(0)] * size
++    for row in range(size - 1, -1, -1):
++        acc = mat[row][size]
++        for j in range(row + 1, size):
++            acc -= mat[row][j] * solution[j]
++        solution[row] = acc / mat[row][row]
++
++    return solution[0]
+diff --git a/test_game.py b/test_game.py
+index 360d43b..92c87e5 100644
+--- a/test_game.py
++++ b/test_game.py
+@@ -14,6 +14,24 @@ class TestExpectedTurns(unittest.TestCase):
+     def test_exact_type(self):
+         self.assertIsInstance(expected_turns(5, 3), Fraction)
+ 
++    def test_single_square_board(self):
++        self.assertEqual(expected_turns(1, 1), Fraction(1))
++
++    def test_bounce_matters(self):
++        # From square 4 the only non-winning roll (2) bounces back to 4.
++        self.assertEqual(expected_turns(5, 2), Fraction(17, 4))
++
++    def test_no_overshoot(self):
++        self.assertEqual(expected_turns(3, 2), Fraction(3))
++
++    def test_mid_size_board(self):
++        self.assertEqual(expected_turns(6, 3), Fraction(43, 9))
++
++    def test_die_as_wide_as_board(self):
++        # Exactly one face (n - p) wins from any square, so E = n.
++        for n in (2, 7, 60):
++            self.assertEqual(expected_turns(n, n), Fraction(n))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

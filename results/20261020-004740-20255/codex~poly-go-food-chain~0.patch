@@ -1,0 +1,86 @@
+diff --git a/food_chain.go b/food_chain.go
+index b46ea45..b6d19fa 100644
+--- a/food_chain.go
++++ b/food_chain.go
+@@ -1,13 +1,78 @@
+ package foodchain
+ 
++import "strings"
++
++var animals = []string{
++	"",
++	"fly",
++	"spider",
++	"bird",
++	"cat",
++	"dog",
++	"goat",
++	"cow",
++	"horse",
++}
++
++var comments = []string{
++	"",
++	"",
++	"It wriggled and jiggled and tickled inside her.",
++	"How absurd to swallow a bird!",
++	"Imagine that, to swallow a cat!",
++	"What a hog, to swallow a dog!",
++	"Just opened her throat and swallowed a goat!",
++	"I don't know how she swallowed a cow!",
++	"",
++}
++
+ func Verse(v int) string {
+-	panic("Please implement the Verse function")
++	if v < 1 || v >= len(animals) {
++		return ""
++	}
++
++	var verse strings.Builder
++	verse.WriteString("I know an old lady who swallowed a ")
++	verse.WriteString(animals[v])
++	verse.WriteString(".\n")
++
++	if v == len(animals)-1 {
++		verse.WriteString("She's dead, of course!")
++		return verse.String()
++	}
++
++	if comments[v] != "" {
++		verse.WriteString(comments[v])
++		verse.WriteString("\n")
++	}
++
++	for i := v; i > 1; i-- {
++		verse.WriteString("She swallowed the ")
++		verse.WriteString(animals[i])
++		verse.WriteString(" to catch the ")
++		verse.WriteString(animals[i-1])
++		if i-1 == 2 {
++			verse.WriteString(" that wriggled and jiggled and tickled inside her")
++		}
++		verse.WriteString(".\n")
++	}
++
++	verse.WriteString("I don't know why she swallowed the fly. Perhaps she'll die.")
++	return verse.String()
+ }
+ 
+ func Verses(start, end int) string {
+-	panic("Please implement the Verses function")
++	if start < 1 || end >= len(animals) || start > end {
++		return ""
++	}
++
++	verses := make([]string, 0, end-start+1)
++	for v := start; v <= end; v++ {
++		verses = append(verses, Verse(v))
++	}
++	return strings.Join(verses, "\n\n")
+ }
+ 
+ func Song() string {
+-	panic("Please implement the Song function")
++	return Verses(1, len(animals)-1)
+ }

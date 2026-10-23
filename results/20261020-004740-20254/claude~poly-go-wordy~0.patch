@@ -1,0 +1,74 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..c1dd4d5 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,68 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
++// Answer evaluates a simple word problem, returning the result and whether
++// the question was understood. Operations are applied left to right.
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	const prefix = "What is "
++
++	if !strings.HasPrefix(question, prefix) || !strings.HasSuffix(question, "?") {
++		return 0, false
++	}
++
++	fields := strings.Fields(strings.TrimSuffix(strings.TrimPrefix(question, prefix), "?"))
++	if len(fields) == 0 {
++		return 0, false
++	}
++
++	value, err := strconv.Atoi(fields[0])
++	if err != nil {
++		return 0, false
++	}
++
++	for i := 1; i < len(fields); {
++		var op string
++		switch fields[i] {
++		case "plus", "minus":
++			op = fields[i]
++			i++
++		case "multiplied", "divided":
++			if i+1 >= len(fields) || fields[i+1] != "by" {
++				return 0, false
++			}
++			op = fields[i]
++			i += 2
++		default:
++			return 0, false
++		}
++
++		if i >= len(fields) {
++			return 0, false
++		}
++		operand, err := strconv.Atoi(fields[i])
++		if err != nil {
++			return 0, false
++		}
++		i++
++
++		switch op {
++		case "plus":
++			value += operand
++		case "minus":
++			value -= operand
++		case "multiplied":
++			value *= operand
++		case "divided":
++			if operand == 0 {
++				return 0, false
++			}
++			value /= operand
++		}
++	}
++
++	return value, true
+ }

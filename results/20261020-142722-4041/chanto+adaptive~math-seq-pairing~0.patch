@@ -1,0 +1,76 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..868e589 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,69 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _t(length):
++    """Number of pairs whose two code lengths sum to less than length."""
++    if length == 0:
++        return 0
++    return ((length - 1) << length) + 1
++
++
++def _pair(a, b):
++    """Bijection from pairs of non-negative ints to non-negative ints.
++
++    A non-negative int x is first mapped to the binary string of x + 1
++    without its leading 1.  The two strings are concatenated, and the
++    concatenation is ranked by total length and then position of the split.
++    """
++    a += 1
++    a_length = a.bit_length() - 1
++    a_value = a - (1 << a_length)
++
++    b += 1
++    b_length = b.bit_length() - 1
++    b_value = b - (1 << b_length)
++
++    length = a_length + b_length
++    value = (a_value << b_length) | b_value
++    return _t(length) + (a_length << length) + value
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    if n == 0:
++        return 0, 0
++
++    low, high = 1, n.bit_length() + 1
++    while low < high:
++        middle = (low + high + 1) // 2
++        if _t(middle) <= n:
++            low = middle
++        else:
++            high = middle - 1
++    length = low
++
++    remainder = n - _t(length)
++    a_length = remainder >> length
++    value = remainder & ((1 << length) - 1)
++    b_length = length - a_length
++
++    a_value = value >> b_length
++    b_value = value & ((1 << b_length) - 1)
++    return (1 << a_length) + a_value - 1, (1 << b_length) + b_value - 1
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = 0
++    for value in reversed(lst):
++        n = 1 + _pair(value, n)
++    return n
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

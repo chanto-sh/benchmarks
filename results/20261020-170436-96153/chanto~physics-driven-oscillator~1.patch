@@ -1,0 +1,76 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..88158a5 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,69 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return A and B with x_steady(t) = A cos(omega t) + B sin(omega t)."""
++    d = k - m * omega * omega
++    cw = c * omega
++    z = math.hypot(d, cw)
++    # Dividing by z twice avoids squaring values that are too large or too small.
++    return F0 * (d / z) / z, F0 * (cw / z) / z
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    d = k - m * omega * omega
++    return F0 / math.hypot(d, c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, b = _steady_state_coefficients(m, k, c, F0, omega)
++    steady = a * math.cos(omega * t) + b * math.sin(omega * t)
++
++    # Initial conditions for the homogeneous part y = x - x_steady.
++    y0 = x0 - a
++    v = v0 - b * omega
++
++    alpha = c / (2.0 * m)
++    wn2 = k / m
++    delta = alpha * alpha - wn2
++    q = v + alpha * y0
++
++    if delta < 0.0:
++        # Underdamped: roots -alpha +/- i*beta.
++        beta = math.sqrt(-delta)
++        z = beta * t
++        z2 = z * z
++        if abs(z) < 1.0e-4:
++            sinc = 1.0 - z2 / 6.0 + z2 * z2 / 120.0
++        else:
++            sinc = math.sin(z) / z
++        transient = math.exp(-alpha * t) * (
++            y0 * math.cos(z) + q * t * sinc
++        )
++    elif delta > 0.0:
++        # Overdamped: roots -alpha +/- mu.  The -alpha-mu root is written
++        # below with the stable identity alpha^2 - mu^2 = k/m.
++        mu = math.sqrt(delta)
++        r2 = -(alpha + mu)
++        r1 = -wn2 / (alpha + mu)
++        z = mu * t
++        e1 = math.exp(r1 * t)
++        e2 = math.exp(r2 * t)
++        cosh_scaled = 0.5 * (e1 + e2)
++        if z < 1.0:
++            if z == 0.0:
++                sinh_over_z = e2
++            else:
++                sinh_over_z = 0.5 * e2 * math.expm1(2.0 * z) / z
++        else:
++            sinh_over_z = 0.5 * (e1 - e2) / z
++        transient = y0 * cosh_scaled + q * t * sinh_over_z
++    else:
++        # Critical damping: repeated root -alpha.
++        transient = math.exp(-alpha * t) * (y0 + q * t)
++
++    return steady + transient

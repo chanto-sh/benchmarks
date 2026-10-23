@@ -1,0 +1,52 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..adefdeb 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,11 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _comb(n, k):
++    if k < 0 or k > n:
++        return 0
++    return comb(n, k)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +13,34 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++
++    total_cards = r + b + g
++    turned = min(max(m, 0), total_cards)
++    probability = Fraction(0)
++
++    # The first green is card p (1-indexed) for some p <= turned: the first
++    # p - 1 cards hold only reds and blues, then a green ends the deal.
++    for p in range(1, turned + 1):
++        if g == 0:
++            break
++        ways_without_green = comb(total_cards, p - 1)
++        j_low = max(k, p - 1 - b)
++        j_high = min(r, p - 1)
++        for j in range(j_low, j_high + 1):
++            probability += (
++                Fraction(_comb(r, j) * _comb(b, p - 1 - j), ways_without_green)
++                * Fraction(g, total_cards - p + 1)
++            )
++
++    # No green among the first `turned` cards: the deal stops after m cards.
++    ways_first_turned = comb(total_cards, turned)
++    j_low = max(k, turned - b)
++    j_high = min(r, turned)
++    for j in range(j_low, j_high + 1):
++        probability += Fraction(
++            _comb(r, j) * _comb(b, turned - j), ways_first_turned
++        )
++
++    return probability

@@ -1,0 +1,60 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..a9a8c71 100644
+--- a/pov.py
++++ b/pov.py
+@@ -18,8 +18,53 @@ class Tree:
+     def __eq__(self, other):
+         return self.__dict__() == other.__dict__()
+ 
++    def _adjacency(self):
++        """Return an undirected adjacency map of the whole tree."""
++        adjacency = {}
++
++        def visit(node):
++            adjacency.setdefault(node.label, [])
++            for child in node.children:
++                adjacency[node.label].append(child.label)
++                adjacency.setdefault(child.label, []).append(node.label)
++                visit(child)
++
++        visit(self)
++        return adjacency
++
++    @staticmethod
++    def _find_path(adjacency, start, end):
++        """Return the list of labels on the unique path from start to end."""
++        stack = [(start, [start])]
++        seen = {start}
++        while stack:
++            node, path = stack.pop()
++            if node == end:
++                return path
++            for neighbour in adjacency[node]:
++                if neighbour not in seen:
++                    seen.add(neighbour)
++                    stack.append((neighbour, path + [neighbour]))
++        return None
++
+     def from_pov(self, from_node):
+-        pass
++        adjacency = self._adjacency()
++        if from_node not in adjacency:
++            raise ValueError("Tree could not be reoriented")
++
++        def orient(node, parent):
++            return Tree(
++                node,
++                [orient(child, node) for child in adjacency[node] if child != parent],
++            )
++
++        return orient(from_node, None)
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        adjacency = self._adjacency()
++        if from_node not in adjacency:
++            raise ValueError("Tree could not be reoriented")
++        if to_node not in adjacency:
++            raise ValueError("No path found")
++
++        return self._find_path(adjacency, from_node, to_node)

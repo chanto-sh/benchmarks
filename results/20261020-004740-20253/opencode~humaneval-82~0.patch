@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index f2568cc..51e88d5 100644
+--- a/solution.py
++++ b/solution.py
+@@ -8,3 +8,10 @@ def prime_length(string):
+     prime_length('kittens') == True
+     prime_length('orange') == False
+     """
++    n = len(string)
++    if n < 2:
++        return False
++    for i in range(2, int(n ** 0.5) + 1):
++        if n % i == 0:
++            return False
++    return True

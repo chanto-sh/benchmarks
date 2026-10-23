@@ -1,0 +1,128 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..cf33c56 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,121 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at zero handled."""
++    if abs(x) < 1e-8:
++        return 1.0 - x * x / 6.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the removable singularity at zero handled."""
++    if abs(x) < 1e-8:
++        return 1.0 + x * x / 6.0
++    return math.sinh(x) / x
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return P, Q for the particular solution P cos(omega t) + Q sin(omega t)."""
++    d = k - m * omega * omega
++    cw = c * omega
++    denom = d * d + cw * cw
++    return F0 * d / denom, F0 * cw / denom
++
++
++def _series_displacement(m, k, c, F0, omega, x0, v0, t):
++    """Evaluate x(t) by its Taylor series about t = 0.
++
++    This avoids cancellation between very large steady-state and transient
++    terms when the driving frequency is close to resonance and t is small.
++    """
++    a = c / (2.0 * m)
++    wn2 = k / m
++    f = F0 / m
++    order = 100
++
++    coeff = [0.0] * (order + 1)
++    coeff[0] = x0
++    coeff[1] = v0
++
++    fn, fn_next = f, 0.0
++    for n in range(order - 1):
++        coeff[n + 2] = (
++            fn - 2.0 * a * (n + 1) * coeff[n + 1] - wn2 * coeff[n]
++        ) / ((n + 2) * (n + 1))
++        fn, fn_next = fn_next, -fn * omega * omega / ((n + 1) * (n + 2))
++
++    value = coeff[order]
++    for n in range(order - 1, -1, -1):
++        value = value * t + coeff[n]
++    return value
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    d = k - m * omega * omega
++    cw = c * omega
++    return abs(F0) / math.sqrt(d * d + cw * cw)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0:
++        return x0
++
++    if c == 0.0 and k > 0.0:
++        # Undamped case.  Group the two cosines using a product formula so
++        # that driving frequencies very close to resonance stay accurate.
++        d = k - m * omega * omega
++        p = F0 / d
++        wn = math.sqrt(k / m)
++        return (
++            x0 * math.cos(wn * t)
++            + (v0 / wn) * math.sin(wn * t)
++            - 2.0
++            * p
++            * math.sin(0.5 * (omega + wn) * t)
++            * math.sin(0.5 * (omega - wn) * t)
++        )
++
++    a = c / (2.0 * m)
++    disc = a * a - k / m
++    rate = max(
++        abs(a) + math.sqrt(abs(disc)),
++        abs(omega),
++        math.sqrt(abs(k / m)),
++    )
++    if abs(t) * rate <= 10.0:
++        return _series_displacement(m, k, c, F0, omega, x0, v0, t)
++
++    p, q = _steady_state_coefficients(m, k, c, F0, omega)
++    steady = p * math.cos(omega * t) + q * math.sin(omega * t)
++
++    # Homogeneous part.  Write it as exp(-a t) times functions that remain
++    # well behaved as the system approaches critical damping.
++    ca = x0 - p
++    va = v0 - q * omega + a * ca
++
++    if disc < 0.0:
++        w = math.sqrt(-disc)
++        z = w * t
++        transient = math.exp(-a * t) * (ca * math.cos(z) + va * t * _sinc(z))
++    elif disc == 0.0:
++        transient = math.exp(-a * t) * (ca + va * t)
++    else:
++        d = math.sqrt(disc)
++        z = d * t
++        # Keep the exponentials separate: exp(-a t) cosh(d t) would overflow
++        # in cosh before the decaying exponential brings it back down.
++        ep = math.exp((d - a) * t)
++        em = math.exp(-(d + a) * t)
++        cosh_part = 0.5 * (ep + em)
++        if abs(z) < 1e-3:
++            sinh_part = math.exp(-a * t) * t * _sinhc(z)
++        else:
++            sinh_part = 0.5 * (ep - em) / d
++        transient = ca * cosh_part + va * sinh_part
++
++    return steady + transient

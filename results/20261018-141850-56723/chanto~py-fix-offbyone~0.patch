@@ -1,0 +1,21 @@
+diff --git a/stats.py b/stats.py
+index 7b6effd..b9f8ce3 100644
+--- a/stats.py
++++ b/stats.py
+@@ -6,7 +6,7 @@ def moving_average(xs, k):
+     if k <= 0:
+         raise ValueError("k must be positive")
+     out = []
+-    for i in range(len(xs) - k):
++    for i in range(len(xs) - k + 1):
+         window = xs[i:i + k]
+         out.append(sum(window) / k)
+     return out
+@@ -18,5 +18,5 @@ def median(xs):
+     n = len(s)
+     mid = n // 2
+     if n % 2 == 0:
+-        return s[mid]
+-    return (s[mid - 1] + s[mid]) / 2
++        return (s[mid - 1] + s[mid]) / 2
++    return s[mid]

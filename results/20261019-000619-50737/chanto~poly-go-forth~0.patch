@@ -1,0 +1,203 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..64a56bf 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,197 @@
+ package forth
+ 
++import (
++	"errors"
++	"fmt"
++	"strconv"
++	"strings"
++)
++
++type stack []int
++
++type operation func(*stack) error
++
++var (
++	errEmptyStack    = errors.New("empty stack")
++	errOneValueStack = errors.New("only one value on the stack")
++)
++
++func binary(f func(a, b int) (int, error)) operation {
++	return func(s *stack) error {
++		if len(*s) < 2 {
++			return underflow(*s)
++		}
++		n := len(*s)
++		a, b := (*s)[n-2], (*s)[n-1]
++		result, err := f(a, b)
++		if err != nil {
++			return err
++		}
++		*s = append((*s)[:n-2], result)
++		return nil
++	}
++}
++
++func underflow(s stack) error {
++	if len(s) == 0 {
++		return errEmptyStack
++	}
++	return errOneValueStack
++}
++
++func isNumber(token string) bool {
++	if token == "" {
++		return false
++	}
++	if token[0] == '-' {
++		token = token[1:]
++	}
++	if token == "" {
++		return false
++	}
++	for _, r := range token {
++		if r < '0' || r > '9' {
++			return false
++		}
++	}
++	return true
++}
++
++func literal(n int) operation {
++	return func(s *stack) error {
++		*s = append(*s, n)
++		return nil
++	}
++}
++
++func builtins() map[string]operation {
++	return map[string]operation{
++		"+": binary(func(a, b int) (int, error) { return a + b, nil }),
++		"-": binary(func(a, b int) (int, error) { return a - b, nil }),
++		"*": binary(func(a, b int) (int, error) { return a * b, nil }),
++		"/": binary(func(a, b int) (int, error) {
++			if b == 0 {
++				return 0, errors.New("divide by zero")
++			}
++			return a / b, nil
++		}),
++		"DUP": func(s *stack) error {
++			if len(*s) < 1 {
++				return errEmptyStack
++			}
++			*s = append(*s, (*s)[len(*s)-1])
++			return nil
++		},
++		"DROP": func(s *stack) error {
++			if len(*s) < 1 {
++				return errEmptyStack
++			}
++			*s = (*s)[:len(*s)-1]
++			return nil
++		},
++		"SWAP": func(s *stack) error {
++			if len(*s) < 2 {
++				return underflow(*s)
++			}
++			n := len(*s)
++			(*s)[n-1], (*s)[n-2] = (*s)[n-2], (*s)[n-1]
++			return nil
++		},
++		"OVER": func(s *stack) error {
++			if len(*s) < 2 {
++				return underflow(*s)
++			}
++			n := len(*s)
++			*s = append(*s, (*s)[n-2])
++			return nil
++		},
++	}
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	words := make(map[string][]operation)
++	for name, op := range builtins() {
++		words[name] = []operation{op}
++	}
++
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	s := stack{}
++	for i := 0; i < len(tokens); i++ {
++		token := strings.ToUpper(tokens[i])
++		switch token {
++		case ":":
++			if i+1 >= len(tokens) {
++				return nil, errors.New("illegal operation")
++			}
++			name := strings.ToUpper(tokens[i+1])
++			if isNumber(name) {
++				return nil, errors.New("illegal operation")
++			}
++			i++
++			var body []operation
++			closed := false
++			for i++; i < len(tokens); i++ {
++				t := strings.ToUpper(tokens[i])
++				if t == ";" {
++					closed = true
++					break
++				}
++				if isNumber(t) {
++					n, err := strconv.Atoi(t)
++					if err != nil {
++						return nil, fmt.Errorf("invalid number: %s", t)
++					}
++					body = append(body, literal(n))
++					continue
++				}
++				op, err := resolve(t, words)
++				if err != nil {
++					return nil, err
++				}
++				body = append(body, op)
++			}
++			if !closed {
++				return nil, errors.New("illegal operation")
++			}
++			words[name] = body
++		case ";":
++			return nil, errors.New("undefined operation")
++		default:
++			if isNumber(tokens[i]) {
++				n, err := strconv.Atoi(tokens[i])
++				if err != nil {
++					return nil, fmt.Errorf("invalid number: %s", tokens[i])
++				}
++				s = append(s, n)
++				continue
++			}
++			op, err := resolve(token, words)
++			if err != nil {
++				return nil, err
++			}
++			if err := op(&s); err != nil {
++				return nil, err
++			}
++		}
++	}
++	return []int(s), nil
++}
++
++func resolve(token string, words map[string][]operation) (operation, error) {
++	body, ok := words[token]
++	if !ok {
++		return nil, errors.New("undefined operation")
++	}
++	return func(s *stack) error {
++		for _, op := range body {
++			if err := op(s); err != nil {
++				return err
++			}
++		}
++		return nil
++	}, nil
+ }

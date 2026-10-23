@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index 451015d..a7a288e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,18 @@
+-def set_left_most_unset_bit(n): 
+-    pass
++def set_left_most_unset_bit(n):
++    """Set the leftmost (most significant) unset bit of ``n`` and return it.
++
++    For example, 10 (1010 in binary) becomes 14 (1110), and 15 (1111)
++    becomes 31 (11111).
++    """
++    if n <= 0:
++        return 1 if n == 0 else n
++
++    msb = n.bit_length() - 1
++    # If every bit up to the most significant one is set, the leftmost
++    # unset bit is the next (more significant) bit.
++    if n == (1 << (msb + 1)) - 1:
++        return n | (1 << (msb + 1))
++
++    # Otherwise find the highest zero bit below the leading one.
++    zero_bits = ~n & ((1 << (msb + 1)) - 1)
++    return n | (1 << (zero_bits.bit_length() - 1))

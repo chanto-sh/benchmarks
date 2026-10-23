@@ -1,0 +1,218 @@
+diff --git a/robot_simulator.go b/robot_simulator.go
+index d5d5b1c..9e084f5 100644
+--- a/robot_simulator.go
++++ b/robot_simulator.go
+@@ -1,44 +1,202 @@
+ package robot
+ 
++import "fmt"
++
+ // See defs.go for other definitions
+ 
+ // Step 1
+-// Define N, E, S, W here.
++
++const (
++	N Dir = iota
++	E
++	S
++	W
++)
+ 
+ func Right() {
+-	panic("Please implement the Right function")
++	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
+ }
+ 
+ func Left() {
+-	panic("Please implement the Left function")
++	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
+ }
+ 
+ func Advance() {
+-	panic("Please implement the Advance function")
++	switch Step1Robot.Dir {
++	case N:
++		Step1Robot.Y++
++	case E:
++		Step1Robot.X++
++	case S:
++		Step1Robot.Y--
++	case W:
++		Step1Robot.X--
++	}
+ }
+ 
+ func (d Dir) String() string {
+-	panic("Please implement the String function")
++	switch d {
++	case N:
++		return "north"
++	case E:
++		return "east"
++	case S:
++		return "south"
++	case W:
++		return "west"
++	}
++	return fmt.Sprintf("Dir(%d)", int(d))
+ }
+ 
+ // Step 2
+-// Define Action type here.
++
++type Action struct {
++	Command Command
++}
+ 
+ func StartRobot(command chan Command, action chan Action) {
+-	panic("Please implement the StartRobot function")
++	for c := range command {
++		action <- Action{Command: c}
++	}
++	close(action)
+ }
+ 
+ func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
+-	panic("Please implement the Room function")
++	for a := range action {
++		robot, _ = apply(extent, robot, a.Command)
++	}
++	report <- robot
+ }
+ 
+ // Step 3
+-// Define Action3 type here.
++
++type Action3 struct {
++	Name    string
++	Command Command
++}
++
++// doneCommand is sent by a robot once it has finished running its script.
++const doneCommand Command = 0
+ 
+ func StartRobot3(name, script string, action chan Action3, log chan string) {
+-	panic("Please implement the StartRobot3 function")
++	for i := 0; i < len(script); i++ {
++		c := Command(script[i])
++		switch c {
++		case 'R', 'L', 'A':
++			action <- Action3{Name: name, Command: c}
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", name, script[i])
++			action <- Action3{Name: name, Command: doneCommand}
++			return
++		}
++	}
++	action <- Action3{Name: name, Command: doneCommand}
+ }
+ 
+ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
+-	panic("Please implement the Room3 function")
++	result := make([]Step3Robot, len(robots))
++	copy(result, robots)
++
++	index := make(map[string]int, len(result))
++	for i, r := range result {
++		if r.Name == "" {
++			log <- "robot without a name"
++		}
++		if _, ok := index[r.Name]; ok {
++			log <- fmt.Sprintf("duplicate robot name %q", r.Name)
++		}
++		index[r.Name] = i
++
++		if !inRect(extent, r.Pos) {
++			log <- fmt.Sprintf("robot %q placed outside of the room at %v", r.Name, r.Pos)
++		}
++		for j := 0; j < i; j++ {
++			if result[j].Pos == r.Pos {
++				log <- fmt.Sprintf("robots %q and %q placed at the same position %v",
++					result[j].Name, r.Name, r.Pos)
++			}
++		}
++	}
++
++	remaining := len(result)
++	for a := range action {
++		if a.Command == doneCommand {
++			remaining--
++			if remaining <= 0 {
++				rep <- result
++				return
++			}
++			continue
++		}
++
++		i, ok := index[a.Name]
++		if !ok {
++			log <- fmt.Sprintf("action from unknown robot %q", a.Name)
++			continue
++		}
++
++		robot := result[i]
++		switch a.Command {
++		case 'R', 'L':
++			robot.Step2Robot, _ = apply(extent, robot.Step2Robot, a.Command)
++		case 'A':
++			p := advance(robot.Pos, robot.Dir)
++			if !inRect(extent, p) {
++				log <- fmt.Sprintf("robot %q attempted to advance into a wall", a.Name)
++				continue
++			}
++			collision := false
++			for j := range result {
++				if j != i && result[j].Pos == p {
++					collision = true
++					break
++				}
++			}
++			if collision {
++				log <- fmt.Sprintf("robot %q attempted to advance into another robot", a.Name)
++				continue
++			}
++			robot.Pos = p
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", a.Name, a.Command)
++		}
++		result[i] = robot
++	}
++}
++
++// apply executes a single command for a robot in isolation, reporting whether
++// the robot attempted to move into a wall.
++func apply(extent Rect, robot Step2Robot, cmd Command) (Step2Robot, bool) {
++	switch cmd {
++	case 'R':
++		robot.Dir = (robot.Dir + 1) % 4
++	case 'L':
++		robot.Dir = (robot.Dir + 3) % 4
++	case 'A':
++		p := advance(robot.Pos, robot.Dir)
++		if !inRect(extent, p) {
++			return robot, true
++		}
++		robot.Pos = p
++	}
++	return robot, false
++}
++
++func advance(p Pos, d Dir) Pos {
++	switch d {
++	case N:
++		p.Northing++
++	case E:
++		p.Easting++
++	case S:
++		p.Northing--
++	case W:
++		p.Easting--
++	}
++	return p
++}
++
++func inRect(extent Rect, p Pos) bool {
++	return p.Easting >= extent.Min.Easting && p.Easting <= extent.Max.Easting &&
++		p.Northing >= extent.Min.Northing && p.Northing <= extent.Max.Northing
+ }

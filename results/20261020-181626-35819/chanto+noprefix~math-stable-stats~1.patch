@@ -1,0 +1,76 @@
+diff --git a/stats.py b/stats.py
+index add4f59..f51a978 100644
+--- a/stats.py
++++ b/stats.py
+@@ -1,21 +1,65 @@
+ """Summary statistics for the sensor pipeline."""
+ import math
+ 
++_MIN_NORMAL = 2.2250738585072014e-308
++
+ 
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    largest = max(abs(x) for x in xs)
++    if largest == 0.0:
++        return 0.0, 0.0
++
++    # Work with values scaled by a power of two so sums cannot overflow.
++    # Scaling is exact for normal results; values that would become subnormal
++    # are kept aside so they can contribute to the mean without losing bits.
++    _, exponent = math.frexp(largest)
++    scaled = []
++    normal = []
++    small = []
++    for x in xs:
++        value = math.ldexp(x, -exponent)
++        scaled.append(value)
++        if abs(value) >= _MIN_NORMAL:
++            normal.append(value)
++        else:
++            small.append(x)
++    mean_scaled = math.fsum(scaled) / n
++    mean = (
++        math.ldexp(math.fsum(normal) / n, exponent)
++        + math.fsum(small) / n
++    )
++
++    # Correct the deviations for the rounding error in the computed mean.
++    deviations = [x - mean_scaled for x in scaled]
++    correction = math.fsum(deviations) / n
++    dmax = max(abs(d - correction) for d in deviations)
++    if dmax == 0.0:
++        return mean, 0.0
++
++    # Scale the deviations again before squaring: when values are near the
++    # limits of the float range, their squares would otherwise underflow.
++    try:
++        max_deviation = math.ldexp(dmax, exponent)
++    except OverflowError:
++        return mean, math.inf
++    sum_squares = math.fsum(((d - correction) / dmax) ** 2 for d in deviations)
++    variance = (sum_squares / n) * max_deviation * max_deviation
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    values = list(xs)
++    largest = max(values)
++    return largest + math.log(
++        math.fsum(math.exp(x - largest) for x in values)
++    )
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

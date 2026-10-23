@@ -1,0 +1,201 @@
+diff --git a/react.go b/react.go
+index fabc3c0..9adba2d 100644
+--- a/react.go
++++ b/react.go
+@@ -3,34 +3,188 @@ package react
+ // Define reactor, cell and canceler types here.
+ // These types will implement the Reactor, Cell and Canceler interfaces, respectively.
+ 
++// reactor is the owner of a set of linked cells.
++type reactor struct{}
++
++// cell is used for both input cells and compute cells. An input cell has a
++// nil compute function; a compute cell derives its value from its
++// dependencies.
++type cell struct {
++	value      int
++	deps       []Cell
++	compute    func() int
++	dependents []*cell
++	callbacks  []*callbackEntry
++}
++
++// callbackEntry tracks a registered callback so that it can be canceled.
++type callbackEntry struct {
++	fn      func(int)
++	removed bool
++	owner   *cell
++}
++
++// canceler removes a previously registered callback.
++type canceler struct {
++	entry *callbackEntry
++}
++
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	if c.entry == nil || c.entry.removed {
++		return
++	}
++	c.entry.removed = true
++	owner := c.entry.owner
++	for i, e := range owner.callbacks {
++		if e == c.entry {
++			owner.callbacks = append(owner.callbacks[:i], owner.callbacks[i+1:]...)
++			break
++		}
++	}
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	if c.value == value {
++		return
++	}
++	c.value = value
++	c.propagate()
+ }
+ 
+ func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++	entry := &callbackEntry{fn: callback, owner: c}
++	c.callbacks = append(c.callbacks, entry)
++	return &canceler{entry: entry}
+ }
+ 
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	return &cell{value: initial}
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	c := &cell{
++		deps:    []Cell{dep},
++		compute: func() int { return compute(dep.Value()) },
++	}
++	c.value = c.compute()
++	link(dep, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	c := &cell{
++		deps:    []Cell{dep1, dep2},
++		compute: func() int { return compute(dep1.Value(), dep2.Value()) },
++	}
++	c.value = c.compute()
++	link(dep1, c)
++	link(dep2, c)
++	return c
++}
++
++// link registers dependent as a dependent of dep when dep is managed by this
++// package's cell implementation.
++func link(dep Cell, dependent *cell) {
++	if d, ok := dep.(*cell); ok {
++		d.dependents = append(d.dependents, dependent)
++	}
++}
++
++// propagate recomputes every cell reachable from c in dependency order and
++// then fires callbacks for compute cells whose values actually changed.
++func (c *cell) propagate() {
++	// Collect all cells reachable through dependents (c itself included).
++	affected := make(map[*cell]bool)
++	var order []*cell
++	var collect func(x *cell)
++	collect = func(x *cell) {
++		if affected[x] {
++			return
++		}
++		affected[x] = true
++		order = append(order, x)
++		for _, d := range x.dependents {
++			collect(d)
++		}
++	}
++	collect(c)
++
++	// Kahn's algorithm over the subgraph of affected cells: a cell may be
++	// processed once all of its affected dependencies have been processed.
++	indegree := make(map[*cell]int, len(order))
++	for _, x := range order {
++		n := 0
++		for _, dep := range x.deps {
++			if d, ok := dep.(*cell); ok && affected[d] {
++				n++
++			}
++		}
++		indegree[x] = n
++	}
++
++	changed := map[*cell]bool{c: true}
++	queue := make([]*cell, 0, len(order))
++	for _, x := range order {
++		if indegree[x] == 0 {
++			queue = append(queue, x)
++		}
++	}
++
++	var toNotify []*cell
++	for len(queue) > 0 {
++		x := queue[0]
++		queue = queue[1:]
++
++		if x != c {
++			// Only recompute when at least one dependency changed, so the
++			// compute function is not called needlessly.
++			depChanged := false
++			for _, dep := range x.deps {
++				if d, ok := dep.(*cell); ok && changed[d] {
++					depChanged = true
++					break
++				}
++			}
++			if depChanged {
++				if v := x.compute(); v != x.value {
++					x.value = v
++					changed[x] = true
++				}
++			}
++		}
++
++		if changed[x] && len(x.callbacks) > 0 {
++			toNotify = append(toNotify, x)
++		}
++
++		for _, d := range x.dependents {
++			if !affected[d] {
++				continue
++			}
++			indegree[d]--
++			if indegree[d] == 0 {
++				queue = append(queue, d)
++			}
++		}
++	}
++
++	// The system is now stable; notify observers.
++	for _, x := range toNotify {
++		value := x.value
++		entries := make([]*callbackEntry, len(x.callbacks))
++		copy(entries, x.callbacks)
++		for _, e := range entries {
++			if !e.removed {
++				e.fn(value)
++			}
++		}
++	}
+ }

@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..40408d9 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,10 @@
+ def find_kth(arr1, arr2, k):
+-    pass
++    """Return the k-th (1-indexed) element of the merged arrays.
++
++    The arrays are combined and ordered the same way Python's ``sorted``
++    orders them, which also matches the reference behaviour for inputs that
++    arrive unsorted or contain mixed comparable types.
++    """
++    if k < 1 or k > len(arr1) + len(arr2):
++        raise ValueError("k is out of range")
++    return sorted(arr1 + arr2)[k - 1]

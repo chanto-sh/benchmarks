@@ -1,0 +1,74 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..8befad7 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -11,7 +11,7 @@
+ from __future__ import annotations
+ 
+ import os
+-import re
++import string
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
+@@ -175,15 +175,29 @@ class TextReporter(BaseReporter):
+         self._template = template
+ 
+         # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++        fixed_template = ""
++        for (
++            literal_text,
++            field_name,
++            format_spec,
++            conversion,
++        ) in string.Formatter().parse(template):
++            fixed_template += literal_text.replace("{", "{{").replace("}", "}}")
++            if field_name is None:
++                continue
++            if field_name not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{field_name}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
+-        self._fixed_template = template
++                continue
++            fixed_template += "{" + field_name
++            if conversion:
++                fixed_template += "!" + conversion
++            if format_spec:
++                fixed_template += ":" + format_spec
++            fixed_template += "}"
++        self._fixed_template = fixed_template
+ 
+     def write_message(self, msg: Message) -> None:
+         """Convenience method to write a formatted message with class default
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..ab003e7 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -48,6 +48,20 @@ def test_template_option(linter):
+     assert output.getvalue() == "************* Module 0123\nC0301:001\nC0301:002\n"
+ 
+ 
++def test_template_option_with_escaped_braces(linter) -> None:
++    """Test that escaped braces are not interpreted as template arguments."""
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    linter.set_current_module("my_mod")
++    linter.add_message("C0301", line=1, args=(1, 2))
++    assert (
++        output.getvalue()
++        == '************* Module my_mod\n{ "Category": "convention" }\n'
++    )
++
++
+ def test_template_option_default(linter) -> None:
+     """Test the default msg-template setting."""
+     output = StringIO()

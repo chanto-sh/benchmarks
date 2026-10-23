@@ -1,0 +1,289 @@
+diff --git a/notes/cli.py b/notes/cli.py
+index 3ead104..16b6802 100644
+--- a/notes/cli.py
++++ b/notes/cli.py
+@@ -3,6 +3,7 @@ import os
+ import sys
+ 
+ from .fmt import detail, line
++from .model import InvalidTag, normalize_tags
+ from .store import NotFound, Store
+ 
+ 
+@@ -13,11 +14,20 @@ def parser():
+     a = sub.add_parser("add")
+     a.add_argument("title")
+     a.add_argument("--body", default="")
+-    sub.add_parser("list")
++    a.add_argument("--tag", action="append", default=[])
++    lst = sub.add_parser("list")
++    lst.add_argument("--tag", action="append", default=[])
+     s = sub.add_parser("show")
+     s.add_argument("id", type=int)
+     d = sub.add_parser("delete")
+     d.add_argument("id", type=int)
++    t = sub.add_parser("tag")
++    t.add_argument("id", type=int)
++    t.add_argument("tags", nargs="+", metavar="TAG")
++    u = sub.add_parser("untag")
++    u.add_argument("id", type=int)
++    u.add_argument("tags", nargs="+", metavar="TAG")
++    sub.add_parser("tags")
+     return p
+ 
+ 
+@@ -27,18 +37,33 @@ def main(argv=None):
+     store = Store(args.db)
+     try:
+         if args.cmd == "add":
+-            note = store.add(args.title, args.body)
++            note = store.add(args.title, args.body, normalize_tags(args.tag))
+             store.save()
+             print(f"added #{note.id}")
+         elif args.cmd == "list":
++            wanted = [tag.strip().lower() for tag in args.tag]
+             for n in store.notes:
+-                print(line(n))
++                have = {tag.lower() for tag in n.tags}
++                if all(tag in have for tag in wanted):
++                    print(line(n))
+         elif args.cmd == "show":
+             print(detail(store.get(args.id)))
+         elif args.cmd == "delete":
+             store.delete(args.id)
+             store.save()
+             print(f"deleted #{args.id}")
++        elif args.cmd == "tag":
++            store.add_tags(args.id, normalize_tags(args.tags))
++            store.save()
++        elif args.cmd == "untag":
++            store.remove_tags(args.id, normalize_tags(args.tags))
++            store.save()
++        elif args.cmd == "tags":
++            for name, count in store.tag_counts():
++                print(f"{name} {count}")
++    except InvalidTag as e:
++        print(f"invalid tag: {e.args[0]!r}", file=sys.stderr)
++        return 2
+     except NotFound as e:
+         print(f"no such note: {e.args[0]}", file=sys.stderr)
+         return 1
+diff --git a/notes/fmt.py b/notes/fmt.py
+index 13fbf61..7671613 100644
+--- a/notes/fmt.py
++++ b/notes/fmt.py
+@@ -1,11 +1,20 @@
++def _tag_words(tags):
++    return " ".join("#" + t for t in tags)
++
++
+ def line(note):
+     """One row of `notes list`."""
+-    return f"{note.id:>3}  {note.title}"
++    row = f"{note.id:>3}  {note.title}"
++    if note.tags:
++        row += "  " + _tag_words(note.tags)
++    return row
+ 
+ 
+ def detail(note):
+     """`notes show` output."""
+     out = [f"#{note.id} {note.title}"]
++    if note.tags:
++        out.append("tags: " + _tag_words(note.tags))
+     if note.body:
+         out += ["", note.body]
+     return "\n".join(out)
+diff --git a/notes/model.py b/notes/model.py
+index 3750b6b..9cb36e1 100644
+--- a/notes/model.py
++++ b/notes/model.py
+@@ -1,4 +1,25 @@
+-from dataclasses import asdict, dataclass
++from dataclasses import asdict, dataclass, field
++
++
++class InvalidTag(ValueError):
++    """A tag that is empty or contains whitespace, a comma or a '#'."""
++
++
++def normalize_tag(tag):
++    text = tag.strip()
++    if not text or any(c.isspace() or c in ",#" for c in text):
++        raise InvalidTag(tag)
++    return text.lower()
++
++
++def normalize_tags(tags):
++    """Lowercase, trim, validate and de-duplicate tags, keeping first-seen order."""
++    out = []
++    for tag in tags:
++        text = normalize_tag(tag)
++        if text not in out:
++            out.append(text)
++    return out
+ 
+ 
+ @dataclass
+@@ -6,10 +27,16 @@ class Note:
+     id: int
+     title: str
+     body: str = ""
++    tags: list = field(default_factory=list)
+ 
+     def to_dict(self):
+         return asdict(self)
+ 
+     @classmethod
+     def from_dict(cls, d):
+-        return cls(id=d["id"], title=d["title"], body=d.get("body", ""))
++        return cls(
++            id=d["id"],
++            title=d["title"],
++            body=d.get("body", ""),
++            tags=list(d.get("tags") or []),
++        )
+diff --git a/notes/store.py b/notes/store.py
+index 0483c15..ac2ba21 100644
+--- a/notes/store.py
++++ b/notes/store.py
+@@ -3,7 +3,7 @@ import os
+ 
+ from .model import Note
+ 
+-VERSION = 1
++VERSION = 2
+ 
+ 
+ class NotFound(KeyError):
+@@ -24,8 +24,8 @@ class Store:
+     def next_id(self):
+         return max((n.id for n in self.notes), default=0) + 1
+ 
+-    def add(self, title, body=""):
+-        note = Note(self.next_id(), title, body)
++    def add(self, title, body="", tags=()):
++        note = Note(self.next_id(), title, body, list(tags))
+         self.notes.append(note)
+         return note
+ 
+@@ -38,6 +38,26 @@ class Store:
+     def delete(self, note_id):
+         self.notes.remove(self.get(note_id))
+ 
++    def add_tags(self, note_id, tags):
++        note = self.get(note_id)
++        for tag in tags:
++            if tag not in note.tags:
++                note.tags.append(tag)
++        return note
++
++    def remove_tags(self, note_id, tags):
++        note = self.get(note_id)
++        drop = set(tags)
++        note.tags = [t for t in note.tags if t not in drop]
++        return note
++
++    def tag_counts(self):
++        counts = {}
++        for n in self.notes:
++            for tag in n.tags:
++                counts[tag] = counts.get(tag, 0) + 1
++        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
++
+     def save(self):
+         tmp = self.path + ".tmp"
+         with open(tmp, "w") as f:
+diff --git a/test_notes.py b/test_notes.py
+index e659cfe..9a1b275 100644
+--- a/test_notes.py
++++ b/test_notes.py
+@@ -41,6 +41,88 @@ class NotesTest(unittest.TestCase):
+         data = json.load(open(self.db))
+         self.assertEqual(data["notes"][0]["title"], "x")
+ 
++    def test_add_tags_normalized(self):
++        run(self.db, "add", "Buy milk", "--tag", "home", "--tag", " Errands ", "--tag", "HOME")
++        self.assertEqual(run(self.db, "list")[1], "  1  Buy milk  #home #errands\n")
++        self.assertEqual(run(self.db, "show", "1")[1], "#1 Buy milk\ntags: #home #errands\n")
++
++    def test_list_filters_by_tag(self):
++        run(self.db, "add", "A", "--tag", "home")
++        run(self.db, "add", "B", "--tag", "home", "--tag", "work")
++        run(self.db, "add", "C", "--tag", "errands")
++        self.assertEqual(run(self.db, "list", "--tag", "HOME")[1], "  1  A  #home\n  2  B  #home #work\n")
++        self.assertEqual(run(self.db, "list", "--tag", "home", "--tag", "Work")[1], "  2  B  #home #work\n")
++        self.assertEqual(run(self.db, "list", "--tag", "nope")[1], "")
++
++    def test_show_tags_before_body(self):
++        run(self.db, "add", "A", "--body", "hello", "--tag", "x")
++        self.assertEqual(run(self.db, "show", "1")[1], "#1 A\ntags: #x\n\nhello\n")
++
++    def test_invalid_tags(self):
++        cases = ["", "   ", "two words", "a,b", "#home"]
++        for bad in cases:
++            code, out, err = run(self.db, "add", "x", "--tag", bad)
++            self.assertEqual(code, 2)
++            self.assertEqual(out, "")
++            self.assertNotEqual(err, "")
++            self.assertFalse(os.path.exists(self.db))
++
++    def test_invalid_tag_names_bad_tag_and_saves_nothing(self):
++        run(self.db, "add", "keep")
++        before = open(self.db).read()
++        code, _, err = run(self.db, "add", "x", "--tag", "ok", "--tag", "bad tag")
++        self.assertEqual(code, 2)
++        self.assertIn("bad tag", err)
++        self.assertEqual(open(self.db).read(), before)
++
++    def test_tags_counts(self):
++        run(self.db, "add", "A", "--tag", "z", "--tag", "a", "--tag", "m")
++        run(self.db, "add", "B", "--tag", "a", "--tag", "m")
++        run(self.db, "add", "C", "--tag", "a")
++        run(self.db, "add", "D", "--tag", "b")
++        self.assertEqual(run(self.db, "tags")[1], "a 3\nm 2\nb 1\nz 1\n")
++
++    def test_tag_and_untag(self):
++        run(self.db, "add", "A", "--tag", "home")
++        code, out, _ = run(self.db, "tag", "1", " Work ", "HOME", "new")
++        self.assertEqual(code, 0)
++        self.assertEqual(out, "")
++        self.assertEqual(run(self.db, "show", "1")[1], "#1 A\ntags: #home #work #new\n")
++        self.assertEqual(run(self.db, "untag", "1", "home", "missing")[0], 0)
++        self.assertEqual(run(self.db, "show", "1")[1], "#1 A\ntags: #work #new\n")
++
++    def test_tag_invalid_saves_nothing(self):
++        run(self.db, "add", "A")
++        before = open(self.db).read()
++        code, _, err = run(self.db, "tag", "1", "ok", "a,b")
++        self.assertEqual(code, 2)
++        self.assertIn("a,b", err)
++        self.assertEqual(open(self.db).read(), before)
++
++    def test_tag_unknown_note(self):
++        run(self.db, "add", "A")
++        for cmd in ("tag", "untag"):
++            code, _, err = run(self.db, cmd, "9", "x")
++            self.assertEqual(code, 1)
++            self.assertIn("no such note", err)
++
++    def test_file_format_version_2(self):
++        run(self.db, "add", "x")
++        data = json.load(open(self.db))
++        self.assertEqual(data["version"], 2)
++        self.assertEqual(data["notes"][0]["tags"], [])
++        self.assertEqual(data["notes"][0]["body"], "")
++
++    def test_loads_version_1_file(self):
++        with open(self.db, "w") as f:
++            json.dump({"version": 1, "notes": [{"id": 1, "title": "old"}]}, f)
++        self.assertEqual(run(self.db, "list")[1], "  1  old\n")
++        run(self.db, "add", "new")
++        data = json.load(open(self.db))
++        self.assertEqual(data["version"], 2)
++        self.assertEqual(data["notes"][0], {"id": 1, "title": "old", "body": "", "tags": []})
++        self.assertEqual(data["notes"][1]["tags"], [])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

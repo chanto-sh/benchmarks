@@ -1,0 +1,65 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..806ad58 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb, perm
++
++
++def _fall(n, k):
++    """Number of ordered ways to pick k distinct items out of n."""
++    if k < 0 or k > n:
++        return 0
++    return perm(n, k)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,46 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    n = r + b + g
++
++    if k <= 0:
++        return Fraction(1)
++    if k > r or k > m:
++        return Fraction(0)
++
++    if g == 0:
++        # Nothing stops the deal early: exactly min(m, n) cards are turned.
++        turned = min(m, n)
++        if turned == n:
++            return Fraction(1)  # k <= r, so all reds are seen
++        total = comb(n, turned)
++        favourable = sum(
++            comb(r, i) * comb(b, turned - i)
++            for i in range(k, min(r, turned) + 1)
++        )
++        return Fraction(favourable, total)
++
++    # Count distinct-card orderings; all n! orderings are equally likely.
++
++    # Case 1: the first green is among the first m cards.  Say it is at
++    # position s + 1, with i reds among the s non-green cards before it.
++    # The whole prefix is ordered, so the sample space is _fall(n, s + 1).
++    total = Fraction(0)
++    for s in range(min(m - 1, r + b) + 1):
++        ways = 0
++        for i in range(k, min(r, s) + 1):
++            ways += comb(s, i) * _fall(r, i) * _fall(b, s - i)
++        if ways:
++            total += Fraction(ways * g, _fall(n, s + 1))
++
++    # Case 2: no green among the first m cards, so the deal stops at m.
++    # The first m cards then come from the r + b non-green cards, and the
++    # sample space is _fall(n, m); this is empty when m > n.
++    if m <= n:
++        ways = 0
++        for i in range(k, min(r, m) + 1):
++            ways += comb(m, i) * _fall(r, i) * _fall(b, m - i)
++        if ways:
++            total += Fraction(ways, _fall(n, m))
++
++    return total

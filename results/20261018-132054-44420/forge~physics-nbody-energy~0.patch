@@ -1,0 +1,235 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..0d4b549 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,34 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses kick-drift-kick leapfrog (velocity Verlet).  The scheme is symplectic
++    and time-reversible, so the energy error oscillates within a bound set by
++    `dt` instead of growing linearly with the number of steps.  Forces are
++    pairwise, so total momentum is conserved to round-off.  The input lists
++    are copied and never mutated.
++    """
++    n = len(masses)
++    m = list(masses)
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++
++    acc = accelerations(m, pos, G)
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        # half kick + full drift: v_{k+1/2}, x_{k+1}
++        for i in range(n):
++            vx = vel[i][0] + half_dt * acc[i][0]
++            vy = vel[i][1] + half_dt * acc[i][1]
++            vel[i][0] = vx
++            vel[i][1] = vy
++            pos[i][0] += dt * vx
++            pos[i][1] += dt * vy
++        # new forces at x_{k+1}, then the second half kick
++        acc = accelerations(m, pos, G)
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..01c414b 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,6 +4,51 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def momentum(masses, velocities):
++    return [sum(m * v[k] for m, v in zip(masses, velocities)) for k in range(2)]
++
++
++def kepler_pair(eccentricity, a=1.0, m1=1.0, m2=1.0, G=1.0):
++    """Two bodies at perihelion of a Kepler orbit, with zero net momentum."""
++    total = m1 + m2
++    r_peri = a * (1.0 - eccentricity)
++    v_peri = math.sqrt(G * total / a * (1.0 + eccentricity) / (1.0 - eccentricity))
++    masses = [m1, m2]
++    positions = [[-m2 / total * r_peri, 0.0], [m1 / total * r_peri, 0.0]]
++    velocities = [[0.0, -m2 / total * v_peri], [0.0, m1 / total * v_peri]]
++    return masses, positions, velocities
++
++
++def figure_eight():
++    """Chenciner-Montgomery figure-eight (three equal masses, period 6.32591398)."""
++    x, y = 0.97000436, -0.24308753
++    vx, vy = 0.93240737, 0.86473146
++    return (
++        [1.0, 1.0, 1.0],
++        [[x, y], [-x, -y], [0.0, 0.0]],
++        [[vx / 2.0, vy / 2.0], [vx / 2.0, vy / 2.0], [-vx, -vy]],
++    )
++
++
++def star_and_planets():
++    """Central star with four well separated planets on circular orbits."""
++    star = 1.0
++    masses = [star]
++    positions = [[0.0, 0.0]]
++    velocities = [[0.0, 0.0]]
++    for k, phase in enumerate((0.0, 1.9, 3.9, 5.6)):
++        a = 1.0 + 0.6 * k
++        speed = math.sqrt(star / a)
++        positions.append([a * math.cos(phase), a * math.sin(phase)])
++        velocities.append([-speed * math.sin(phase), speed * math.cos(phase)])
++        masses.append(1e-3)
++    return masses, positions, velocities
++
++
++def relative_energy_error(masses, positions, velocities, e0, G=1.0):
++    return abs(energy(masses, positions, velocities, G) - e0) / abs(e0)
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +62,137 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_inputs_not_modified(self):
++        masses, positions, velocities = figure_eight()
++        pos0 = [list(xy) for xy in positions]
++        vel0 = [list(xy) for xy in velocities]
++        mass0 = list(masses)
++
++        p, q = simulate(masses, positions, velocities, 0.01, 200)
++
++        self.assertEqual(positions, pos0)
++        self.assertEqual(velocities, vel0)
++        self.assertEqual(masses, mass0)
++        # results are fresh containers, not aliases of the inputs
++        self.assertIsNot(p, positions)
++        self.assertIsNot(q, velocities)
++        for xy in p:
++            self.assertIsInstance(xy, list)
++            self.assertEqual(len(xy), 2)
++        for xy in q:
++            self.assertIsInstance(xy, list)
++            self.assertEqual(len(xy), 2)
++        # writing to the output must not touch the input
++        p[0][0] = 123.0
++        self.assertEqual(positions, pos0)
++
++    def test_zero_steps_returns_copy(self):
++        masses, positions, velocities = kepler_pair(0.5)
++        p, q = simulate(masses, positions, velocities, 0.01, 0)
++        self.assertEqual(p, positions)
++        self.assertEqual(q, velocities)
++        self.assertIsNot(p, positions)
++        self.assertIsNot(q, velocities)
++
++    def test_eccentric_orbit_energy_is_bounded(self):
++        # e = 0.5 orbit, 20000 steps: symplectic error must stay small
++        masses, positions, velocities = kepler_pair(0.5)
++        e0 = energy(masses, positions, velocities)
++        p, q = simulate(masses, positions, velocities, 0.01, 20000)
++        self.assertLess(relative_energy_error(masses, p, q, e0), 5e-3)
++
++    def test_orbit_closes_after_one_period(self):
++        masses, positions, velocities = kepler_pair(0.5)
++        period = 2.0 * math.pi * math.sqrt(1.0 / sum(masses))
++        steps = 2048
++        p, q = simulate(masses, positions, velocities, period / steps, steps)
++        pos_err = max(abs(p[i][k] - positions[i][k]) for i in range(2) for k in range(2))
++        vel_err = max(abs(q[i][k] - velocities[i][k]) for i in range(2) for k in range(2))
++        self.assertLess(pos_err, 2e-3)
++        self.assertLess(vel_err, 5e-3)
++
++    def test_second_order_accuracy(self):
++        # halving dt must cut the one-period error by roughly 4x
++        masses, positions, velocities = kepler_pair(0.5)
++        period = 2.0 * math.pi * math.sqrt(1.0 / sum(masses))
++
++        def one_period_error(steps):
++            p, q = simulate(masses, positions, velocities, period / steps, steps)
++            return max(abs(p[i][k] - positions[i][k]) for i in range(2) for k in range(2))
++
++        coarse = one_period_error(1024)
++        fine = one_period_error(2048)
++        self.assertGreater(coarse, 0.0)
++        self.assertGreater(coarse / fine, 3.0)
++
++    def test_figure_eight_energy_is_bounded(self):
++        masses, positions, velocities = figure_eight()
++        e0 = energy(masses, positions, velocities)
++        p, q = simulate(masses, positions, velocities, 0.01, 20000)
++        self.assertLess(relative_energy_error(masses, p, q, e0), 1e-3)
++
++    def test_figure_eight_returns_after_one_period(self):
++        masses, positions, velocities = figure_eight()
++        period = 6.32591398
++        steps = 1265
++        p, q = simulate(masses, positions, velocities, period / steps, steps)
++        pos_err = max(abs(p[i][k] - positions[i][k]) for i in range(3) for k in range(2))
++        self.assertLess(pos_err, 1e-3)
++
++    def test_star_and_planets_energy_is_bounded(self):
++        masses, positions, velocities = star_and_planets()
++        e0 = energy(masses, positions, velocities)
++        p, q = simulate(masses, positions, velocities, 5e-3, 40000)
++        self.assertLess(relative_energy_error(masses, p, q, e0), 1e-4)
++
++    def test_momentum_conserved_unequal_masses(self):
++        masses = [0.7, 3.1, 1.9, 0.35, 2.2]
++        positions = [[-1.0, 0.3], [0.4, -1.2], [1.5, 0.8], [-0.2, 1.7], [0.9, -0.4]]
++        velocities = [[0.11, -0.05], [-0.2, 0.13], [0.07, 0.21], [0.15, -0.12], [-0.09, -0.04]]
++        p0 = momentum(masses, velocities)
++        p, q = simulate(masses, positions, velocities, 1e-3, 10000)
++        p1 = momentum(masses, q)
++        scale = sum(m * math.hypot(*v) for m, v in zip(masses, velocities))
++        drift = max(abs(a - b) for a, b in zip(p0, p1))
++        self.assertLess(drift / scale, 1e-11)
++
++    def test_centre_of_mass_moves_uniformly(self):
++        # translation invariance of the pairwise forces
++        masses, positions, velocities = figure_eight()
++        velocities = [[v[0] + 0.3, v[1] - 0.7] for v in velocities]
++        total = sum(masses)
++        p0 = momentum(masses, velocities)
++        dt = 1e-3
++        steps = 5000
++        p, q = simulate(masses, positions, velocities, dt, steps)
++        for k in range(2):
++            com0 = sum(m * xy[k] for m, xy in zip(masses, positions)) / total
++            com1 = sum(m * xy[k] for m, xy in zip(masses, p)) / total
++            self.assertAlmostEqual(com1 - com0, p0[k] / total * (dt * steps), places=9)
++
++    def test_energy_error_does_not_grow_with_time(self):
++        # a symplectic scheme oscillates; it must not accumulate a linear drift
++        for masses, positions, velocities in (figure_eight(), kepler_pair(0.5)):
++            e0 = energy(masses, positions, velocities)
++            state_p = [list(xy) for xy in positions]
++            state_v = [list(xy) for xy in velocities]
++            windows = []
++            for _ in range(8):
++                state_p, state_v = simulate(masses, state_p, state_v, 0.01, 5000)
++                windows.append(relative_energy_error(masses, state_p, state_v, e0))
++            early = max(windows[:2])
++            late = max(windows[-2:])
++            self.assertLess(late, 3.0 * early + 1e-12)
++
++    def test_time_reversible(self):
++        masses, positions, velocities = figure_eight()
++        p, q = simulate(masses, positions, velocities, 0.01, 3000)
++        p_back, q_back = simulate(masses, p, q, -0.01, 3000)
++        pos_err = max(abs(p_back[i][k] - positions[i][k]) for i in range(3) for k in range(2))
++        vel_err = max(abs(q_back[i][k] - velocities[i][k]) for i in range(3) for k in range(2))
++        self.assertLess(pos_err, 1e-9)
++        self.assertLess(vel_err, 1e-9)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,61 @@
+diff --git a/pylint/config/exceptions.py b/pylint/config/exceptions.py
+index 74a001c..492d6ec 100644
+--- a/pylint/config/exceptions.py
++++ b/pylint/config/exceptions.py
+@@ -19,5 +19,13 @@ class _UnrecognizedOptionError(Exception):
+         super().__init__(*args)
+ 
+ 
++class _UnrecognizedOptionErrorAndExit(_UnrecognizedOptionError, SystemExit):
++    """Raised to exit gracefully when an unrecognized command line option is found."""
++
++    def __init__(self, options: list[str]) -> None:
++        super().__init__(options)
++        self.code = 2
++
++
+ class ArgumentPreprocessingError(Exception):
+     """Raised if an error occurs during argument pre-processing."""
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index 778e644..881fb0e 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -13,7 +13,11 @@ from typing import Any
+ 
+ from pylint import config
+ from pylint.config.config_initialization import _config_initialization
+-from pylint.config.exceptions import ArgumentPreprocessingError
++from pylint.config.exceptions import (
++    ArgumentPreprocessingError,
++    _UnrecognizedOptionError,
++    _UnrecognizedOptionErrorAndExit,
++)
+ from pylint.config.utils import _preprocess_options
+ from pylint.constants import full_version
+ from pylint.lint.base_options import _make_run_options
+@@ -132,9 +136,22 @@ group are mutually exclusive.",
+         linter.disable("I")
+         linter.enable("c-extension-no-member")
+ 
+-        args = _config_initialization(
+-            linter, args, reporter, config_file=self._rcfile, verbose_mode=self.verbose
+-        )
++        try:
++            args = _config_initialization(
++                linter,
++                args,
++                reporter,
++                config_file=self._rcfile,
++                verbose_mode=self.verbose,
++            )
++        except _UnrecognizedOptionError as exc:
++            linter._arg_parser.print_usage(sys.stderr)
++            print(
++                f"{linter._arg_parser.prog}: error: Unrecognized option found: "
++                f"{', '.join(exc.options)}",
++                file=sys.stderr,
++            )
++            raise _UnrecognizedOptionErrorAndExit(options=exc.options) from None
+ 
+         if linter.config.jobs < 0:
+             print(

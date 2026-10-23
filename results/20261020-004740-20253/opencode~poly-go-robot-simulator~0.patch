@@ -1,0 +1,212 @@
+diff --git a/robot_simulator.go b/robot_simulator.go
+index d5d5b1c..ec0c42c 100644
+--- a/robot_simulator.go
++++ b/robot_simulator.go
+@@ -2,43 +2,199 @@ package robot
+ 
+ // See defs.go for other definitions
+ 
++import "fmt"
++
+ // Step 1
+ // Define N, E, S, W here.
+ 
++const (
++	N Dir = iota
++	E
++	S
++	W
++)
++
+ func Right() {
+-	panic("Please implement the Right function")
++	Step1Robot.Dir = (Step1Robot.Dir + 1) % 4
+ }
+ 
+ func Left() {
+-	panic("Please implement the Left function")
++	Step1Robot.Dir = (Step1Robot.Dir + 3) % 4
+ }
+ 
+ func Advance() {
+-	panic("Please implement the Advance function")
++	switch Step1Robot.Dir {
++	case N:
++		Step1Robot.Y++
++	case E:
++		Step1Robot.X++
++	case S:
++		Step1Robot.Y--
++	case W:
++		Step1Robot.X--
++	}
+ }
+ 
+ func (d Dir) String() string {
+-	panic("Please implement the String function")
++	switch d {
++	case N:
++		return "N"
++	case E:
++		return "E"
++	case S:
++		return "S"
++	case W:
++		return "W"
++	}
++	return fmt.Sprintf("Dir(%d)", int(d))
+ }
+ 
+ // Step 2
+ // Define Action type here.
+ 
++type Action struct {
++	Command
++}
++
+ func StartRobot(command chan Command, action chan Action) {
+-	panic("Please implement the StartRobot function")
++	for c := range command {
++		action <- Action{c}
++	}
++	close(action)
+ }
+ 
+ func Room(extent Rect, robot Step2Robot, action chan Action, report chan Step2Robot) {
+-	panic("Please implement the Room function")
++	for a := range action {
++		switch a.Command {
++		case 'R':
++			robot.Dir = (robot.Dir + 1) % 4
++		case 'L':
++			robot.Dir = (robot.Dir + 3) % 4
++		case 'A':
++			next := advanced(robot.Pos, robot.Dir)
++			if inExtent(next, extent) {
++				robot.Pos = next
++			}
++		}
++	}
++	report <- robot
++}
++
++func advanced(p Pos, d Dir) Pos {
++	switch d {
++	case N:
++		p.Northing++
++	case E:
++		p.Easting++
++	case S:
++		p.Northing--
++	case W:
++		p.Easting--
++	}
++	return p
++}
++
++func inExtent(p Pos, r Rect) bool {
++	return p.Easting >= r.Min.Easting && p.Easting <= r.Max.Easting &&
++		p.Northing >= r.Min.Northing && p.Northing <= r.Max.Northing
+ }
+ 
+ // Step 3
+ // Define Action3 type here.
+ 
++type Action3 struct {
++	Name string
++	Command
++	Done bool
++}
++
+ func StartRobot3(name, script string, action chan Action3, log chan string) {
+-	panic("Please implement the StartRobot3 function")
++	defer func() {
++		action <- Action3{Name: name, Done: true}
++	}()
++
++	for _, c := range script {
++		switch c {
++		case 'R', 'L', 'A':
++			action <- Action3{Name: name, Command: Command(c)}
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", name, c)
++			return
++		}
++	}
+ }
+ 
+ func Room3(extent Rect, robots []Step3Robot, action chan Action3, rep chan []Step3Robot, log chan string) {
+-	panic("Please implement the Room3 function")
++	// Validate the initial placement of the robots.
++	names := make(map[string]int)
++	for i, r := range robots {
++		if r.Name == "" {
++			log <- "robot with no name"
++		}
++		if _, ok := names[r.Name]; ok {
++			log <- fmt.Sprintf("duplicate robot name %q", r.Name)
++		} else {
++			names[r.Name] = i
++		}
++		if !inExtent(r.Pos, extent) {
++			log <- fmt.Sprintf("robot %q placed outside the room", r.Name)
++		}
++		for j := 0; j < i; j++ {
++			if robots[j].Pos == r.Pos {
++				log <- fmt.Sprintf("robot %q placed at the same place as %q", r.Name, robots[j].Name)
++				break
++			}
++		}
++	}
++
++	if len(robots) == 0 {
++		rep <- robots
++		return
++	}
++
++	finished := 0
++	for a := range action {
++		if a.Done {
++			finished++
++			if finished >= len(robots) {
++				rep <- robots
++				return
++			}
++			continue
++		}
++
++		i, ok := names[a.Name]
++		if !ok {
++			log <- fmt.Sprintf("action from unknown robot %q", a.Name)
++			continue
++		}
++
++		r := &robots[i]
++		switch a.Command {
++		case 'R':
++			r.Dir = (r.Dir + 1) % 4
++		case 'L':
++			r.Dir = (r.Dir + 3) % 4
++		case 'A':
++			next := advanced(r.Pos, r.Dir)
++			if !inExtent(next, extent) {
++				log <- fmt.Sprintf("robot %q attempted to advance into a wall", a.Name)
++				continue
++			}
++			occupied := false
++			for j := range robots {
++				if j != i && robots[j].Pos == next {
++					occupied = true
++					break
++				}
++			}
++			if occupied {
++				log <- fmt.Sprintf("robot %q attempted to advance into another robot", a.Name)
++				continue
++			}
++			r.Pos = next
++		default:
++			log <- fmt.Sprintf("robot %q: undefined command %q", a.Name, a.Command)
++		}
++	}
+ }

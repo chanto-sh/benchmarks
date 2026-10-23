@@ -1,0 +1,89 @@
+diff --git a/go_counting.py b/go_counting.py
+index d1c689e..626f472 100644
+--- a/go_counting.py
++++ b/go_counting.py
+@@ -1,4 +1,9 @@
+ 
++BLACK = "B"
++WHITE = "W"
++NONE = ""
++
++
+ class Board:
+     """Count territories of each player in a Go game
+ 
+@@ -7,7 +12,40 @@ class Board:
+     """
+ 
+     def __init__(self, board):
+-        pass
++        self.board = board
++        self.height = len(board)
++        self.width = len(board[0]) if self.height else 0
++
++    def _is_empty(self, x, y):
++        return self.board[y][x] == " "
++
++    def _neighbors(self, x, y):
++        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
++            nx, ny = x + dx, y + dy
++            if 0 <= nx < self.width and 0 <= ny < self.height:
++                yield nx, ny
++
++    def _region(self, start):
++        """Flood fill the empty region containing ``start``.
++
++        Returns:
++            (set, set): the empty intersections of the region and the
++                        set of stone colours bordering it.
++        """
++        empty = {start}
++        stack = [start]
++        borders = set()
++        while stack:
++            x, y = stack.pop()
++            for nx, ny in self._neighbors(x, y):
++                value = self.board[ny][nx]
++                if value == " ":
++                    if (nx, ny) not in empty:
++                        empty.add((nx, ny))
++                        stack.append((nx, ny))
++                else:
++                    borders.add(value)
++        return empty, borders
+ 
+     def territory(self, x, y):
+         """Find the owner and the territories given a coordinate on
+@@ -23,7 +61,15 @@ class Board:
+                         second being a set of coordinates, representing
+                         the owner's territories.
+         """
+-        pass
++        if not (0 <= x < self.width and 0 <= y < self.height):
++            raise ValueError("Invalid coordinate")
++
++        if not self._is_empty(x, y):
++            return NONE, set()
++
++        empty, borders = self._region((x, y))
++        owner = next(iter(borders)) if len(borders) == 1 else NONE
++        return owner, empty
+ 
+     def territories(self):
+         """Find the owners and the territories of the whole board
+@@ -36,4 +82,14 @@ class Board:
+                         , i.e. "W", "B", "".  The value being a set
+                         of coordinates owned by the owner.
+         """
+-        pass
++        result = {BLACK: set(), WHITE: set(), NONE: set()}
++        visited = set()
++        for y in range(self.height):
++            for x in range(self.width):
++                if (x, y) in visited or not self._is_empty(x, y):
++                    continue
++                empty, borders = self._region((x, y))
++                visited |= empty
++                owner = next(iter(borders)) if len(borders) == 1 else NONE
++                result[owner] |= empty
++        return result

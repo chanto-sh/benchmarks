@@ -1,0 +1,77 @@
+diff --git a/food_chain.go b/food_chain.go
+index b46ea45..970aa08 100644
+--- a/food_chain.go
++++ b/food_chain.go
+@@ -1,13 +1,69 @@
+ package foodchain
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++var animals = []string{
++	"fly",
++	"spider",
++	"bird",
++	"cat",
++	"dog",
++	"goat",
++	"cow",
++	"horse",
++}
++
++var remarks = []string{
++	"",
++	"I don't know why she swallowed the fly. Perhaps she'll die.",
++	"It wriggled and jiggled and tickled inside her.",
++	"How absurd to swallow a bird!",
++	"Imagine that, to swallow a cat!",
++	"What a hog, to swallow a dog!",
++	"Just opened her throat and swallowed a goat!",
++	"I don't know how she swallowed a cow!",
++	"She's dead, of course!",
++}
++
++// Verse returns the given verse of the song.
+ func Verse(v int) string {
+-	panic("Please implement the Verse function")
++	lines := []string{
++		fmt.Sprintf("I know an old lady who swallowed a %s.", animals[v-1]),
++		remarks[v],
++	}
++
++	if v == 8 {
++		return strings.Join(lines, "\n")
++	}
++
++	for i := v; i > 1; i-- {
++		line := fmt.Sprintf("She swallowed the %s to catch the %s", animals[i-1], animals[i-2])
++		if animals[i-2] == "spider" {
++			line += " that wriggled and jiggled and tickled inside her"
++		}
++		lines = append(lines, line+".")
++	}
++
++	if v > 1 {
++		lines = append(lines, remarks[1])
++	}
++
++	return strings.Join(lines, "\n")
+ }
+ 
++// Verses returns the verses from start to end, inclusive.
+ func Verses(start, end int) string {
+-	panic("Please implement the Verses function")
++	verses := make([]string, 0, end-start+1)
++	for v := start; v <= end; v++ {
++		verses = append(verses, Verse(v))
++	}
++	return strings.Join(verses, "\n\n")
+ }
+ 
++// Song returns the entire song.
+ func Song() string {
+-	panic("Please implement the Song function")
++	return Verses(1, len(animals))
+ }

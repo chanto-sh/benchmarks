@@ -1,0 +1,85 @@
+diff --git a/simple_linked_list.go b/simple_linked_list.go
+index 22fe8fc..d3554f2 100644
+--- a/simple_linked_list.go
++++ b/simple_linked_list.go
+@@ -1,27 +1,73 @@
+ package linkedlist
+ 
+-// Define the List and Element types here.
++import "errors"
+ 
++// Element is a node in the singly linked list.
++type Element struct {
++	value int
++	next  *Element
++}
++
++// List is a singly linked list of song IDs. The head node holds the element
++// most recently pushed, so Push and Pop are both O(1).
++type List struct {
++	head *Element
++	size int
++}
++
++// New creates a list containing elements in the given order.
+ func New(elements []int) *List {
+-	panic("Please implement the New function")
++	l := &List{}
++	for _, element := range elements {
++		l.Push(element)
++	}
++	return l
+ }
+ 
++// Size returns the number of elements in the list.
+ func (l *List) Size() int {
+-	panic("Please implement the Size function")
++	return l.size
+ }
+ 
++// Push adds an element to the end of the list.
+ func (l *List) Push(element int) {
+-	panic("Please implement the Push function")
++	l.head = &Element{value: element, next: l.head}
++	l.size++
+ }
+ 
++// Pop removes and returns the last element of the list.
+ func (l *List) Pop() (int, error) {
+-	panic("Please implement the Pop function")
++	if l.head == nil {
++		return 0, errors.New("pop from empty list")
++	}
++	value := l.head.value
++	l.head = l.head.next
++	l.size--
++	return value, nil
+ }
+ 
++// Array returns the list's elements in order as a slice.
+ func (l *List) Array() []int {
+-	panic("Please implement the Array function")
++	array := make([]int, 0, l.size)
++	for element := l.head; element != nil; element = element.next {
++		array = append(array, element.value)
++	}
++	for i, j := 0, len(array)-1; i < j; i, j = i+1, j-1 {
++		array[i], array[j] = array[j], array[i]
++	}
++	return array
+ }
+ 
++// Reverse reverses the list in place and returns it.
+ func (l *List) Reverse() *List {
+-	panic("Please implement the Reverse function")
++	var previous *Element
++	current := l.head
++	for current != nil {
++		next := current.next
++		current.next = previous
++		previous = current
++		current = next
++	}
++	l.head = previous
++	return l
+ }

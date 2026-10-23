@@ -1,0 +1,100 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..c2cf9d4 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,92 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        self.users = {}
++        if database:
++            for user in database.get("users", []):
++                self.users[user["name"]] = {
++                    "name": user["name"],
++                    "owes": dict(user.get("owes", {})),
++                    "owed_by": dict(user.get("owed_by", {})),
++                }
+ 
+     def get(self, url, payload=None):
+-        pass
++        data = self._parse(payload)
++        if url == "/users":
++            names = data.get("users") if data else None
++            if names is None:
++                selected = list(self.users.values())
++            else:
++                selected = [self.users[name] for name in names if name in self.users]
++            selected = sorted(selected, key=lambda u: u["name"])
++            return self._dump({"users": [self._serialize(u) for u in selected]})
++        raise ValueError(f"Unknown URL: {url}")
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = self._parse(payload) or {}
++        if url == "/add":
++            name = data["user"]
++            user = {"name": name, "owes": {}, "owed_by": {}}
++            self.users[name] = user
++            return self._dump(self._serialize(user))
++        if url == "/iou":
++            lender = self.users[data["lender"]]
++            borrower = self.users[data["borrower"]]
++            self._record_iou(lender, borrower, data["amount"])
++            involved = sorted((lender, borrower), key=lambda u: u["name"])
++            return self._dump({"users": [self._serialize(u) for u in involved]})
++        raise ValueError(f"Unknown URL: {url}")
++
++    @staticmethod
++    def _parse(payload):
++        if payload is None:
++            return None
++        if isinstance(payload, str):
++            return json.loads(payload)
++        return payload
++
++    @staticmethod
++    def _dump(data):
++        return json.dumps(data)
++
++    @staticmethod
++    def _record_iou(lender, borrower, amount):
++        """Record that ``lender`` lends ``amount`` to ``borrower``.
++
++        Existing debts between the two users are netted out: if the borrower
++        already owed the lender, that debt is reduced; if the lender owed the
++        borrower, it is reduced first and any remainder is owed the other way.
++        """
++        # Net amount the borrower will owe the lender after this loan.
++        # Positive means the borrower owes the lender, negative the reverse.
++        owed = round(
++            borrower["owes"].get(lender["name"], 0.0)
++            - lender["owes"].get(borrower["name"], 0.0)
++            + amount,
++            2,
++        )
++        borrower["owes"].pop(lender["name"], None)
++        lender["owed_by"].pop(borrower["name"], None)
++        lender["owes"].pop(borrower["name"], None)
++        borrower["owed_by"].pop(lender["name"], None)
++
++        if owed > 0:
++            borrower["owes"][lender["name"]] = owed
++            lender["owed_by"][borrower["name"]] = owed
++        elif owed < 0:
++            lender["owes"][borrower["name"]] = -owed
++            borrower["owed_by"][lender["name"]] = -owed
++
++    @staticmethod
++    def _serialize(user):
++        balance = round(
++            sum(user["owed_by"].values()) - sum(user["owes"].values()), 2
++        )
++        return {
++            "name": user["name"],
++            "owes": dict(user["owes"]),
++            "owed_by": dict(user["owed_by"]),
++            "balance": float(balance),
++        }

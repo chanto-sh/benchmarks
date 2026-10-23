@@ -1,0 +1,90 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index dff74fd..4ccf6cf 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,3 +1,84 @@
+ pub fn answer(command: &str) -> Option<i32> {
+-    todo!("Return the result of the command '{command}' or None, if the command is invalid.");
++    let command = command.trim();
++    let expression = command.strip_prefix("What is ")?.strip_suffix('?')?;
++    if expression.contains('?') {
++        return None;
++    }
++
++    let tokens: Vec<&str> = expression.split_whitespace().collect();
++    let mut index = 0;
++    let mut result = parse_number(&tokens, &mut index)?;
++
++    while let Some(operator) = tokens.get(index).copied() {
++        match operator {
++            "plus" => {
++                index += 1;
++                result = result.checked_add(parse_number(&tokens, &mut index)?)?;
++            }
++            "minus" => {
++                index += 1;
++                result = result.checked_sub(parse_number(&tokens, &mut index)?)?;
++            }
++            "multiplied" => {
++                expect(&tokens, &mut index, "multiplied")?;
++                expect(&tokens, &mut index, "by")?;
++                result = result.checked_mul(parse_number(&tokens, &mut index)?)?;
++            }
++            "divided" => {
++                expect(&tokens, &mut index, "divided")?;
++                expect(&tokens, &mut index, "by")?;
++                result = result.checked_div(parse_number(&tokens, &mut index)?)?;
++            }
++            #[cfg(feature = "exponentials")]
++            "raised" => {
++                expect(&tokens, &mut index, "raised")?;
++                expect(&tokens, &mut index, "to")?;
++                expect(&tokens, &mut index, "the")?;
++                let exponent = parse_ordinal(tokens.get(index)?)?;
++                index += 1;
++                expect(&tokens, &mut index, "power")?;
++                result = result.checked_pow(exponent)?;
++            }
++            _ => return None,
++        }
++    }
++
++    Some(result)
++}
++
++fn parse_number(tokens: &[&str], index: &mut usize) -> Option<i32> {
++    let number = tokens.get(*index)?.parse().ok()?;
++    *index += 1;
++    Some(number)
++}
++
++fn expect(tokens: &[&str], index: &mut usize, expected: &str) -> Option<()> {
++    if tokens.get(*index).copied() != Some(expected) {
++        return None;
++    }
++    *index += 1;
++    Some(())
++}
++
++#[cfg(feature = "exponentials")]
++fn parse_ordinal(token: &str) -> Option<u32> {
++    let suffix_start = token.find(|character: char| !character.is_ascii_digit())?;
++    let (number, suffix) = token.split_at(suffix_start);
++    if number.is_empty() {
++        return None;
++    }
++
++    let number: u32 = number.parse().ok()?;
++    let expected_suffix = if (11..=13).contains(&(number % 100)) {
++        "th"
++    } else {
++        match number % 10 {
++            1 => "st",
++            2 => "nd",
++            3 => "rd",
++            _ => "th",
++        }
++    };
++
++    (suffix == expected_suffix).then_some(number)
+ }

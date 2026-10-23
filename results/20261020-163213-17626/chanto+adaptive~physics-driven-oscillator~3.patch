@@ -1,0 +1,106 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..3110861 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,99 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++_fma = getattr(math, "fma", None)
++
++
++def _detuning(m, k, omega):
++    """Return k - m*omega**2, with reduced cancellation where possible."""
++    if _fma is None:
++        return k - m * omega * omega
++
++    # form m*omega exactly as p + error, then evaluate k - (p + error)*omega
++    p = m * omega
++    error = _fma(m, omega, -p)
++    return _fma(-error, omega, _fma(-p, omega, k))
++
++
++def _steady_coefficients(m, k, c, F0, omega):
++    """Return C, S such that C*cos(omega*t) + S*sin(omega*t) is particular."""
++    d = _detuning(m, k, omega)
++    cw = c * omega
++    scale = math.hypot(d, cw)
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0
++        raise ValueError("undamped oscillator driven exactly at resonance")
++
++    amplitude = F0 / scale
++    return amplitude * (d / scale), amplitude * (cw / scale)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    scale = math.hypot(_detuning(m, k, omega), c * omega)
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        raise ValueError("undamped oscillator driven exactly at resonance")
++    return abs(F0) / scale
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    c_cos, s_sin = _steady_coefficients(m, k, c, F0, omega)
++    particular0 = c_cos
++    particular_velocity0 = s_sin * omega
++
++    h0 = x0 - particular0
++    hv0 = v0 - particular_velocity0
++
++    alpha = c / (2.0 * m)
++    # kappa = 4*m*k - c**2: positive, zero, or negative determines the
++    # underdamped, critically damped, or overdamped regime.
++    if _fma is None:
++        kappa = 4.0 * m * k - c * c
++    else:
++        product = 4.0 * m * k
++        product_error = _fma(4.0 * m, k, -product)
++        kappa = _fma(-c, c, product) + product_error
++
++    if kappa > 0.0:
++        omega_d = math.sqrt(kappa) / (2.0 * m)
++        z = omega_d * t
++        # Use sin(z)/z rather than dividing by omega_d, which is stable as the
++        # damping approaches the critically damped limit.
++        sinc = 1.0 if z == 0.0 else math.sin(z) / z
++        transient = math.exp(-alpha * t) * (
++            h0 * math.cos(z) + (hv0 + alpha * h0) * t * sinc
++        )
++    elif kappa == 0.0:
++        transient = math.exp(-alpha * t) * (h0 + (hv0 + alpha * h0) * t)
++    else:
++        beta = math.sqrt(-kappa) / (2.0 * m)
++        coefficient = hv0 + alpha * h0
++        z = beta * t
++
++        if z < 1.0:
++            decay = math.exp(-alpha * t)
++            phi0 = decay * math.cosh(z)
++            phi1 = decay * t * (1.0 if z == 0.0 else math.sinh(z) / z)
++        else:
++            # These exponents are non-positive, avoiding overflow in cosh/sinh.
++            # Compute the slowly decaying root without beta - alpha cancellation.
++            r2 = -(alpha + beta)
++            r1 = -(k / m) / (alpha + beta)
++            slow = math.exp(r1 * t)
++            fast = math.exp(r2 * t)
++            phi0 = 0.5 * (slow + fast)
++            phi1 = (slow - fast) / (2.0 * beta)
++
++        transient = h0 * phi0 + coefficient * phi1
++
++    driving = c_cos * math.cos(omega * t) + s_sin * math.sin(omega * t)
++    return transient + driving

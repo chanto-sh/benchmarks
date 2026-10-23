@@ -1,0 +1,94 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..a6339b3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,53 @@
++# Blocked: September reconciliation cannot be produced
++
++## What is blocked
++
++`python3 reconcile.py 2026-09` fails with:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++`recon_2026-09.json` and the September net difference cannot be produced from the
++data available in this repository.
++
++## Why
++
++`reconcile.py` reconciles two exports per month:
++
++- `exports/ledger_<month>.csv` (general ledger)
++- `exports/bank_<month>.csv` (bank statement)
++
++The repository contains `exports/bank_2026-09.csv`, but the matching
++`exports/ledger_2026-09.csv` does not exist. Only the August ledger
++(`exports/ledger_2026-08.csv`) is present.
++
++The net difference is defined as the bank total minus the ledger total. Without
++the September ledger there is no ledger total to subtract, and the
++`missing_in_bank` / `amount_mismatch` categories cannot be determined either.
++Running the reconciliation against the bank file alone would silently report
++every bank line as `missing_in_ledger` and would misstate the net difference, so
++no September output was generated.
++
++## What is needed to unblock
++
++Provide `exports/ledger_2026-09.csv` (same schema as the August export:
++`id,date,ref,amount`). Once it is in place, run:
++
++```
++python3 reconcile.py 2026-09
++```
++
++No code changes are required — the matching logic is implemented and tested.
++
++## What was completed
++
++- Implemented `reconcile()` in `reconcile.py` per its docstring: matches by
++  `ref`, separates `matched`, `amount_mismatch`, `missing_in_bank`,
++  `missing_in_ledger`, and computes `net_difference` as bank total minus ledger
++  total formatted to two decimals.
++- `python3 -m unittest -v test_reconcile` passes (2/2 tests).
++- End-to-end sanity check on the available August data succeeded
++  (`recon_2026-08.json`: net difference `-19.59`, 3 matched, 1 amount mismatch,
++  1 missing in bank, 1 missing in ledger); the temporary output was removed.
++- September reconciliation attempted and confirmed blocked for the reason above.
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..c5efba9 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,29 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref in sorted(ledger_by_ref.keys() & bank_by_ref.keys()):
++        if ledger_by_ref[ref] == bank_by_ref[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    net_difference = (
++        sum(bank_by_ref.values(), Decimal("0"))
++        - sum(ledger_by_ref.values(), Decimal("0"))
++    )
++
++    return {
++        "matched": matched,
++        "amount_mismatch": amount_mismatch,
++        "missing_in_bank": sorted(ledger_by_ref.keys() - bank_by_ref.keys()),
++        "missing_in_ledger": sorted(bank_by_ref.keys() - ledger_by_ref.keys()),
++        "net_difference": f"{net_difference:.2f}",
++    }
+ 
+ 
+ def main(month):

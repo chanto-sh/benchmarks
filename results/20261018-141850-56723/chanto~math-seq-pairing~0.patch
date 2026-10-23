@@ -1,0 +1,75 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..526e82c 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,67 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The encoding is an exact bijection.  A non-empty list has its length stored
++in the number of trailing zero bits of the key, and its contents are encoded
++with a balanced tree of Cantor pairings.  Balancing keeps the key size linear
++in the total size of the list's values instead of growing exponentially with
++the list length.
++"""
++
++from math import isqrt
++
++
++def _pair(x, y):
++    """Cantor pairing: a bijection from N x N to N."""
++    total = x + y
++    return total * (total + 1) // 2 + y
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    total = (isqrt(8 * n + 1) - 1) // 2
++    y = n - total * (total + 1) // 2
++    return total - y, y
++
++
++def _encode_tuple(values):
++    """Encode a non-empty tuple as a single non-negative int."""
++    length = len(values)
++    if length == 1:
++        return values[0]
++    middle = length // 2
++    return _pair(
++        _encode_tuple(values[:middle]),
++        _encode_tuple(values[middle:]),
++    )
++
++
++def _decode_tuple(value, length):
++    """Decode a single int into a tuple of the given positive length."""
++    if length == 1:
++        return [value]
++    middle = length // 2
++    left, right = _unpair(value)
++    return (
++        _decode_tuple(left, middle)
++        + _decode_tuple(right, length - middle)
++    )
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++    content = _encode_tuple(lst)
++    return (1 << (len(lst) - 1)) * (2 * content + 1)
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("n must be non-negative")
++    if n == 0:
++        return []
++
++    length = (n & -n).bit_length()
++    content = n >> length
++    return _decode_tuple(content, length)

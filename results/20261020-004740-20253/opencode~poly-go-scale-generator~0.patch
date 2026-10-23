@@ -1,0 +1,105 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..129dd3b 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,99 @@
+ package scale
+ 
++import "strings"
++
++var sharpChromatic = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
++var flatChromatic = []string{"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
++
++var sharpMajor = map[string]bool{
++	"C": true, "G": true, "D": true, "A": true, "E": true, "B": true, "F#": true,
++}
++
++var flatMajor = map[string]bool{
++	"F": true, "Bb": true, "Eb": true, "Ab": true, "Db": true, "Gb": true,
++}
++
++var sharpMinor = map[string]bool{
++	"A": true, "E": true, "B": true, "F#": true, "C#": true, "G#": true, "D#": true,
++}
++
++var flatMinor = map[string]bool{
++	"D": true, "G": true, "C": true, "F": true, "Bb": true, "Eb": true,
++}
++
++var pitchIndex = map[string]int{
++	"C": 0, "B#": 0,
++	"C#": 1, "Db": 1,
++	"D":  2,
++	"D#": 3, "Eb": 3,
++	"E": 4, "Fb": 4,
++	"F": 5, "E#": 5,
++	"F#": 6, "Gb": 6,
++	"G":  7,
++	"G#": 8, "Ab": 8,
++	"A":  9,
++	"A#": 10, "Bb": 10,
++	"B": 11, "Cb": 11,
++}
++
++// normalizeTonic converts a tonic to its uppercase note name with ASCII
++// accidentals, and reports whether the original tonic was minor (lowercase).
++func normalizeTonic(tonic string) (string, bool) {
++	tonic = strings.TrimSpace(tonic)
++	tonic = strings.ReplaceAll(tonic, "♯", "#")
++	tonic = strings.ReplaceAll(tonic, "♭", "b")
++	if tonic == "" {
++		return "", false
++	}
++
++	minor := tonic[0] >= 'a' && tonic[0] <= 'z'
++	normalized := strings.ToUpper(tonic[:1]) + tonic[1:]
++	return normalized, minor
++}
++
++func usesFlats(tonic string, minor bool) bool {
++	if minor {
++		return flatMinor[tonic]
++	}
++	return flatMajor[tonic]
++}
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	normalized, minor := normalizeTonic(tonic)
++
++	chromatic := sharpChromatic
++	if usesFlats(normalized, minor) {
++		chromatic = flatChromatic
++	}
++
++	index, ok := pitchIndex[normalized]
++	if !ok {
++		index = 0
++	}
++
++	if interval == "" {
++		result := make([]string, len(chromatic))
++		for i := range chromatic {
++			result[i] = chromatic[(index+i)%len(chromatic)]
++		}
++		return result
++	}
++
++	result := make([]string, 0, len(interval)+1)
++	result = append(result, chromatic[index])
++	for _, step := range interval {
++		switch step {
++		case 'M':
++			index += 2
++		case 'm':
++			index++
++		case 'A':
++			index += 3
++		default:
++			continue
++		}
++		index %= len(chromatic)
++		result = append(result, chromatic[index])
++	}
++	return result
+ }

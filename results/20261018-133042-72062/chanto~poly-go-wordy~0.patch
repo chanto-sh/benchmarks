@@ -1,0 +1,92 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..003e6e4 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,86 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	const prefix = "What is "
++
++	question = strings.TrimSpace(question)
++	if !strings.HasPrefix(question, prefix) {
++		return 0, false
++	}
++
++	question = strings.TrimSpace(strings.TrimSuffix(question[len(prefix):], "?"))
++	if question == "" {
++		return 0, false
++	}
++
++	fields := strings.Fields(question)
++
++	result, ok := parseNumber(fields[0])
++	if !ok {
++		return 0, false
++	}
++
++	i := 1
++	for i < len(fields) {
++		op, size := parseOperator(fields[i:])
++		if size == 0 || i+size >= len(fields) {
++			return 0, false
++		}
++
++		operand, ok := parseNumber(fields[i+size])
++		if !ok {
++			return 0, false
++		}
++
++		switch op {
++		case "plus":
++			result += operand
++		case "minus":
++			result -= operand
++		case "multiplied by":
++			result *= operand
++		case "divided by":
++			if operand == 0 {
++				return 0, false
++			}
++			result /= operand
++		default:
++			return 0, false
++		}
++
++		i += size + 1
++	}
++
++	return result, true
++}
++
++func parseNumber(s string) (int, bool) {
++	n, err := strconv.Atoi(s)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++// parseOperator returns the operator and the number of words it occupies.
++func parseOperator(fields []string) (string, int) {
++	if len(fields) == 0 {
++		return "", 0
++	}
++
++	switch fields[0] {
++	case "plus", "minus":
++		return fields[0], 1
++	case "multiplied", "divided":
++		if len(fields) >= 2 && fields[1] == "by" {
++			return fields[0] + " by", 2
++		}
++	}
++
++	return "", 0
+ }

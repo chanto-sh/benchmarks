@@ -1,0 +1,98 @@
+diff --git a/doc/whatsnew/fragments/7993.bugfix b/doc/whatsnew/fragments/7993.bugfix
+new file mode 100644
+index 0000000..3420c33
+--- /dev/null
++++ b/doc/whatsnew/fragments/7993.bugfix
+@@ -0,0 +1,4 @@
++Fix a crash when using custom braces in the message template. Escaped braces
++are now correctly handled and rendered as literal braces.
++
++Closes #7993
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..cc4f9a1 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -11,7 +11,7 @@
+ from __future__ import annotations
+ 
+ import os
+-import re
++import string
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
+@@ -174,16 +174,37 @@ class TextReporter(BaseReporter):
+         # Set template to the currently selected template
+         self._template = template
+ 
+-        # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++        # Check to see if all parameters in the template are attributes of the Message.
++        # Use string.Formatter to correctly handle escaped braces (``{{`` and ``}}``)
++        # and format specifications.
++        formatted_template = []
++        formatter = string.Formatter()
++        for (
++            literal_text,
++            field_name,
++            format_spec,
++            conversion,
++        ) in formatter.parse(template):
++            # Re-escape braces in the literal text: Formatter.parse unescapes them.
++            formatted_template.append(
++                literal_text.replace("{", "{{").replace("}", "}}")
++            )
++            if field_name is None:
++                continue
++            if field_name not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{field_name}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
+-        self._fixed_template = template
++                continue
++            # Rebuild the replacement field, preserving conversion and format spec.
++            field = f"{{{field_name}"
++            if conversion:
++                field += f"!{conversion}"
++            if format_spec:
++                field += f":{format_spec}"
++            formatted_template.append(f"{field}}}")
++        self._fixed_template = "".join(formatted_template)
+ 
+     def write_message(self, msg: Message) -> None:
+         """Convenience method to write a formatted message with class default
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..5e7611e 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -81,6 +81,25 @@ def test_template_option_end_line(linter) -> None:
+     assert out_lines[2] == "my_mod:2:0:2:4: C0301: Line too long (3/4) (line-too-long)"
+ 
+ 
++def test_template_option_with_custom_braces(linter) -> None:
++    """Test the msg-template option with escaped braces.
++
++    Escaped braces should be rendered as literal braces and should not be
++    mistaken for an unknown message field.
++    """
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    linter.set_current_module("my_module")
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    assert (
++        output.getvalue()
++        == '************* Module my_module\n{ "Category": "convention" }\n'
++    )
++
++
+ def test_template_option_non_existing(linter) -> None:
+     """Test the msg-template option with non-existent options.
+     This makes sure that this option remains backwards compatible as new

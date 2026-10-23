@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index df33a95..041b2ff 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,7 @@
+-def validate(n): 
+-    pass
++from collections import Counter
++
++
++def validate(n):
++    """Return True if each digit's frequency in n is <= the digit itself."""
++    counts = Counter(str(abs(int(n))))
++    return all(int(digit) >= freq for digit, freq in counts.items())

@@ -1,0 +1,41 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..87ea0eb 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,35 @@
++VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    """Translate a single word from English to Pig Latin."""
++    lower = word.lower()
++
++    # Rule 1: starts with a vowel, or with "xr" / "yt".
++    if lower[0] in VOWELS or lower.startswith(("xr", "yt")):
++        return word + "ay"
++
++    # Find the length of the leading cluster to move to the end of the word.
++    # Rules 2-4 differ only in where that cluster stops:
++    #   - before the first vowel,
++    #   - after a "qu" whose "u" closes the cluster,
++    #   - before a "y" that follows at least one consonant.
++    index = 0
++    while index < len(lower):
++        char = lower[index]
++        if char in VOWELS:
++            # A "u" directly after a "q" belongs to the cluster ("qu").
++            if char == "u" and index > 0 and lower[index - 1] == "q":
++                index += 1
++            break
++        # A "y" acts as a vowel once at least one consonant precedes it.
++        if char == "y" and index > 0:
++            break
++        index += 1
++
++    return word[index:] + word[:index] + "ay"
++
++
+ def translate(text):
+-    pass
++    """Translate an English phrase into Pig Latin, word by word."""
++    return " ".join(_translate_word(word) for word in text.split())

@@ -1,0 +1,40 @@
+diff --git a/fetcher.py b/fetcher.py
+index 21035b5..4dc6b6a 100644
+--- a/fetcher.py
++++ b/fetcher.py
+@@ -11,18 +11,26 @@ async def fetch_all(urls, fetch, limit=5, retries=2):
+       fails, results[i] is the last exception instance raised for it; the other
+       URLs are not affected.
+     """
+-    results = []
++    urls = list(urls)
++    results = [None] * len(urls)
++    # One semaphore shared by every task; creating it inside `one` gave each
++    # task its own, so nothing was actually limited.
++    sem = asyncio.Semaphore(limit)
+ 
+-    async def one(url):
+-        sem = asyncio.Semaphore(limit)
++    async def one(i, url):
+         async with sem:
+-            for attempt in range(retries):
++            last_exc = None
++            # One initial attempt plus `retries` retries.
++            for _ in range(retries + 1):
+                 try:
+-                    results.append(await fetch(url))
++                    results[i] = await fetch(url)
+                     return
+-                except Exception:
+-                    if attempt == retries:
+-                        raise
++                except Exception as exc:
++                    last_exc = exc
++            # Out of retries: record the failure in place instead of raising so
++            # the rest of the batch is unaffected.
++            results[i] = last_exc
+ 
+-    await asyncio.gather(*(one(u) for u in urls))
++    # `one` never raises, so gather cannot tear down the other tasks.
++    await asyncio.gather(*(one(i, url) for i, url in enumerate(urls)))
+     return results

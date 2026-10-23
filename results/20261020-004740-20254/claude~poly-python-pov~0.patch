@@ -1,0 +1,61 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..636f236 100644
+--- a/pov.py
++++ b/pov.py
+@@ -19,7 +19,54 @@ class Tree:
+         return self.__dict__() == other.__dict__()
+ 
+     def from_pov(self, from_node):
+-        pass
++        path = self._find_path(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++        return self._reroot_path(path, len(path) - 1)
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        from_path = self._find_path(from_node)
++        if from_path is None:
++            raise ValueError("Tree could not be reoriented")
++        to_path = self._find_path(to_node)
++        if to_path is None:
++            raise ValueError("No path found")
++
++        # Drop the shared prefix (from the original root), then walk up from
++        # the source and down towards the destination.
++        split = 0
++        while (
++            split < len(from_path)
++            and split < len(to_path)
++            and from_path[split] is to_path[split]
++        ):
++            split += 1
++        return [node.label for node in reversed(from_path[split - 1 :])] + [
++            node.label for node in to_path[split:]
++        ]
++
++    def _find_path(self, target):
++        """Return the list of nodes from this node down to `target`, or None."""
++        if self.label == target:
++            return [self]
++        for child in self.children:
++            found = child._find_path(target)
++            if found is not None:
++                return [self] + found
++        return None
++
++    def _reroot_path(self, path, index):
++        """Build a copy of the tree rooted at path[index], oriented away from
++        the original root, without mutating the original nodes."""
++        node = path[index]
++        below = path[index + 1] if index + 1 < len(path) else None
++        children = [
++            _copy_subtree(child) for child in node.children if child is not below
++        ]
++        if index > 0:
++            children.append(self._reroot_path(path, index - 1))
++        return Tree(node.label, children)
++
++
++def _copy_subtree(node):
++    return Tree(node.label, [_copy_subtree(child) for child in node.children])

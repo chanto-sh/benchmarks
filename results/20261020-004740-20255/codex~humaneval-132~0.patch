@@ -1,0 +1,18 @@
+diff --git a/solution.py b/solution.py
+index 8d1cb0a..511231b 100644
+--- a/solution.py
++++ b/solution.py
+@@ -12,3 +12,13 @@ def is_nested(string):
+     is_nested('[[][]]') ➞ True
+     is_nested('[[]][[') ➞ True
+     '''
++    matched = 0
++    pattern = '[[]]'
++
++    for bracket in string:
++        if bracket == pattern[matched]:
++            matched += 1
++            if matched == len(pattern):
++                return True
++
++    return False

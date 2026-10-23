@@ -1,0 +1,189 @@
+diff --git a/test_roman.py b/test_roman.py
+new file mode 100644
+index 0000000..e6f644a
+--- /dev/null
++++ b/test_roman.py
+@@ -0,0 +1,183 @@
++"""Unit tests for roman.to_roman."""
++
++import unittest
++
++from roman import to_roman
++
++
++class TestToRomanBasicValues(unittest.TestCase):
++    """Normal, non-subtractive values."""
++
++    def test_single_symbols(self):
++        cases = {
++            1: "I",
++            5: "V",
++            10: "X",
++            50: "L",
++            100: "C",
++            500: "D",
++            1000: "M",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_repeated_symbols(self):
++        cases = {
++            2: "II",
++            3: "III",
++            20: "XX",
++            30: "XXX",
++            200: "CC",
++            300: "CCC",
++            2000: "MM",
++            3000: "MMM",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_additive_combinations(self):
++        cases = {
++            6: "VI",
++            7: "VII",
++            8: "VIII",
++            11: "XI",
++            15: "XV",
++            16: "XVI",
++            35: "XXXV",
++            60: "LX",
++            110: "CX",
++            250: "CCL",
++            1001: "MI",
++            1666: "MDCLXVI",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanBoundaries(unittest.TestCase):
++    """Range boundaries of the supported domain [1, 3999]."""
++
++    def test_lower_boundary(self):
++        self.assertEqual(to_roman(1), "I")
++
++    def test_upper_boundary(self):
++        self.assertEqual(to_roman(3999), "MMMCMXCIX")
++
++    def test_near_lower_boundary(self):
++        self.assertEqual(to_roman(2), "II")
++        self.assertEqual(to_roman(3), "III")
++
++    def test_near_upper_boundary(self):
++        self.assertEqual(to_roman(3998), "MMMCMXCVIII")
++        self.assertEqual(to_roman(3997), "MMMCMXCVII")
++
++
++class TestToRomanSubtractiveForms(unittest.TestCase):
++    """Symbols used in subtractive notation."""
++
++    def test_subtractive_values(self):
++        cases = {
++            4: "IV",
++            9: "IX",
++            40: "XL",
++            90: "XC",
++            400: "CD",
++            900: "CM",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_subtractive_combined_with_additive(self):
++        cases = {
++            14: "XIV",
++            19: "XIX",
++            24: "XXIV",
++            49: "XLIX",
++            69: "LXIX",
++            94: "XCIV",
++            444: "CDXLIV",
++            994: "CMXCIV",
++            1444: "MCDXLIV",
++            1994: "MCMXCIV",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanKnownValues(unittest.TestCase):
++    """Well-known reference conversions across the range."""
++
++    def test_reference_values(self):
++        cases = {
++            44: "XLIV",
++            99: "XCIX",
++            400: "CD",
++            999: "CMXCIX",
++            1492: "MCDXCII",
++            1987: "MCMLXXXVII",
++            2024: "MMXXIV",
++            3888: "MMMDCCCLXXXVIII",
++            3549: "MMMDXLIX",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanInvalidInput(unittest.TestCase):
++    """Inputs outside the supported domain must raise ValueError."""
++
++    def test_zero_and_negative(self):
++        for value in (0, -1, -3999, -4000):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_above_upper_boundary(self):
++        for value in (4000, 4001, 5000, 10**6):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_non_integer_numbers(self):
++        for value in (1.0, 3999.0, 0.5, 3.5):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_strings(self):
++        for value in ("1", "MCMXCIV", "", " 1 "):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_booleans(self):
++        for value in (True, False):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_none_and_other_types(self):
++        for value in (None, [], [1], (1,), {"n": 1}, set()):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_error_message_mentions_value(self):
++        with self.assertRaises(ValueError) as ctx:
++            to_roman(4000)
++        self.assertIn("4000", str(ctx.exception))
++
++    def test_error_message_mentions_value_for_repr(self):
++        with self.assertRaises(ValueError) as ctx:
++            to_roman(None)
++        self.assertIn("None", str(ctx.exception))
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -1,0 +1,179 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..d71f5d9 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,173 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_C = (0.0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1.0, 1.0)
++_B5 = (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0)
++_B4 = (
++    5179 / 57600,
++    0.0,
++    7571 / 16695,
++    393 / 640,
++    -92097 / 339200,
++    187 / 2100,
++    1 / 40,
++)
++# Dense-output coefficients for the fourth-order interpolant.
++_P = (
++    (1.0, -8048581381 / 2820520608, 8663915743 / 2820520608,
++     -12715105075 / 11282082432),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200 / 32700410799, -68118460800 / 10900136933,
++     87487479700 / 32700410799),
++    (0.0, -1754552775 / 470086768, 14199869525 / 1410260304,
++     -10690763975 / 1880347072),
++    (0.0, 127303824393 / 49829197408, -318862633887 / 49829197408,
++     701980252875 / 199316789632),
++    (0.0, -282668133 / 205662961, 2019193451 / 616988883,
++     -1453857185 / 822651844),
++    (0.0, 40617522 / 29380423, -110615467 / 29380423,
++     69997945 / 29380423),
++)
++
++_RTOL = 1e-10
++_ATOL = 1e-12
++
++
++def _derivative(state, drag, g):
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    acceleration = drag * speed
++    return (
++        vx,
++        vy,
++        -acceleration * vx,
++        -g - acceleration * vy,
++    )
++
++
++def _rk_step(state, h, drag, g):
++    """Return the fifth-order solution and the embedded error estimate."""
++    stages = []
++    for i in range(7):
++        if i == 0:
++            stage_state = state
++        else:
++            stage_state = tuple(
++                state[j] + h * sum(_A[i][m] * stages[m][j] for m in range(i))
++                for j in range(4)
++            )
++        stages.append(_derivative(stage_state, drag, g))
++
++    solution = tuple(
++        state[j] + h * sum(_B5[i] * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    error = tuple(
++        h * sum((_B5[i] - _B4[i]) * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    return solution, error, stages
++
++
++def _dense(stages, state, h, theta):
++    powers = (theta, theta * theta, theta**3, theta**4)
++    coefficients = tuple(
++        sum(_P[i][j] * powers[j] for j in range(4)) for i in range(7)
++    )
++    return tuple(
++        state[j] + h * sum(coefficients[i] * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++
++
++def _event_time(stages, state, h, component):
++    """Locate a zero of one state component inside an accepted step."""
++    low, high = 0.0, 1.0
++    low_value = _dense(stages, state, h, low)[component]
++    for _ in range(80):
++        middle = (low + high) / 2
++        middle_value = _dense(stages, state, h, middle)[component]
++        if middle_value == 0.0:
++            return middle
++        if (middle_value < 0.0) == (low_value < 0.0):
++            low, low_value = middle, middle_value
++        else:
++            high = middle
++    return (low + high) / 2
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    angle = math.radians(angle_deg)
++    cos_angle = math.cos(angle)
++    sin_angle = math.sin(angle)
++    if abs(cos_angle) < 1e-15:
++        cos_angle = 0.0
++    if abs(sin_angle) < 1e-15:
++        sin_angle = 0.0
++    vx = v0 * cos_angle
++    vy = v0 * sin_angle
++
++    # Already at or below the ground when launched.
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": h0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, h0, vx, vy)
++    t = 0.0
++    apex = h0
++
++    speed = math.hypot(vx, vy)
++    fall_time = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    acceleration = g + drag * speed * speed
++    velocity_time = speed / acceleration if speed and acceleration else fall_time
++    h = max(1e-12, 1e-3 * min(fall_time, velocity_time))
++
++    phase = 1 if vy > 0.0 else 2
++    while True:
++        solution, error, stages = _rk_step(state, h, drag, g)
++
++        error_norm = math.sqrt(
++            sum(
++                (error[j] / (_ATOL + _RTOL * max(abs(state[j]), abs(solution[j]))))
++                ** 2
++                for j in range(4)
++            )
++            / 4.0
++        )
++        if error_norm > 1.0:
++            h *= max(0.2, 0.9 * error_norm**-0.2)
++            continue
++
++        if phase == 1 and solution[3] <= 0.0:
++            theta = _event_time(stages, state, h, 3)
++            t += theta * h
++            state = _dense(stages, state, h, theta)
++            apex = state[1]
++            phase = 2
++        elif phase == 2 and solution[1] <= 0.0:
++            theta = _event_time(stages, state, h, 1)
++            t += theta * h
++            state = _dense(stages, state, h, theta)
++            return {"range": state[0], "apex": apex, "time": t}
++        else:
++            t += h
++            state = solution
++            apex = max(apex, state[1])
++
++        factor = 5.0 if error_norm == 0.0 else min(
++            5.0, max(0.2, 0.9 * error_norm**-0.2)
++        )
++        h *= factor

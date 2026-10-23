@@ -1,0 +1,87 @@
+diff --git a/kindergarten_garden.go b/kindergarten_garden.go
+index 0db500b..ffa5087 100644
+--- a/kindergarten_garden.go
++++ b/kindergarten_garden.go
+@@ -1,6 +1,15 @@
+ package kindergarten
+ 
+-// Define the Garden type here.
++import (
++	"errors"
++	"sort"
++	"strings"
++)
++
++// Garden holds the plants assigned to each child.
++type Garden struct {
++	plants map[string][]string
++}
+ 
+ // The diagram argument starts each row with a '\n'.  This allows Go's
+ // raw string literals to present diagrams in source code nicely as two
+@@ -10,10 +19,63 @@ package kindergarten
+ //     VVCCGG
+ //     VVCCGG`
+ 
++var plantNames = map[byte]string{
++	'G': "grass",
++	'C': "clover",
++	'R': "radishes",
++	'V': "violets",
++}
++
+ func NewGarden(diagram string, children []string) (*Garden, error) {
+-	panic("Please implement the NewGarden function")
++	rows := strings.Split(diagram, "\n")
++	if len(rows) != 3 || rows[0] != "" {
++		return nil, errors.New("diagram must start with a newline and contain two rows")
++	}
++
++	top, bottom := rows[1], rows[2]
++	if len(top) != len(bottom) {
++		return nil, errors.New("diagram rows must have the same length")
++	}
++	if len(top)%2 != 0 {
++		return nil, errors.New("diagram must contain an even number of cups per row")
++	}
++	if len(top) != 2*len(children) {
++		return nil, errors.New("diagram must provide two cups per child per row")
++	}
++
++	seen := make(map[string]bool, len(children))
++	for _, child := range children {
++		if seen[child] {
++			return nil, errors.New("duplicate child name")
++		}
++		seen[child] = true
++	}
++
++	// Assign cups alphabetically without modifying the caller's slice.
++	ordered := append([]string(nil), children...)
++	sort.Strings(ordered)
++
++	g := &Garden{plants: make(map[string][]string, len(ordered))}
++	for i, child := range ordered {
++		cups := []byte{top[2*i], top[2*i+1], bottom[2*i], bottom[2*i+1]}
++		plants := make([]string, len(cups))
++		for j, cup := range cups {
++			name, ok := plantNames[cup]
++			if !ok {
++				return nil, errors.New("invalid cup code")
++			}
++			plants[j] = name
++		}
++		g.plants[child] = plants
++	}
++
++	return g, nil
+ }
+ 
+ func (g *Garden) Plants(child string) ([]string, bool) {
+-	panic("Please implement the Plants function")
++	plants, ok := g.plants[child]
++	if !ok {
++		return nil, false
++	}
++	return append([]string(nil), plants...), true
+ }

@@ -1,0 +1,224 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..d2ee80f 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,218 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++var (
++	errEmptyStack   = errors.New("empty stack")
++	errOneValue     = errors.New("only one value on the stack")
++	errDivideByZero = errors.New("divide by zero")
++	errUndefined    = errors.New("undefined operation")
++	errIllegal      = errors.New("illegal operation")
++)
++
++type kind int
++
++const (
++	pushNumber kind = iota
++	callBuiltin
++	callWord
++)
++
++// instruction is either a literal push, a built-in operation, or a call to a
++// user-defined word resolved at the time the instruction was compiled.
++type instruction struct {
++	kind kind
++	num  int
++	op   string
++	word *definition
++}
++
++// definition holds the compiled body of a user-defined word.
++type definition struct {
++	body []instruction
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	defs := make(map[string]*definition)
++	var stack []int
++
++	for i := 0; i < len(tokens); i++ {
++		if tokens[i] == ":" {
++			if i+1 >= len(tokens) || isNumber(tokens[i+1]) {
++				return nil, errIllegal
++			}
++			name := strings.ToLower(tokens[i+1])
++			i += 2
++
++			var body []instruction
++			closed := false
++			for ; i < len(tokens); i++ {
++				if tokens[i] == ";" {
++					closed = true
++					break
++				}
++				instr, err := compile(tokens[i], defs)
++				if err != nil {
++					return nil, err
++				}
++				body = append(body, instr)
++			}
++			if !closed {
++				return nil, errIllegal
++			}
++			defs[name] = &definition{body: body}
++			continue
++		}
++
++		instr, err := compile(tokens[i], defs)
++		if err != nil {
++			return nil, err
++		}
++		stack, err = execute(instr, stack, defs)
++		if err != nil {
++			return nil, err
++		}
++	}
++
++	if stack == nil {
++		stack = []int{}
++	}
++	return stack, nil
++}
++
++// compile turns a token into an instruction using the definitions currently in
++// scope. User definitions take precedence over built-in words so that they can
++// be overridden.
++func compile(token string, defs map[string]*definition) (instruction, error) {
++	if n, ok := parseNumber(token); ok {
++		return instruction{kind: pushNumber, num: n}, nil
++	}
++
++	word := strings.ToLower(token)
++	if d, ok := defs[word]; ok {
++		return instruction{kind: callWord, word: d}, nil
++	}
++	switch word {
++	case "+", "-", "*", "/", "dup", "drop", "swap", "over":
++		return instruction{kind: callBuiltin, op: word}, nil
++	}
++	return instruction{}, errUndefined
++}
++
++func execute(instr instruction, stack []int, defs map[string]*definition) ([]int, error) {
++	switch instr.kind {
++	case pushNumber:
++		return append(stack, instr.num), nil
++	case callWord:
++		var err error
++		for _, sub := range instr.word.body {
++			stack, err = execute(sub, stack, defs)
++			if err != nil {
++				return nil, err
++			}
++		}
++		return stack, nil
++	default:
++		return executeBuiltin(instr.op, stack)
++	}
++}
++
++func executeBuiltin(op string, stack []int) ([]int, error) {
++	switch op {
++	case "+", "-", "*", "/":
++		operands, err := pop2(stack)
++		if err != nil {
++			return nil, err
++		}
++		stack = operands
++		a, b := stack[len(stack)-2], stack[len(stack)-1]
++		var result int
++		switch op {
++		case "+":
++			result = a + b
++		case "-":
++			result = a - b
++		case "*":
++			result = a * b
++		case "/":
++			if b == 0 {
++				return nil, errDivideByZero
++			}
++			result = a / b
++		}
++		stack[len(stack)-2] = result
++		return stack[:len(stack)-1], nil
++
++	case "dup":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		return append(stack, stack[len(stack)-1]), nil
++
++	case "drop":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		return stack[:len(stack)-1], nil
++
++	case "swap":
++		if _, err := pop2(stack); err != nil {
++			return nil, err
++		}
++		n := len(stack)
++		stack[n-1], stack[n-2] = stack[n-2], stack[n-1]
++		return stack, nil
++
++	case "over":
++		if _, err := pop2(stack); err != nil {
++			return nil, err
++		}
++		return append(stack, stack[len(stack)-2]), nil
++	}
++	return nil, errUndefined
++}
++
++// pop2 validates that at least two values are available and returns the stack.
++func pop2(stack []int) ([]int, error) {
++	switch len(stack) {
++	case 0:
++		return nil, errEmptyStack
++	case 1:
++		return nil, errOneValue
++	}
++	return stack, nil
++}
++
++func parseNumber(token string) (int, bool) {
++	digits := token
++	if strings.HasPrefix(digits, "-") {
++		digits = digits[1:]
++	}
++	if digits == "" {
++		return 0, false
++	}
++	for _, r := range digits {
++		if r < '0' || r > '9' {
++			return 0, false
++		}
++	}
++	n, err := strconv.Atoi(token)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++func isNumber(token string) bool {
++	_, ok := parseNumber(token)
++	return ok
+ }

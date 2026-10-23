@@ -1,0 +1,220 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..ba48430 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,214 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++type instructionKind int
++
++const (
++	pushNumber instructionKind = iota
++	callBuiltin
++	callWord
++)
++
++type instruction struct {
++	kind    instructionKind
++	number  int
++	name    string
++	wordDef *word
++}
++
++type word struct {
++	body []instruction
++}
++
++var errEmptyStack = errors.New("empty stack")
++var errOneValue = errors.New("only one value on the stack")
++var errDivideByZero = errors.New("divide by zero")
++var errIllegal = errors.New("illegal operation")
++var errUndefined = errors.New("undefined operation")
++
++var builtins = map[string]func(*[]int) error{
++	"+": func(s *[]int) error {
++		return binary(s, func(a, b int) (int, error) { return a + b, nil })
++	},
++	"-": func(s *[]int) error {
++		return binary(s, func(a, b int) (int, error) { return a - b, nil })
++	},
++	"*": func(s *[]int) error {
++		return binary(s, func(a, b int) (int, error) { return a * b, nil })
++	},
++	"/": func(s *[]int) error {
++		return binary(s, func(a, b int) (int, error) {
++			if b == 0 {
++				return 0, errDivideByZero
++			}
++			return a / b, nil
++		})
++	},
++	"dup": func(s *[]int) error {
++		if len(*s) < 1 {
++			return errEmptyStack
++		}
++		*s = append(*s, (*s)[len(*s)-1])
++		return nil
++	},
++	"drop": func(s *[]int) error {
++		if len(*s) < 1 {
++			return errEmptyStack
++		}
++		*s = (*s)[:len(*s)-1]
++		return nil
++	},
++	"swap": func(s *[]int) error {
++		if err := requireTwo(s); err != nil {
++			return err
++		}
++		n := len(*s)
++		(*s)[n-1], (*s)[n-2] = (*s)[n-2], (*s)[n-1]
++		return nil
++	},
++	"over": func(s *[]int) error {
++		if err := requireTwo(s); err != nil {
++			return err
++		}
++		n := len(*s)
++		*s = append(*s, (*s)[n-2])
++		return nil
++	},
++}
++
++func requireTwo(s *[]int) error {
++	switch len(*s) {
++	case 0:
++		return errEmptyStack
++	case 1:
++		return errOneValue
++	}
++	return nil
++}
++
++func binary(s *[]int, op func(a, b int) (int, error)) error {
++	if err := requireTwo(s); err != nil {
++		return err
++	}
++	n := len(*s)
++	a, b := (*s)[n-2], (*s)[n-1]
++	result, err := op(a, b)
++	if err != nil {
++		return err
++	}
++	*s = append((*s)[:n-2], result)
++	return nil
++}
++
++func isNumber(token string) bool {
++	if token == "" {
++		return false
++	}
++	if token[0] == '-' {
++		token = token[1:]
++		if token == "" {
++			return false
++		}
++	}
++	for i := 0; i < len(token); i++ {
++		if token[i] < '0' || token[i] > '9' {
++			return false
++		}
++	}
++	return true
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	words := make(map[string]*word)
++	stack := make([]int, 0)
++	tokens := strings.Fields(strings.Join(input, " "))
++
++	for i := 0; i < len(tokens); i++ {
++		token := tokens[i]
++		if token != ":" {
++			ins, err := resolve(token, words)
++			if err != nil {
++				return nil, err
++			}
++			if err := execute([]instruction{ins}, &stack); err != nil {
++				return nil, err
++			}
++			continue
++		}
++
++		// Parse a definition: ": name body... ;"
++		i++
++		if i >= len(tokens) {
++			return nil, errIllegal
++		}
++		name := tokens[i]
++		if isNumber(name) {
++			return nil, errIllegal
++		}
++		name = strings.ToLower(name)
++
++		var body []instruction
++		closed := false
++		for i++; i < len(tokens); i++ {
++			if tokens[i] == ";" {
++				closed = true
++				break
++			}
++			ins, err := resolve(tokens[i], words)
++			if err != nil {
++				return nil, err
++			}
++			body = append(body, ins)
++		}
++		if !closed {
++			return nil, errIllegal
++		}
++		// Bind the new word only after its body has been compiled,
++		// so a redefinition can still refer to the previous one.
++		words[name] = &word{body: body}
++	}
++
++	return stack, nil
++}
++
++func resolve(token string, words map[string]*word) (instruction, error) {
++	if isNumber(token) {
++		n, err := strconv.Atoi(token)
++		if err != nil {
++			return instruction{}, errIllegal
++		}
++		return instruction{kind: pushNumber, number: n}, nil
++	}
++
++	lower := strings.ToLower(token)
++	if w, ok := words[lower]; ok {
++		return instruction{kind: callWord, wordDef: w}, nil
++	}
++	if _, ok := builtins[lower]; ok {
++		return instruction{kind: callBuiltin, name: lower}, nil
++	}
++	return instruction{}, errUndefined
++}
++
++func execute(instructions []instruction, stack *[]int) error {
++	for _, ins := range instructions {
++		switch ins.kind {
++		case pushNumber:
++			*stack = append(*stack, ins.number)
++		case callBuiltin:
++			if err := builtins[ins.name](stack); err != nil {
++				return err
++			}
++		case callWord:
++			if err := execute(ins.wordDef.body, stack); err != nil {
++				return err
++			}
++		}
++	}
++	return nil
+ }

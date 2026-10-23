@@ -1,0 +1,18 @@
+diff --git a/proverb.py b/proverb.py
+index d1be410..e51107f 100644
+--- a/proverb.py
++++ b/proverb.py
+@@ -1,2 +1,11 @@
+-def proverb():
+-    pass
++def proverb(*pieces, qualifier=None):
++    if not pieces:
++        return []
++
++    verses = [
++        f"For want of a {first} the {second} was lost."
++        for first, second in zip(pieces, pieces[1:])
++    ]
++    qualifier = f"{qualifier} " if qualifier else ""
++    verses.append(f"And all for the want of a {qualifier}{pieces[0]}.")
++    return verses

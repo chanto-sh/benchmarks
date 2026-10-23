@@ -1,0 +1,170 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..9bf7048 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,163 @@
++"""Solve the Zebra Puzzle.
++
++The puzzle is a constraint satisfaction problem: five houses in a row, each
++with a distinct colour, nationality, drink, hobby and pet.  The fifteen clues
++are encoded as checks performed while houses are filled in from left to right,
++which prunes impossible partial assignments early.
++"""
++
++from functools import lru_cache
++
++NATIONALITIES = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++COLORS = ("red", "green", "ivory", "yellow", "blue")
++DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++PETS = ("dog", "fox", "horse", "snails", "zebra")
++
++ATTRIBUTES = ("nationality", "color", "drink", "hobby", "pet")
++VALUES = {
++    "nationality": NATIONALITIES,
++    "color": COLORS,
++    "drink": DRINKS,
++    "hobby": HOBBIES,
++    "pet": PETS,
++}
++
++
++def _house_is_valid(houses, index):
++    """Check every clue that only involves houses[0..index]."""
++    house = houses[index]
++
++    linked = (
++        # 2. The Englishman lives in the red house.
++        ("nationality", "Englishman", "color", "red"),
++        # 3. The Spaniard owns the dog.
++        ("nationality", "Spaniard", "pet", "dog"),
++        # 4. The person in the green house drinks coffee.
++        ("color", "green", "drink", "coffee"),
++        # 5. The Ukrainian drinks tea.
++        ("nationality", "Ukrainian", "drink", "tea"),
++        # 7. The snail owner likes to go dancing.
++        ("hobby", "dancing", "pet", "snails"),
++        # 8. The person in the yellow house is a painter.
++        ("hobby", "painting", "color", "yellow"),
++        # 13. The person who plays football drinks orange juice.
++        ("hobby", "football", "drink", "orange juice"),
++        # 14. The Japanese person plays chess.
++        ("nationality", "Japanese", "hobby", "chess"),
++    )
++    for first, first_value, second, second_value in linked:
++        # The attributes are assigned in order, so the partner may still be
++        # unknown; only a conflicting known value rules the branch out.
++        if house[first] == first_value and house[second] not in (
++            None,
++            second_value,
++        ):
++            return False
++        if house[second] == second_value and house[first] not in (
++            None,
++            first_value,
++        ):
++            return False
++
++    # 6. The green house is immediately to the right of the ivory house.
++    if house["color"] == "green" and (
++        index == 0 or houses[index - 1]["color"] != "ivory"
++    ):
++        return False
++    if house["color"] == "ivory":
++        if index == len(houses) - 1:
++            return False
++        if houses[index + 1]["color"] not in (None, "green"):
++            return False
++    # 9. The person in the middle house drinks milk.
++    if house["drink"] == "milk" and index != 2:
++        return False
++    # 10. The Norwegian lives in the first house.
++    if house["nationality"] == "Norwegian" and index != 0:
++        return False
++    # 15. The Norwegian lives next to the blue house.
++    if house["color"] == "blue" and index != 1:
++        return False
++
++    return True
++
++
++def _all_clues_hold(houses):
++    """Check the clues that relate different houses once everything is set."""
++    positions = {
++        attribute: {
++            houses[index][attribute]: index for index in range(len(houses))
++        }
++        for attribute in ATTRIBUTES
++    }
++
++    # 11. The person who enjoys reading lives next to the person with the fox.
++    if abs(positions["hobby"]["reading"] - positions["pet"]["fox"]) != 1:
++        return False
++    # 12. The painter's house is next to the house with the horse.
++    if abs(positions["hobby"]["painting"] - positions["pet"]["horse"]) != 1:
++        return False
++    # 15. The Norwegian lives next to the blue house.
++    if abs(positions["nationality"]["Norwegian"] - positions["color"]["blue"]) != 1:
++        return False
++
++    return True
++
++
++def _solve(houses, index, remaining):
++    """Depth-first search filling in one house at a time from the left."""
++    if index == len(houses):
++        return _all_clues_hold(houses)
++
++    house = houses[index]
++
++    def fill(position, available):
++        if position == len(ATTRIBUTES):
++            return _solve(houses, index + 1, available)
++
++        attribute = ATTRIBUTES[position]
++        for value in available[attribute]:
++            house[attribute] = value
++            if _house_is_valid(houses, index):
++                rest = {
++                    name: (
++                        tuple(option for option in options if option != value)
++                        if name == attribute
++                        else options
++                    )
++                    for name, options in available.items()
++                }
++                if fill(position + 1, rest):
++                    return True
++            house[attribute] = None
++        return False
++
++    return fill(0, remaining)
++
++
++@lru_cache(maxsize=None)
++def _solution():
++    """Return the unique solution as a tuple of house dictionaries."""
++    houses = [{attribute: None for attribute in ATTRIBUTES} for _ in range(5)]
++    remaining = {attribute: VALUES[attribute] for attribute in ATTRIBUTES}
++    solved = _solve(houses, 0, remaining)
++    # The puzzle has exactly one solution, so this always holds.
++    assert solved
++    return tuple(dict(house) for house in houses)
++
++
++def _find(attribute, value, wanted):
++    for house in _solution():
++        if house[attribute] == value:
++            return house[wanted]
++    raise AssertionError(f"no house has {attribute} == {value}")
++
++
+ def drinks_water():
+-    pass
++    return _find("drink", "water", "nationality")
+ 
+ 
+ def owns_zebra():
+-    pass
++    return _find("pet", "zebra", "nationality")
++

@@ -1,0 +1,70 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..9db826e
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1 @@
++The ``testsuite`` element of generated JUnit XML reports now includes the ``hostname`` and ``timestamp`` attributes.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..ac97e3a 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -8,9 +8,11 @@ Based on initial code from Ross Lawley.
+ Output conforms to https://github.com/jenkinsci/xunit-plugin/blob/master/
+ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ """
++import datetime
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
+ 
+@@ -666,6 +668,10 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.datetime.fromtimestamp(
++                self.suite_start_time
++            ).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..1a4fae6 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -1,4 +1,6 @@
++import datetime
+ import os
++import socket
+ from xml.dom import minidom
+ 
+ import py
+@@ -1118,6 +1120,24 @@ def test_root_testsuites_tag(testdir):
+     assert suite_node.tag == "testsuite"
+ 
+ 
++def test_timestamp_and_hostname(testdir):
++    testdir.makepyfile(
++        """
++        def test_x():
++            pass
++    """
++    )
++    _, dom = runandparse(testdir)
++    node = dom.find_first_by_tag("testsuite")
++    node.assert_attr(hostname=socket.gethostname())
++    timestamp = node["timestamp"]
++    assert timestamp is not None
++    try:
++        datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f")
++    except ValueError:
++        datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
++
++
+ def test_runs_twice(testdir):
+     f = testdir.makepyfile(
+         """

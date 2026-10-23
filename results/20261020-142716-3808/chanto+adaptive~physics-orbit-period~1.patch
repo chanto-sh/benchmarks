@@ -1,0 +1,299 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..3f2b2fc 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,168 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
++
++def _deriv(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return (vx, vy, ax, ay)
++
++
++def _combine(state, h, terms):
++    """Return state + h * sum(coefficient * stage)."""
++    return tuple(
++        state[i] + h * sum(coefficient * stage[i] for coefficient, stage in terms)
++        for i in range(4)
++    )
++
++
++def _rk_step(state, h, accel):
++    """One Dormand-Prince 5(4) step; return the fifth-order state and error."""
++    k1 = _deriv(state, accel)
++    k2 = _deriv(_combine(state, h, ((1 / 5, k1),)), accel)
++    k3 = _deriv(
++        _combine(state, h, ((3 / 40, k1), (9 / 40, k2))),
++        accel,
++    )
++    k4 = _deriv(
++        _combine(
++            state,
++            h,
++            ((44 / 45, k1), (-56 / 15, k2), (32 / 9, k3)),
++        ),
++        accel,
++    )
++    k5 = _deriv(
++        _combine(
++            state,
++            h,
++            (
++                (19372 / 6561, k1),
++                (-25360 / 2187, k2),
++                (64448 / 6561, k3),
++                (-212 / 729, k4),
++            ),
++        ),
++        accel,
++    )
++    k6 = _deriv(
++        _combine(
++            state,
++            h,
++            (
++                (9017 / 3168, k1),
++                (-355 / 33, k2),
++                (46732 / 5247, k3),
++                (49 / 176, k4),
++                (-5103 / 18656, k5),
++            ),
++        ),
++        accel,
++    )
++    new_state = _combine(
++        state,
++        h,
++        (
++            (35 / 384, k1),
++            (500 / 1113, k3),
++            (125 / 192, k4),
++            (-2187 / 6784, k5),
++            (11 / 84, k6),
++        ),
++    )
++    k7 = _deriv(new_state, accel)
++
++    error = tuple(
++        h
++        * (
++            71 / 57600 * k1[i]
++            - 71 / 16695 * k3[i]
++            + 71 / 1920 * k4[i]
++            - 17253 / 339200 * k5[i]
++            + 22 / 525 * k6[i]
++            - 1 / 40 * k7[i]
++        )
++        for i in range(4)
++    )
++    return new_state, error
++
++
++def _error_norm(error, state, new_state, rtol, atol):
++    total = 0.0
++    for i in range(4):
++        scale = atol[i] + rtol * max(abs(state[i]), abs(new_state[i]))
++        total += (error[i] / scale) ** 2
++    return math.sqrt(total / 4)
++
++
++def _initial_step(state, accel):
++    x, y, vx, vy = state
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    acceleration = math.hypot(ax, ay)
++
++    timescales = []
++    if speed > 0.0:
++        timescales.append(r / speed)
++    if acceleration > 0.0:
++        timescales.append(math.sqrt(r / acceleration))
++    if not timescales:
++        return 1e-2
++    return 1e-2 * min(timescales)
++
++
++def _closest_measure(state):
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
++
++def _angle_between(old_state, new_state):
++    x0, y0 = old_state[0], old_state[1]
++    x1, y1 = new_state[0], new_state[1]
++    return math.atan2(x0 * y1 - y0 * x1, x0 * x1 + y0 * y1)
++
++
++def _locate_event(state, h, accel):
++    """Locate an upward zero of r dot v in [0, h]."""
++    lo, hi = 0.0, h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        trial, _ = _rk_step(state, mid, accel)
++        if _closest_measure(trial) >= 0.0:
++            hi = mid
++        else:
++            lo = mid
++    dt = 0.5 * (lo + hi)
++    event_state, _ = _rk_step(state, dt, accel)
++    return dt, event_state
++
++
++def _circular_period(r, accel, epicyclic=True):
++    """Period at a circular orbit: radial epicyclic or angular."""
++    f0 = accel(r, 0.0)[0]
++
++    if not epicyclic:
++        omega_squared = -f0 / r
++        if omega_squared > 0.0:
++            return 2.0 * math.pi / math.sqrt(omega_squared)
++        raise ValueError("no circular orbit at the starting radius")
++
++    dr = 1e-5 * r
++    f_plus = accel(r + dr, 0.0)[0]
++    f_minus = accel(r - dr, 0.0)[0]
++    f_prime = (f_plus - f_minus) / (2.0 * dr)
++
++    kappa_squared = -3.0 * f0 / r - f_prime
++    if kappa_squared > 0.0:
++        return 2.0 * math.pi / math.sqrt(kappa_squared)
++
++    omega_squared = -f0 / r
++    if omega_squared > 0.0:
++        return 2.0 * math.pi / math.sqrt(omega_squared)
++    raise ValueError("no circular orbit at the starting radius")
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -11,4 +174,124 @@ def newtonian(gm):
+ 
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    x, y = float(r0[0]), float(r0[1])
++    vx, vy = float(v0[0]), float(v0[1])
++    state = (x, y, vx, vy)
++
++    r_scale = math.hypot(x, y)
++    if r_scale == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    acceleration = math.hypot(ax, ay)
++    if speed > 0.0:
++        v_scale = speed
++    elif acceleration > 0.0:
++        v_scale = math.sqrt(acceleration * r_scale)
++    else:
++        v_scale = 1.0
++
++    rtol = 1e-11
++    atol = (
++        1e-13 * r_scale,
++        1e-13 * r_scale,
++        1e-13 * v_scale,
++        1e-13 * v_scale,
++    )
++    event_tol = 1e-9 * r_scale * v_scale
++    circular_tol = 1e-9 * r_scale * v_scale
++
++    g0 = x * vx + y * vy
++    gdot0 = vx * vx + vy * vy + x * ax + y * ay
++    exactly_circular = (
++        abs(g0) <= event_tol
++        and abs(gdot0) <= 1e-14 * v_scale * v_scale
++    )
++
++    t = 0.0
++    h = _initial_step(state, accel)
++    events = 0
++    first_time = None
++    angle = 0.0
++    angle_at_first = 0.0
++    max_signal = abs(g0)
++    max_signal_since = abs(g0)
++    armed = g0 < -event_tol
++
++    # If we start exactly at a periapsis, that instant is the first event.
++    if abs(g0) <= event_tol and gdot0 > 0.0:
++        events = 1
++        first_time = 0.0
++        angle_at_first = 0.0
++        max_signal_since = abs(g0)
++        armed = False
++
++    while True:
++        if r_scale > 0.0 and speed > 0.0:
++            # Keep one step's angular advance below about half a radian.
++            current_r = math.hypot(state[0], state[1])
++            current_speed = math.hypot(state[2], state[3])
++            if current_speed > 0.0:
++                h = min(h, 0.5 * current_r / current_speed)
++        if not math.isfinite(h) or h <= 0.0:
++            raise RuntimeError("orbit integration failed to advance")
++
++        new_state, error = _rk_step(state, h, accel)
++        error_norm = _error_norm(error, state, new_state, rtol, atol)
++
++        if error_norm <= 1.0:
++            g1 = _closest_measure(new_state)
++            if armed and g0 < 0.0 and g1 >= 0.0:
++                dt, event_state = _locate_event(state, h, accel)
++                angle += abs(_angle_between(state, event_state))
++                t += dt
++                state = event_state
++                g0 = _closest_measure(state)
++                events += 1
++                armed = False
++
++                if events == 1:
++                    first_time = t
++                    angle_at_first = angle
++                    max_signal_since = abs(g0)
++                else:
++                    return t - first_time
++
++                h = dt
++                continue
++
++            angle += abs(_angle_between(state, new_state))
++            t += h
++            state = new_state
++            g0 = g1
++            if g0 < -event_tol:
++                armed = True
++            max_signal = max(max_signal, abs(g0))
++            if events == 1:
++                max_signal_since = max(max_signal_since, abs(g0))
++
++            # A circular orbit has no special point to call closest.  When the
++            # radial signal is at the level of integration noise, use the
++            # limiting radial (epicyclic) period; for an exactly circular orbit
++            # use its ordinary orbital period.
++            if events == 0 and max_signal <= circular_tol:
++                if angle >= 2.0 * math.pi:
++                    return _circular_period(
++                        r_scale, accel, epicyclic=not exactly_circular
++                    )
++            elif events == 1 and max_signal_since <= circular_tol:
++                if angle - angle_at_first >= 2.0 * math.pi:
++                    return _circular_period(
++                        r_scale, accel, epicyclic=not exactly_circular
++                    )
++
++            if error_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * error_norm ** (-0.2)
++                factor = min(5.0, max(0.2, factor))
++            h *= factor
++        else:
++            factor = 0.9 * error_norm ** (-0.2)
++            h *= max(0.2, factor)

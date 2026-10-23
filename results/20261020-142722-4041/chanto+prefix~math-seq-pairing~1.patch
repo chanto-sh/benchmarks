@@ -1,0 +1,60 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..006840f 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,53 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++from math import isqrt
++
++
++def _pair(a, b):
++    """Cantor pairing: a bijection from N x N to N."""
++    total = a + b
++    return total * (total + 1) // 2 + b
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    diagonal = (isqrt(8 * n + 1) - 1) // 2
++    start = diagonal * (diagonal + 1) // 2
++    b = n - start
++    return diagonal - b, b
++
++
++def _pack(values):
++    """Bijection from N^k to N using a balanced tree of Cantor pairs."""
++    size = len(values)
++    if size == 1:
++        return values[0]
++    middle = (size + 1) // 2
++    return _pair(_pack(values[:middle]), _pack(values[middle:]))
++
++
++def _unpack(n, size):
++    """Inverse of _pack for tuples of the given size."""
++    if size == 1:
++        return [n]
++    middle = (size + 1) // 2
++    left, right = _unpair(n)
++    return _unpack(left, middle) + _unpack(right, size - middle)
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    values = list(lst)
++    if not values:
++        return 0
++    return _pair(len(values) - 1, _pack(values)) + 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("n must be non-negative")
++    if n == 0:
++        return []
++    length_minus_one, packed = _unpair(n - 1)
++    return _unpack(packed, length_minus_one + 1)

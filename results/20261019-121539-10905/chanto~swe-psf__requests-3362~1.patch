@@ -1,0 +1,46 @@
+diff --git a/requests/utils.py b/requests/utils.py
+index 8d17b6b..74339da 100644
+--- a/requests/utils.py
++++ b/requests/utils.py
+@@ -355,6 +355,11 @@ def get_encoding_from_headers(headers):
+     if 'text' in content_type:
+         return 'ISO-8859-1'
+ 
++    if 'application/json' in content_type:
++        # Assume UTF-8 based on RFC 4627: https://www.ietf.org/rfc/rfc4627.txt
++        # since the charset was unset
++        return 'utf-8'
++
+ 
+ def stream_decode_response_unicode(iterator, r):
+     """Stream decodes a iterator."""
+diff --git a/tests/test_utils.py b/tests/test_utils.py
+index 17149d2..9a3dfca 100644
+--- a/tests/test_utils.py
++++ b/tests/test_utils.py
+@@ -22,11 +22,11 @@ from .compat import StringIO, cStringIO
+ class TestSuperLen:
+ 
+     @pytest.mark.parametrize(
+-        'stream, value', (
++        'stream, value', [
+             (StringIO.StringIO, 'Test'),
+             (BytesIO, b'Test'),
+-            pytest.mark.skipif('cStringIO is None')((cStringIO, 'Test')),
+-        ))
++        ] + ([(cStringIO, 'Test')] if cStringIO is not None else [])
++    )
+     def test_io_streams(self, stream, value):
+         """Ensures that we properly deal with different kinds of IO streams."""
+         assert super_len(stream()) == 0
+@@ -368,6 +368,10 @@ def test_parse_dict_header(value, expected):
+             CaseInsensitiveDict({'content-type': 'text/plain'}),
+             'ISO-8859-1'
+         ),
++        (
++            CaseInsensitiveDict({'content-type': 'application/json'}),
++            'utf-8'
++        ),
+     ))
+ def test_get_encoding_from_headers(value, expected):
+     assert get_encoding_from_headers(value) == expected

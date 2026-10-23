@@ -1,0 +1,66 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..49a2759 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,60 @@
++from collections import Counter
++
++RANKS = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++
++def _hand_key(hand):
++    cards = hand.split()
++    ranks = [RANKS[card[:-1]] for card in cards]
++    suits = [card[-1] for card in cards]
++
++    counts = Counter(ranks)
++    ordered = sorted(counts, key=lambda rank: (counts[rank], rank), reverse=True)
++
++    is_flush = len(set(suits)) == 1
++
++    unique = sorted(set(ranks))
++    straight_high = 0
++    if len(unique) == 5:
++        if unique[-1] - unique[0] == 4:
++            straight_high = unique[-1]
++        elif unique == [2, 3, 4, 5, 14]:
++            straight_high = 5
++
++    if is_flush and straight_high:
++        return (9, straight_high)
++    if counts[ordered[0]] == 4:
++        return (8, ordered[0], ordered[1])
++    if counts[ordered[0]] == 3 and counts[ordered[1]] == 2:
++        return (7, ordered[0], ordered[1])
++    if is_flush:
++        return (6, *sorted(ranks, reverse=True))
++    if straight_high:
++        return (5, straight_high)
++    if counts[ordered[0]] == 3:
++        return (4, *ordered)
++    if counts[ordered[0]] == 2 and counts[ordered[1]] == 2:
++        return (3, *ordered)
++    if counts[ordered[0]] == 2:
++        return (2, *ordered)
++    return (1, *sorted(ranks, reverse=True))
++
++
+ def best_hands(hands):
+-    pass
++    keys = [_hand_key(hand) for hand in hands]
++    best = max(keys)
++    return [hand for hand, key in zip(hands, keys) if key == best]

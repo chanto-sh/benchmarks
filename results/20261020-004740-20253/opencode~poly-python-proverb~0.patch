@@ -1,0 +1,23 @@
+diff --git a/proverb.py b/proverb.py
+index d1be410..97c7de2 100644
+--- a/proverb.py
++++ b/proverb.py
+@@ -1,2 +1,16 @@
+-def proverb():
+-    pass
++def proverb(*pieces, qualifier=None):
++    """Generate the proverb for the given sequence of pieces."""
++    if not pieces:
++        return []
++
++    lines = [
++        f"For want of a {first} the {second} was lost."
++        for first, second in zip(pieces, pieces[1:])
++    ]
++
++    final = f"And all for the want of a {pieces[0]}."
++    if qualifier is not None:
++        final = f"And all for the want of a {qualifier} {pieces[0]}."
++
++    lines.append(final)
++    return lines

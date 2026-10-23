@@ -1,0 +1,40 @@
+diff --git a/transpose.go b/transpose.go
+index 0db7e6a..72bb2fd 100644
+--- a/transpose.go
++++ b/transpose.go
+@@ -1,5 +1,34 @@
+ package transpose
+ 
+ func Transpose(input []string) []string {
+-	panic("Please implement the Transpose function")
++	maxLen := 0
++	for _, row := range input {
++		if len(row) > maxLen {
++			maxLen = len(row)
++		}
++	}
++
++	result := make([]string, 0, maxLen)
++	for col := 0; col < maxLen; col++ {
++		// Find the last row that extends into this column. Rows beyond that
++		// point would only contribute right padding, which is omitted.
++		last := -1
++		for r, row := range input {
++			if len(row) > col {
++				last = r
++			}
++		}
++
++		out := make([]byte, last+1)
++		for r := 0; r <= last; r++ {
++			if len(input[r]) > col {
++				out[r] = input[r][col]
++			} else {
++				out[r] = ' '
++			}
++		}
++		result = append(result, string(out))
++	}
++
++	return result
+ }

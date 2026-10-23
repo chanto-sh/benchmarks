@@ -1,0 +1,40 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..9064e2e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,33 @@
+-def find_kth(arr1, arr2, k):
+-    pass
++def find_kth(arr1, arr2, *args):
++    """Return the k-th smallest element (1-indexed) of two sorted arrays.
++
++    Supports both ``find_kth(arr1, arr2, k)`` and the MBPP form
++    ``find_kth(arr1, arr2, m, n, k)`` where ``m`` and ``n`` are the lengths
++    of ``arr1`` and ``arr2``.
++    """
++    if len(args) == 1:
++        k = args[0]
++    elif len(args) == 3:
++        _m, _n, k = args
++    else:
++        raise TypeError(
++            "find_kth() takes 3 or 5 positional arguments"
++        )
++
++    k = int(k)
++    total = len(arr1) + len(arr2)
++    if k < 1 or k > total:
++        return None
++
++    i = j = 0
++    for _ in range(k - 1):
++        if j >= len(arr2) or (i < len(arr1) and arr1[i] <= arr2[j]):
++            i += 1
++        else:
++            j += 1
++
++    if i >= len(arr1):
++        return arr2[j]
++    if j >= len(arr2):
++        return arr1[i]
++    return arr1[i] if arr1[i] <= arr2[j] else arr2[j]

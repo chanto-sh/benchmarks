@@ -1,0 +1,34 @@
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 157903f..9bf79f1 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -676,6 +676,7 @@ class AssertionRewriter(ast.NodeVisitor):
+                 expect_docstring
+                 and isinstance(item, ast.Expr)
+                 and isinstance(item.value, ast.Constant)
++                and isinstance(item.value.value, str)
+             ):
+                 doc = item.value.value
+                 if self.is_rewrite_disabled(doc):
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index d018032..b61d0df 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -141,6 +141,17 @@ class TestAssertionRewrite:
+         assert isinstance(m.body[1], ast.Assert)
+         assert m.body[1].msg is None
+ 
++    @pytest.mark.parametrize("literal", ["1", "1.5", "b'bytes'", "None", "True"])
++    def test_non_string_first_statement_is_not_docstring(self, literal: str) -> None:
++        """Regression test for #11143: non-string constants are not docstrings."""
++        s = f"{literal}\nassert 14"
++        m = rewrite(s)
++        # The injected imports must come before the constant expression.
++        assert isinstance(m.body[0], ast.Import)
++        assert isinstance(m.body[1], ast.Import)
++        assert isinstance(m.body[2], ast.Expr)
++        assert isinstance(m.body[2].value, ast.Constant)
++
+     def test_dont_rewrite_plugin(self, pytester: Pytester) -> None:
+         contents = {
+             "conftest.py": "pytest_plugins = 'plugin'; import plugin",

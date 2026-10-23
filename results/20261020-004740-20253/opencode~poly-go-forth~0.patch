@@ -1,0 +1,225 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..8388d64 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,219 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++var (
++	errEmptyStack         = errors.New("empty stack")
++	errOnlyOneValue       = errors.New("only one value on the stack")
++	errDivideByZero       = errors.New("divide by zero")
++	errIllegalOperation   = errors.New("illegal operation")
++	errUndefinedOperation = errors.New("undefined operation")
++)
++
++type instructionKind int
++
++const (
++	pushNumber instructionKind = iota
++	builtinWord
++	userWord
++)
++
++type instruction struct {
++	kind    instructionKind
++	number  int
++	builtin string
++	word    *definition
++}
++
++type definition struct {
++	body []instruction
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	words := make(map[string]*definition)
++	stack := []int{}
++
++	for i := 0; i < len(tokens); i++ {
++		token := tokens[i]
++		lower := strings.ToLower(token)
++
++		if lower == ":" {
++			// Collect the definition up to the terminating semicolon.
++			start := i + 1
++			end := start
++			for end < len(tokens) && strings.ToLower(tokens[end]) != ";" {
++				end++
++			}
++			if start >= end || end >= len(tokens) {
++				return nil, errIllegalOperation
++			}
++
++			name := strings.ToLower(tokens[start])
++			if isNumber(name) || name == ":" || name == ";" {
++				return nil, errIllegalOperation
++			}
++
++			body, err := compile(tokens[start+1:end], words)
++			if err != nil {
++				return nil, err
++			}
++			words[name] = &definition{body: body}
++			i = end
++			continue
++		}
++
++		if lower == ";" {
++			return nil, errIllegalOperation
++		}
++
++		if n, err := strconv.Atoi(token); err == nil {
++			stack = append(stack, n)
++			continue
++		}
++
++		if d, ok := words[lower]; ok {
++			var err error
++			stack, err = runDefinition(d, stack)
++			if err != nil {
++				return nil, err
++			}
++			continue
++		}
++
++		if isBuiltin(lower) {
++			var err error
++			stack, err = runBuiltin(lower, stack)
++			if err != nil {
++				return nil, err
++			}
++			continue
++		}
++
++		return nil, errUndefinedOperation
++	}
++
++	return stack, nil
++}
++
++func compile(tokens []string, words map[string]*definition) ([]instruction, error) {
++	body := make([]instruction, 0, len(tokens))
++	for _, token := range tokens {
++		lower := strings.ToLower(token)
++
++		if n, err := strconv.Atoi(token); err == nil {
++			body = append(body, instruction{kind: pushNumber, number: n})
++			continue
++		}
++
++		if d, ok := words[lower]; ok {
++			body = append(body, instruction{kind: userWord, word: d})
++			continue
++		}
++
++		if isBuiltin(lower) {
++			body = append(body, instruction{kind: builtinWord, builtin: lower})
++			continue
++		}
++
++		return nil, errUndefinedOperation
++	}
++	return body, nil
++}
++
++func isNumber(word string) bool {
++	_, err := strconv.Atoi(word)
++	return err == nil
++}
++
++func isBuiltin(word string) bool {
++	switch word {
++	case "+", "-", "*", "/", "dup", "drop", "swap", "over":
++		return true
++	}
++	return false
++}
++
++func runDefinition(d *definition, stack []int) ([]int, error) {
++	for _, inst := range d.body {
++		var err error
++		switch inst.kind {
++		case pushNumber:
++			stack = append(stack, inst.number)
++		case builtinWord:
++			stack, err = runBuiltin(inst.builtin, stack)
++		case userWord:
++			stack, err = runDefinition(inst.word, stack)
++		}
++		if err != nil {
++			return nil, err
++		}
++	}
++	return stack, nil
++}
++
++func runBuiltin(word string, stack []int) ([]int, error) {
++	switch word {
++	case "dup":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		return append(stack, stack[len(stack)-1]), nil
++	case "drop":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		return stack[:len(stack)-1], nil
++	case "swap":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		if len(stack) == 1 {
++			return nil, errOnlyOneValue
++		}
++		stack[len(stack)-1], stack[len(stack)-2] = stack[len(stack)-2], stack[len(stack)-1]
++		return stack, nil
++	case "over":
++		if len(stack) == 0 {
++			return nil, errEmptyStack
++		}
++		if len(stack) == 1 {
++			return nil, errOnlyOneValue
++		}
++		return append(stack, stack[len(stack)-2]), nil
++	}
++
++	if len(stack) == 0 {
++		return nil, errEmptyStack
++	}
++	if len(stack) == 1 {
++		return nil, errOnlyOneValue
++	}
++
++	b := stack[len(stack)-1]
++	a := stack[len(stack)-2]
++	stack = stack[:len(stack)-2]
++
++	switch word {
++	case "+":
++		stack = append(stack, a+b)
++	case "-":
++		stack = append(stack, a-b)
++	case "*":
++		stack = append(stack, a*b)
++	case "/":
++		if b == 0 {
++			return nil, errDivideByZero
++		}
++		stack = append(stack, a/b)
++	}
++	return stack, nil
+ }

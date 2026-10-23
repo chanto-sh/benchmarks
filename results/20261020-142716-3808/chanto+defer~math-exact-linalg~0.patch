@@ -1,0 +1,118 @@
+diff --git a/linalg.py b/linalg.py
+index 4060bd6..8f7b24e 100644
+--- a/linalg.py
++++ b/linalg.py
+@@ -1,54 +1,96 @@
+ """Small linear-algebra helpers used by the answer checker for the course.
+ 
+ Students submit integer/rational matrices; we compare their answers to these.
++All arithmetic is exact: inputs are converted to ``fractions.Fraction``.
+ """
+ 
++from fractions import Fraction
++
++
++def _as_fraction_rows(A):
++    return [[Fraction(x) for x in row] for row in A]
++
+ 
+ def _eliminate(A):
+-    A = [[float(x) for x in row] for row in A]
+-    n, m = len(A), len(A[0])
+-    sign = 1.0
++    """Row-echelon form of A via exact Gaussian elimination with pivoting."""
++    A = [row[:] for row in A]
++    n, m = len(A), (len(A[0]) if A else 0)
+     r = 0
+     for c in range(m):
+         if r == n:
+             break
+-        if abs(A[r][c]) < 1e-12:
++        pivot = next((i for i in range(r, n) if A[i][c] != 0), None)
++        if pivot is None:
+             continue
++        if pivot != r:
++            A[r], A[pivot] = A[pivot], A[r]
+         for i in range(r + 1, n):
+             f = A[i][c] / A[r][c]
+             for j in range(c, m):
+                 A[i][j] -= f * A[r][j]
+         r += 1
+-    return A, sign
++    return A
+ 
+ 
+ def det(A):
+-    """Determinant of a square matrix (list of rows)."""
+-    U, sign = _eliminate(A)
++    """Determinant of a square matrix (list of rows), as a Fraction."""
++    M = _as_fraction_rows(A)
++    n = len(M)
++    if n == 0:
++        return Fraction(1)
++    if any(len(row) != n for row in M):
++        raise ValueError("det requires a square matrix")
++
++    sign = Fraction(1)
++    for c in range(n):
++        pivot = next((i for i in range(c, n) if M[i][c] != 0), None)
++        if pivot is None:
++            return Fraction(0)
++        if pivot != c:
++            M[c], M[pivot] = M[pivot], M[c]
++            sign = -sign
++        for i in range(c + 1, n):
++            f = M[i][c] / M[c][c]
++            for j in range(c + 1, n):
++                M[i][j] -= f * M[c][j]
++
+     p = sign
+-    for i in range(len(U)):
+-        p *= U[i][i]
++    for i in range(n):
++        p *= M[i][i]
+     return p
+ 
+ 
+ def rank(A):
+-    """Rank of an n x m matrix."""
+-    U, _ = _eliminate(A)
+-    return sum(1 for row in U if any(abs(x) > 1e-12 for x in row))
++    """Rank of an n x m matrix, as an int."""
++    U = _eliminate(_as_fraction_rows(A))
++    return sum(1 for row in U if any(x != 0 for x in row))
+ 
+ 
+ def solve(A, b):
+     """Solution x of A x = b for square A, or None if there is no unique solution."""
+-    n = len(A)
+-    if abs(det(A)) < 1e-12:
+-        return None
+-    M = [[float(x) for x in row] + [float(v)] for row, v in zip(A, b)]
++    M = _as_fraction_rows(A)
++    n = len(M)
++    if n == 0:
++        return []
++    if any(len(row) != n for row in M):
++        raise ValueError("solve requires a square matrix")
++
++    # Augmented matrix.
++    for i in range(n):
++        M[i].append(Fraction(b[i]))
++
+     for c in range(n):
++        pivot = next((i for i in range(c, n) if M[i][c] != 0), None)
++        if pivot is None:
++            return None
++        if pivot != c:
++            M[c], M[pivot] = M[pivot], M[c]
+         for i in range(c + 1, n):
+             f = M[i][c] / M[c][c]
+             for j in range(c, n + 1):
+                 M[i][j] -= f * M[c][j]
+-    x = [0.0] * n
++
++    x = [Fraction(0)] * n
+     for i in reversed(range(n)):
+         x[i] = (M[i][n] - sum(M[i][j] * x[j] for j in range(i + 1, n))) / M[i][i]
+     return x

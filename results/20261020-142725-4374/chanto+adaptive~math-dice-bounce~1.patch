@@ -1,0 +1,46 @@
+diff --git a/game.py b/game.py
+index 768dec9..051d1f4 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,40 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # E[p] is the expected number of turns from square p; E[n] = 0.
++    # For each p < n:
++    #   E[p] = 1 + (1/k) * sum_{d=1..k} E[next(p, d)]
++    # Multiplying through by k gives an integer linear system:
++    #   k * E[p] - sum_{d=1..k} E[next(p, d)] = k
++    size = n
++    # Augmented matrix with one column per state 0..n-1 plus the RHS.
++    matrix = [[Fraction(0) for _ in range(size + 1)] for _ in range(size)]
++
++    for p in range(size):
++        matrix[p][p] = Fraction(k)
++        for d in range(1, k + 1):
++            q = p + d
++            if q > n:
++                q = 2 * n - q
++            if q < n:
++                matrix[p][q] -= 1
++        matrix[p][size] = Fraction(k)
++
++    # Gauss-Jordan elimination over exact rationals.
++    for col in range(size):
++        pivot = next((r for r in range(col, size) if matrix[r][col] != 0), None)
++        if pivot is None:
++            raise ValueError("singular system")
++        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++
++        pivot_value = matrix[col][col]
++        for j in range(col, size + 1):
++            matrix[col][j] /= pivot_value
++
++        for r in range(size):
++            if r != col and matrix[r][col] != 0:
++                factor = matrix[r][col]
++                for j in range(col, size + 1):
++                    matrix[r][j] -= factor * matrix[col][j]
++
++    return matrix[0][size]

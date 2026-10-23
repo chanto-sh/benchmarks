@@ -1,0 +1,22 @@
+diff --git a/solution.py b/solution.py
+index feb0367..e40dd75 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,16 @@
+ def min_val(listval):
+-    pass
++    """Return the smallest numeric value found in a heterogeneous list.
++
++    Only numbers (int/float) are considered; non-numeric items such as
++    strings, None or other objects are ignored.  ``None`` is returned when
++    the list contains no numbers.
++    """
++    if not isinstance(listval, (list, tuple, set)):
++        listval = list(listval)
++
++    numbers = [item for item in listval if isinstance(item, (int, float))]
++
++    if not numbers:
++        return None
++
++    return min(numbers)

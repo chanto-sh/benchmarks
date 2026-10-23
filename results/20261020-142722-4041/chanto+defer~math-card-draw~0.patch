@@ -1,0 +1,43 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..d903bfa 100644
+--- a/odds.py
++++ b/odds.py
+@@ -6,4 +6,37 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    limit = min(m, n)
++    if limit <= 0:
++        return Fraction(0)
++
++    # P[i] is the probability that the first t cards contain i reds, no greens.
++    P = {0: Fraction(1)}
++    result = Fraction(0)
++
++    for t in range(limit):
++        remaining = n - t
++        nxt = {}
++        for i, prob in P.items():
++            # A green now stops the deal with i reds turned up.
++            if i >= k:
++                result += prob * Fraction(g, remaining)
++
++            if r - i > 0:
++                nxt[i + 1] = nxt.get(i + 1, Fraction(0)) + prob * Fraction(r - i, remaining)
++            blue_used = t - i
++            if b - blue_used > 0:
++                nxt[i] = nxt.get(i, Fraction(0)) + prob * Fraction(b - blue_used, remaining)
++        P = nxt
++
++        if t + 1 == limit:
++            # Dealer stops here even without a green; count the reds already seen.
++            result += sum((prob for i, prob in P.items() if i >= k), Fraction(0))
++
++    return result

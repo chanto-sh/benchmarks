@@ -1,0 +1,90 @@
+diff --git a/doc/whatsnew/2/2.15/index.rst b/doc/whatsnew/2/2.15/index.rst
+index e8ce187..f2498e7 100644
+--- a/doc/whatsnew/2/2.15/index.rst
++++ b/doc/whatsnew/2/2.15/index.rst
+@@ -73,6 +73,10 @@ False negatives fixed
+ Other bug fixes
+ ===============
+ 
++* ``ignore-paths`` is now respected when running recursively with ``--recursive=y``.
++
++  Closes #7080
++
+ 
+ Other Changes
+ =============
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index e2bbf06..1878fa9 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -34,7 +34,11 @@ from pylint.constants import (
+ from pylint.interfaces import HIGH
+ from pylint.lint.base_options import _make_linter_options
+ from pylint.lint.caching import load_results, save_results
+-from pylint.lint.expand_modules import _is_ignored_file, expand_modules
++from pylint.lint.expand_modules import (
++    _is_ignored_file,
++    _is_in_ignore_list_re,
++    expand_modules,
++)
+ from pylint.lint.message_state_handler import _MessageStateHandler
+ from pylint.lint.parallel import check_parallel
+ from pylint.lint.report_functions import (
+@@ -602,6 +606,11 @@ class PyLinter(
+                         self.config.ignore,
+                         self.config.ignore_patterns,
+                         self.config.ignore_paths,
++                    ) or _is_in_ignore_list_re(
++                        # Match the directory as if it were a file inside itself
++                        # so patterns like ``^src/gen/.*$`` ignore the directory.
++                        root + os.sep,
++                        self.config.ignore_paths,
+                     ):
+                         skip_subtrees.append(root)
+                         continue
+@@ -615,6 +624,12 @@ class PyLinter(
+                             for file in files
+                             if file.endswith(".py")
+                         )
++            elif os.path.isdir(something) and _is_in_ignore_list_re(
++                # Match the package directory as if it were a file inside itself.
++                something + os.sep,
++                self.config.ignore_paths,
++            ):
++                continue
+             else:
+                 yield something
+ 
+diff --git a/tests/lint/unittest_lint.py b/tests/lint/unittest_lint.py
+index 3dbde39..0f3e0eb 100644
+--- a/tests/lint/unittest_lint.py
++++ b/tests/lint/unittest_lint.py
+@@ -912,6 +912,28 @@ def test_recursive_ignore(ignore_parameter, ignore_parameter_value) -> None:
+     assert module in linted_file_paths
+ 
+ 
++def test_recursive_ignore_paths_directory_contents(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """An ignore-paths pattern matching a directory's contents ignores the directory.
++
++    Regression test for https://github.com/PyCQA/pylint/issues/7080.
++    """
++    src = tmp_path / "src"
++    generated = src / "gen"
++    generated.mkdir(parents=True)
++    (src / "region_selection.py").write_text("", encoding="utf-8")
++    (generated / "__init__.py").write_text("", encoding="utf-8")
++    (generated / "about.py").write_text("", encoding="utf-8")
++    monkeypatch.chdir(tmp_path)
++
++    run = Run(["--recursive=y", "--ignore-paths=^src/gen/.*$", "src/"], exit=False)
++    discovered = list(run.linter._discover_files(["src/"]))
++
++    assert not any("gen" in path for path in discovered)
++    assert any("region_selection.py" in path for path in discovered)
++
++
+ def test_import_sibling_module_from_namespace(initialized_linter: PyLinter) -> None:
+     """If the parent directory above `namespace` is on sys.path, ensure that
+     modules under `namespace` can import each other without raising `import-error`."""

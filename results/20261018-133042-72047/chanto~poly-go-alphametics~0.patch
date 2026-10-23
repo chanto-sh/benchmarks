@@ -1,0 +1,184 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..39fa241 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,178 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++type column struct {
++	// counts[l] is the number of times letter l occurs in the addends at this column.
++	counts []int
++	// result is the index of the result letter at this column, or -1 if none.
++	result int
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, errors.New("invalid puzzle: expected exactly one ==")
++	}
++	left := strings.TrimSpace(parts[0])
++	right := strings.TrimSpace(parts[1])
++	if left == "" || right == "" {
++		return nil, errors.New("invalid puzzle: missing operand")
++	}
++
++	var addends []string
++	for _, w := range strings.Split(left, "+") {
++		w = strings.TrimSpace(w)
++		if w == "" {
++			return nil, errors.New("invalid puzzle: empty addend")
++		}
++		addends = append(addends, w)
++	}
++	words := append(append([]string{}, addends...), right)
++
++	// Map each distinct letter to a small index.
++	index := make(map[byte]int)
++	var letters []byte
++	for _, w := range words {
++		for i := 0; i < len(w); i++ {
++			if _, ok := index[w[i]]; !ok {
++				index[w[i]] = len(letters)
++				letters = append(letters, w[i])
++			}
++		}
++	}
++	n := len(letters)
++	if n > 10 {
++		return nil, errors.New("no solution: more than ten distinct letters")
++	}
++
++	leading := make([]bool, n)
++	maxLen := 0
++	for _, w := range words {
++		if len(w) > maxLen {
++			maxLen = len(w)
++		}
++		if len(w) > 1 {
++			leading[index[w[0]]] = true
++		}
++	}
++
++	// Precompute, for each column (0 == units), how often each letter occurs
++	// among the addends and which letter, if any, is the result digit.
++	columns := make([]column, maxLen)
++	for c := 0; c < maxLen; c++ {
++		counts := make([]int, n)
++		for _, w := range addends {
++			p := len(w) - 1 - c
++			if p >= 0 {
++				counts[index[w[p]]]++
++			}
++		}
++		res := -1
++		if p := len(right) - 1 - c; p >= 0 {
++			res = index[right[p]]
++		}
++		columns[c] = column{counts: counts, result: res}
++	}
++
++	digits := make([]int, n)
++	for i := range digits {
++		digits[i] = -1
++	}
++	var used [10]bool
++	var solution map[string]int
++
++	var solveColumn func(col, carry int) bool
++	solveColumn = func(col, carry int) bool {
++		if col == maxLen {
++			return carry == 0
++		}
++
++		colInfo := columns[col]
++		fixed := carry
++		var unknown, weights []int
++		for l, w := range colInfo.counts {
++			if w == 0 {
++				continue
++			}
++			if digits[l] >= 0 {
++				fixed += w * digits[l]
++			} else {
++				unknown = append(unknown, l)
++				weights = append(weights, w)
++			}
++		}
++
++		// The result letter at this column may not occur in any addend, but it
++		// still needs a digit.
++		resultIdx := colInfo.result
++		if resultIdx >= 0 && digits[resultIdx] < 0 {
++			found := false
++			for _, u := range unknown {
++				if u == resultIdx {
++					found = true
++					break
++				}
++			}
++			if !found {
++				unknown = append(unknown, resultIdx)
++				weights = append(weights, 0)
++			}
++		}
++
++		k := len(unknown)
++		var assign func(pos, sum int) bool
++		assign = func(pos, sum int) bool {
++			if pos == k {
++				total := fixed + sum
++				target := 0
++				if resultIdx >= 0 {
++					target = digits[resultIdx]
++				}
++				if total%10 != target {
++					return false
++				}
++				nextCarry := total / 10
++				if col+1 == maxLen {
++					if nextCarry != 0 {
++						return false
++					}
++					solution = make(map[string]int, n)
++					for i, b := range letters {
++						solution[string(b)] = digits[i]
++					}
++					return true
++				}
++				return solveColumn(col+1, nextCarry)
++			}
++
++			letter := unknown[pos]
++			for d := 0; d <= 9; d++ {
++				if used[d] {
++					continue
++				}
++				if d == 0 && leading[letter] {
++					continue
++				}
++				used[d] = true
++				digits[letter] = d
++				if assign(pos+1, sum+weights[pos]*d) {
++					return true
++				}
++				digits[letter] = -1
++				used[d] = false
++			}
++			return false
++		}
++
++		return assign(0, 0)
++	}
++
++	if !solveColumn(0, 0) {
++		return nil, errors.New("no solution")
++	}
++	return solution, nil
+ }

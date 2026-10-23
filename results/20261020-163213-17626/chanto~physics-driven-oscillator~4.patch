@@ -1,0 +1,76 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..5224cef 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,69 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++_FMA = getattr(math, "fma", None)
++
++
++def _stiffness(m, k, omega):
++    """k - m*omega**2, compensated when it nearly cancels."""
++    omega_sq = omega * omega
++    product = m * omega_sq
++    if _FMA is None:
++        return k - product
++
++    # Recover the rounding errors in omega**2 and m*omega**2.
++    omega_sq_error = _FMA(omega, omega, -omega_sq)
++    product_error = _FMA(m, omega_sq, -product) + m * omega_sq_error
++    return (k - product) - product_error
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    stiffness = _stiffness(m, k, omega)
++    damping = c * omega
++    return F0 / math.hypot(stiffness, damping)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    # Particular solution x_p = A cos(omega t) + B sin(omega t).
++    stiffness = _stiffness(m, k, omega)
++    damping = c * omega
++    scale = math.hypot(stiffness, damping)
++    A = (F0 / scale) * (stiffness / scale)
++    B = (F0 / scale) * (damping / scale)
++
++    # Homogeneous solution, parameterised by its value and slope at t = 0.
++    X0 = x0 - A
++    V0 = v0 - B * omega
++
++    alpha = c / (2.0 * m)
++    omega0_sq = k / m
++    discriminant = alpha * alpha - omega0_sq
++
++    if discriminant < 0.0:
++        # Underdamped (including the undamped case c = 0).
++        omega_d = math.sqrt(-discriminant)
++        decay = math.exp(-alpha * t)
++        phase = omega_d * t
++        sine_term = decay * math.sin(phase) / omega_d
++        cosine_term = decay * math.cos(phase)
++        homogeneous = X0 * (cosine_term + alpha * sine_term) + V0 * sine_term
++    elif discriminant == 0.0:
++        # Critically damped.
++        decay = math.exp(-alpha * t)
++        homogeneous = X0 * (1.0 + alpha * t) * decay + V0 * t * decay
++    else:
++        # Overdamped.  Written with decaying exponentials and expm1 so that
++        # near-critical and strongly overdamped cases stay accurate.
++        gamma = math.sqrt(discriminant)
++        rate = omega0_sq / (alpha + gamma)  # alpha - gamma, without cancellation
++        fast_decay = math.exp(-rate * t)
++        sine_term = fast_decay * (-math.expm1(-2.0 * gamma * t)) / (2.0 * gamma)
++        homogeneous = X0 * (fast_decay + rate * sine_term) + V0 * sine_term
++
++    return A * math.cos(omega * t) + B * math.sin(omega * t) + homogeneous

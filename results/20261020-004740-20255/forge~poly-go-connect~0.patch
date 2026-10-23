@@ -1,0 +1,94 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..6b22a4f 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,88 @@
+ package connect
+ 
++// ResultOf determines the winner of a game of Hex / Polygon.
++//
++// "Player O" plays from top to bottom, "Player X" plays from left to right.
++// The empty string is returned when nobody has connected their two sides.
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	board := make([][]rune, len(lines))
++	for i, line := range lines {
++		board[i] = []rune(line)
++	}
++
++	if connects(board, 'X') {
++		return "X", nil
++	}
++	if connects(board, 'O') {
++		return "O", nil
++	}
++	return "", nil
++}
++
++// neighbors lists the offsets of the six hexagons adjacent to a cell.
++// Because every row of the board is shifted one cell to the right, the
++// diagonals that touch a cell are (row-1, col+1) and (row+1, col-1).
++var neighbors = [6][2]int{
++	{0, -1}, {0, 1}, // same row
++	{-1, 0}, {1, 0}, // same column
++	{-1, 1}, {1, -1}, // diagonals
++}
++
++// connects reports whether the given player links its two opposite sides.
++// Player X links the left and right edges, player O links the top and bottom.
++func connects(board [][]rune, player rune) bool {
++	height := len(board)
++	if height == 0 {
++		return false
++	}
++	width := len(board[0])
++	if width == 0 {
++		return false
++	}
++
++	touchesStart := func(r, c int) bool { return c == 0 }
++	touchesGoal := func(r, c int) bool { return c == width-1 }
++	if player == 'O' {
++		touchesStart = func(r, c int) bool { return r == 0 }
++		touchesGoal = func(r, c int) bool { return r == height-1 }
++	}
++
++	visited := make([][]bool, height)
++	for r := range visited {
++		visited[r] = make([]bool, width)
++	}
++
++	var stack [][2]int
++	for r := 0; r < height; r++ {
++		for c := 0; c < width && c < len(board[r]); c++ {
++			if board[r][c] == player && touchesStart(r, c) && !visited[r][c] {
++				visited[r][c] = true
++				stack = append(stack, [2]int{r, c})
++			}
++		}
++	}
++
++	for len(stack) > 0 {
++		cur := stack[len(stack)-1]
++		stack = stack[:len(stack)-1]
++		r, c := cur[0], cur[1]
++
++		if touchesGoal(r, c) {
++			return true
++		}
++
++		for _, d := range neighbors {
++			nr, nc := r+d[0], c+d[1]
++			if nr < 0 || nr >= height || nc < 0 || nc >= len(board[nr]) {
++				continue
++			}
++			if visited[nr][nc] || board[nr][nc] != player {
++				continue
++			}
++			visited[nr][nc] = true
++			stack = append(stack, [2]int{nr, nc})
++		}
++	}
++
++	return false
+ }

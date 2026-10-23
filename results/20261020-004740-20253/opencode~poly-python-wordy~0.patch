@@ -1,0 +1,67 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..2444bc4 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,61 @@
++def _is_number(token):
++    try:
++        int(token)
++    except ValueError:
++        return False
++    return True
++
++
++def _trunc_div(a, b):
++    quotient = abs(a) // abs(b)
++    return quotient if (a < 0) == (b < 0) else -quotient
++
++
+ def answer(question):
+-    pass
++    if not question.startswith("What is"):
++        raise ValueError("unknown operation")
++
++    body = question[len("What is"):].strip()
++    if not body.endswith("?"):
++        raise ValueError("unknown operation")
++    body = body[:-1].strip()
++
++    words = body.split()
++    if not words or not _is_number(words[0]):
++        raise ValueError("syntax error")
++
++    result = int(words[0])
++    index = 1
++
++    operations = {
++        "plus": lambda x, y: x + y,
++        "minus": lambda x, y: x - y,
++    }
++
++    while index < len(words):
++        token = words[index]
++
++        if token in operations:
++            operation = operations[token]
++            index += 1
++        elif token in ("multiplied", "divided"):
++            if index + 1 >= len(words) or words[index + 1] != "by":
++                raise ValueError("syntax error")
++            operation = (
++                (lambda x, y: x * y)
++                if token == "multiplied"
++                else _trunc_div
++            )
++            index += 2
++        elif _is_number(token):
++            raise ValueError("syntax error")
++        else:
++            raise ValueError("unknown operation")
++
++        if index >= len(words) or not _is_number(words[index]):
++            raise ValueError("syntax error")
++
++        result = operation(result, int(words[index]))
++        index += 1
++
++    return result

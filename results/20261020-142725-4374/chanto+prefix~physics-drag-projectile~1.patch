@@ -1,0 +1,153 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..699033a 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,147 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince (RK45) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _derivs(state, drag, g):
++    """Derivatives of (x, y, vx, vy) for quadratic drag."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    scale = drag * speed
++    return (vx, vy, -scale * vx, -scale * vy - g)
++
++
++def _rk_step(state, h, drag, g):
++    """One Dormand-Prince step, returning the fifth-order state and error."""
++    k1 = _derivs(state, drag, g)
++    stages = [k1]
++    for i in range(1, 7):
++        yi = tuple(
++            state[j] + h * sum(_A[i][m] * stages[m][j] for m in range(i))
++            for j in range(4)
++        )
++        stages.append(_derivs(yi, drag, g))
++
++    y5 = tuple(
++        state[j] + h * sum(_B5[i] * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    y4 = tuple(
++        state[j] + h * sum(_B4[i] * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    err = max(abs(y5[j] - y4[j]) for j in range(4))
++    return y5, err
++
++
++def _event_step(state, h, drag, g, component):
++    """Locate the first h in (0, h] where a state component reaches zero."""
++    lo, hi = 0.0, h
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        probe, _ = _rk_step(state, mid, drag, g)
++        if probe[component] > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return hi
++
++
++def _vacuum(v0, angle, g, h0):
++    """Closed-form result when there is no drag."""
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    t = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    apex = h0 + (vy * vy / (2.0 * g) if vy > 0.0 else 0.0)
++    return {"range": vx * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    angle = math.radians(angle_deg)
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++
++    if k == 0.0:
++        return _vacuum(v0, angle, g, h0)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, h0, vx, vy)
++    t = 0.0
++    apex = h0
++    apex_pending = vy > 0.0
++
++    # Keep the local error far below the four-significant-figure requirement.
++    rtol = 1.0e-12
++    atol = 1.0e-13
++    h = 1.0e-2 * max(1.0, v0 / g)
++
++    while True:
++        candidate, err = _rk_step(state, h, drag, g)
++        err_norm = max(
++            err / (atol + rtol * max(abs(state[j]), abs(candidate[j])))
++            for j in range(4)
++        )
++
++        if err_norm > 1.0:
++            # Rejected step: shrink according to the local error estimate.
++            h *= max(0.2, 0.9 * (1.0 / err_norm) ** 0.2)
++            continue
++
++        # Resolve events before accepting a step that crosses them.
++        if apex_pending and state[3] > 0.0 and candidate[3] <= 0.0:
++            h = _event_step(state, h, drag, g, 3)
++            state, _ = _rk_step(state, h, drag, g)
++            t += h
++            apex = state[1]
++            state = (state[0], state[1], state[2], 0.0)
++            apex_pending = False
++            h = max(h * 0.5, 1.0e-12)
++            continue
++
++        if candidate[1] <= 0.0:
++            h = _event_step(state, h, drag, g, 1)
++            state, _ = _rk_step(state, h, drag, g)
++            t += h
++            return {
++                "range": state[0],
++                "apex": apex,
++                "time": t,
++            }
++
++        state = candidate
++        t += h
++        if apex_pending:
++            apex = max(apex, state[1])
++
++        # Standard step-size update for Dormand-Prince.
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, max(0.2, 0.9 * (1.0 / err_norm) ** 0.2))
++        h *= factor

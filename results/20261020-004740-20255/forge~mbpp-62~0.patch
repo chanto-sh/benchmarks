@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index 546eeec..3611152 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,19 @@
+ def smallest_num(xs):
+-    pass
++    """Return the smallest element in the list `xs`.
++
++    Args:
++        xs: A non-empty sequence of comparable numbers.
++
++    Returns:
++        The minimum value contained in `xs`.
++
++    Raises:
++        ValueError: If `xs` is empty.
++    """
++    if not xs:
++        raise ValueError("smallest_num() arg is an empty sequence")
++    smallest = xs[0]
++    for value in xs[1:]:
++        if value < smallest:
++            smallest = value
++    return smallest

@@ -1,0 +1,376 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-20T17:43:58-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--repeat",
+      "3",
+      "--agents",
+      "chanto,chanto+noprefix",
+      "--seed",
+      "5050",
+      "--tasks",
+      "instr-changelog"
+    ],
+    "bench_commit": "56672d3195e5181da82624812abb35c368dcc729",
+    "bench_dirty": true,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-56672d3-defaults",
+      "sha256": "2c2ca4fb6f747133a6fe6ff8dad0a70d9c022c4b8031b859b4eb99a3467140b6"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.12",
+      "chanto+noprefix": "chanto 0.1.12"
+    },
+    "chanto_optimize": {
+      "chanto": [],
+      "chanto+noprefix": [
+        "no_stable_prefix"
+      ]
+    },
+    "chanto_effort": null,
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": null,
+    "seed": 5050,
+    "repeat": 3,
+    "tasks": {
+      "instr-changelog": "32e891e739f5eb1bbb59171b4102fb35a19c6df5b542ae84ac0eee1e684b60d9"
+    },
+    "offline_profile_sha256": "9803643e4620b5b0b1eaf5dca874e09462223255a3cf4384b2cbefe76c34b4d1"
+  },
+  "results": [
+    {
+      "agent": "chanto+noprefix",
+      "task": "instr-changelog",
+      "rep": 0,
+      "passed": true,
+      "seconds": 10.3,
+      "optimize": [
+        "no_stable_prefix"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto+noprefix/instr-changelog-0/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.025s\n\nOK\n",
+      "tokens": {
+        "in": 29678,
+        "out": 1359,
+        "cached": 22144
+      },
+      "tampered": [
+        "test_core.py"
+      ],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 29678,
+        "output": 1359,
+        "cached": 22144
+      },
+      "meter_label": "chanto+noprefix~instr-changelog~0~6f0646a6",
+      "started_at": "2026-10-20T17:44:05-0700",
+      "ended_at": "2026-10-20T17:44:16-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~0.out",
+          "sha256": "6573b996f68587856341a81a719b22b21f9aa4119d5213013aab6b927266e428"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~0.patch",
+          "sha256": "1e440bad6d1cdc30dd3133bdff3edb470e8e87ef52f98e45991cdd771cba9077"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~0.check.txt",
+          "sha256": "2e0acfdecfc98c9ca453e7fab763b018e6d3c43f3d8e20a78e456791ba25f714"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~0.session0.json",
+          "sha256": "418cc15c2a85471cce29f3bf8509e74edb03d3d59ceb4d1f178153ea7bc772fd"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "instr-changelog",
+      "rep": 0,
+      "passed": true,
+      "seconds": 12.7,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto/instr-changelog-0/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n",
+      "tokens": {
+        "in": 46004,
+        "out": 1533,
+        "cached": 42880
+      },
+      "tampered": [
+        "test_core.py"
+      ],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 6,
+        "input": 46004,
+        "output": 1533,
+        "cached": 42880
+      },
+      "meter_label": "chanto~instr-changelog~0~482058d9",
+      "started_at": "2026-10-20T17:44:18-0700",
+      "ended_at": "2026-10-20T17:44:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~0.out",
+          "sha256": "23db83cbd5219e18672e3c5a8f601ed7758a3fea63a020a0f1e0a6bebc47df76"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~0.patch",
+          "sha256": "1ff0d9271727608120235d26018f7292302349325631f05f204ecbfa4a41b7cb"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~0.check.txt",
+          "sha256": "505193054e5a7b4eb608643db8cfa3a4b0fde70bae100169afbdb90d71cb2472"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~0.session0.json",
+          "sha256": "204ef1049ad8561c3beee49b4663ea53e1fcbcc58e2d6181c85fd4809646e5d6"
+        }
+      }
+    },
+    {
+      "agent": "chanto+noprefix",
+      "task": "instr-changelog",
+      "rep": 1,
+      "passed": true,
+      "seconds": 11.2,
+      "optimize": [
+        "no_stable_prefix"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto+noprefix/instr-changelog-1/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.003s\n\nOK\n",
+      "tokens": {
+        "in": 29971,
+        "out": 1586,
+        "cached": 22016
+      },
+      "tampered": [
+        "test_core.py"
+      ],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 29971,
+        "output": 1586,
+        "cached": 22016
+      },
+      "meter_label": "chanto+noprefix~instr-changelog~1~90c5045f",
+      "started_at": "2026-10-20T17:44:33-0700",
+      "ended_at": "2026-10-20T17:44:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~1.out",
+          "sha256": "6c8aa9479d55d301e03533ec2b42c79b469fc14a0065c73e8ddadf20e28b6462"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~1.patch",
+          "sha256": "7392fa6407e5307d1f0e7da3d523b06636e17f6e03f3e6bcd570a68ff3361daa"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~1.check.txt",
+          "sha256": "ecc18f004543e2b5b5e112d8adcd9dcf1fc90b4d6dba462bc1040e7f326b7b58"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~1.session0.json",
+          "sha256": "c012d258674fd0ac29fa22598ec3564d6b5814dda5268bd797efd9bedaf7138d"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "instr-changelog",
+      "rep": 1,
+      "passed": true,
+      "seconds": 11.0,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto/instr-changelog-1/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n",
+      "tokens": {
+        "in": 37447,
+        "out": 1418,
+        "cached": 34048
+      },
+      "tampered": [
+        "test_core.py"
+      ],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 5,
+        "input": 37447,
+        "output": 1418,
+        "cached": 34048
+      },
+      "meter_label": "chanto~instr-changelog~1~e785bd1f",
+      "started_at": "2026-10-20T17:44:46-0700",
+      "ended_at": "2026-10-20T17:44:58-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~1.out",
+          "sha256": "ccad8a7f7a3a9b19eb873952bcc493363c76502d93a5c28cebea9accb0a015dc"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~1.patch",
+          "sha256": "f39d94dda3faef2578615da092cf8fc22b47b68319c16328c2c0595bacf144d0"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~1.check.txt",
+          "sha256": "dd9548ba386ad3f470f38067b667ff2661943e3ed8c3c86b6337a863686dd482"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~1.session0.json",
+          "sha256": "38f390624708e8b16fdb0306e5facf708f7a37fa31b480449768aeee462bcd8d"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "instr-changelog",
+      "rep": 2,
+      "passed": true,
+      "seconds": 10.7,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto/instr-changelog-2/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.003s\n\nOK\n",
+      "tokens": {
+        "in": 28397,
+        "out": 1221,
+        "cached": 25856
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 28397,
+        "output": 1221,
+        "cached": 25856
+      },
+      "meter_label": "chanto~instr-changelog~2~464d7540",
+      "started_at": "2026-10-20T17:45:00-0700",
+      "ended_at": "2026-10-20T17:45:12-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~2.out",
+          "sha256": "ff43ef553f54b4418ee4f414c499abf73d007f0cdf5f9f0221eec1954f1ce7a1"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~2.patch",
+          "sha256": "0b41ca15068bd65215a4571dbd30515942c247d3184ab5c9ae25be0dfa4478b5"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~2.check.txt",
+          "sha256": "acd299dc7847b002c0f69d0948d0b569e06a431cfff2c929b2d7d9c24b4eb5fc"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto~instr-changelog~2.session0.json",
+          "sha256": "2f8d7ef80b33304eb894c873f4f26379db13bc750c94dfb8fa64166556d34f23"
+        }
+      }
+    },
+    {
+      "agent": "chanto+noprefix",
+      "task": "instr-changelog",
+      "rep": 2,
+      "passed": true,
+      "seconds": 9.9,
+      "optimize": [
+        "no_stable_prefix"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n~/.local/share/chanto-bench/work-instr-0/chanto+noprefix/instr-changelog-2/_check_changelog.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHANGELOG.md' mode='r' encoding='UTF-8'>\n  text = open(\"CHANGELOG.md\").read()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n----------------------------------------------------------------------\nRan 2 tests in 0.003s\n\nOK\n",
+      "tokens": {
+        "in": 29161,
+        "out": 1268,
+        "cached": 22272
+      },
+      "tampered": [
+        "test_core.py"
+      ],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 29161,
+        "output": 1268,
+        "cached": 22272
+      },
+      "meter_label": "chanto+noprefix~instr-changelog~2~badf7b3d",
+      "started_at": "2026-10-20T17:45:13-0700",
+      "ended_at": "2026-10-20T17:45:24-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~2.out",
+          "sha256": "2e7c240e28fc5c106dc0161d019dbdcbe5a2d01f8ff161b4aef7bf853bd81842"
+        },
+        "patch": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~2.patch",
+          "sha256": "c31425befe107d0cf4b388b2842e1132679054dab72dbc29ae3adb5d42cd5be9"
+        },
+        "check": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~2.check.txt",
+          "sha256": "fbf5d7fec5ba204e2a1e8fd24b06d765860a9fab674612729bbec7bcc90bee5a"
+        },
+        "session0": {
+          "file": "20261020-174358-27683/chanto+noprefix~instr-changelog~2.session0.json",
+          "sha256": "f2e9de80aa3187b6fcfe95db2742ecdb454ae1ce541295f9e15f6fbdcdb94fb8"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..c72e78e 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,78 @@
++from itertools import permutations
++
++
++NATIONALITIES = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++COLORS = ("red", "green", "ivory", "yellow", "blue")
++DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++PETS = ("dog", "snails", "fox", "horse", "zebra")
++HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++
++
++def _solve():
++    solutions = []
++
++    for nationalities in permutations(NATIONALITIES):
++        if nationalities[0] != "Norwegian":
++            continue
++
++        englishman = nationalities.index("Englishman")
++        spaniard = nationalities.index("Spaniard")
++        ukrainian = nationalities.index("Ukrainian")
++        japanese = nationalities.index("Japanese")
++
++        for colors in permutations(COLORS):
++            if colors[1] != "blue" or colors[englishman] != "red":
++                continue
++
++            green = colors.index("green")
++            if green == 0 or colors[green - 1] != "ivory":
++                continue
++
++            for drinks in permutations(DRINKS):
++                if (
++                    drinks[2] != "milk"
++                    or drinks[ukrainian] != "tea"
++                    or drinks[green] != "coffee"
++                ):
++                    continue
++
++                for hobbies in permutations(HOBBIES):
++                    if hobbies[japanese] != "chess":
++                        continue
++
++                    painter = hobbies.index("painting")
++                    if colors[painter] != "yellow":
++                        continue
++
++                    football = hobbies.index("football")
++                    if drinks[football] != "orange juice":
++                        continue
++
++                    reader = hobbies.index("reading")
++                    dancer = hobbies.index("dancing")
++
++                    for pets in permutations(PETS):
++                        if pets[spaniard] != "dog" or pets[dancer] != "snails":
++                            continue
++
++                        fox = pets.index("fox")
++                        horse = pets.index("horse")
++                        if abs(reader - fox) != 1 or abs(painter - horse) != 1:
++                            continue
++
++                        water_drinker = nationalities[drinks.index("water")]
++                        zebra_owner = nationalities[pets.index("zebra")]
++                        solutions.append((water_drinker, zebra_owner))
++
++    if len(solutions) != 1:
++        raise ValueError(f"Expected exactly one solution, found {len(solutions)}")
++
++    return solutions[0]
++
++
+ def drinks_water():
+-    pass
++    return _solve()[0]
+ 
+ 
+ def owns_zebra():
+-    pass
++    return _solve()[1]

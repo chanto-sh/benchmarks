@@ -1,0 +1,49 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..12d1904 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb, factorial
++
++
++def _perm(n, i):
++    """Number of ways to pick i distinguishable items from n in order."""
++    if i < 0 or i > n:
++        return 0
++    return factorial(n) // factorial(n - i)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,30 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or m <= 0:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)
++    total = factorial(n)
++    favorable = 0
++
++    # The deal stops at the first green card, at some position t <= m.
++    if g:
++        for t in range(1, m + 1):
++            ways = 0
++            for j in range(k, min(t - 1, r) + 1):
++                ways += comb(t - 1, j) * _perm(r, j) * _perm(b, t - 1 - j)
++            if ways:
++                favorable += g * factorial(n - t) * ways
++
++    # No green among the first m cards, so the deal stops after m cards.
++    ways = 0
++    for j in range(k, min(m, r) + 1):
++        ways += comb(m, j) * _perm(r, j) * _perm(b, m - j)
++    if ways:
++        favorable += factorial(n - m) * ways
++
++    return Fraction(favorable, total)

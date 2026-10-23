@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index 937a447..d2962a8 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,9 @@
+ def odd_length_sum(arr):
+-    pass
++    total = 0
++    n = len(arr)
++    for i, value in enumerate(arr):
++        # Number of subarrays containing index i is (i + 1) * (n - i).
++        # Exactly ceil(that / 2) of them have an odd length.
++        occurrences = ((i + 1) * (n - i) + 1) // 2
++        total += value * occurrences
++    return total

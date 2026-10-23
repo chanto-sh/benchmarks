@@ -1,0 +1,13 @@
+diff --git a/solution.py b/solution.py
+index ff48b79..aac2ac4 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,8 @@ def search(lst):
+         search([1, 2, 2, 3, 3, 3, 4, 4, 4]) == 3
+         search([5, 5, 4, 4, 4]) == -1
+     '''
++    from collections import Counter
++
++    counts = Counter(lst)
++    valid = [value for value, freq in counts.items() if value > 0 and freq >= value]
++    return max(valid) if valid else -1

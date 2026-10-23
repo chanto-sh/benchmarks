@@ -1,0 +1,26 @@
+diff --git a/solution.py b/solution.py
+index 523a623..f44a4eb 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,19 @@
+-def check_min_heap_helper(arr, i):
+-    pass
++def check_min_heap_helper(arr, i=0):
++    n = len(arr)
++    # Nodes after the last internal node are leaves, hence trivially valid.
++    if i > (n - 2) // 2:
++        return True
++
++    left = 2 * i + 1
++    right = 2 * i + 2
++
++    if arr[i] > arr[left]:
++        return False
++    if right < n and arr[i] > arr[right]:
++        return False
++
++    return check_min_heap_helper(arr, left) and check_min_heap_helper(arr, right)
++
++
++def check_min_heap(arr):
++    return check_min_heap_helper(arr, 0)

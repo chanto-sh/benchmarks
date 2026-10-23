@@ -1,0 +1,140 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..4b97e26 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,133 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++from decimal import Decimal, localcontext
++
++_DECIMAL_PRECISION = 80
++
++
++def _residual_stiffness(m, k, omega):
++    """Return k - m*omega**2, accurately even very close to resonance."""
++    with localcontext() as ctx:
++        ctx.prec = _DECIMAL_PRECISION
++        dm = Decimal.from_float(float(m))
++        dk = Decimal.from_float(float(k))
++        dw = Decimal.from_float(float(omega))
++        return float(dk - dm * dw * dw)
++
++
++def _discriminant(m, k, c):
++    """Return c**2 - 4*m*k, accurately even very close to critical damping."""
++    with localcontext() as ctx:
++        ctx.prec = _DECIMAL_PRECISION
++        dm = Decimal.from_float(float(m))
++        dk = Decimal.from_float(float(k))
++        dc = Decimal.from_float(float(c))
++        return float(dc * dc - Decimal(4) * dm * dk)
++
++
++def _sinc(x):
++    """Return sin(x) / x, with the limiting value 1 at x == 0."""
++    if x == 0.0:
++        return 1.0
++    return math.sin(x) / x
++
++
++def _steady_coefficients(m, k, c, F0, omega):
++    """Coefficients A, B of x_p = A cos(omega t) + B sin(omega t)."""
++    residual = _residual_stiffness(m, k, omega)
++    driving = c * omega
++    scale = math.hypot(residual, driving)
++
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0
++        raise ValueError(
++            "no steady state for an undamped system driven exactly at resonance"
++        )
++
++    factor = F0 / scale
++    return factor * (residual / scale), factor * (driving / scale)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    residual = _residual_stiffness(m, k, omega)
++    scale = math.hypot(residual, c * omega)
++
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        raise ValueError(
++            "no steady state for an undamped system driven exactly at resonance"
++        )
++
++    return abs(F0) / scale
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    A, B = _steady_coefficients(m, k, c, F0, omega)
++    alpha = c / (2.0 * m)
++    damping_discriminant = _discriminant(m, k, c)
++
++    if damping_discriminant < 0.0:
++        # Underdamped.  Split into the free response and the zero-initial-
++        # condition forced response, then group the latter by frequency
++        # differences.  This avoids cancelling huge, nearly equal steady and
++        # transient terms when driving close to resonance.
++        gamma = math.sqrt(-damping_discriminant) / (2.0 * m)
++        decay = math.exp(-alpha * t)
++        gamma_t = gamma * t
++
++        free = decay * (
++            x0 * math.cos(gamma_t)
++            + (v0 + alpha * x0) * t * _sinc(gamma_t)
++        )
++
++        delta_t = 0.5 * (omega - gamma) * t
++        sigma_t = 0.5 * (omega + gamma) * t
++        forced = (
++            -math.expm1(-alpha * t)
++            * (A * math.cos(omega * t) + B * math.sin(omega * t))
++            + 2.0
++            * decay
++            * math.sin(delta_t)
++            * (B * math.cos(sigma_t) - A * math.sin(sigma_t))
++            + decay
++            * (
++                -(alpha * A + B * (omega - gamma))
++                * t
++                * _sinc(gamma_t)
++            )
++        )
++        return free + forced
++
++    x_particular = A * math.cos(omega * t) + B * math.sin(omega * t)
++
++    # The remainder y = x - x_particular satisfies the homogeneous equation.
++    y0 = x0 - A
++    vy0 = v0 - B * omega
++
++    if damping_discriminant > 0.0:
++        # Overdamped: use the less-decayed root first so that neither
++        # exponential overflows before being multiplied by its decay.
++        s = math.sqrt(damping_discriminant) / (2.0 * m)
++        r1 = -(k / m) / (alpha + s)
++        z = 2.0 * s * t
++        decay = math.exp(r1 * t)
++        f1 = 0.5 * decay * (1.0 + math.exp(-z))
++        if z == 0.0:
++            f2 = decay * t
++        else:
++            f2 = decay * t * (-math.expm1(-z) / z)
++    else:
++        # Critically damped limit of both formulas above.
++        decay = math.exp(-alpha * t)
++        f1 = decay
++        f2 = t * decay
++
++    return x_particular + y0 * f1 + (vy0 + alpha * y0) * f2

@@ -1,0 +1,66 @@
+diff --git a/stats.py b/stats.py
+index add4f59..f921985 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,55 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    try:
++        mean = math.fsum(xs) / n
++    except OverflowError:
++        # A batch of huge-but-finite values can overflow the sum even when
++        # their mean is representable; scale down and back up in that case.
++        ms = max(abs(x) for x in xs)
++        mean = math.fsum(x / ms for x in xs) / n * ms
++    # Center the variance on a data point rather than on `mean`: when the
++    # readings share a large offset, the mean is only representable to ~1 ulp
++    # of that offset, which would swamp a small variance.
++    anchor = xs[0]
++    devs = []
++    for x in xs:
++        d = x - anchor
++        if math.isinf(d):
++            return mean, math.inf
++        devs.append(d)
++    try:
++        mean_dev = math.fsum(devs) / n
++    except OverflowError:
++        # Same overflow guard as for the mean above.
++        ds = max(map(abs, devs))
++        mean_dev = math.fsum(d / ds for d in devs) / n * ds
++    # Scale by the largest deviation so squaring cannot overflow before the
++    # division by n brings the variance back into range.
++    scale = max(abs(d - mean_dev) for d in devs)
++    if scale == 0.0:
++        return mean, 0.0
++    if math.isinf(scale):
++        return mean, math.inf
++    var = math.fsum(((d - mean_dev) / scale) ** 2 for d in devs) / n * scale * scale
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    xs = list(xs)
++    m = max(xs)
++    if m == -math.inf:
++        return m
++    # Shifting by the max keeps every exp() at or below 1, so the sum can
++    # neither overflow nor lose the terms that matter.
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # log1p keeps full precision when exp(x) is tiny; the max(x, 0) split
++    # avoids overflow when exp(x) is huge.
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

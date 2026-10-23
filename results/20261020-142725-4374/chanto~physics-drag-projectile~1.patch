@@ -1,0 +1,199 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..2292589 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,192 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++from math import cos, hypot, pi, sin, sqrt
++
++
++# Dormand-Prince 5(4) tableau.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = _A[-1] + (0.0,)
++_E = (
++    71.0 / 57600.0,
++    0.0,
++    -71.0 / 16695.0,
++    71.0 / 1920.0,
++    -17253.0 / 339200.0,
++    22.0 / 525.0,
++    -1.0 / 40.0,
++)
++
++# Coefficients for the dense output of the Dormand-Prince step.
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0, 8663915743.0 / 2820520608.0,
++     -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0, -68118460800.0 / 10900136933.0,
++     87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0, 14199869525.0 / 1410260304.0,
++     -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0,
++     -318862633887.0 / 49829197408.0,
++     701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0, 2019193451.0 / 616988883.0,
++     -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0, -110615467.0 / 29380423.0,
++     69997945.0 / 29380423.0),
++)
++
++
++def _deriv(state, drag, g):
++    """State is (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = hypot(vx, vy)
++    return (vx, vy, -drag * speed * vx, -drag * speed * vy - g)
++
++
++def _step(state, h, drag, g):
++    """Take one Dormand-Prince step; also return dense-output coefficients."""
++    k = [_deriv(state, drag, g)]
++    for i in range(1, 7):
++        y = state
++        ai = _A[i]
++        for j in range(i):
++            if ai[j]:
++                y = tuple(y[d] + h * ai[j] * k[j][d] for d in range(4))
++        k.append(_deriv(y, drag, g))
++
++    y_new = tuple(
++        state[d] + h * sum(_B[i] * k[i][d] for i in range(7))
++        for d in range(4)
++    )
++    err = tuple(
++        h * sum(_E[i] * k[i][d] for i in range(7))
++        for d in range(4)
++    )
++    dense = tuple(
++        tuple(sum(k[i][d] * _P[i][j] for i in range(7)) for j in range(4))
++        for d in range(4)
++    )
++    return y_new, err, dense
++
++
++def _dense_value(q, x):
++    return x * (q[0] + x * (q[1] + x * (q[2] + x * q[3])))
++
++
++def _bisect(f, lo, hi, f_lo=None):
++    """Root of a continuous function on [lo, hi], given a sign change."""
++    if f_lo is None:
++        f_lo = f(lo)
++    f_hi = f(hi)
++    if f_lo == 0.0:
++        return lo
++    if f_hi == 0.0:
++        return hi
++    for _ in range(100):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        f_mid = f(mid)
++        if f_mid == 0.0:
++            return mid
++        if (f_lo < 0.0) == (f_mid < 0.0):
++            lo, f_lo = mid, f_mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched at speed *v0* and elevation *angle_deg* from
++    height *h0*.  Quadratic drag is ``F = -k |v| v``.  The equations of
++    motion are integrated with an adaptive Dormand-Prince 5(4) method and the
++    apex and ground crossings are located on its dense output.
++    """
++    drag = k / mass
++    angle = angle_deg * pi / 180.0
++    vx0 = v0 * cos(angle)
++    vy0 = v0 * sin(angle)
++
++    # Already on the ground with no upward velocity: there is no flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    state = (0.0, float(h0), vx0, vy0)
++    t = 0.0
++    apex = float(h0)
++    apex_found = vy0 <= 0.0
++
++    # A first step comparable to the shortest relevant time scale.
++    scales = []
++    if v0 > 0.0:
++        scales.append(v0 / g)
++        if drag > 0.0:
++            scales.append(1.0 / (drag * v0))
++    if h0 > 0.0:
++        scales.append(sqrt(2.0 * h0 / g))
++    h = 0.01 * min(scales) if scales else 1e-3
++    h = min(0.01, max(h, 1e-12))
++
++    rtol = 1e-10
++    atol = 1e-12
++    safety = 0.9
++
++    while True:
++        y_new, err, dense = _step(state, h, drag, g)
++
++        # Local error control, using a maximum norm over the four states.
++        err_norm = 0.0
++        for d in range(4):
++            scale = atol + rtol * max(abs(state[d]), abs(y_new[d]))
++            err_norm = max(err_norm, abs(err[d]) / scale)
++
++        if err_norm <= 1.0:
++            x0 = state[0]
++            y0, vy0 = state[1], state[3]
++            y1, vy1 = y_new[1], y_new[3]
++            qx, qy, _, qvy = dense
++
++            # Apex: the first zero of vy while the projectile is ascending.
++            if not apex_found and vy1 <= 0.0:
++                xa = _bisect(lambda s: vy0 + h * _dense_value(qvy, s),
++                             0.0, 1.0)
++                apex = max(apex, y0 + h * _dense_value(qy, xa))
++                apex_found = True
++
++            # Ground: the first return to y = 0 after launch.
++            if y1 <= 0.0:
++                if y0 > 0.0:
++                    xg = _bisect(lambda s: y0 + h * _dense_value(qy, s),
++                                 0.0, 1.0)
++                else:
++                    # Launching from y = 0: ignore the t = 0 root and find
++                    # the subsequent landing root.
++                    xg = _bisect(lambda s: y0 + h * _dense_value(qy, s),
++                                 1e-12, 1.0)
++                return {
++                    "range": x0 + h * _dense_value(qx, xg),
++                    "apex": apex,
++                    "time": t + h * xg,
++                }
++
++            state = y_new
++            t += h
++
++            if err_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = safety * err_norm ** -0.2
++            h *= min(5.0, max(0.2, factor))
++        else:
++            h *= max(0.1, safety * err_norm ** -0.2)

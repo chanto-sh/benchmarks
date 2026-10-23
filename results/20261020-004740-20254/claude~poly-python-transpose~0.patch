@@ -1,0 +1,21 @@
+diff --git a/transpose.py b/transpose.py
+index 24b60af..07661ac 100644
+--- a/transpose.py
++++ b/transpose.py
+@@ -1,2 +1,15 @@
+ def transpose(text):
+-    pass
++    rows = text.split("\n")
++    width = max((len(row) for row in rows), default=0)
++
++    transposed = []
++    for column in range(width):
++        # Only go as deep as the deepest row that actually has a character
++        # in this column; anything below that is right-padding.
++        last = max(i for i, row in enumerate(rows) if len(row) > column)
++        transposed.append(
++            "".join(rows[i][column] if len(rows[i]) > column else " "
++                    for i in range(last + 1))
++        )
++
++    return "\n".join(transposed)

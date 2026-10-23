@@ -1,0 +1,53 @@
+diff --git a/pig_latin.go b/pig_latin.go
+index 2836af2..32e72bf 100644
+--- a/pig_latin.go
++++ b/pig_latin.go
+@@ -1,5 +1,47 @@
+ package piglatin
+ 
++import "strings"
++
+ func Sentence(sentence string) string {
+-	panic("Please implement the Sentence function")
++	words := strings.Split(sentence, " ")
++	for i, word := range words {
++		words[i] = translate(word)
++	}
++	return strings.Join(words, " ")
++}
++
++func translate(word string) string {
++	if word == "" {
++		return word
++	}
++
++	// Rule 1: begins with a vowel, or with "xr" or "yt".
++	if isVowel(word[0]) || strings.HasPrefix(word, "xr") || strings.HasPrefix(word, "yt") {
++		return word + "ay"
++	}
++
++	// Find how many leading consonants to move.
++	n := 0
++	for n < len(word) && !isVowel(word[n]) {
++		if word[n] == 'y' && n > 0 {
++			// Rule 4: consonants followed by "y" — move only the consonants.
++			// A leading "y" is treated as a consonant (Rule 2).
++			break
++		}
++		// Rule 3: consonants followed by "qu" — include the "qu".
++		if word[n] == 'q' && n+1 < len(word) && word[n+1] == 'u' {
++			return word[n+2:] + word[:n+2] + "ay"
++		}
++		n++
++	}
++	// Rule 2 (or Rule 4 when stopped at 'y').
++	return word[n:] + word[:n] + "ay"
++}
++
++func isVowel(c byte) bool {
++	switch c {
++	case 'a', 'e', 'i', 'o', 'u':
++		return true
++	}
++	return false
+ }

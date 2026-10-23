@@ -1,0 +1,82 @@
+diff --git a/beer_song.go b/beer_song.go
+index 7a26646..2bf1ea5 100644
+--- a/beer_song.go
++++ b/beer_song.go
+@@ -1,13 +1,74 @@
+ package beer
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++const (
++	minBottles = 0
++	maxBottles = 99
++)
++
++// Song returns the lyrics to the entire song, from 99 bottles down to none.
+ func Song() string {
+-	panic("Please implement the Song function")
++	verses, err := Verses(maxBottles, minBottles)
++	if err != nil {
++		panic(err)
++	}
++	return verses
+ }
+ 
++// Verses returns the lyrics from verse start down to verse stop, inclusive.
+ func Verses(start, stop int) (string, error) {
+-	panic("Please implement the Verses function")
++	if start < minBottles || start > maxBottles {
++		return "", fmt.Errorf("invalid start verse: %d", start)
++	}
++	if stop < minBottles || stop > maxBottles {
++		return "", fmt.Errorf("invalid stop verse: %d", stop)
++	}
++	if start < stop {
++		return "", fmt.Errorf("start verse %d is less than stop verse %d", start, stop)
++	}
++
++	verses := make([]string, 0, start-stop+1)
++	for n := start; n >= stop; n-- {
++		v, err := Verse(n)
++		if err != nil {
++			return "", err
++		}
++		verses = append(verses, v)
++	}
++	return strings.Join(verses, "\n") + "\n", nil
+ }
+ 
++// Verse returns the lyrics for a single verse of the song.
+ func Verse(n int) (string, error) {
+-	panic("Please implement the Verse function")
++	if n < minBottles || n > maxBottles {
++		return "", fmt.Errorf("invalid verse: %d", n)
++	}
++
++	switch n {
++	case 0:
++		return "No more bottles of beer on the wall, no more bottles of beer.\n" +
++			"Go to the store and buy some more, 99 bottles of beer on the wall.\n", nil
++	case 1:
++		return "1 bottle of beer on the wall, 1 bottle of beer.\n" +
++			"Take it down and pass it around, no more bottles of beer on the wall.\n", nil
++	default:
++		return fmt.Sprintf("%d bottles of beer on the wall, %d bottles of beer.\n"+
++			"Take one down and pass it around, %s on the wall.\n", n, n, bottleCount(n-1)), nil
++	}
++}
++
++// bottleCount renders the number of bottles remaining after a verse.
++func bottleCount(n int) string {
++	switch n {
++	case 0:
++		return "no more bottles of beer"
++	case 1:
++		return "1 bottle of beer"
++	default:
++		return fmt.Sprintf("%d bottles of beer", n)
++	}
+ }

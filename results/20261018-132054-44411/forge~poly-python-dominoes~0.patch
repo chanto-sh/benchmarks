@@ -1,0 +1,63 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..aded3c9 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,57 @@
++from collections import defaultdict
++
++
+ def can_chain(dominoes):
+-    pass
++    """Arrange dominoes into a closed chain, or return None if impossible.
++
++    Domino halves are graph vertices and each domino is an undirected edge.
++    A valid chain corresponds to an Eulerian circuit: every vertex must have
++    even degree and all edges must lie in a single connected component.
++    """
++    if not dominoes:
++        return []
++
++    graph = defaultdict(list)
++    degree = defaultdict(int)
++    for index, (left, right) in enumerate(dominoes):
++        graph[left].append((right, index))
++        graph[right].append((left, index))
++        degree[left] += 1
++        degree[right] += 1
++
++    # An Eulerian circuit requires every vertex to have even degree.
++    if any(count % 2 for count in degree.values()):
++        return None
++
++    # All edges must belong to one connected component.
++    start = dominoes[0][0]
++    visited = set()
++    stack = [start]
++    while stack:
++        vertex = stack.pop()
++        if vertex in visited:
++            continue
++        visited.add(vertex)
++        for neighbor, _ in graph[vertex]:
++            if neighbor not in visited:
++                stack.append(neighbor)
++    if visited != set(degree):
++        return None
++
++    # Hierholzer's algorithm for an Eulerian circuit.
++    used = [False] * len(dominoes)
++    circuit = []
++
++    def visit(vertex):
++        adjacency = graph[vertex]
++        while adjacency:
++            neighbor, index = adjacency.pop()
++            if used[index]:
++                continue
++            used[index] = True
++            visit(neighbor)
++            circuit.append((vertex, neighbor))
++
++    visit(start)
++    circuit.reverse()
++    return circuit

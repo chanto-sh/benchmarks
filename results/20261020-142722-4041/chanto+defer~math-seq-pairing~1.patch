@@ -1,0 +1,95 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..ba943c4 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,87 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The bijection is built in two layers:
++
++* A non-empty list is encoded as a byte string: each element becomes a
++  string over bytes 0..254, and the element strings are joined by 255.
++  Every byte string splits uniquely on 255, so this covers them all.
++* All byte strings are then mapped bijectively to the non-negative ints by
++  ordering them by length.  Strings of length L occupy one block of 256**L
++  consecutive integers.
++
++The empty list is mapped to 0; every other list is shifted by one to use the
++remaining non-negative integers.
++"""
++
++_ALPHABET = 255            # element symbols are bytes 0..254
++_ELEMENT_DIVISOR = _ALPHABET - 1
++_SEPARATOR = b"\xff"
++
++_BYTE_BASE = 256
++_BYTE_DIVISOR = _BYTE_BASE - 1
++
++
++def _encode_element(n):
++    """Encode a non-negative int as a string of bytes in 0..254."""
++    length = 0
++    power = 1  # _ALPHABET ** length
++
++    # Strings of the next length start at (_ALPHABET**length - 1) / 254.
++    while n >= (power * _ALPHABET - 1) // _ELEMENT_DIVISOR:
++        power *= _ALPHABET
++        length += 1
++
++    value = n - (power - 1) // _ELEMENT_DIVISOR
++    out = bytearray(length)
++    for i in range(length - 1, -1, -1):
++        value, digit = divmod(value, _ALPHABET)
++        out[i] = digit
++    return bytes(out)
++
++
++def _decode_element(data):
++    """Decode a string of bytes in 0..254 back to a non-negative int."""
++    value = 0
++    for digit in data:
++        value = value * _ALPHABET + digit
++    return (_ALPHABET ** len(data) - 1) // _ELEMENT_DIVISOR + value
++
++
++def _bytes_to_int(data):
++    """Bijection from all byte strings to non-negative ints."""
++    if not data:
++        return 0
++    length = len(data)
++    return ((1 << (8 * length)) - 1) // _BYTE_DIVISOR + int.from_bytes(
++        data, "big"
++    )
++
++
++def _int_to_bytes(n):
++    """Inverse of _bytes_to_int."""
++    if n == 0:
++        return b""
++
++    # Find the length block containing n:
++    # 256**length <= 255*n + 1 < 256**(length + 1).
++    length = ((_BYTE_DIVISOR * n + 1).bit_length() - 1) // 8
++    block_start = ((1 << (8 * length)) - 1) // _BYTE_DIVISOR
++    return (n - block_start).to_bytes(length, "big")
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    data = _SEPARATOR.join(_encode_element(n) for n in lst)
++    return _bytes_to_int(data) + 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++
++    data = _int_to_bytes(n - 1)
++    return [_decode_element(part) for part in data.split(_SEPARATOR)]

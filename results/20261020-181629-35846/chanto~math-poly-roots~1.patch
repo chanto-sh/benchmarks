@@ -1,0 +1,250 @@
+diff --git a/roots.py b/roots.py
+index d624667..9aaf50f 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,221 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Drop leading (high-degree) zero coefficients."""
++    i = 0
++    while i < len(p) - 1 and p[i] == 0:
++        i += 1
++    return p[i:]
++
++
++def _is_zero(p):
++    return all(c == 0 for c in p)
++
++
++def _primitive(p):
++    """Clear denominators and content, preserving the signs of p."""
++    p = _trim([Fraction(c) for c in p])
++    if _is_zero(p):
++        return p
++
++    denominator = 1
++    for c in p:
++        denominator = denominator * c.denominator // gcd(
++            denominator, c.denominator
++        )
++    coefficients = [
++        c.numerator * (denominator // c.denominator)
++        for c in p
++    ]
++    content = 0
++    for c in coefficients:
++        content = gcd(content, abs(c))
++    if content > 1:
++        coefficients = [c // content for c in coefficients]
++    return [Fraction(c) for c in coefficients]
++
++
++def _derivative(p):
++    """Derivative of a polynomial given highest degree first."""
++    degree = len(p) - 1
++    if degree <= 0:
++        return [Fraction(0)]
++    return _trim([p[i] * (degree - i) for i in range(degree)])
++
++
++def _divmod(a, b):
++    """Quotient and remainder of a / b over the rationals."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    if _is_zero(b):
++        raise ZeroDivisionError("polynomial division by zero")
++
++    if len(a) < len(b):
++        return [Fraction(0)], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    r = a[:]
++    while not _is_zero(r) and len(r) >= len(b):
++        shift = len(r) - len(b)
++        factor = r[0] / b[0]
++        q[len(q) - 1 - shift] = factor
++        for i, c in enumerate(b):
++            r[i] -= factor * c
++        r = _trim(r)
++    return q, r
++
++
++def _mod(a, b):
++    return _divmod(a, b)[1]
++
++
++def _monic(p):
++    p = _trim([Fraction(c) for c in p])
++    if _is_zero(p):
++        return p
++    lead = p[0]
++    return [c / lead for c in p]
++
++
++def _gcd(a, b):
++    """Monic gcd of two rational polynomials."""
++    a = _primitive(a)
++    b = _primitive(b)
++    while not _is_zero(b):
++        a, b = b, _primitive(_mod(a, b))
++    return _monic(a)
++
++
++def _squarefree_part(p):
++    """p divided by gcd(p, p'), so every root has multiplicity one."""
++    g = _gcd(p, _derivative(p))
++    q, _ = _divmod(p, g)
++    return _primitive(q)
++
++
++def _divide_by_linear(p, root):
++    """Exact division of p by (x - root)."""
++    q, remainder = _divmod(p, [Fraction(1), -root])
++    if not _is_zero(remainder):
++        raise ArithmeticError("attempted to divide by a non-root")
++    return q
++
++
++def _sturm_chain(p):
++    """Sturm sequence for a squarefree polynomial, highest degree first."""
++    p = _primitive(p)
++    chain = [p, _primitive(_derivative(p))]
++    while True:
++        remainder = _mod(chain[-2], chain[-1])
++        if _is_zero(remainder):
++            break
++        chain.append(_primitive([-c for c in remainder]))
++    return chain
++
++
++def _variations(chain, x):
++    """Number of sign changes in the Sturm chain evaluated at x."""
++    signs = []
++    for p in chain:
++        value = evaluate(p, x)
++        if value > 0:
++            signs.append(1)
++        elif value < 0:
++            signs.append(-1)
++    return sum(1 for a, b in zip(signs, signs[1:]) if a != b)
++
++
++def _pick_nonroot(p, a, b):
++    """Choose a rational strictly between a and b that is not a root of p."""
++    width = b - a
++    # The midpoint almost always works; if it is a root, try other simple
++    # fractions.  A nonzero polynomial has only finitely many roots.
++    for denominator in range(2, 64):
++        for numerator in range(1, denominator):
++            x = a + width * Fraction(numerator, denominator)
++            if evaluate(p, x) != 0:
++                return x
++    raise ArithmeticError("could not find a non-root split point")
++
++
++def _refine(p, a, b):
++    """Bisect an interval containing exactly one simple root of p."""
++    fa = evaluate(p, a)
++    fb = evaluate(p, b)
++    tolerance = Fraction(1, 10**12)
++    while b - a > tolerance:
++        m = (a + b) / 2
++        fm = evaluate(p, m)
++        if fm == 0:
++            return m
++        if (fa > 0) == (fm > 0):
++            a, fa = m, fm
++        else:
++            b, fb = m, fm
++    return (a + b) / 2
++
++
++def _isolate(p, chain, a, b, va, vb):
++    """Distinct roots of squarefree p in the open interval (a, b)."""
++    roots = []
++    stack = [(a, b, va, vb)]
++    while stack:
++        a, b, va, vb = stack.pop()
++        count = va - vb
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine(p, a, b))
++            continue
++
++        m = _pick_nonroot(p, a, b)
++        vm = _variations(chain, m)
++        stack.append((m, b, vm, vb))
++        stack.append((a, m, va, vm))
++    return roots
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    lo = Fraction(lo)
++    hi = Fraction(hi)
++    if lo > hi:
++        return []
++
++    p = _trim([Fraction(c) for c in coeffs])
++    if _is_zero(p):
++        return []
++    if len(p) == 1:
++        return []
++    if lo == hi:
++        return [float(lo)] if evaluate(p, lo) == 0 else []
++
++    # Repeated roots are removed before root counting: Sturm's theorem and
++    # sign-change bisection both need a squarefree polynomial.
++    p = _squarefree_part(p)
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if evaluate(p, lo) == 0:
++        roots.append(lo)
++    if evaluate(p, hi) == 0:
++        roots.append(hi)
++
++    # Remove boundary roots so Sturm counting can use the closed endpoints.
++    q = p
++    if evaluate(q, lo) == 0:
++        q = _divide_by_linear(q, lo)
++    if evaluate(q, hi) == 0:
++        q = _divide_by_linear(q, hi)
++
++    if len(q) > 1:
++        chain = _sturm_chain(q)
++        roots.extend(_isolate(q, chain, lo, hi,
++                              _variations(chain, lo),
++                              _variations(chain, hi)))
++
++    roots.sort()
++    return [float(r) for r in roots]

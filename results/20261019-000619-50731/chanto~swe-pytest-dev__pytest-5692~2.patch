@@ -1,0 +1,64 @@
+diff --git a/changelog/5470.feature.rst b/changelog/5470.feature.rst
+new file mode 100644
+index 0000000..b83d14b
+--- /dev/null
++++ b/changelog/5470.feature.rst
+@@ -0,0 +1 @@
++The ``testsuite`` element in the JUnit XML report now includes the ``hostname`` and ``timestamp`` attributes.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..bcb6016 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -11,8 +11,10 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..5f44be7 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -1,4 +1,6 @@
+ import os
++import socket
++from datetime import datetime
+ from xml.dom import minidom
+ 
+ import py
+@@ -157,6 +159,21 @@ class TestPython:
+         val = tnode["time"]
+         assert round(float(val), 2) >= 0.03
+ 
++    def test_hostname_and_timestamp(self, testdir):
++        testdir.makepyfile(
++            """
++            def test_pass():
++                pass
++        """
++        )
++        _, dom = runandparse(testdir)
++        node = dom.find_first_by_tag("testsuite")
++        assert node["hostname"] == socket.gethostname()
++        timestamp = node["timestamp"]
++        assert timestamp is not None
++        parsed_timestamp = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f")
++        assert isinstance(parsed_timestamp, datetime)
++
+     @pytest.mark.parametrize("duration_report", ["call", "total"])
+     def test_junit_duration_report(self, testdir, monkeypatch, duration_report):
+ 

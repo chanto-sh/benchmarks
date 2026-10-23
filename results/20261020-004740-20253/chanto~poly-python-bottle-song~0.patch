@@ -1,0 +1,44 @@
+diff --git a/bottle_song.py b/bottle_song.py
+index 9a5e67f..d20f25b 100644
+--- a/bottle_song.py
++++ b/bottle_song.py
+@@ -1,2 +1,38 @@
++NUMBERS = [
++    "no",
++    "one",
++    "two",
++    "three",
++    "four",
++    "five",
++    "six",
++    "seven",
++    "eight",
++    "nine",
++    "ten",
++]
++
++
++def _bottles(n):
++    return "bottle" if n == 1 else "bottles"
++
++
++def _verse(n):
++    current = NUMBERS[n].capitalize()
++    following = NUMBERS[n - 1]
++    return [
++        f"{current} green {_bottles(n)} hanging on the wall,",
++        f"{current} green {_bottles(n)} hanging on the wall,",
++        "And if one green bottle should accidentally fall,",
++        f"There'll be {following} green {_bottles(n - 1)} hanging on the wall.",
++    ]
++
++
+ def recite(start, take=1):
+-    pass
++    verses = [_verse(n) for n in range(start, start - take, -1)]
++    result = []
++    for i, verse in enumerate(verses):
++        if i:
++            result.append("")
++        result.extend(verse)
++    return result

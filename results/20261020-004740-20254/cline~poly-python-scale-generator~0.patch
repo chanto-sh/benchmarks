@@ -1,0 +1,47 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..b0f2d28 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,39 @@
+ class Scale:
++    SHARP_CHROMATIC = [
++        "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"
++    ]
++    FLAT_CHROMATIC = [
++        "A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"
++    ]
++    FLAT_MAJOR_KEYS = {"F", "Bb", "Eb", "Ab", "Db", "Gb"}
++    FLAT_MINOR_KEYS = {"D", "G", "C", "F", "Bb", "Eb"}
++
+     def __init__(self, tonic):
+-        pass
++        if not tonic:
++            raise ValueError("tonic is required")
++        is_minor = tonic[0].islower()
++        tonic = tonic[0].upper() + tonic[1:].lower()
++        if len(tonic) > 1 and tonic[1] not in ("b", "#"):
++            raise ValueError("invalid tonic: {}".format(tonic))
++
++        self.tonic = tonic
++        flat_keys = self.FLAT_MINOR_KEYS if is_minor else self.FLAT_MAJOR_KEYS
++        self.uses_flats = tonic in flat_keys
++        self.chromatic_scale = list(
++            self.FLAT_CHROMATIC if self.uses_flats else self.SHARP_CHROMATIC
++        )
++        self.tonic_index = self.chromatic_scale.index(tonic)
+ 
+     def chromatic(self):
+-        pass
++        return self.chromatic_scale[self.tonic_index:] + self.chromatic_scale[:self.tonic_index]
+ 
+     def interval(self, intervals):
+-        pass
++        steps = {"m": 1, "M": 2, "A": 3}
++        result = [self.tonic]
++        index = self.tonic_index
++        for interval in intervals:
++            if interval not in steps:
++                raise ValueError("invalid interval: {}".format(interval))
++            index = (index + steps[interval]) % len(self.chromatic_scale)
++            result.append(self.chromatic_scale[index])
++        return result

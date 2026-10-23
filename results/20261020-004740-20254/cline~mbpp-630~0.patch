@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index bab6eae..4dca01b 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,18 @@
+-def adjac(ele, sub = []): 
+-    pass
++def adjac(ele, sub=[]):
++    """Return all coordinates adjacent to (and including) the given coordinate.
++
++    For each dimension the coordinate value, its predecessor and its
++    successor are used, giving ``3 ** len(ele)`` coordinate tuples.
++    """
++    if not ele:
++        return [sub]
++
++    coordinates = []
++    for value in range(ele[0] - 1, ele[0] + 2):
++        coordinates.extend(adjac(ele[1:], sub + [value]))
++    return coordinates
++
++
++def get_coordinates(test_tup):
++    """Return the adjacent coordinates of ``test_tup`` as a list of lists."""
++    return adjac(test_tup)

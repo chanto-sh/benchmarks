@@ -1,0 +1,72 @@
+diff --git a/food_chain.py b/food_chain.py
+index ed87e69..15a801f 100644
+--- a/food_chain.py
++++ b/food_chain.py
+@@ -1,2 +1,66 @@
++ANIMALS = [
++    None,
++    "fly",
++    "spider",
++    "bird",
++    "cat",
++    "dog",
++    "goat",
++    "cow",
++    "horse",
++]
++
++INTRODUCTIONS = {
++    1: [],
++    2: [
++        "It wriggled and jiggled and tickled inside her.",
++    ],
++    3: [
++        "How absurd to swallow a bird!",
++    ],
++    4: [
++        "Imagine that, to swallow a cat!",
++    ],
++    5: [
++        "What a hog, to swallow a dog!",
++    ],
++    6: [
++        "Just opened her throat and swallowed a goat!",
++    ],
++    7: [
++        "I don't know how she swallowed a cow!",
++    ],
++    8: [
++        "She's dead, of course!",
++    ],
++}
++
++
++def _verse(number):
++    animal = ANIMALS[number]
++    lines = [f"I know an old lady who swallowed a {animal}."]
++    lines.extend(INTRODUCTIONS[number])
++
++    if number == 8:
++        return lines
++
++    for current in range(number, 1, -1):
++        if current == 3:
++            lines.append(
++                "She swallowed the bird to catch the spider that wriggled and "
++                "jiggled and tickled inside her."
++            )
++        else:
++            lines.append(
++                f"She swallowed the {ANIMALS[current]} to catch the "
++                f"{ANIMALS[current - 1]}."
++            )
++
++    lines.append("I don't know why she swallowed the fly. Perhaps she'll die.")
++
++    return lines
++
++
+ def recite(start_verse, end_verse):
+-    pass
++    verses = [_verse(number) for number in range(start_verse, end_verse + 1)]
++    return [line for verse in verses for line in verse + [""]][:-1]

@@ -22,7 +22,8 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The Chanto checkout: a sibling of this repository unless CHANTO_REPO says otherwise.
+ROOT = Path(os.environ.get("CHANTO_REPO", Path(__file__).resolve().parents[2] / "chanto")).resolve()
 NPM = Path.home() / ".local/share/chanto-bench/agents/node_modules/.bin"
 
 

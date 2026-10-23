@@ -1,0 +1,160 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..04809c2 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,153 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++from fractions import Fraction
++
++
++def _detuning(k, m, omega):
++    """Return k - m*omega**2, avoiding cancellation near resonance."""
++    d = k - m * omega * omega
++    scale = abs(k) + abs(m) * omega * omega
++    if scale != 0.0 and abs(d) <= 1e-4 * scale:
++        # Recompute exactly from the given floating-point inputs; the
++        # subtraction above has lost most of its significant digits.
++        exact = (
++            Fraction(k)
++            - Fraction(m) * Fraction(omega) ** 2
++        )
++        d = float(exact)
++    return d
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at zero handled."""
++    if x == 0.0:
++        return 1.0
++    return math.sin(x) / x
++
++
++def _expm1c(x):
++    """expm1(x) / x, with the removable singularity at zero handled."""
++    if x == 0.0:
++        return 1.0
++    return math.expm1(x) / x
++
++
++def _series_solution(m, k, c, F0, omega, x0, v0, t):
++    """Taylor series about t=0, used when all rates are small on this scale."""
++    q_prev2 = x0
++    q_prev1 = v0 * t
++    terms = [q_prev2, q_prev1]
++
++    omega_t = omega * t
++    p = 1.0  # p_{n-2} = (omega*t)**(n-2) / (n-2)!, currently n = 2
++    for n in range(2, 51):
++        if n % 4 == 2:
++            forcing = p
++        elif n % 4 == 0:
++            forcing = -p
++        else:
++            forcing = 0.0
++
++        factor = t * t / (n * (n - 1))
++        q = (
++            (F0 / m) * factor * forcing
++            - (c / m) * (t / n) * q_prev1
++            - (k / m) * factor * q_prev2
++        )
++        terms.append(q)
++        q_prev2, q_prev1 = q_prev1, q
++        p *= omega_t / (n - 1)
++
++    return math.fsum(terms)
++
++
++def _steady_coefficients(m, k, c, F0, omega):
++    """Return cos/sin coefficients of x_p and the steady-state amplitude."""
++    d = _detuning(k, m, omega)
++    drive = c * omega
++    h = math.hypot(d, drive)
++    if h == 0.0:
++        return 0.0, 0.0, (0.0 if F0 == 0.0 else math.inf)
++
++    scale = F0 / h
++    return scale * (d / h), scale * (drive / h), abs(scale)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    _, _, amp = _steady_coefficients(m, k, c, F0, omega)
++    return amp
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    a = c / (2.0 * m)
++    wn = math.sqrt(k / m)
++
++    # The closed forms below can lose relative accuracy very close to t=0
++    # when large steady-state and transient terms cancel.  The Taylor
++    # series is well conditioned in that regime.
++    if max(abs(a), wn, abs(omega)) * abs(t) <= 1.0:
++        return _series_solution(m, k, c, F0, omega, x0, v0, t)
++
++    if c == 0.0:
++        # Undamped.  Writing the particular solution as a difference
++        # quotient keeps it accurate (and finite) at resonance.
++        s = wn + omega
++        d = _detuning(k, m, omega)
++        delta = 2.0 * wn if s == 0.0 else d / (m * s)
++        return (
++            x0 * math.cos(wn * t)
++            + v0 * t * _sinc(wn * t)
++            + F0
++            / m
++            * 0.5
++            * t
++            * t
++            * _sinc(0.5 * s * t)
++            * _sinc(0.5 * delta * t)
++        )
++
++    cos_coeff, sin_coeff, _ = _steady_coefficients(m, k, c, F0, omega)
++    xp = cos_coeff * math.cos(omega * t) + sin_coeff * math.sin(omega * t)
++
++    # Homogeneous solution h(t) = h(0) f(t) + h'(0) g(t), where
++    # f(0)=1, f'(0)=0, g(0)=0, g'(0)=1.
++    h0 = x0 - cos_coeff
++    hv = v0 - sin_coeff * omega
++
++    if a < wn:
++        # Underdamped.
++        wd = math.sqrt((wn - a) * (wn + a))
++        decay = math.exp(-a * t)
++        x = wd * t
++        g = decay * t * _sinc(x)
++        f = decay * math.cos(x) + a * g
++    elif a > wn:
++        # Overdamped.
++        b = math.sqrt((a - wn) * (a + wn))
++        # The slow root is written this way to avoid cancellation when
++        # a is much larger than wn.
++        r1 = -wn * wn / (a + b)
++        r2 = -a - b
++        e1 = math.exp(r1 * t)
++        e2 = math.exp(r2 * t)
++
++        u = 2.0 * b * t
++        if u < 1.0:
++            # expm1 keeps g accurate as the roots coalesce.
++            g = e2 * t * _expm1c(u)
++        else:
++            g = (e1 - e2) / (2.0 * b)
++        f = 0.5 * (e1 + e2) + a * g
++    else:
++        # Critically damped (coincident roots).
++        decay = math.exp(-a * t)
++        g = t * decay
++        f = (1.0 + a * t) * decay
++
++    return xp + h0 * f + hv * g

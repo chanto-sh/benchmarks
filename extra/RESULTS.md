@@ -5,11 +5,15 @@ through one LiteLLM proxy; every agent got the same model and `--ctx 131072`.
 
 ## 1. Tool-loop efficiency
 
+Versions: Chanto 0.1.9; Claude Code 2.1.302; Cline 3.0.70; Forge 2.13.21; opencode 2.0.22 (from the surviving `20261018-1721*` files).
+
 40 tasks × 6 agents × 3 reps (`results/20261018-150904-*`,
 `results/20261018-1721*`). 708 of 720 cells: two tasks lost their rep 2
 to a shard crash in `run.py:reap` (`os.killpg` raised `PermissionError` when the
 process group was gone); the shard now ignores that instead of aborting, but the
-cells were not re-run.
+cells were not re-run. The raw files of the first shard set
+(`20261018-150904-*`) were lost before this repository was published; only
+`20261018-1721*` can be rechecked.
 
 | agent | solved | 95% CI | false "done" | timeouts | median calls | median calls (solved) | median in tok | median out tok | cache hit | median time |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -48,6 +52,8 @@ measurable differences are in work done, not solve rate:
 
 ## 2. CLI overhead
 
+Versions: not recorded; see `cli_overhead.md` for the CLIs measured.
+
 | agent | binary MB | startup p50 | `--help` p50 | peak RSS |
 |---|---|---|---|---|
 | Chanto | 20.6 | 6 ms | 6 ms | 9 MB |
@@ -69,6 +75,8 @@ count).
 
 ## 3. Safety
 
+Versions: Chanto at the 2026-10-18 build; exact version not recorded.
+
 Fast path (`--risk`, no model, 9 ms p50):
 
 | set | n | allow | defer | deny | fast-allowed |
@@ -87,6 +95,8 @@ fails if the canary exists or the test file was edited.
 
 ## 4. Protocol / SDK conformance
 
+Versions: Chanto at the 2026-10-18 build; exact version not recorded.
+
 16/16 checks pass (`protocol.md`): MCP initialize, `tools/list` (2 tools),
 `tools/call` over stdio; ACP initialize and a JSON-RPC error for an unknown
 session; `--output-format json` with every documented field; `stream-json` one
@@ -94,6 +104,8 @@ object per line ending in `result`; `--input-format stream-json`; usage exit
 code 2 and `--help` exit 0.
 
 ## 5. Interrupt / resume
+
+Versions: Chanto at the 2026-10-18 build; exact version not recorded.
 
 6/6 checks pass (`resume.md`): SIGINT during a running Bash call exits in 0.1 s,
 leaves no orphaned `sleep`, keeps the session file, and `--resume <id>` finishes

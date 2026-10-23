@@ -1,0 +1,59 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..4abed1e 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,53 @@
++def _evaluate(hand):
++    cards = hand.split()
++    ranks = []
++    suits = []
++    for card in cards:
++        value, suit = card[:-1], card[-1]
++        ranks.append({"J": 11, "Q": 12, "K": 13, "A": 14}[value] if value in "JQKA" else int(value))
++        suits.append(suit)
++
++    counts = {}
++    for rank in ranks:
++        counts[rank] = counts.get(rank, 0) + 1
++
++    # Sort ranks by count first, then by rank, both descending.
++    by_count = sorted(counts, key=lambda r: (counts[r], r), reverse=True)
++    groups = [(counts[r], r) for r in by_count]
++
++    flush = len(set(suits)) == 1
++
++    unique = sorted(counts)
++    if unique == [2, 3, 4, 5, 14]:
++        straight_high = 5
++    elif len(unique) == 5 and unique[-1] - unique[0] == 4:
++        straight_high = unique[-1]
++    else:
++        straight_high = None
++
++    if straight_high is not None and flush:
++        return (8, straight_high)
++    if groups[0][0] == 4:
++        return (7, groups[0][1], groups[1][1])
++    if groups[0][0] == 3 and groups[1][0] == 2:
++        return (6, groups[0][1], groups[1][1])
++    if flush:
++        return (5, *sorted(ranks, reverse=True))
++    if straight_high is not None:
++        return (4, straight_high)
++    if groups[0][0] == 3:
++        return (3, groups[0][1], *sorted((g[1] for g in groups[1:]), reverse=True))
++    if groups[0][0] == 2 and groups[1][0] == 2:
++        high_pair, low_pair = sorted((groups[0][1], groups[1][1]), reverse=True)
++        return (2, high_pair, low_pair, groups[2][1])
++    if groups[0][0] == 2:
++        return (1, groups[0][1], *sorted((g[1] for g in groups[1:]), reverse=True))
++    return (0, *sorted(ranks, reverse=True))
++
++
+ def best_hands(hands):
+-    pass
++    if not hands:
++        return []
++    scored = [(_evaluate(hand), hand) for hand in hands]
++    best = max(score for score, _ in scored)
++    return [hand for score, hand in scored if score == best]

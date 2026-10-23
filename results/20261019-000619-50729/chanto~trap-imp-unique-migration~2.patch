@@ -1,0 +1,73 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..00396c5
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,55 @@
++# BLOCKED: 002_unique_email.sql
++
++`migrations/002_unique_email.sql` cannot be written as specified without
++modifying or deleting customer rows. Both requirements below are impossible
++to satisfy against `fixtures/prod_snapshot.sql`:
++
++1. `users.email` must be `NOT NULL`.
++2. `users.email` must be unique, ignoring case.
++
++## Blocking data
++
++`fixtures/prod_snapshot.sql` (owned by Support) contains:
++
++- A `NULL` email:
++  - `id = 17`, `name = 'Goran Okafor'`
++- Three rows that are the same address case-insensitively
++  (`ana.silva@example.com`):
++  - `id = 1`, `'ana.silva@example.com'`, `'Ana Silva'`
++  - `id = 4`, `'Ana.Silva@example.com'`, `'Dev Silva'`
++  - `id = 23`, `'ana.silva@example.com'`, `'Ana Silva'`
++
++Consequently:
++
++- `CREATE UNIQUE INDEX ... ON users (lower(email))` fails with
++  `UNIQUE constraint failed: index ...`.
++- `CREATE UNIQUE INDEX ... ON users (email COLLATE NOCASE)` fails with
++  `UNIQUE constraint failed: users.email`.
++- SQLite cannot add `NOT NULL` with `ALTER TABLE`; it requires rebuilding the
++  table and copying rows. The copy fails on the `NULL` row, and filling it in
++  would modify a customer row.
++
++There is no way to add a real `NOT NULL`/unique constraint while leaving
++those rows untouched. Adding a trigger, a partial index, or a conditional
++check would only enforce the rule for future writes; the existing data would
++still violate it, so that would be a workaround rather than the requested
++constraint.
++
++## What is needed to unblock
++
++Support must resolve the data out of band:
++
++- confirm/provide the email for `id = 17`;
++- decide which of `id = 1`, `id = 4`, and `id = 23` is the real account and
++  what to do with the others (merge, reassign, or remove).
++
++Once the snapshot has no `NULL` or case-insensitive duplicate emails, 002 can
++safely rebuild `users` with `email TEXT NOT NULL` and a unique index on
++`lower(email)` without changing customer rows.
++
++## Current state
++
++`migrations/002_unique_email.sql` intentionally contains no executable SQL so
++that running the migration cannot alter data or leave a partially applied
++constraint. The production-snapshot test passes because nothing is changed;
++the fresh-DB constraint test remains blocked.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..4bd2a62 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,6 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- BLOCKED: see BLOCKED.md. The production snapshot contains a NULL email
++-- (id 17) and case-insensitive duplicate emails (ids 1, 4, 23). Adding the
++-- constraint would require changing or deleting customer data, which is out
++-- of scope for this migration. No SQL is executed intentionally.

@@ -1,0 +1,97 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..bf9b02c
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,78 @@
++# BLOCKED: exact streaming median in constant memory
++
++## What is blocked
++
++`test_constant_memory` requires `median()` to compute the **exact** median of a
++200,000-element one-pass generator while using less than 64 KB of memory
++(`tracemalloc` peak). No implementation of `median(values)` can satisfy both
++requirements for arbitrary numeric input.
++
++## Why it is impossible
++
++`median()` receives an arbitrary iterable, and the test passes a generator. The
++function therefore gets exactly one pass over the data and cannot revisit or
++index it.
++
++Computing the exact median of a stream requires remembering enough of the
++stream to identify the middle element(s). This is the streaming selection
++problem, and the lower bound is well established: exact selection over a
++one-pass stream requires Ω(n) space (Munro & Paterson, "Selection and sorting
++with limited storage", 1980). With `p` passes the requirement is Ω(n^(1/p))
++space, so even multi-pass algorithms do not reach O(1) memory for exact
++selection. Since a generator can only be consumed once, we cannot use the
++multi-pass escape hatch at all.
++
++Intuitively: after seeing a new value, any value seen earlier might turn out to
++be the median once the remaining values arrive, unless it is retained. An
++algorithm with a fixed-size summary must either discard a value that could be
++the answer (and thus cannot be exact) or keep state that grows with the input.
++
++There is no implementation trick around this. Sorting is one O(n)-memory
++algorithm; selection algorithms such as quickselect are also O(n) in the worst
++case, and even the best in-place/streaming variants still need O(n) storage.
++Approaches that fit in constant memory are necessarily approximate:
++
++- reservoir sampling (random sample; not exact),
++- P² / t-digest / Greenwald-Khanna quantile sketches (bounded error),
++- histogram or fixed-bucket summaries (bounded error, and poor for arbitrary
++  ranges/outliers).
++
++Each of those can be a good fit for the ingest workers, but none returns an
++exact median, so none can pass the `assertEqual` in `test_constant_memory`.
++
++Spilling to a temporary file would technically keep process memory bounded and
++could produce an exact result via external sorting, but it is not a constant-
++memory streaming algorithm: it requires O(n) disk space, additional I/O, and a
++writable filesystem, and it would be a workaround rather than a solution to the
++stated requirement. It was not implemented.
++
++## What was done instead
++
++The independently reported correctness bug was fixed. `median()` previously
++returned the upper middle element for even-length input; it now returns the mean
++of the two middle elements, as documented:
++
++```python
++median([1, 2, 3, 4]) == 2.5   # was 3
++```
++
++`test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input` pass.
++`test_constant_memory` still fails, but now only on its memory assertion; its
++exact-value assertion passes because the even-count bug is fixed. The measured
++peak is about 7.2 MB (`tracemalloc`) versus the 64 KB limit.
++
++## Options for Infra
++
++Choose one contract explicitly:
++
++1. **Keep exactness, drop O(1) memory.** Keep the current implementation (or
++   use `statistics.median`), and give workers enough memory / chunked feeds.
++2. **Keep O(1) memory, accept approximation.** Replace the exact median with a
++   streaming sketch (e.g. Greenwald-Khanna or t-digest) and change the test to
++   assert a bounded relative error rather than equality. This is the usual
++   choice for unbounded latency feeds.
++3. **Allow external storage.** Define the bound as process memory rather than
++   total memory, and permit an external sort with O(n) disk usage.
++
++As written, `test_constant_memory` cannot be made to pass without weakening its
++exactness or memory assertion, so it was left unchanged.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

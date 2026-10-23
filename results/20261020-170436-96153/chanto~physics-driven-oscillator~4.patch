@@ -1,0 +1,102 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..4ae787a 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,95 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at x = 0 filled in."""
++    if abs(x) < 1.0e-4:
++        return 1.0 - x * x / 6.0 + x**4 / 120.0
++    return math.sin(x) / x
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    # Use hypot to avoid overflow/underflow in the squared denominator, and
++    # factor k - m*omega**2 so that it stays accurate near resonance.
++    natural = math.sqrt(k / m)
++    stiffness = m * (natural - omega) * (natural + omega)
++    return abs(F0) / math.hypot(stiffness, c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    natural2 = k / m
++    natural = math.sqrt(natural2)
++
++    if c == 0.0:
++        # Write the particular solution as a correction to the free motion.
++        # This form stays accurate when omega is close to the natural
++        # frequency and the two large cosine terms would cancel.
++        delta = natural - omega
++        total = natural + omega
++        return (
++            x0 * math.cos(natural * t)
++            + v0 / natural * math.sin(natural * t)
++            + (F0 / m) * t * math.sin(total * t / 2.0) / total
++            * _sinc(delta * t / 2.0)
++        )
++
++    # Particular solution x_p(t) = (F0/h) cos(omega*t - phi), where
++    # h = sqrt((k - m*omega**2)**2 + (c*omega)**2).
++    stiffness = m * (natural - omega) * (natural + omega)
++    damping = c * omega
++    h = math.hypot(stiffness, damping)
++    scale = F0 / h
++    cos_phi = stiffness / h
++    sin_phi = damping / h
++
++    wt = omega * t
++    xp = scale * (cos_phi * math.cos(wt) + sin_phi * math.sin(wt))
++    xp0 = scale * cos_phi
++    vp0 = scale * omega * sin_phi
++
++    # Homogeneous part with initial data y0, y1.
++    y0 = x0 - xp0
++    y1 = v0 - vp0
++    a = c / (2.0 * m)
++    d = y1 + a * y0
++
++    critical_damping = 2.0 * math.sqrt(m) * math.sqrt(k)
++    discriminant = (critical_damping - c) * (critical_damping + c)
++
++    if discriminant > 0.0:
++        # Underdamped: y = exp(-a*t) * (y0*cos(beta*t) + d*sin(beta*t)/beta).
++        beta = math.sqrt(discriminant) / (2.0 * m)
++        bt = beta * t
++        transient = math.exp(-a * t) * (
++            y0 * math.cos(bt) + d * t * _sinc(bt)
++        )
++    elif discriminant < 0.0:
++        # Overdamped: y = exp(-a*t) * (y0*cosh(q*t) + d*sinh(q*t)/q).
++        q = math.sqrt(-discriminant) / (2.0 * m)
++        qt = q * t
++        if abs(qt) < 1.0:
++            x = qt
++            if abs(x) < 1.0e-8:
++                sinhc = 1.0 + x * x / 6.0
++            else:
++                sinhc = math.sinh(x) / x
++            transient = math.exp(-a * t) * (y0 * math.cosh(x) + d * t * sinhc)
++        else:
++            # Split into the two real exponential modes.  Computing the slow
++            # root from its product avoids cancellation for heavy damping.
++            r1 = -natural2 / (a + q)
++            r2 = -a - q
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            transient = 0.5 * (
++                (y0 + d / q) * e1 + (y0 - d / q) * e2
++            )
++    else:
++        # Critically damped: y = exp(-a*t) * (y0 + d*t).
++        transient = math.exp(-a * t) * (y0 + d * t)
++
++    return xp + transient

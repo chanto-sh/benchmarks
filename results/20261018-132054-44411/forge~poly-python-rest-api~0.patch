@@ -1,0 +1,90 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..69143e8 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,82 @@
++import json
++
++_ZERO = 1e-9
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        if database is None:
++            database = {"users": []}
++        self.database = database
++        for user in self.database["users"]:
++            user.setdefault("owes", {})
++            user.setdefault("owed_by", {})
++            user.setdefault("balance", 0.0)
++
++    def _find_user(self, name):
++        for user in self.database["users"]:
++            if user["name"] == name:
++                return user
++        return None
++
++    @staticmethod
++    def _balance(user):
++        return float(sum(user["owed_by"].values()) - sum(user["owes"].values()))
++
++    def _refresh_balance(self, user):
++        user["balance"] = self._balance(user)
++
++    def _add_user(self, name):
++        user = {"name": name, "owes": {}, "owed_by": {}, "balance": 0.0}
++        self.database["users"].append(user)
++        return user
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            users = list(self.database["users"])
++            if payload is not None:
++                requested = json.loads(payload).get("users", [])
++                users = [u for u in users if u["name"] in requested]
++            users.sort(key=lambda u: u["name"])
++            return json.dumps({"users": users})
++        raise ValueError("Unknown URL: {!r}".format(url))
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = json.loads(payload) if payload is not None else {}
++
++        if url == "/add":
++            name = data["user"]
++            user = self._find_user(name)
++            if user is None:
++                user = self._add_user(name)
++            return json.dumps(user)
++
++        if url == "/iou":
++            lender = self._find_user(data["lender"])
++            borrower = self._find_user(data["borrower"])
++            amount = float(data["amount"])
++
++            # Net the new loan against any existing debt between the pair.
++            owed_by = lender["owed_by"].get(borrower["name"], 0.0)
++            owes = lender["owes"].get(borrower["name"], 0.0)
++            net = owed_by - owes + amount  # positive => borrower owes lender
++
++            lender["owed_by"].pop(borrower["name"], None)
++            lender["owes"].pop(borrower["name"], None)
++            borrower["owed_by"].pop(lender["name"], None)
++            borrower["owes"].pop(lender["name"], None)
++
++            if net > _ZERO:
++                lender["owed_by"][borrower["name"]] = net
++                borrower["owes"][lender["name"]] = net
++            elif net < -_ZERO:
++                lender["owes"][borrower["name"]] = -net
++                borrower["owed_by"][lender["name"]] = -net
++
++            self._refresh_balance(lender)
++            self._refresh_balance(borrower)
++
++            users = sorted((lender, borrower), key=lambda u: u["name"])
++            return json.dumps({"users": users})
++
++        raise ValueError("Unknown URL: {!r}".format(url))

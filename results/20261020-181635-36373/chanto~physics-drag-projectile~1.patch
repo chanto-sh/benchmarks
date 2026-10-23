@@ -1,0 +1,184 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..8aab3a8 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,178 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++from math import hypot, radians, cos, sin
++
++
++def _deriv(state, q, g):
++    """Time derivative of (x, y, vx, vy) for drag q = k / mass."""
++    _, _, vx, vy = state
++    speed = hypot(vx, vy)
++    drag = q * speed
++    return (vx, vy, -drag * vx, -g - drag * vy)
++
++
++def _rk45_step(state, h, q, g):
++    """One Dormand-Prince 5(4) step; return the 5th-order state and error."""
++    k1 = _deriv(state, q, g)
++
++    s = [state[i] + h * (1.0 / 5.0) * k1[i] for i in range(4)]
++    k2 = _deriv(s, q, g)
++
++    s = [state[i] + h * (3.0 / 40.0 * k1[i] + 9.0 / 40.0 * k2[i])
++         for i in range(4)]
++    k3 = _deriv(s, q, g)
++
++    s = [state[i] + h * (44.0 / 45.0 * k1[i] - 56.0 / 15.0 * k2[i]
++                         + 32.0 / 9.0 * k3[i]) for i in range(4)]
++    k4 = _deriv(s, q, g)
++
++    s = [state[i] + h * (19372.0 / 6561.0 * k1[i]
++                         - 25360.0 / 2187.0 * k2[i]
++                         + 64448.0 / 6561.0 * k3[i]
++                         - 212.0 / 729.0 * k4[i]) for i in range(4)]
++    k5 = _deriv(s, q, g)
++
++    s = [state[i] + h * (9017.0 / 3168.0 * k1[i]
++                         - 355.0 / 33.0 * k2[i]
++                         + 46732.0 / 5247.0 * k3[i]
++                         + 49.0 / 176.0 * k4[i]
++                         - 5103.0 / 18656.0 * k5[i]) for i in range(4)]
++    k6 = _deriv(s, q, g)
++
++    s = [state[i] + h * (35.0 / 384.0 * k1[i]
++                         + 500.0 / 1113.0 * k3[i]
++                         + 125.0 / 192.0 * k4[i]
++                         - 2187.0 / 6784.0 * k5[i]
++                         + 11.0 / 84.0 * k6[i]) for i in range(4)]
++    k7 = _deriv(s, q, g)
++
++    high = [state[i] + h * (35.0 / 384.0 * k1[i]
++                            + 500.0 / 1113.0 * k3[i]
++                            + 125.0 / 192.0 * k4[i]
++                            - 2187.0 / 6784.0 * k5[i]
++                            + 11.0 / 84.0 * k6[i]) for i in range(4)]
++    low = [state[i] + h * (5179.0 / 57600.0 * k1[i]
++                           + 7571.0 / 16695.0 * k3[i]
++                           + 393.0 / 640.0 * k4[i]
++                           - 92097.0 / 339200.0 * k5[i]
++                           + 187.0 / 2100.0 * k6[i]
++                           + 1.0 / 40.0 * k7[i]) for i in range(4)]
++    err = [high[i] - low[i] for i in range(4)]
++    return high, err
++
++
++def _hermite(v0, dv0, v1, dv1, h, tau):
++    """Cubic Hermite interpolation at tau in [0, 1] of a step of length h."""
++    t2 = tau * tau
++    t3 = t2 * tau
++    return ((2.0 * t3 - 3.0 * t2 + 1.0) * v0
++            + (t3 - 2.0 * t2 + tau) * h * dv0
++            + (-2.0 * t3 + 3.0 * t2) * v1
++            + (t3 - t2) * h * dv1)
++
++
++def _root_derivative(y0, vy0, y1, vy1, h):
++    """First root in (0, 1) of the derivative of the y Hermite polynomial."""
++    # Coefficients of y(tau); its derivative is 3a*tau^2 + 2b*tau + c.
++    a = 2.0 * y0 - 2.0 * y1 + h * (vy0 + vy1)
++    b = -3.0 * y0 + 3.0 * y1 - h * (2.0 * vy0 + vy1)
++    c = h * vy0
++
++    lo, hi = 0.0, 1.0
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if (3.0 * a * mid + 2.0 * b) * mid + c > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _root_y(y0, vy0, y1, vy1, h):
++    """First positive root in (0, 1] of the y Hermite polynomial."""
++    a = 2.0 * y0 - 2.0 * y1 + h * (vy0 + vy1)
++    b = -3.0 * y0 + 3.0 * y1 - h * (2.0 * vy0 + vy1)
++    c = h * vy0
++
++    if y0 > 0.0:
++        lo, hi = 0.0, 1.0
++        for _ in range(80):
++            mid = 0.5 * (lo + hi)
++            if _hermite(y0, vy0, y1, vy1, h, mid) > 0.0:
++                lo = mid
++            else:
++                hi = mid
++        return 0.5 * (lo + hi)
++
++    # Launching exactly from y = 0: factor out the root at tau = 0.
++    if abs(a) < 1e-300:
++        if abs(b) < 1e-300:
++            return 1.0
++        root = -c / b
++        return root if 0.0 < root <= 1.0 else 1.0
++
++    disc = b * b - 4.0 * a * c
++    if disc < 0.0:
++        return 1.0
++    sqrt_disc = disc ** 0.5
++    q = -0.5 * (b + (sqrt_disc if b >= 0.0 else -sqrt_disc))
++    roots = []
++    if abs(q) > 0.0:
++        roots.append(q / a)
++        roots.append(c / q)
++    else:
++        roots.append(0.0)
++    positive = [r for r in roots if 0.0 < r <= 1.0]
++    return min(positive) if positive else 1.0
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    theta = radians(angle_deg)
++    vx = v0 * cos(theta)
++    vy = v0 * sin(theta)
++
++    # Starting on the ground with no upward motion: no flight takes place.
++    if h0 <= 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    q = k / mass
++    state = (0.0, h0, vx, vy)
++    t = 0.0
++
++    apex = h0
++    apex_found = vy <= 0.0
++    rtol = 1e-12
++    atol = 1e-12
++    h = 1e-6
++
++    while True:
++        high, err = _rk45_step(state, h, q, g)
++
++        err_norm = 0.0
++        for i in range(4):
++            e = abs(err[i]) / (atol + rtol * max(abs(state[i]), abs(high[i])))
++            if e > err_norm:
++                err_norm = e
++
++        if err_norm > 1.0:
++            h *= max(0.2, 0.9 * err_norm ** -0.2)
++            continue
++
++        x0, y0, vx0, vy0 = state
++        x1, y1, vx1, vy1 = high
++
++        if not apex_found and vy0 > 0.0 and vy1 <= 0.0:
++            tau = _root_derivative(y0, vy0, y1, vy1, h)
++            apex = max(apex, _hermite(y0, vy0, y1, vy1, h, tau))
++            apex_found = True
++
++        if y1 <= 0.0:
++            tau = _root_y(y0, vy0, y1, vy1, h)
++            range_ = _hermite(x0, vx0, x1, vx1, h, tau)
++            time = t + h * tau
++            return {"range": range_, "apex": apex, "time": time}
++
++        t += h
++        state = tuple(high)
++        h *= 5.0 if err_norm == 0.0 else min(5.0, 0.9 * err_norm ** -0.2)

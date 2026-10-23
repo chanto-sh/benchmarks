@@ -1,0 +1,53 @@
+diff --git a/error_handling.go b/error_handling.go
+index ac66fe0..a000654 100644
+--- a/error_handling.go
++++ b/error_handling.go
+@@ -1,5 +1,46 @@
+ package erratum
+ 
+-func Use(opener ResourceOpener, input string) error {
+-	panic("Please implement the Use function")
++// Use opens a resource, calls Frob on it and closes the resource exactly once
++// no matter what happens. Transient errors from the opener are retried; any
++// other opener error is returned immediately. If Frob panics with a FrobError,
++// Defrob is called with the error's tag before the resource is closed, and the
++// panic is returned as an error.
++func Use(opener ResourceOpener, input string) (err error) {
++	var res Resource
++	for {
++		res, err = opener()
++		if err == nil {
++			break
++		}
++		if _, ok := err.(TransientError); !ok {
++			return err
++		}
++	}
++
++	// Registered first, so it runs last: Defrob (if any) must happen before
++	// Close, but Close must happen even if recovering from the panic fails.
++	defer func() {
++		if closeErr := res.Close(); err == nil {
++			err = closeErr
++		}
++	}()
++
++	defer func() {
++		r := recover()
++		if r == nil {
++			return
++		}
++		switch e := r.(type) {
++		case FrobError:
++			res.Defrob(e.defrobTag)
++			err = e
++		case error:
++			err = e
++		default:
++			panic(r)
++		}
++	}()
++
++	res.Frob(input)
++	return nil
+ }

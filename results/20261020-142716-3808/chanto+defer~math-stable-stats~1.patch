@@ -1,0 +1,70 @@
+diff --git a/stats.py b/stats.py
+index add4f59..db03af3 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,59 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++
++    lo = hi = xs[0]
++    for x in xs:
++        if x < lo:
++            lo = x
++        if x > hi:
++            hi = x
++
++    # Center the data first so a large common offset does not cancel away
++    # the variance.  Using half of each endpoint avoids overflowing while
++    # computing the midpoint of very large values.
++    origin = lo / 2.0 + hi / 2.0
++    offsets = [x - origin for x in xs]
++
++    try:
++        mean_offset = math.fsum(offsets) / n
++    except OverflowError:
++        # The exact sum is outside the float range, although its average
++        # is not.  Scale before summing so the division can bring it back.
++        scale = max(abs(d) for d in offsets)
++        mean_offset = scale * (math.fsum(d / scale for d in offsets) / n)
++    mean = origin + mean_offset
++
++    # Two-pass variance about the computed mean.  Scaling the deviations
++    # keeps the sum of squares from overflowing when the variance itself
++    # is still representable.
++    deviations = []
++    max_abs_dev = 0.0
++    for d in offsets:
++        dev = d - mean_offset
++        if not math.isfinite(dev):
++            return mean, math.inf
++        deviations.append(dev)
++        ad = abs(dev)
++        if ad > max_abs_dev:
++            max_abs_dev = ad
++
++    if max_abs_dev == 0.0:
++        return mean, 0.0
++
++    ss = math.fsum((dev / max_abs_dev) ** 2 for dev in deviations)
++    var = max_abs_dev * (max_abs_dev * (ss / n))
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

@@ -1,0 +1,27 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..2f09072
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed temporary directory creation when the current user name contains characters that are invalid in directory names.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..d336ee1 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,14 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # If we cannot create the root directory (e.g. a user name
++                # that is not a valid directory name on Windows), fall back
++                # to a directory without the user name.
++                rootdir = temproot.joinpath("pytest-of-unknown")
++                rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )

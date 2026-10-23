@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index 1b07492..badf0b5 100644
+--- a/solution.py
++++ b/solution.py
+@@ -11,3 +11,11 @@ def check_dict_case(dict):
+     check_dict_case({"Name":"John", "Age":"36", "City":"Houston"}) should return False.
+     check_dict_case({"STATE":"NC", "ZIP":"12345" }) should return True.
+     """
++    if len(dict) == 0:
++        return False
++    keys = dict.keys()
++    if all(isinstance(key, str) and key.islower() for key in keys):
++        return True
++    if all(isinstance(key, str) and key.isupper() for key in keys):
++        return True
++    return False

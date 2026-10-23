@@ -1,0 +1,142 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..ec52bca 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -25,5 +25,136 @@ class SgfTree:
+         return not self == other
+ 
+ 
++class _Parser:
++    """Recursive descent parser for a single SGF game tree."""
++
++    def __init__(self, text):
++        self.text = text
++        self.pos = 0
++
++    def error(self, message):
++        raise ValueError(message)
++
++    def peek(self):
++        if self.pos < len(self.text):
++            return self.text[self.pos]
++        return ""
++
++    def skip_whitespace(self):
++        while self.peek() and self.peek().isspace():
++            self.pos += 1
++
++    def parse_collection(self):
++        self.skip_whitespace()
++        if self.peek() != "(":
++            self.error("tree missing")
++        return self.parse_tree()
++
++    def parse_tree(self):
++        # The opening parenthesis has already been checked.
++        self.pos += 1
++        self.skip_whitespace()
++
++        if self.peek() != ";":
++            self.error("tree with no nodes")
++
++        root = None
++        children = []
++
++        while True:
++            self.skip_whitespace()
++            char = self.peek()
++            if char == ";":
++                self.pos += 1
++                node = SgfTree(properties=self.parse_properties())
++                if root is None:
++                    root = node
++                    children = [node]
++                else:
++                    children[-1].children = [node]
++                    children.append(node)
++            elif char == "(":
++                child = self.parse_tree()
++                if root is None:
++                    # A tree must start with a node.
++                    self.error("tree with no nodes")
++                children[-1].children.append(child)
++            elif char == ")":
++                self.pos += 1
++                break
++            elif not char:
++                self.error("tree missing")
++            else:
++                self.error("tree missing")
++
++        if root is None:
++            self.error("tree with no nodes")
++        return root
++
++    def parse_properties(self):
++        properties = {}
++        while True:
++            self.skip_whitespace()
++            char = self.peek()
++            if not char or char in ";()":
++                break
++
++            start = self.pos
++            while self.peek() and self.peek() not in "[];()" and not self.peek().isspace():
++                self.pos += 1
++            identifier = self.text[start:self.pos]
++
++            if not identifier or not identifier.isalpha() or not identifier.isupper():
++                self.error("property must be in uppercase")
++
++            self.skip_whitespace()
++            if self.peek() != "[":
++                self.error("properties without delimiter")
++
++            values = []
++            while self.peek() == "[":
++                values.append(self.parse_value())
++
++            properties[identifier] = values
++
++        return properties
++
++    def parse_value(self):
++        # Opening bracket.
++        self.pos += 1
++        value = []
++        while True:
++            char = self.peek()
++            if not char:
++                self.error("properties without delimiter")
++            if char == "]":
++                self.pos += 1
++                return "".join(value)
++            if char == "\\":
++                self.pos += 1
++                escaped = self.peek()
++                if not escaped:
++                    self.error("properties without delimiter")
++                if escaped == "\n":
++                    # An escaped newline is removed entirely.
++                    self.pos += 1
++                elif escaped.isspace():
++                    # Escaped whitespace other than newline becomes a space.
++                    value.append(" ")
++                    self.pos += 1
++                else:
++                    value.append(escaped)
++                    self.pos += 1
++            elif char == "\n":
++                value.append(char)
++                self.pos += 1
++            elif char.isspace():
++                value.append(" ")
++                self.pos += 1
++            else:
++                value.append(char)
++                self.pos += 1
++
++
+ def parse(input_string):
+-    pass
++    return _Parser(input_string).parse_collection()

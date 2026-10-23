@@ -1,0 +1,122 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..c96a23f 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,115 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(z):
++    """sin(z) / z, with the removable singularity filled in."""
++    if z == 0.0:
++        return 1.0
++    if abs(z) < 1e-4:
++        z2 = z * z
++        return 1.0 - z2 / 6.0 + z2 * z2 / 120.0
++    return math.sin(z) / z
++
++
++def _sinhc(z):
++    """sinh(z) / z, with the removable singularity filled in."""
++    if z == 0.0:
++        return 1.0
++    if abs(z) < 1e-4:
++        z2 = z * z
++        return 1.0 + z2 / 6.0 + z2 * z2 / 120.0
++    return math.sinh(z) / z
++
++
++def _underdamped_transient(c, w, alpha, omega_d, t):
++    z = omega_d * t
++    return math.exp(-alpha * t) * (c * math.cos(z) + w * t * _sinc(z))
++
++
++def _overdamped_transient(c, w, alpha, beta, t):
++    z = beta * t
++
++    # For large positive z, e^{-alpha t} cosh(z) and e^{-alpha t} sinh(z)
++    # are bounded, although cosh(z) and sinh(z) themselves may overflow.
++    if z > 30.0 and t >= 0.0:
++        e1 = math.exp(z - alpha * t)
++        e2 = math.exp(-z - alpha * t)
++        ch = 0.5 * (e1 + e2)
++        sh_over_z = 0.5 * (e1 - e2) / z
++        return c * ch + w * t * sh_over_z
++
++    return math.exp(-alpha * t) * (c * math.cosh(z) + w * t * _sinhc(z))
++
++
++def _stiffness_offset(m, k, omega):
++    """k - m*omega^2, factored to avoid cancellation near resonance."""
++    root_k = math.sqrt(k)
++    root_m_omega = math.sqrt(m) * omega
++    return (root_k - root_m_omega) * (root_k + root_m_omega)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return F0 / math.hypot(_stiffness_offset(m, k, omega), c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    if c == 0.0:
++        omega_0 = math.sqrt(k) / math.sqrt(m)
++        x_free = x0 * math.cos(omega_0 * t)
++        if omega_0 != 0.0:
++            x_free += (v0 / omega_0) * math.sin(omega_0 * t)
++        else:
++            x_free += v0 * t
++
++        # cos(omega t) - cos(omega_0 t), written without cancellation:
++        # 2 sin((omega_0 + omega)t/2) sin((omega_0 - omega)t/2).
++        half_sum = (omega_0 + omega) * t / 2.0
++        half_diff = (omega_0 - omega) * t / 2.0
++        x_forced = (F0 / (2.0 * m)) * t * t * _sinc(half_diff) * _sinc(half_sum)
++        return x_free + x_forced
++
++    w2 = omega * omega
++    offset = _stiffness_offset(m, k, omega)
++    force_sin = c * omega
++    size = math.hypot(offset, force_sin)
++    if size == 0.0:
++        raise ValueError("undamped driving exactly at the natural frequency")
++
++    # Particular solution:
++    # x_p = (F0 / size) * (cos(phi) cos(omega t) + sin(phi) sin(omega t)),
++    # where cos(phi) = (k - m omega^2) / size and sin(phi) = c omega / size.
++    a = F0 / size
++    cos_phi = offset / size
++    sin_phi = force_sin / size
++
++    xp0 = a * cos_phi
++    vp0 = a * omega * sin_phi
++
++    # Homogeneous solution x_h = e^{-alpha t} (C cos(...) + W t sinc(...)),
++    # with the appropriate circular/hyperbolic functions.  This same form
++    # remains valid in the limit of critical damping.
++    alpha = c / (2.0 * m)
++    C = x0 - xp0
++    W = v0 - vp0 + alpha * C
++
++    root_mk = math.sqrt(m) * math.sqrt(k)
++    disc = (c - 2.0 * root_mk) * (c + 2.0 * root_mk)
++
++    if disc < 0.0:
++        omega_d = math.sqrt(-disc) / (2.0 * m)
++        xh = _underdamped_transient(C, W, alpha, omega_d, t)
++    elif disc > 0.0:
++        beta = math.sqrt(disc) / (2.0 * m)
++        xh = _overdamped_transient(C, W, alpha, beta, t)
++    else:
++        xh = math.exp(-alpha * t) * (C + W * t)
++
++    xp = a * (cos_phi * math.cos(omega * t) + sin_phi * math.sin(omega * t))
++    return xh + xp

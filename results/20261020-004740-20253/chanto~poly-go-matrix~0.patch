@@ -1,0 +1,78 @@
+diff --git a/matrix.go b/matrix.go
+index 1d957d5..5451b67 100644
+--- a/matrix.go
++++ b/matrix.go
+@@ -1,20 +1,68 @@
+ package matrix
+ 
+-// Define the Matrix type here.
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// Matrix represents a matrix of integers, stored row by row.
++type Matrix [][]int
+ 
+ func New(s string) (Matrix, error) {
+-	panic("Please implement the New function")
++	lines := strings.Split(s, "\n")
++	m := make(Matrix, len(lines))
++	for i, line := range lines {
++		fields := strings.Fields(line)
++		if len(fields) == 0 {
++			return nil, errors.New("empty row")
++		}
++		if i > 0 && len(fields) != len(m[0]) {
++			return nil, errors.New("uneven rows")
++		}
++		row := make([]int, len(fields))
++		for j, f := range fields {
++			n, err := strconv.Atoi(f)
++			if err != nil {
++				return nil, err
++			}
++			row[j] = n
++		}
++		m[i] = row
++	}
++	return m, nil
+ }
+ 
+ // Cols and Rows must return the results without affecting the matrix.
+ func (m Matrix) Cols() [][]int {
+-	panic("Please implement the Cols function")
++	if len(m) == 0 {
++		return [][]int{}
++	}
++	cols := make([][]int, len(m[0]))
++	for c := range cols {
++		col := make([]int, len(m))
++		for r := range m {
++			col[r] = m[r][c]
++		}
++		cols[c] = col
++	}
++	return cols
+ }
+ 
+ func (m Matrix) Rows() [][]int {
+-	panic("Please implement the Rows function")
++	rows := make([][]int, len(m))
++	for r := range m {
++		row := make([]int, len(m[r]))
++		copy(row, m[r])
++		rows[r] = row
++	}
++	return rows
+ }
+ 
+ func (m Matrix) Set(row, col, val int) bool {
+-	panic("Please implement the Set function")
++	if row < 0 || row >= len(m) || col < 0 || col >= len(m[row]) {
++		return false
++	}
++	m[row][col] = val
++	return true
+ }

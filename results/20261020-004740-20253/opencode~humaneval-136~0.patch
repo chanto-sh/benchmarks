@@ -1,0 +1,13 @@
+diff --git a/solution.py b/solution.py
+index b1814a4..68e1d72 100644
+--- a/solution.py
++++ b/solution.py
+@@ -11,3 +11,8 @@ def largest_smallest_integers(lst):
+     largest_smallest_integers([]) == (None, None)
+     largest_smallest_integers([0]) == (None, None)
+     '''
++    negatives = [n for n in lst if n < 0]
++    positives = [n for n in lst if n > 0]
++    largest_negative = max(negatives) if negatives else None
++    smallest_positive = min(positives) if positives else None
++    return (largest_negative, smallest_positive)

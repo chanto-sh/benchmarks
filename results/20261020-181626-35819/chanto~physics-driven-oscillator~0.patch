@@ -1,0 +1,96 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..7077987 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,89 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++from fractions import Fraction
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at x = 0."""
++    if abs(x) < 1.0e-4:
++        x2 = x * x
++        return 1.0 + x2 * (
++            -1.0 / 6.0
++            + x2 * (1.0 / 120.0 + x2 * (-1.0 / 5040.0 + x2 / 362880.0))
++        )
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the removable singularity at x = 0."""
++    if abs(x) < 1.0e-4:
++        x2 = x * x
++        return 1.0 + x2 * (
++            1.0 / 6.0
++            + x2 * (1.0 / 120.0 + x2 * (1.0 / 5040.0 + x2 / 362880.0))
++        )
++    return math.sinh(x) / x
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return (a, b) such that a*cos(wt) + b*sin(wt) is the steady state."""
++    # Use exact arithmetic for the potentially cancelling term k - m*omega^2.
++    delta = float(Fraction(k) - Fraction(m) * Fraction(omega) ** 2)
++    c_omega = c * omega
++    scale = math.hypot(delta, c_omega)
++    if scale == 0.0:
++        raise ValueError("steady state is unbounded at zero damping and resonance")
++    amp = F0 / scale
++    return amp * delta / scale, amp * c_omega / scale
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    delta = float(Fraction(k) - Fraction(m) * Fraction(omega) ** 2)
++    return F0 / math.hypot(delta, c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, b = _steady_state_coefficients(m, k, c, F0, omega)
++
++    gamma = c / (2.0 * m)
++    # Exact arithmetic avoids losing the small difference near critical damping.
++    mu2 = float(
++        (4 * Fraction(k) * Fraction(m) - Fraction(c) ** 2)
++        / (4 * Fraction(m) ** 2)
++    )
++
++    # Homogeneous part, chosen to satisfy y(0) = x0 - x_p(0),
++    # y'(0) = v0 - x_p'(0).
++    y0 = x0 - a
++    q = (v0 - b * omega) + gamma * y0
++
++    if mu2 > 0.0:
++        # Underdamped (this also covers c = 0).
++        wd = math.sqrt(mu2)
++        x = wd * t
++        homogeneous = math.exp(-gamma * t) * (
++            y0 * math.cos(x) + q * t * _sinc(x)
++        )
++    elif mu2 < 0.0:
++        # Overdamped.  The exponential form is used away from critical damping
++        # so that exp(-gamma*t) * cosh(nu*t) cannot overflow.
++        nu = math.sqrt(-mu2)
++        x = nu * t
++        if abs(x) < 1.0:
++            homogeneous = math.exp(-gamma * t) * (
++                y0 * math.cosh(x) + q * t * _sinhc(x)
++            )
++        else:
++            e_plus = math.exp((-gamma + nu) * t)
++            e_minus = math.exp((-gamma - nu) * t)
++            homogeneous = 0.5 * (
++                (y0 + q / nu) * e_plus + (y0 - q / nu) * e_minus
++            )
++    else:
++        # Critically damped.
++        homogeneous = math.exp(-gamma * t) * (y0 + q * t)
++
++    return a * math.cos(omega * t) + b * math.sin(omega * t) + homogeneous

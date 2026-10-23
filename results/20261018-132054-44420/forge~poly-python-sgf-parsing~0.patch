@@ -1,0 +1,118 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..7c14f0b 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -25,5 +25,112 @@ class SgfTree:
+         return not self == other
+ 
+ 
++def _parse_value(text, index):
++    """Parse a single ``[...]`` property value starting at ``index``.
++
++    Returns the decoded value and the index just past the closing bracket.
++    """
++    index += 1  # skip the opening '['
++    chars = []
++
++    while index < len(text):
++        char = text[index]
++
++        if char == "\\":
++            index += 1
++            if index >= len(text):
++                break
++            escaped = text[index]
++            if escaped == "\n":
++                # A newline immediately following a backslash is removed.
++                pass
++            elif escaped.isspace():
++                # Other whitespace after a backslash is converted to a space.
++                chars.append(" ")
++            else:
++                chars.append(escaped)
++            index += 1
++        elif char == "]":
++            return "".join(chars), index + 1
++        elif char == "\n":
++            chars.append("\n")
++            index += 1
++        elif char.isspace():
++            chars.append(" ")
++            index += 1
++        else:
++            chars.append(char)
++            index += 1
++
++    raise ValueError("tree missing")
++
++
++def _parse_node(text, index):
++    """Parse a node (starting at ``;``) and its properties."""
++    index += 1  # skip the ';'
++    properties = {}
++
++    while index < len(text) and text[index].isalpha():
++        if not ("A" <= text[index] <= "Z"):
++            raise ValueError("property must be in uppercase")
++
++        start = index
++        while index < len(text) and "A" <= text[index] <= "Z":
++            index += 1
++        key = text[start:index]
++
++        if index < len(text) and text[index].isalpha():
++            raise ValueError("property must be in uppercase")
++
++        if index >= len(text) or text[index] != "[":
++            raise ValueError("properties without delimiter")
++
++        values = []
++        while index < len(text) and text[index] == "[":
++            value, index = _parse_value(text, index)
++            values.append(value)
++
++        properties.setdefault(key, []).extend(values)
++
++    return SgfTree(properties=properties), index
++
++
++def _parse_tree(text, index):
++    """Parse a parenthesised tree starting at ``(``."""
++    index += 1  # skip the '('
++
++    nodes = []
++    while index < len(text) and text[index] == ";":
++        node, index = _parse_node(text, index)
++        nodes.append(node)
++
++    if not nodes:
++        raise ValueError("tree with no nodes")
++
++    subtrees = []
++    while index < len(text) and text[index] == "(":
++        subtree, index = _parse_tree(text, index)
++        subtrees.append(subtree)
++
++    if index >= len(text) or text[index] != ")":
++        raise ValueError("tree missing")
++    index += 1
++
++    # The nodes form a chain; the subtrees are variations of the last node.
++    for parent, child in zip(nodes, nodes[1:]):
++        parent.children.append(child)
++    nodes[-1].children.extend(subtrees)
++
++    return nodes[0], index
++
++
+ def parse(input_string):
+-    pass
++    if not input_string or input_string[0] != "(":
++        raise ValueError("tree missing")
++
++    tree, index = _parse_tree(input_string, 0)
++
++    if index != len(input_string):
++        raise ValueError("tree missing")
++
++    return tree

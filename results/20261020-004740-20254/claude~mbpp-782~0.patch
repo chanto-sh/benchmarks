@@ -1,0 +1,17 @@
+diff --git a/solution.py b/solution.py
+index 937a447..7da4bbc 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,11 @@
+ def odd_length_sum(arr):
+-    pass
++    """Return the sum of all odd-length contiguous subarrays of arr.
++
++    An element at index i belongs to (i + 1) * (n - i) subarrays; exactly
++    ceil((i + 1) * (n - i) / 2) of those have odd length.
++    """
++    n = len(arr)
++    total = 0
++    for i, value in enumerate(arr):
++        total += value * (((i + 1) * (n - i) + 1) // 2)
++    return total

@@ -1,0 +1,11 @@
+diff --git a/solution.py b/solution.py
+index 8e4ea63..49e4e46 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,5 @@
+ def index_multiplication(test_tup1, test_tup2):
+-    pass
++    return tuple(
++        index_multiplication(a, b) if isinstance(a, tuple) and isinstance(b, tuple) else a * b
++        for a, b in zip(test_tup1, test_tup2)
++    )

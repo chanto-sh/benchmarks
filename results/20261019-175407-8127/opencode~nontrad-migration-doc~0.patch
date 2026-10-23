@@ -1,0 +1,42 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..ebdea85
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,36 @@
++# Retiring `app/legacy_db.py`
++
++## Call sites
++
++- `app/admin/tools.py` — imports the function under an alias (`from app.legacy_db import query_raw as qr`); `purge_test_customers()` runs a `DELETE` against `customers` for `%@example.test` addresses.
++- `app/billing/invoices.py` — imports the module (`from app import legacy_db`) and calls `legacy_db.query_raw` in `unpaid(customer_id)` to read unpaid invoices, then pairs each row with `BILLING_CURRENCY`.
++- `app/orders/service.py` — imports the function directly (`from app.legacy_db import query_raw`); `open_orders(customer_id)` selects open orders, and `cancel(order_id)` updates an order's status to `cancelled`.
++
++`app/reports/export.py` (`query_raw_v2` from `app/db/fastpath.py`) and `app/search/index.py` only look similar by name; both already use `Session` and are not legacy callers.
++
++Prerequisite: `Session.fetch_all` in `app/db/session.py` currently raises `NotImplementedError`, so no call site can move until the replacement is actually implemented and tested.
++
++## Schema
++
++Current schema version: 14
++
++This comes from `SCHEMA_VERSION = 14` in `app/db/schema.py` and matches the newest migration, `app/db/migrations/0014_add_refunds.py`. (`docs/old_notes.md` still says v12; that is out of date.)
++
++No new schema version is needed for this migration. Switching the callers changes application code only; all the queries above run against tables that already exist at v14, and `SCHEMA_VERSION` should stay at 14. The commented-out v15 ("drop legacy views once legacy_db is gone") is a separate follow-up for after `legacy_db.py` has been removed and the switch has stuck — doing it as part of this change would add a database rollback step for no benefit.
++
++## Environment
++
++- `ORDERS_DB_URL` — required (`os.environ["ORDERS_DB_URL"]`) by `app/settings.py` at import time; the legacy connection and anything else touching the database use it. Still needed by the new session layer: `Session` falls back to `settings.DB_URL` when no URL is passed.
++- `ORDERS_DB_POOL` — optional, default `5`, parsed as an integer in `app/settings.py`. Still needed by the new session layer: `Session` falls back to `settings.DB_POOL_SIZE` for its pool size.
++- `LEGACY_DB_TIMEOUT_S` — optional, default `30`, read when `app/legacy_db.py` is imported and used as the timeout for each legacy connection. Not needed by the new session layer; keep it configured while legacy remains the rollback path, and remove it when `legacy_db.py` is deleted.
++- `BILLING_CURRENCY` — optional, default `EUR`, read by `app/billing/invoices.py` through `app.util.env.env` and attached to each returned invoice row. Not needed by the session layer, but `invoices.py` still needs it after the switch; don't drop it from deployments.
++
++Not runtime configuration: `ORDERS_TEST_MODE` is set only inside the test suite, `DB_PASSWORD` is mentioned only in `README.md`/docs and is no longer read by code, and `ORDERS_DB_REPLICA` exists only as a commented-out line in `app/settings.py`.
++
++## Rollback
++
++- Keep `app/legacy_db.py` and `LEGACY_DB_TIMEOUT_S` in place for at least one release after the last caller moves. The switch is code-only, so the primary rollback is to revert the migration commit(s) and redeploy the previous build; there is no schema change and therefore no down-migration or data conversion to undo.
++- Move one call site per commit (`admin/tools.py`, then `billing/invoices.py`, then `orders/service.py`) so a bad path can be reverted on its own. Restoring that module's legacy import and calls is enough; the other migrated modules can stay on `Session`.
++- Don't delete `legacy_db.py` or bump the schema to 15 until the new path has run in production long enough to trust. Both are what make the rollback cheap.
++- If a failure involves writes (`cancel()`'s `UPDATE`, `purge_test_customers()`'s `DELETE`), treat reverting the code as separate from recovering data: the legacy code path will not undo rows already written through the new path, so use the normal database backup/point-in-time restore procedure if those writes are wrong.
++- Rollback is complete when the reverted build is deployed, `LEGACY_DB_TIMEOUT_S` is confirmed set, and the legacy call paths pass their tests. Note that `tests/test_orders.py` patches `app.orders.service.query_raw`, so that patch target has to match whichever implementation is deployed.

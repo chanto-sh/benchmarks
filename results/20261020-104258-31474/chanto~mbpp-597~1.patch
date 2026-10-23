@@ -1,0 +1,55 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..613573a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,48 @@
+-def find_kth(arr1, arr2, k):
+-    pass
++def find_kth(arr1, arr2, *args):
++    """Return the k-th smallest element (1-indexed) of two sorted arrays.
++
++    Accepts either ``find_kth(arr1, arr2, k)`` or the MBPP form
++    ``find_kth(arr1, arr2, m, n, k)``.  Returns ``None`` when k is out of
++    range.
++    """
++    if len(args) == 1:
++        k = args[0]
++    elif len(args) == 3:
++        _, _, k = args
++    else:
++        raise TypeError(
++            "find_kth() expects (arr1, arr2, k) or (arr1, arr2, m, n, k)"
++        )
++
++    m, n = len(arr1), len(arr2)
++    if k < 1 or k > m + n:
++        return None
++
++    # Search the shorter array so the binary search is O(log(min(m, n))).
++    if m > n:
++        arr1, arr2 = arr2, arr1
++        m, n = n, m
++
++    # Choose i elements from arr1 and j = k - i from arr2.
++    lo, hi = max(0, k - n), min(k, m)
++    while lo <= hi:
++        i = (lo + hi) // 2
++        j = k - i
++
++        left1 = arr1[i - 1] if i > 0 else None
++        left2 = arr2[j - 1] if j > 0 else None
++        right1 = arr1[i] if i < m else None
++        right2 = arr2[j] if j < n else None
++
++        if ((left1 is None or right2 is None or left1 <= right2) and
++                (left2 is None or right1 is None or left2 <= right1)):
++            if left1 is None:
++                return left2
++            if left2 is None:
++                return left1
++            return max(left1, left2)
++
++        if left1 is not None and right2 is not None and left1 > right2:
++            hi = i - 1
++        else:
++            lo = i + 1

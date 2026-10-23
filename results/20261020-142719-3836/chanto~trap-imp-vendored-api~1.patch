@@ -1,0 +1,84 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..927f46d
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,41 @@
++# BLOCKED: `RateLimiter.acquire_async()` does not exist in the vendored library
++
++## What is blocking
++
++The migration to native async rate limiting requires `RateLimiter.acquire_async()`,
++but the synced copy of the platform library does not provide it.
++
++- `vendor/ratelimit.py` is version **2.4.1** and defines only `try_acquire()` and
++  the blocking `acquire()`.
++- `vendor/CHANGELOG.md` documents nothing newer than 2.4.1, and 2.4.1's only
++  entry is "Fix refill drift when the clock goes backwards." There is no release
++  in the changelog that mentions `acquire_async` or any async support.
++- `vendor/` is synced from the platform repo and must not be hand-edited, so the
++  missing method cannot be added here; it has to come from upstream.
++
++## Consequences
++
++`test_client.py` contains two tests that cannot pass against the vendored code:
++
++- `test_limiter_is_natively_async` — `RateLimiter.acquire_async` is absent.
++- `test_fetch_all_async_uses_native_limiter` — fails while accessing
++  `limiter.acquire_async` (the spy setup), before `fetch_all_async` runs.
++
++Current result: `1 passed, 2 failed`.
++
++## What was still done
++
++- Added `Client.fetch_all_async(urls)`, which awaits
++  `self.limiter.acquire_async()` before each request and awaits the fetch,
++  preserving order. It is written against the promised native API — no
++  workaround (no executor/thread offloading, no shim) is used.
++- Removed the `_ThreadedLimiter` workaround and its now-unused `asyncio` import.
++- `Client.fetch_all` is unchanged and still passes its test.
++
++## How to unblock
++
++Publish/point at the `ratelimit` version that actually contains
++`acquire_async()` upstream, then re-sync it with `make vendor` (updating
++`vendor/ratelimit.py` and `vendor/CHANGELOG.md`). Once that lands, no further
++client changes should be needed: `fetch_all_async` already calls the native
++method.
+diff --git a/client.py b/client.py
+index 2b319e5..58dd804 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +15,11 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Fetch each URL in order, awaiting the limiter before each request."""
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            out.append(await self.fetch(url))
++        return out

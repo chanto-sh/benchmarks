@@ -1,0 +1,75 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..c1f428a 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,60 @@
+ """Frequency response of the detector model."""
+ import math
+ 
++# Eight-point Gauss-Legendre rule on [-1, 1].
++_GL_NODES = (
++    -0.9602898564975363,
++    -0.7966664774136267,
++    -0.5255324099163290,
++    -0.1834346424956498,
++    0.1834346424956498,
++    0.5255324099163290,
++    0.7966664774136267,
++    0.9602898564975363,
++)
++_GL_WEIGHTS = (
++    0.1012285362903763,
++    0.2223810344533745,
++    0.3137066458778873,
++    0.3626837833783620,
++    0.3626837833783620,
++    0.3137066458778873,
++    0.2223810344533745,
++    0.1012285362903763,
++)
++_PHASE_STEP = math.pi / 8.0
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substitute x = u**2. Then dx / sqrt(x) = 2 du and the integral becomes
++
++        2 * integral from 0 to sqrt(b) of cos(t*u**2) du,
++
++    which has no singularity. Panels are chosen so that the phase changes by
++    at most pi/8 in each one, and Gauss-Legendre quadrature is applied there.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0.0:
++        return 0.0
++    t = abs(t)
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    upper = math.sqrt(b)
++    n = max(1, math.ceil(t * b / _PHASE_STEP))
++    width = _PHASE_STEP / t
++    contributions = []
++    left = 0.0
++    for j in range(1, n + 1):
++        right = upper if j == n else math.sqrt(j * width)
++        midpoint = 0.5 * (right + left)
++        half_width = 0.5 * (right - left)
++        panel = 0.0
++        for node, weight in zip(_GL_NODES, _GL_WEIGHTS):
++            u = midpoint + half_width * node
++            panel += weight * math.cos(t * u * u)
++        contributions.append(half_width * panel)
++        left = right
++
++    return 2.0 * math.fsum(contributions)

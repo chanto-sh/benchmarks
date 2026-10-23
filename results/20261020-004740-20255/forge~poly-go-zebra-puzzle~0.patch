@@ -1,0 +1,224 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..1128cd7 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,218 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++const houses = 5
++
++// Categories of attributes.
++const (
++	nationality = iota
++	color
++	drink
++	pet
++	smoke
++	numCategories
++)
++
++// Value indexes within the nationality category.
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++// Value indexes within the color category.
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++// Value indexes within the drink category.
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++// Value indexes within the pet category.
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++// Value indexes within the smoke category.
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++var nationalities = [houses]string{
++	englishman: "Englishman",
++	spaniard:   "Spaniard",
++	ukrainian:  "Ukrainian",
++	norwegian:  "Norwegian",
++	japanese:   "Japanese",
++}
++
++// state holds a partial assignment. pos[category][value] is the house index
++// (0 is the leftmost house) occupied by that value. full is the number of
++// categories that have been completely assigned.
++type state struct {
++	pos  [numCategories][houses]int
++	used [numCategories][houses]bool
++	full int
++}
++
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	var s state
++	if !solve(&s, 0) {
++		panic("zebra puzzle has no solution")
++	}
++	return Solution{
++		DrinksWater: nationalities[valueAt(&s, nationality, s.pos[drink][water])],
++		OwnsZebra:   nationalities[valueAt(&s, nationality, s.pos[pet][zebra])],
++	}
++}
++
++// solve assigns every value of categories cat..numCategories-1 a distinct house.
++func solve(s *state, cat int) bool {
++	if cat == numCategories {
++		return true
++	}
++	return assignValue(s, cat, 0)
++}
++
++// assignValue tries every house for value number `value` of category `cat`.
++func assignValue(s *state, cat, value int) bool {
++	if value == houses {
++		s.full = cat + 1
++		if !consistent(s) {
++			return false
++		}
++		if solve(s, cat+1) {
++			return true
++		}
++		s.full = cat
++		return false
++	}
++	for h := 0; h < houses; h++ {
++		if s.used[cat][h] {
++			continue
++		}
++		s.pos[cat][value] = h
++		s.used[cat][h] = true
++		if assignValue(s, cat, value+1) {
++			return true
++		}
++		s.used[cat][h] = false
++	}
++	return false
++}
++
++// consistent reports whether all constraints expressible with the categories
++// assigned so far hold. Categories are added in the order nationality, color,
++// drink, pet, smoke, so a constraint is only evaluated once every category it
++// mentions has been assigned.
++func consistent(s *state) bool {
++	pos := func(cat, value int) int { return s.pos[cat][value] }
++	nextTo := func(a, b int) bool {
++		d := a - b
++		return d == 1 || d == -1
++	}
++
++	if s.full >= 1 {
++		// 10. The Norwegian lives in the first house.
++		if pos(nationality, norwegian) != 0 {
++			return false
++		}
++	}
++
++	if s.full >= 2 {
++		// 2. The Englishman lives in the red house.
++		if pos(nationality, englishman) != pos(color, red) {
++			return false
++		}
++		// 6. The green house is immediately to the right of the ivory house.
++		if pos(color, green) != pos(color, ivory)+1 {
++			return false
++		}
++		// 15. The Norwegian lives next to the blue house.
++		if !nextTo(pos(nationality, norwegian), pos(color, blue)) {
++			return false
++		}
++	}
++
++	if s.full >= 3 {
++		// 4. Coffee is drunk in the green house.
++		if pos(drink, coffee) != pos(color, green) {
++			return false
++		}
++		// 5. The Ukrainian drinks tea.
++		if pos(nationality, ukrainian) != pos(drink, tea) {
++			return false
++		}
++		// 9. Milk is drunk in the middle house.
++		if pos(drink, milk) != 2 {
++			return false
++		}
++	}
++
++	if s.full >= 4 {
++		// 3. The Spaniard owns the dog.
++		if pos(nationality, spaniard) != pos(pet, dog) {
++			return false
++		}
++	}
++
++	if s.full >= 5 {
++		// 7. The Old Gold smoker owns snails.
++		if pos(smoke, oldGold) != pos(pet, snails) {
++			return false
++		}
++		// 8. Kools are smoked in the yellow house.
++		if pos(smoke, kools) != pos(color, yellow) {
++			return false
++		}
++		// 12. Kools are smoked next to the house where the horse is kept.
++		if !nextTo(pos(smoke, kools), pos(pet, horse)) {
++			return false
++		}
++		// 11. The Chesterfields smoker lives next to the man with the fox.
++		if !nextTo(pos(smoke, chesterfields), pos(pet, fox)) {
++			return false
++		}
++		// 13. The Lucky Strike smoker drinks orange juice.
++		if pos(smoke, luckyStrike) != pos(drink, orangeJuice) {
++			return false
++		}
++		// 14. The Japanese smokes Parliaments.
++		if pos(smoke, parliaments) != pos(nationality, japanese) {
++			return false
++		}
++	}
++
++	return true
++}
++
++// valueAt returns the index of the value of category cat that is located in
++// the given house.
++func valueAt(s *state, cat, house int) int {
++	for v := 0; v < houses; v++ {
++		if s.pos[cat][v] == house {
++			return v
++		}
++	}
++	return -1
+ }

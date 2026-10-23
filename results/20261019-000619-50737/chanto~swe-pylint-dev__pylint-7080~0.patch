@@ -1,0 +1,44 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index e2bbf06..03695c4 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -587,7 +587,25 @@ class PyLinter(
+ 
+         Returns iterator of paths to discovered modules and packages.
+         """
++
++        def _is_ignored_directory(directory: str) -> bool:
++            # A directory can be matched by patterns such as '^src/gen/.*$'
++            # only when it is checked with a trailing path separator.
++            return _is_ignored_file(
++                directory,
++                self.config.ignore,
++                self.config.ignore_patterns,
++                self.config.ignore_paths,
++            ) or _is_ignored_file(
++                directory + os.path.sep,
++                self.config.ignore,
++                self.config.ignore_patterns,
++                self.config.ignore_paths,
++            )
++
+         for something in files_or_modules:
++            if os.path.isdir(something) and _is_ignored_directory(something):
++                continue
+             if os.path.isdir(something) and not os.path.isfile(
+                 os.path.join(something, "__init__.py")
+             ):
+@@ -597,12 +615,7 @@ class PyLinter(
+                         # Skip subtree of already discovered package.
+                         continue
+ 
+-                    if _is_ignored_file(
+-                        root,
+-                        self.config.ignore,
+-                        self.config.ignore_patterns,
+-                        self.config.ignore_paths,
+-                    ):
++                    if _is_ignored_directory(root):
+                         skip_subtrees.append(root)
+                         continue
+ 

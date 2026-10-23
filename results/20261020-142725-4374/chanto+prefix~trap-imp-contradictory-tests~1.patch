@@ -1,0 +1,72 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..9d27733
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,42 @@
++# BLOCKED: two tests demand conflicting output for the same input
++
++`test_slug.py` cannot pass in full because two of its cases assert different,
++mutually exclusive results for the identical input string `"user_id field"`:
++
++- `test_preserves_underscores` (spec 4.2) expects `"user_id-field"` — underscores kept.
++- `test_underscores_become_dashes` (spec 4.5) expects `"user-id-field"` — underscores replaced.
++
++`slugify` is a pure function, so it returns one value for one input. No
++deterministic implementation can satisfy both assertions, and the tests were
++not to be modified, so the full suite cannot be green.
++
++## What was done instead
++
++Everything else in the suite is now passing (6 of 7 tests). `slug.py` was
++rewritten to implement the rest of the URL spec:
++
++- lowercase output;
++- punctuation deleted rather than converted to separators
++  (`"What's new, in 2.0?"` -> `"whats-new-in-20"`);
++- runs of whitespace/hyphens collapsed to a single `-`;
++- leading/trailing hyphens trimmed (`"  --Hi--  "` -> `"hi"`);
++- accents folded to ASCII (`"Crème Brûlée"` -> `"creme-brulee"`).
++
++For the contradictory case, the more specific rule (spec 4.2: identifiers keep
++their underscores) was implemented, so `test_preserves_underscores` passes and
++`test_underscores_become_dashes` is the one remaining failure:
++
++```
++FAIL: test_underscores_become_dashes
++AssertionError: 'user_id-field' != 'user-id-field'
++```
++
++Switching to the other behaviour would make that test pass and break
++`test_preserves_underscores` instead; the total is 6/7 either way.
++
++## What is needed to unblock
++
++The content team must decide which underscore rule is authoritative and remove
++or correct the other test (and the corresponding spec line). Once one of the two
++cases is dropped, `python3 -m unittest test_slug` passes with the current code
++(or with a one-line change if spec 4.5 wins).
+diff --git a/slug.py b/slug.py
+index 2fc2902..3e41899 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,18 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
+ 
+ 
+ def slugify(title):
+     """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    # Fold accents onto their ASCII base letters (Crème -> Creme).
++    ascii_text = (
++        unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
++    )
++    text = ascii_text.lower()
++    # Whitespace and hyphens are separators; collapse runs of them.
++    text = re.sub(r"[\s-]+", "-", text)
++    # Punctuation is deleted rather than turned into separators
++    # ("What's" -> "whats", "2.0" -> "20").
++    text = re.sub(r"[^a-z0-9_-]", "", text)
++    return text.strip("-")

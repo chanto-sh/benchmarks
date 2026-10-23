@@ -1,0 +1,53 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..5bcd00e 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,47 @@
++from functools import lru_cache
++
++BOOK_PRICE = 800
++DISCOUNTS = {
++    1: 0,
++    2: 5,
++    3: 10,
++    4: 20,
++    5: 25,
++}
++
++
+ def total(basket):
+-    pass
++    counts = [0] * 5
++    for book in basket:
++        counts[book - 1] += 1
++
++    @lru_cache(maxsize=None)
++    def best_price(state):
++        if not any(state):
++            return 0
++
++        available = [index for index, count in enumerate(state) if count]
++        cheapest = float("inf")
++
++        # A group can be any non-empty set of distinct books still available.
++        for mask in range(1, 1 << len(available)):
++            group = [
++                available[bit]
++                for bit in range(len(available))
++                if mask & (1 << bit)
++            ]
++            size = len(group)
++            remaining = list(state)
++            for index in group:
++                remaining[index] -= 1
++
++            group_price = size * BOOK_PRICE * (100 - DISCOUNTS[size]) // 100
++            price = group_price + best_price(
++                tuple(sorted(remaining, reverse=True))
++            )
++            if price < cheapest:
++                cheapest = price
++
++        return cheapest
++
++    return best_price(tuple(sorted(counts, reverse=True)))

@@ -1,0 +1,39 @@
+diff --git a/heat.py b/heat.py
+index d670542..89d26b6 100644
+--- a/heat.py
++++ b/heat.py
+@@ -1,5 +1,7 @@
+ """1D heat equation u_t = alpha u_xx on a rod, explicit finite differences."""
+ 
++import math
++
+ 
+ def solve(u0, alpha, length, t_end):
+     """Temperature profile at time t_end.
+@@ -8,11 +10,22 @@ def solve(u0, alpha, length, t_end):
+         (both ends included; the end values are held fixed).
+     """
+     nx = len(u0)
+-    dx = length / (nx - 1)
+-    dt = 1e-3
+-    steps = int(t_end / dt)
+     u = list(u0)
++    if nx < 3 or t_end <= 0 or alpha == 0 or length <= 0:
++        return u
++
++    dx = length / (nx - 1)
++
++    # Explicit Euler is stable only while alpha*dt/dx^2 <= 1/2.  Use a
++    # safety margin, and retain the original 1e-3 cap for accuracy.
++    dt_stable = 0.4 * dx * dx / alpha
++    dt_max = min(1e-3, dt_stable)
++
++    # Take uniform steps whose total is exactly t_end, with dt <= dt_max.
++    steps = max(1, math.ceil(t_end / dt_max))
++    dt = t_end / steps
++    r = alpha * dt / (dx * dx)
++
+     for _ in range(steps):
+-        r = alpha * dt / (dx * dx)
+         u = [u[0]] + [u[i] + r * (u[i - 1] - 2 * u[i] + u[i + 1]) for i in range(1, nx - 1)] + [u[-1]]
+     return u

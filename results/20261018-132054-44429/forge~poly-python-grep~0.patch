@@ -1,0 +1,54 @@
+diff --git a/grep.py b/grep.py
+index 3c8a8e1..f232aa1 100644
+--- a/grep.py
++++ b/grep.py
+@@ -1,2 +1,48 @@
+ def grep(pattern, flags, files):
+-    pass
++    """Search files for lines matching a fixed string and return matching lines.
++
++    ``flags`` is a string containing zero or more space-separated flags:
++    ``-n`` (line numbers), ``-l`` (file names only), ``-i`` (case-insensitive),
++    ``-v`` (invert the match), ``-x`` (match the entire line).
++    """
++    flag_set = set(flags.split())
++
++    line_numbers = "-n" in flag_set
++    files_only = "-l" in flag_set
++    ignore_case = "-i" in flag_set
++    invert = "-v" in flag_set
++    entire_line = "-x" in flag_set
++
++    needle = pattern.lower() if ignore_case else pattern
++    multiple_files = len(files) > 1
++
++    results = []
++    for filename in files:
++        with open(filename) as handle:
++            lines = handle.readlines()
++
++        matched_lines = []
++        for number, line in enumerate(lines, start=1):
++            text = line[:-1] if line.endswith("\n") else line
++            haystack = text.lower() if ignore_case else text
++
++            if entire_line:
++                matched = haystack == needle
++            else:
++                matched = needle in haystack
++
++            if matched != invert:
++                matched_lines.append((number, text))
++
++        if files_only:
++            if matched_lines:
++                results.append(filename + "\n")
++            continue
++
++        for number, text in matched_lines:
++            prefix = filename + ":" if multiple_files else ""
++            if line_numbers:
++                prefix += f"{number}:"
++            results.append(prefix + text + "\n")
++
++    return "".join(results)

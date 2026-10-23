@@ -1,0 +1,49 @@
+diff --git a/game.py b/game.py
+index 768dec9..d57c44e 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,43 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    if not (1 <= k <= n):
++        raise ValueError("expected 1 <= k <= n")
++
++    # E[i] = 1 + (1/k) * sum(E[next(i, r)]) for i in 0..n-1, with E[n] = 0.
++    # Build the augmented system A * E = b.
++    A = [[Fraction(0) for _ in range(n + 1)] for _ in range(n)]
++    inv_k = Fraction(1, k)
++    for i in range(n):
++        A[i][i] += 1
++        for roll in range(1, k + 1):
++            target = i + roll
++            if target == n:
++                continue
++            if target > n:
++                target = 2 * n - target  # bounce back by the excess
++            A[i][target] -= inv_k
++        A[i][n] = Fraction(1)
++
++    # Gaussian elimination with exact arithmetic.
++    for col in range(n):
++        pivot = next(row for row in range(col, n) if A[row][col] != 0)
++        if pivot != col:
++            A[col], A[pivot] = A[pivot], A[col]
++        pivot_value = A[col][col]
++        for row in range(col + 1, n):
++            if A[row][col] == 0:
++                continue
++            factor = A[row][col] / pivot_value
++            for c in range(col, n + 1):
++                A[row][c] -= factor * A[col][c]
++
++    # Back substitution.
++    E = [Fraction(0)] * n
++    for i in range(n - 1, -1, -1):
++        value = A[i][n]
++        for j in range(i + 1, n):
++            value -= A[i][j] * E[j]
++        E[i] = value / A[i][i]
++
++    return E[0]

@@ -1,0 +1,57 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..b4539a3 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,50 @@
+-def find_kth(arr1, arr2, k):
+-    pass
++def find_kth(arr1, arr2, *args, **kwargs):
++    """Return the k-th smallest element (1-indexed) of two sorted arrays.
++
++    Both ``find_kth(arr1, arr2, k)`` and the original MBPP form
++    ``find_kth(arr1, arr2, m, n, k)`` are accepted.
++    """
++    if "k" in kwargs:
++        k = kwargs["k"]
++        m = kwargs.get("m", len(arr1))
++        n = kwargs.get("n", len(arr2))
++    elif len(args) == 1:
++        k = args[0]
++        m, n = len(arr1), len(arr2)
++    elif len(args) == 3:
++        m, n, k = args
++    else:
++        raise TypeError("find_kth expects (arr1, arr2, k) or "
++                        "(arr1, arr2, m, n, k)")
++
++    a = arr1[:m]
++    b = arr2[:n]
++    total = len(a) + len(b)
++    if not isinstance(k, int) or k < 1 or k > total:
++        raise IndexError("k is out of range")
++
++    if len(a) > len(b):
++        a, b = b, a
++
++    # Choose i elements from a and k - i from b.  The first k elements of
++    # the merged arrays are then split correctly when a[i-1] <= b[k-i] and
++    # b[k-i-1] <= a[i].
++    lo = max(0, k - len(b))
++    hi = min(k, len(a))
++    while lo <= hi:
++        i = (lo + hi) // 2
++        j = k - i
++
++        left_a = a[i - 1] if i > 0 else float("-inf")
++        right_a = a[i] if i < len(a) else float("inf")
++        left_b = b[j - 1] if j > 0 else float("-inf")
++        right_b = b[j] if j < len(b) else float("inf")
++
++        if left_a <= right_b and left_b <= right_a:
++            return max(left_a, left_b)
++        if left_a > right_b:
++            hi = i - 1
++        else:
++            lo = i + 1
++
++    raise IndexError("k is out of range")

@@ -1,0 +1,78 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..789abf6 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,72 @@
+ package scale
+ 
++import "strings"
++
++var sharpNotes = []string{"A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"}
++var flatNotes = []string{"A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"}
++
++var majorFlatKeys = map[string]bool{
++	"F": true, "Bb": true, "Eb": true, "Ab": true, "Db": true, "Gb": true,
++}
++
++var minorFlatKeys = map[string]bool{
++	"D": true, "G": true, "C": true, "F": true, "Bb": true, "Eb": true,
++}
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	if tonic == "" {
++		return nil
++	}
++
++	// A lower-case tonic denotes a minor key, an upper-case one a major key.
++	minor := tonic[0] >= 'a' && tonic[0] <= 'z'
++	name := strings.ToUpper(tonic[:1]) + tonic[1:]
++
++	chromatic := sharpNotes
++	if (minor && minorFlatKeys[name]) || (!minor && majorFlatKeys[name]) {
++		chromatic = flatNotes
++	}
++
++	start := noteIndex(chromatic, name)
++
++	steps := []int{}
++	for _, r := range interval {
++		switch r {
++		case 'm':
++			steps = append(steps, 1)
++		case 'M':
++			steps = append(steps, 2)
++		case 'A':
++			steps = append(steps, 3)
++		default:
++			steps = append(steps, 1)
++		}
++	}
++
++	if len(steps) == 0 {
++		// Chromatic scale: all twelve notes, starting from the tonic.
++		result := make([]string, 12)
++		for i := 0; i < 12; i++ {
++			result[i] = chromatic[(start+i)%12]
++		}
++		return result
++	}
++
++	result := make([]string, 0, len(steps)+1)
++	pos := start
++	result = append(result, chromatic[pos])
++	for _, step := range steps {
++		pos = (pos + step) % 12
++		result = append(result, chromatic[pos])
++	}
++	return result
++}
++
++func noteIndex(notes []string, name string) int {
++	for i, n := range notes {
++		if n == name {
++			return i
++		}
++	}
++	return 0
+ }

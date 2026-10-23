@@ -1,0 +1,22 @@
+diff --git a/transpose.py b/transpose.py
+index 24b60af..43f3263 100644
+--- a/transpose.py
++++ b/transpose.py
+@@ -1,2 +1,16 @@
+ def transpose(text):
+-    pass
++    if text == "":
++        return ""
++
++    lines = text.split("\n")
++    max_length = max(len(line) for line in lines)
++
++    rows = []
++    for column in range(max_length):
++        chars = [line[column] if column < len(line) else " " for line in lines]
++        # Drop trailing cells that only exist because of right-padding.
++        while chars and column >= len(lines[len(chars) - 1]):
++            chars.pop()
++        rows.append("".join(chars))
++
++    return "\n".join(rows)

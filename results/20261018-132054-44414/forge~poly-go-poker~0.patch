@@ -1,0 +1,233 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..0004585 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,227 @@
+ package poker
+ 
++import (
++	"fmt"
++	"sort"
++	"strings"
++)
++
++// card is a parsed playing card. rank is 2..14 where 11=J, 12=Q, 13=K, 14=A.
++type card struct {
++	rank int
++	suit rune
++}
++
++// validSuits holds the only suits accepted by the parser.
++var validSuits = map[rune]bool{
++	'♤': true, // spades
++	'♡': true, // hearts
++	'♢': true, // diamonds
++	'♧': true, // clubs
++}
++
++// rankValues maps the textual representation of a rank to its numeric value.
++var rankValues = map[string]int{
++	"2":  2,
++	"3":  3,
++	"4":  4,
++	"5":  5,
++	"6":  6,
++	"7":  7,
++	"8":  8,
++	"9":  9,
++	"10": 10,
++	"J":  11,
++	"Q":  12,
++	"K":  13,
++	"A":  14,
++}
++
++// handRank is a comparable description of a hand: a category plus the values
++// that break ties within that category, most significant first.
++type handRank struct {
++	category int
++	tiebreak []int
++}
++
++// compare returns 1 if a is better than b, -1 if worse and 0 if they tie.
++func (a handRank) compare(b handRank) int {
++	if a.category != b.category {
++		if a.category > b.category {
++			return 1
++		}
++		return -1
++	}
++	for i := 0; i < len(a.tiebreak) || i < len(b.tiebreak); i++ {
++		var av, bv int
++		if i < len(a.tiebreak) {
++			av = a.tiebreak[i]
++		}
++		if i < len(b.tiebreak) {
++			bv = b.tiebreak[i]
++		}
++		if av != bv {
++			if av > bv {
++				return 1
++			}
++			return -1
++		}
++	}
++	return 0
++}
++
++// parseCard turns a string such as "10♢" into a card, rejecting anything that
++// is not exactly a valid rank immediately followed by exactly one valid suit.
++func parseCard(s string) (card, error) {
++	for i, r := range s {
++		if !validSuits[r] {
++			continue
++		}
++		// The suit must be the final character of the card.
++		if i+len(string(r)) != len(s) {
++			return card{}, fmt.Errorf("invalid card %q: unexpected characters after suit", s)
++		}
++		rank, ok := rankValues[s[:i]]
++		if !ok {
++			return card{}, fmt.Errorf("invalid card %q: invalid rank %q", s, s[:i])
++		}
++		return card{rank: rank, suit: r}, nil
++	}
++	return card{}, fmt.Errorf("invalid card %q: missing or invalid suit", s)
++}
++
++// parseHand parses a hand of exactly five space-separated cards.
++func parseHand(hand string) ([]card, error) {
++	fields := strings.Fields(hand)
++	if len(fields) != 5 {
++		return nil, fmt.Errorf("invalid hand %q: expected 5 cards, got %d", hand, len(fields))
++	}
++	cards := make([]card, 0, 5)
++	for _, f := range fields {
++		c, err := parseCard(f)
++		if err != nil {
++			return nil, err
++		}
++		cards = append(cards, c)
++	}
++	return cards, nil
++}
++
++// straightHigh reports the highest card of a straight formed by the distinct
++// ranks, treating an ace as low for A-2-3-4-5.
++func straightHigh(ranks []int) (int, bool) {
++	if len(ranks) != 5 {
++		return 0, false
++	}
++	consecutive := true
++	for i := 1; i < len(ranks); i++ {
++		if ranks[i] != ranks[i-1]+1 {
++			consecutive = false
++			break
++		}
++	}
++	if consecutive {
++		return ranks[4], true
++	}
++	// Ace-low straight: A,2,3,4,5 (ranks sorted ascending: 2,3,4,5,14).
++	if ranks[0] == 2 && ranks[1] == 3 && ranks[2] == 4 && ranks[3] == 5 && ranks[4] == 14 {
++		return 5, true
++	}
++	return 0, false
++}
++
++// evaluate scores a five-card hand.
++func evaluate(cards []card) handRank {
++	counts := make(map[int]int, 5)
++	suits := make(map[rune]bool, 5)
++	for _, c := range cards {
++		counts[c.rank]++
++		suits[c.suit] = true
++	}
++	flush := len(suits) == 1
++
++	// All ranks, sorted descending.
++	ranks := make([]int, 0, len(counts))
++	for r := range counts {
++		ranks = append(ranks, r)
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(ranks)))
++
++	// Groups of (count, rank) sorted by count then rank, both descending.
++	type group struct {
++		count int
++		rank  int
++	}
++	groups := make([]group, 0, len(ranks))
++	for _, r := range ranks {
++		groups = append(groups, group{count: counts[r], rank: r})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count != groups[j].count {
++			return groups[i].count > groups[j].count
++		}
++		return groups[i].rank > groups[j].rank
++	})
++
++	distinctAsc := make([]int, len(ranks))
++	for i, r := range ranks {
++		distinctAsc[len(ranks)-1-i] = r
++	}
++	high, isStraight := straightHigh(distinctAsc)
++
++	switch {
++	case isStraight && flush:
++		return handRank{category: 8, tiebreak: []int{high}}
++	case groups[0].count == 4:
++		return handRank{category: 7, tiebreak: []int{groups[0].rank, groups[1].rank}}
++	case groups[0].count == 3 && groups[1].count == 2:
++		return handRank{category: 6, tiebreak: []int{groups[0].rank, groups[1].rank}}
++	case flush:
++		return handRank{category: 5, tiebreak: ranks}
++	case isStraight:
++		return handRank{category: 4, tiebreak: []int{high}}
++	case groups[0].count == 3:
++		return handRank{category: 3, tiebreak: []int{groups[0].rank, groups[1].rank, groups[2].rank}}
++	case groups[0].count == 2 && groups[1].count == 2:
++		return handRank{category: 2, tiebreak: []int{groups[0].rank, groups[1].rank, groups[2].rank}}
++	case groups[0].count == 2:
++		return handRank{category: 1, tiebreak: []int{groups[0].rank, groups[1].rank, groups[2].rank, groups[3].rank}}
++	default:
++		return handRank{category: 0, tiebreak: ranks}
++	}
++}
++
++// BestHand returns the best hand, or all hands tied for best, from the given
++// list. Hands are returned in the same textual form and relative order they
++// were provided in. An error is returned if any hand is malformed.
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	type evaluated struct {
++		hand string
++		rank handRank
++	}
++
++	best := make([]evaluated, 0, len(hands))
++	for _, h := range hands {
++		cards, err := parseHand(h)
++		if err != nil {
++			return nil, err
++		}
++		r := evaluate(cards)
++		if len(best) == 0 {
++			best = append(best, evaluated{hand: h, rank: r})
++			continue
++		}
++		switch cmp := r.compare(best[0].rank); {
++		case cmp > 0:
++			best = []evaluated{{hand: h, rank: r}}
++		case cmp == 0:
++			best = append(best, evaluated{hand: h, rank: r})
++		}
++	}
++
++	result := make([]string, len(best))
++	for i, e := range best {
++		result[i] = e.hand
++	}
++	return result, nil
+ }

@@ -1,0 +1,79 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..6cf1c03 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -11,7 +11,7 @@
+ from __future__ import annotations
+ 
+ import os
+-import re
++import string
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
+@@ -174,16 +174,30 @@ class TextReporter(BaseReporter):
+         # Set template to the currently selected template
+         self._template = template
+ 
+-        # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++        # Check to see if all parameters in the template are attributes of the Message.
++        # Use the string formatter to parse the template so that escaped braces
++        # (e.g. '{{' and '}}') are not mistaken for replacement fields.
++        fixed_template = []
++        for literal, field_name, format_spec, conversion in string.Formatter().parse(
++            template
++        ):
++            # The formatter returns escaped braces unescaped, so escape them again.
++            fixed_template.append(literal.replace("{", "{{").replace("}", "}}"))
++            if field_name is None:
++                continue
++            if field_name and field_name not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{field_name}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
+-        self._fixed_template = template
++                continue
++            field = f"{{{field_name}"
++            if conversion:
++                field += f"!{conversion}"
++            if format_spec:
++                field += f":{format_spec}"
++            fixed_template.append(f"{field}}}")
++        self._fixed_template = "".join(fixed_template)
+ 
+     def write_message(self, msg: Message) -> None:
+         """Convenience method to write a formatted message with class default
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..210bdc5 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -81,6 +81,23 @@ def test_template_option_end_line(linter) -> None:
+     assert out_lines[2] == "my_mod:2:0:2:4: C0301: Line too long (3/4) (line-too-long)"
+ 
+ 
++def test_template_option_with_escaped_braces(linter) -> None:
++    """Test the msg-template option with escaped braces."""
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    with warnings.catch_warnings(record=True) as records:
++        warnings.simplefilter("always")
++        linter.set_current_module("my_module")
++    assert not records
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[0] == "************* Module my_module"
++    assert out_lines[1] == '{ "Category": "convention" }'
++
++
+ def test_template_option_non_existing(linter) -> None:
+     """Test the msg-template option with non-existent options.
+     This makes sure that this option remains backwards compatible as new

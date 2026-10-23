@@ -1,0 +1,80 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..4a8daa9 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -30,4 +30,27 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+     """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    # Work on copies so the caller's lists are never modified.
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++    n = len(masses)
++    if steps <= 0:
++        return pos, vel
++
++    # Velocity Verlet (kick-drift-kick): symplectic, so the energy error stays
++    # bounded over long integrations instead of accumulating secular drift.
++    acc = accelerations(masses, pos, G)
++    dt2 = dt * dt
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        for i in range(n):
++            pos[i][0] += vel[i][0] * dt + 0.5 * acc[i][0] * dt2
++            pos[i][1] += vel[i][1] * dt + 0.5 * acc[i][1] * dt2
++
++        new_acc = accelerations(masses, pos, G)
++        for i in range(n):
++            vel[i][0] += half_dt * (acc[i][0] + new_acc[i][0])
++            vel[i][1] += half_dt * (acc[i][1] + new_acc[i][1])
++        acc = new_acc
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..e73e7fa 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -17,6 +17,42 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_unequal_mass_circular_orbit_long_run(self):
++        # Mass ratio 3:1 on a circular orbit about the centre of mass.
++        m = [3.0, 1.0]
++        r = 2.0
++        v_rel = math.sqrt(sum(m) / r)
++        pos = [[-r * m[1] / sum(m), 0.0], [r * m[0] / sum(m), 0.0]]
++        vel = [[0.0, -v_rel * m[1] / sum(m)], [0.0, v_rel * m[0] / sum(m)]]
++        pos0 = [xy[:] for xy in pos]
++        vel0 = [xy[:] for xy in vel]
++        e0 = energy(m, pos, vel)
++        p0 = [sum(mi * vi[k] for mi, vi in zip(m, vel)) for k in range(2)]
++
++        p, q = simulate(m, pos, vel, 0.005, 40000)
++
++        self.assertEqual(pos0, pos)
++        self.assertEqual(vel0, vel)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-6)
++        p1 = [sum(mi * vi[k] for mi, vi in zip(m, q)) for k in range(2)]
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-12)
++
++    def test_figure_eight_long_run(self):
++        # Chenciner-Montgomery figure-eight choreography.
++        m = [1.0, 1.0, 1.0]
++        x = [0.97000436, -0.24308753]
++        v = [0.4662036850, 0.4323657300]
++        pos = [x[:], [-x[0], -x[1]], [0.0, 0.0]]
++        vel = [v[:], v[:], [-2.0 * v[0], -2.0 * v[1]]]
++        e0 = energy(m, pos, vel)
++        p0 = [sum(mi * vi[k] for mi, vi in zip(m, vel)) for k in range(2)]
++
++        p, q = simulate(m, pos, vel, 0.001, 50000)
++
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-5)
++        p1 = [sum(mi * vi[k] for mi, vi in zip(m, q)) for k in range(2)]
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-12)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

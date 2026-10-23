@@ -1,0 +1,49 @@
+diff --git a/bottle_song.py b/bottle_song.py
+index 9a5e67f..0f2011b 100644
+--- a/bottle_song.py
++++ b/bottle_song.py
+@@ -1,2 +1,43 @@
++NUMBERS = [
++    "no",
++    "one",
++    "two",
++    "three",
++    "four",
++    "five",
++    "six",
++    "seven",
++    "eight",
++    "nine",
++    "ten",
++]
++
++
++def _bottles(count, capitalized=False):
++    """Return the phrase describing ``count`` green bottles."""
++    word = NUMBERS[count]
++    if capitalized:
++        word = word.capitalize()
++    noun = "bottle" if count == 1 else "bottles"
++    return f"{word} green {noun}"
++
++
+ def recite(start, take=1):
+-    pass
++    verses = []
++    for count in range(start, start - take, -1):
++        current = _bottles(count, capitalized=True)
++        remaining = _bottles(count - 1)
++        verses.append(
++            [
++                f"{current} hanging on the wall,",
++                f"{current} hanging on the wall,",
++                "And if one green bottle should accidentally fall,",
++                f"There'll be {remaining} hanging on the wall.",
++            ]
++        )
++    result = []
++    for i, verse in enumerate(verses):
++        if i:
++            result.append("")
++        result.extend(verse)
++    return result

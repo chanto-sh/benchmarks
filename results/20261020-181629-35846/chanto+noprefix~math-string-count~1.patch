@@ -1,0 +1,47 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..5709f7d 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,41 @@
+ MOD = 1_000_000_007
++SIZE = 6
++
++
++def _mat_mul(a, b):
++    result = [[0] * SIZE for _ in range(SIZE)]
++    for i in range(SIZE):
++        row = result[i]
++        for k in range(SIZE):
++            if a[i][k]:
++                factor = a[i][k]
++                for j in range(SIZE):
++                    row[j] = (row[j] + factor * b[k][j]) % MOD
++    return result
++
++
++def _mat_pow(matrix, exponent):
++    result = [[int(i == j) for j in range(SIZE)] for i in range(SIZE)]
++    while exponent:
++        if exponent & 1:
++            result = _mat_mul(result, matrix)
++        matrix = _mat_mul(matrix, matrix)
++        exponent >>= 1
++    return result
+ 
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    # State: (last letter is A?, number of C's mod 3).
++    transitions = [[0] * SIZE for _ in range(SIZE)]
++    for last_a in range(2):
++        for c in range(3):
++            i = last_a * 3 + c
++            if not last_a:
++                transitions[i][3 + c] += 1  # append A
++            transitions[i][c] += 1  # append B
++            transitions[i][(c + 1) % 3] += 1  # append C
++
++    powered = _mat_pow(transitions, n)
++    # The empty code starts in (not A, 0); c == 0 means states 0 and 3.
++    return (powered[0][0] + powered[0][3]) % MOD

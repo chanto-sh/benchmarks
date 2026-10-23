@@ -1,0 +1,70 @@
+diff --git a/protein_translation.go b/protein_translation.go
+index 993ab7a..a59260b 100644
+--- a/protein_translation.go
++++ b/protein_translation.go
+@@ -1,9 +1,62 @@
+ package protein
+ 
+-func FromRNA(rna string) ([]string, error) {
+-	panic("Please implement the FromRNA function")
++import "errors"
++
++// ErrStop is returned when a STOP codon is encountered.
++var ErrStop = errors.New("stop codon")
++
++// ErrInvalidBase is returned when a codon contains an invalid RNA base.
++var ErrInvalidBase = errors.New("invalid base")
++
++var codonToProtein = map[string]string{
++	"AUG": "Methionine",
++	"UUU": "Phenylalanine",
++	"UUC": "Phenylalanine",
++	"UUA": "Leucine",
++	"UUG": "Leucine",
++	"UCU": "Serine",
++	"UCC": "Serine",
++	"UCA": "Serine",
++	"UCG": "Serine",
++	"UAU": "Tyrosine",
++	"UAC": "Tyrosine",
++	"UGU": "Cysteine",
++	"UGC": "Cysteine",
++	"UGG": "Tryptophan",
++}
++
++var stopCodons = map[string]bool{
++	"UAA": true,
++	"UAG": true,
++	"UGA": true,
+ }
+ 
++// FromCodon translates a single RNA codon into its amino acid.
+ func FromCodon(codon string) (string, error) {
+-	panic("Please implement the FromCodon function")
++	if stopCodons[codon] {
++		return "", ErrStop
++	}
++	if protein, ok := codonToProtein[codon]; ok {
++		return protein, nil
++	}
++	return "", ErrInvalidBase
++}
++
++// FromRNA translates an RNA sequence into a slice of amino acids.
++func FromRNA(rna string) ([]string, error) {
++	var proteins []string
++
++	for i := 0; i+3 <= len(rna); i += 3 {
++		protein, err := FromCodon(rna[i : i+3])
++		switch err {
++		case nil:
++			proteins = append(proteins, protein)
++		case ErrStop:
++			return proteins, nil
++		default:
++			return nil, err
++		}
++	}
++
++	return proteins, nil
+ }

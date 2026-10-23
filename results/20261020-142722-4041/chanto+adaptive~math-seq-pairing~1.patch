@@ -1,0 +1,104 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..8523d41 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,97 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _total(s):
++    """Number of pairs (x, y) with bit_length(x) + bit_length(y) <= s."""
++    if s == 0:
++        return 1
++    return (s + 2) << (s - 1)
++
++
++def _pair(x, y):
++    """A bijection from pairs of non-negative ints to non-negative ints.
++
++    Pairs are grouped by the sum of the bit lengths of their components.
++    This keeps the result about as small as the inputs themselves.
++    """
++    p = x.bit_length()
++    q = y.bit_length()
++    s = p + q
++    if s == 0:
++        return 0
++
++    before = _total(s - 1)
++    size_x = 1 if p == 0 else 1 << (p - 1)
++    size_y = 1 if q == 0 else 1 << (q - 1)
++    a = x - size_x if p else 0
++    b = y - size_y if q else 0
++
++    if p == 0:
++        within = b
++    elif s == 1:
++        within = 1 + b
++    else:
++        within = ((p + 1) << (s - 2)) + a * size_y + b
++    return before + within
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    if n == 0:
++        return 0, 0
++
++    lo, hi = 1, n.bit_length() + 2
++    while lo < hi:
++        mid = (lo + hi) // 2
++        if _total(mid) > n:
++            hi = mid
++        else:
++            lo = mid + 1
++    s = lo
++
++    rank = n - _total(s - 1)
++    first = 1 << (s - 1)
++    if rank < first:
++        p = 0
++        rem = rank
++    elif s == 1:
++        p = 1
++        rem = rank - first
++    else:
++        middle = 1 << (s - 2)
++        last = first + (s - 1) * middle
++        if rank >= last:
++            p = s
++            rem = rank - last
++        else:
++            off = rank - first
++            p = 1 + off // middle
++            rem = off % middle
++
++    q = s - p
++    size_y = 1 if q == 0 else 1 << (q - 1)
++    if q == 0:
++        a, b = rem, 0
++    else:
++        a, b = rem >> (q - 1), rem & (size_y - 1)
++
++    x = 0 if p == 0 else (1 << (p - 1)) + a
++    y = 0 if q == 0 else (1 << (q - 1)) + b
++    return x, y
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = 0
++    for value in reversed(lst):
++        n = _pair(value, n) + 1
++    return n
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

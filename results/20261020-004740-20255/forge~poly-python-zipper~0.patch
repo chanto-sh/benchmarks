@@ -1,0 +1,103 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..1c0a896 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,86 @@
+ class Zipper:
++    """A zipper over a binary tree represented as nested dicts.
++
++    Each node is a dict of the shape::
++
++        {"value": ..., "left": <node or None>, "right": <node or None>}
++
++    A ``Zipper`` is an immutable snapshot of a focus node plus the path back
++    to the root.  The path is a tuple of ``(parent_value, direction, other)``
++    triples, where ``direction`` is either ``"left"`` or ``"right"`` and
++    ``other`` is the sibling subtree of the focus at that level.
++    """
++
++    def __init__(self, focus, path=()):
++        self._focus = focus
++        self._path = path
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        return Zipper(tree, ())
+ 
+     def value(self):
+-        pass
++        if self._focus is None:
++            return None
++        return self._focus["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        if self._focus is None:
++            return None
++        return Zipper(
++            {"value": value, "left": self._focus["left"], "right": self._focus["right"]},
++            self._path,
++        )
+ 
+     def left(self):
+-        pass
++        if self._focus is None or self._focus["left"] is None:
++            return None
++        return Zipper(
++            self._focus["left"],
++            self._path
++            + ((self._focus["value"], "left", self._focus["right"]),),
++        )
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, tree):
++        if self._focus is None:
++            return None
++        return Zipper(
++            {"value": self._focus["value"], "left": tree, "right": self._focus["right"]},
++            self._path,
++        )
+ 
+     def right(self):
+-        pass
++        if self._focus is None or self._focus["right"] is None:
++            return None
++        return Zipper(
++            self._focus["right"],
++            self._path
++            + ((self._focus["value"], "right", self._focus["left"]),),
++        )
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, tree):
++        if self._focus is None:
++            return None
++        return Zipper(
++            {"value": self._focus["value"], "left": self._focus["left"], "right": tree},
++            self._path,
++        )
+ 
+     def up(self):
+-        pass
++        if not self._path:
++            return None
++        parent_value, direction, sibling = self._path[-1]
++        if direction == "left":
++            parent = {"value": parent_value, "left": self._focus, "right": sibling}
++        else:
++            parent = {"value": parent_value, "left": sibling, "right": self._focus}
++        return Zipper(parent, self._path[:-1])
+ 
+     def to_tree(self):
+-        pass
++        node = self._focus
++        for parent_value, direction, sibling in reversed(self._path):
++            if direction == "left":
++                node = {"value": parent_value, "left": node, "right": sibling}
++            else:
++                node = {"value": parent_value, "left": sibling, "right": node}
++        return node

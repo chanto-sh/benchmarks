@@ -1,0 +1,29 @@
+diff --git a/transpose.py b/transpose.py
+index 24b60af..215e8a0 100644
+--- a/transpose.py
++++ b/transpose.py
+@@ -1,2 +1,23 @@
+ def transpose(text):
+-    pass
++    if not text:
++        return ""
++
++    rows = text.split("\n")
++    width = max(len(row) for row in rows)
++
++    lines = []
++    for col in range(width):
++        cells = []
++        last_solid = -1
++        for row in rows:
++            if col < len(row):
++                # A real character from the input (may itself be a space).
++                cells.append(row[col])
++                last_solid = len(cells) - 1
++            else:
++                # Padding added because this row is too short.
++                cells.append(" ")
++        # Drop only the padding spaces hanging off the right edge.
++        lines.append("".join(cells[: last_solid + 1]))
++
++    return "\n".join(lines)

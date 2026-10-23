@@ -1,0 +1,90 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..218d9ad 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,75 @@
+ import math
+ 
+ 
++_GAUSS_ORDER = 24
++_MAX_PANEL_PHASE = math.pi / 4.0
++
++
++def _gauss_legendre(n):
++    """Return nodes and weights for n-point Gauss-Legendre quadrature."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        while True:
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p3 = p2
++                p2 = p1
++                p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
++            derivative = n * (z * p1 - p2) / (z * z - 1.0)
++            previous = z
++            z = previous - p1 / derivative
++            if abs(z - previous) <= 1e-15:
++                break
++        nodes[i] = -z
++        nodes[n - 1 - i] = z
++        weight = 2.0 / ((1.0 - z * z) * derivative * derivative)
++        weights[i] = weight
++        weights[n - 1 - i] = weight
++    return nodes, weights
++
++
++_GAUSS_NODES, _GAUSS_WEIGHTS = _gauss_legendre(_GAUSS_ORDER)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the singularity at zero:
++
++        2 * integral(cos(t*u**2), u=0..sqrt(b)).
++
++    The transformed integrand is smooth. Gauss-Legendre panels, split so
++    each spans at most a quarter period of phase, resolve its oscillations.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    upper = math.sqrt(b)
++    if upper == 0.0:
++        return 0.0
++
++    panels = max(1, math.ceil(t * b / _MAX_PANEL_PHASE))
++    inverse_t = 1.0 / t
++    total = 0.0
++
++    for k in range(panels):
++        lo = 0.0 if k == 0 else math.sqrt(k * _MAX_PANEL_PHASE * inverse_t)
++        if k == panels - 1:
++            hi = upper
++        else:
++            hi = math.sqrt((k + 1) * _MAX_PANEL_PHASE * inverse_t)
++
++        midpoint = 0.5 * (lo + hi)
++        half_width = 0.5 * (hi - lo)
++        if half_width == 0.0:
++            continue
++
++        panel = 0.0
++        for node, weight in zip(_GAUSS_NODES, _GAUSS_WEIGHTS):
++            u = midpoint + half_width * node
++            panel += weight * math.cos(t * u * u)
++        total += half_width * panel
++
++    return 2.0 * total

@@ -1,0 +1,128 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..3d9519b 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,122 @@
+ package twobucket
+ 
++import "fmt"
++
++// bucketState describes how much water each bucket currently holds.
++type bucketState struct {
++	one int
++	two int
++}
++
++// Solve determines the fewest actions needed to measure goalAmount using two
++// buckets of the given sizes, starting by filling startBucket ("one" or "two").
++// It returns the bucket holding the goal amount, the number of actions, and the
++// amount left in the other bucket. Invalid parameters and unreachable goals
++// produce an error.
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	switch {
++	case sizeBucketOne <= 0:
++		return "", 0, 0, fmt.Errorf("invalid first bucket size: %d", sizeBucketOne)
++	case sizeBucketTwo <= 0:
++		return "", 0, 0, fmt.Errorf("invalid second bucket size: %d", sizeBucketTwo)
++	case goalAmount <= 0:
++		return "", 0, 0, fmt.Errorf("invalid goal amount: %d", goalAmount)
++	case startBucket != "one" && startBucket != "two":
++		return "", 0, 0, fmt.Errorf("invalid start bucket name: %q", startBucket)
++	}
++
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, fmt.Errorf("impossible: goal amount %d exceeds both bucket sizes", goalAmount)
++	}
++	if goalAmount%gcd(sizeBucketOne, sizeBucketTwo) != 0 {
++		return "", 0, 0, fmt.Errorf("no solution: goal amount %d cannot be measured with buckets of size %d and %d", goalAmount, sizeBucketOne, sizeBucketTwo)
++	}
++
++	// The first action is always filling the starting bucket.
++	start := bucketState{}
++	if startBucket == "one" {
++		start.one = sizeBucketOne
++	} else {
++		start.two = sizeBucketTwo
++	}
++
++	queue := []bucketState{start}
++	moves := map[bucketState]int{start: 1}
++
++	for len(queue) > 0 {
++		current := queue[0]
++		queue = queue[1:]
++		steps := moves[current]
++
++		if g, other, ok := reachedGoal(current, goalAmount); ok {
++			return g, steps, other, nil
++		}
++
++		for _, next := range nextStates(current, sizeBucketOne, sizeBucketTwo) {
++			if forbidden(next, startBucket, sizeBucketOne, sizeBucketTwo) {
++				continue
++			}
++			if _, seen := moves[next]; seen {
++				continue
++			}
++			moves[next] = steps + 1
++			queue = append(queue, next)
++		}
++	}
++
++	return "", 0, 0, fmt.Errorf("no solution: goal amount %d cannot be measured with buckets of size %d and %d", goalAmount, sizeBucketOne, sizeBucketTwo)
++}
++
++// reachedGoal reports whether a bucket currently holds the goal amount.
++func reachedGoal(s bucketState, goal int) (string, int, bool) {
++	if s.one == goal {
++		return "one", s.two, true
++	}
++	if s.two == goal {
++		return "two", s.one, true
++	}
++	return "", 0, false
++}
++
++// nextStates returns every state reachable from s with exactly one action.
++func nextStates(s bucketState, sizeOne, sizeTwo int) []bucketState {
++	states := []bucketState{
++		{sizeOne, s.two}, // fill bucket one
++		{s.one, sizeTwo}, // fill bucket two
++		{0, s.two},       // empty bucket one
++		{s.one, 0},       // empty bucket two
++	}
++
++	// Pour bucket one into bucket two.
++	transfer := min(s.one, sizeTwo-s.two)
++	states = append(states, bucketState{s.one - transfer, s.two + transfer})
++
++	// Pour bucket two into bucket one.
++	transfer = min(s.two, sizeOne-s.one)
++	states = append(states, bucketState{s.one + transfer, s.two - transfer})
++
++	return states
++}
++
++// forbidden reports whether s violates the rule that the starting bucket may
++// not be empty while the other bucket is full.
++func forbidden(s bucketState, startBucket string, sizeOne, sizeTwo int) bool {
++	if startBucket == "one" {
++		return s.one == 0 && s.two == sizeTwo
++	}
++	return s.two == 0 && s.one == sizeOne
++}
++
++func gcd(a, b int) int {
++	for b != 0 {
++		a, b = b, a%b
++	}
++	return a
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
+ }

@@ -1,0 +1,113 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..45a4a84 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,106 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coeffs(m, k, c, F0, omega):
++    """Return (ca, cb, gain, h) for the particular solution.
++
++    With A = k - m w^2, B = c w and h = hypot(A, B), the steady-state
++    response is
++
++        x_p(t) = gain * (ca cos(wt) + cb sin(wt)),
++
++    where ca = A/h, cb = B/h and gain = F0/h.  Normalising by h keeps
++    the coefficients finite even when A^2 + B^2 would overflow or
++    underflow.
++    """
++    A = k - m * omega * omega
++    B = c * omega
++    h = math.hypot(A, B)
++    if h == 0.0:
++        # Only possible for c == 0 driven exactly at the natural frequency.
++        if F0 == 0.0:
++            return 0.0, 0.0, 0.0, 1.0
++        raise ValueError(
++            "Undamped system driven exactly at its natural frequency: "
++            "no bounded steady-state solution exists"
++        )
++    return A / h, B / h, F0 / h, h
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    _, _, _, h = _steady_state_coeffs(m, k, c, F0, omega)
++    return abs(F0) / h
++
++
++def _exp_diff(x, y):
++    """Compute exp(x) - exp(y) accurately without catastrophic cancellation."""
++    if x >= y:
++        d = x - y
++        if d < 1.0:
++            return math.exp(y) * math.expm1(d)
++        return math.exp(x) - math.exp(y)
++    d = y - x
++    if d < 1.0:
++        return -math.exp(x) * math.expm1(d)
++    return math.exp(x) - math.exp(y)
++
++
++def _homogeneous(h0, hv0, alpha, wn2, t):
++    """Free response with h(0) = h0, h'(0) = hv0.
++
++    The equation is h'' + 2 alpha h' + wn2 h = 0, where wn2 = k/m, so
++    delta = alpha^2 - wn2 discriminates the three damping regimes.
++    """
++    delta = alpha * alpha - wn2
++
++    if delta < 0.0:
++        # Underdamped (includes the undamped case alpha == 0).
++        wd = math.sqrt(-delta)
++        theta = wd * t
++        decay = math.exp(-alpha * t)
++        return decay * (
++            h0 * math.cos(theta)
++            + (hv0 + alpha * h0) * math.sin(theta) / wd
++        )
++
++    if delta == 0.0:
++        # Critically damped.
++        return math.exp(-alpha * t) * (h0 + (hv0 + alpha * h0) * t)
++
++    # Overdamped: roots -alpha +/- beta, with beta = sqrt(delta) < alpha.
++    beta = math.sqrt(delta)
++    # beta - alpha = -(k/m) / (alpha + beta); this form avoids the
++    # catastrophic cancellation of subtracting two nearly equal values
++    # for very heavy damping.
++    a = -wn2 / (alpha + beta) * t  # exponent of the slow mode
++    b = -(alpha + beta) * t  # exponent of the fast mode
++    # exp(-alpha t) cosh(beta t) = (exp(a) + exp(b)) / 2
++    cosh_term = 0.5 * (math.exp(a) + math.exp(b))
++    # exp(-alpha t) sinh(beta t) / beta = (exp(a) - exp(b)) / (2 beta).
++    # _exp_diff with expm1 keeps this accurate as beta -> 0.
++    sinh_term = 0.5 * _exp_diff(a, b) / beta
++    return h0 * cosh_term + (hv0 + alpha * h0) * sinh_term
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    ca, cb, gain, _ = _steady_state_coeffs(m, k, c, F0, omega)
++
++    # Particular (steady-state) solution:
++    #   x_p(t) = gain (ca cos(wt) + cb sin(wt))
++    #   x_p'(0) = gain cb w
++    xp0 = gain * ca
++    vp0 = gain * cb * omega
++    xp = gain * (ca * math.cos(omega * t) + cb * math.sin(omega * t))
++
++    # Homogeneous part chosen to satisfy the initial conditions.
++    h0 = x0 - xp0
++    hv0 = v0 - vp0
++
++    alpha = c / (2.0 * m)
++    wn2 = k / m
++
++    return xp + _homogeneous(h0, hv0, alpha, wn2, t)

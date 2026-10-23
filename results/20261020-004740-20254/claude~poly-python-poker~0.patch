@@ -1,0 +1,104 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..6e150bf 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,98 @@
++RANKS = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++STRAIGHT_FLUSH = 8
++FOUR_OF_A_KIND = 7
++FULL_HOUSE = 6
++FLUSH = 5
++STRAIGHT = 4
++THREE_OF_A_KIND = 3
++TWO_PAIR = 2
++ONE_PAIR = 1
++HIGH_CARD = 0
++
++
++def _parse_hand(hand):
++    """Return (ranks, suits) for a hand such as "4S 5H 6C 8D KH"."""
++    ranks = []
++    suits = []
++    for card in hand.split():
++        ranks.append(RANKS[card[:-1]])
++        suits.append(card[-1])
++    return ranks, suits
++
++
++def _straight_high(ranks):
++    """Return the high card of a straight, or None if the ranks aren't one."""
++    unique = sorted(set(ranks))
++    if len(unique) != 5:
++        return None
++    # A-2-3-4-5: the ace plays low, so the straight is five-high.
++    if unique == [2, 3, 4, 5, 14]:
++        return 5
++    if unique[4] - unique[0] == 4:
++        return unique[4]
++    return None
++
++
++def _rank_counts(ranks):
++    """Return ranks grouped by multiplicity as (rank, count) pairs,
++    ordered by count descending then rank descending."""
++    counts = {}
++    for rank in ranks:
++        counts[rank] = counts.get(rank, 0) + 1
++    return sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)
++
++
++def _hand_value(hand):
++    """Return a sortable key; higher keys are better hands."""
++    ranks, suits = _parse_hand(hand)
++    sorted_ranks = sorted(ranks, reverse=True)
++    flush = len(set(suits)) == 1
++    straight_high = _straight_high(ranks)
++    groups = _rank_counts(ranks)
++    counts = [count for _, count in groups]
++    group_ranks = [rank for rank, _ in groups]
++
++    if straight_high is not None and flush:
++        return (STRAIGHT_FLUSH, straight_high)
++    if counts[0] == 4:
++        return (FOUR_OF_A_KIND, group_ranks[0], group_ranks[1])
++    if counts[0] == 3 and counts[1] == 2:
++        return (FULL_HOUSE, group_ranks[0], group_ranks[1])
++    if flush:
++        return (FLUSH, *sorted_ranks)
++    if straight_high is not None:
++        return (STRAIGHT, straight_high)
++    if counts[0] == 3:
++        kickers = sorted(group_ranks[1:], reverse=True)
++        return (THREE_OF_A_KIND, group_ranks[0], *kickers)
++    if counts[0] == 2 and counts[1] == 2:
++        pairs = sorted([group_ranks[0], group_ranks[1]], reverse=True)
++        kicker = group_ranks[2]
++        return (TWO_PAIR, pairs[0], pairs[1], kicker)
++    if counts[0] == 2:
++        kickers = sorted(group_ranks[1:], reverse=True)
++        return (ONE_PAIR, group_ranks[0], *kickers)
++    return (HIGH_CARD, *sorted_ranks)
++
++
+ def best_hands(hands):
+-    pass
++    if not hands:
++        return []
++    values = [_hand_value(hand) for hand in hands]
++    best = max(values)
++    return [hand for hand, value in zip(hands, values) if value == best]

@@ -1,0 +1,224 @@
+diff --git a/roots.py b/roots.py
+index d624667..a88f0e1 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd, lcm
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,195 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    p = list(p)
++    while p and p[0] == 0:
++        p.pop(0)
++    return p
++
++
++def _primitive(p):
++    """Divide an integer polynomial by the positive gcd of its coefficients."""
++    p = _trim(p)
++    if not p:
++        return []
++    g = 0
++    for c in p:
++        g = gcd(g, abs(c))
++    if g > 1:
++        p = [c // g for c in p]
++    return p
++
++
++def _derivative(p):
++    n = len(p) - 1
++    if n <= 0:
++        return []
++    return _trim([c * (n - i) for i, c in enumerate(p[:-1])])
++
++
++def _frac_trim(p):
++    p = list(p)
++    while p and p[0] == 0:
++        p.pop(0)
++    return p
++
++
++def _frac_divmod(a, b):
++    """Polynomial division over Fraction, highest degree first."""
++    a = _frac_trim([Fraction(c) for c in a])
++    b = _frac_trim([Fraction(c) for c in b])
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    r = a[:]
++    while r and len(r) >= len(b):
++        coeff = r[0] / b[0]
++        q[len(a) - len(r)] = coeff
++        for i, c in enumerate(b):
++            r[i] -= coeff * c
++        r = _frac_trim(r)
++    return _frac_trim(q), r
++
++
++def _frac_gcd(a, b):
++    a = _frac_trim([Fraction(c) for c in a])
++    b = _frac_trim([Fraction(c) for c in b])
++    while b:
++        _, r = _frac_divmod(a, b)
++        a, b = b, r
++    if a:
++        lead = a[0]
++        a = [c / lead for c in a]
++    return a
++
++
++def _squarefree_part(p):
++    """Product of the distinct irreducible factors of p (over Q)."""
++    p = _primitive(p)
++    if len(p) <= 1:
++        return []
++    g = _frac_gcd(p, _derivative(p))
++    q, _ = _frac_divmod([Fraction(c) for c in p], g)
++    den = 1
++    for c in q:
++        den = lcm(den, c.denominator)
++    return _primitive([int(c * den) for c in q])
++
++
++def _pseudo_remainder(a, b):
++    """Pseudo-remainder of a by b, and the sign of its scaling factor.
++
++    Returns r with r == scale * (a mod b) as polynomials, where scale has
++    the returned sign; only the sign is needed here.
++    """
++    r = a[:]
++    n = len(b) - 1
++    lead_sign = 1 if b[0] > 0 else -1
++    scale_sign = 1
++    while r and len(r) - 1 >= n:
++        lead = r[0]
++        lb = b[0]
++        r = [lb * c for c in r]
++        for i, c in enumerate(b):
++            r[i] -= lead * c
++        r = _trim(r)
++        scale_sign *= lead_sign
++    return r, scale_sign
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a square-free integer polynomial p."""
++    seq = [p, _primitive(_derivative(p))]
++    while len(seq[-1]) > 1:
++        rem, scale_sign = _pseudo_remainder(seq[-2], seq[-1])
++        if not rem:
++            break
++        # The next Sturm polynomial is -rem.  Multiplying by a positive
++        # constant is harmless, so flip only when the pseudo-remainder
++        # scale is positive.
++        if scale_sign > 0:
++            rem = [-c for c in rem]
++        seq.append(_primitive(rem))
++    return seq
++
++
++def _sign_at(p, x):
++    """Exact sign of p at the Fraction x, without building huge Fractions."""
++    num, den = x.numerator, x.denominator
++    value = p[0]
++    den_pow = 1
++    for c in p[1:]:
++        den_pow *= den
++        value = value * num + c * den_pow
++    return (value > 0) - (value < 0)
++
++
++def _variations(seq, x):
++    changes = 0
++    previous = 0
++    for p in seq:
++        sign = _sign_at(p, x)
++        if sign:
++            if previous and sign != previous:
++                changes += 1
++            previous = sign
++    return changes
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    p = _primitive(coeffs)
++    if not p:
++        raise ValueError("zero polynomial")
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++
++    p = _squarefree_part(p)
++    if len(p) <= 1:
++        return []
++
++    seq = _sturm_sequence(p)
++    cache = {}
++
++    def variations(x):
++        if x not in cache:
++            cache[x] = _variations(seq, x)
++        return cache[x]
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if _sign_at(p, lo) == 0:
++        roots.append(lo)
++
++    # Sturm counts roots in (a, b] as V(a) - V(b).  The half-open
++    # convention keeps the two halves of every split disjoint.
++    pending = [(lo, hi, variations(lo) - variations(hi))]
++    tolerance = Fraction(1, 10**12)
++
++    while pending:
++        a, b, count = pending.pop()
++        if count == 0:
++            continue
++        if count == 1 and b - a <= tolerance:
++            roots.append(b)
++            continue
++        if a == b:
++            continue
++
++        mid = (a + b) / 2
++        left = variations(a) - variations(mid)
++        right = count - left
++        if right > 0:
++            pending.append((mid, b, right))
++        if left > 0:
++            pending.append((a, mid, left))
++
++    roots.sort()
++    return [float(r) for r in roots]

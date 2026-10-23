@@ -1,0 +1,21 @@
+diff --git a/solution.py b/solution.py
+index 17751c2..cf65e0a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,4 +1,3 @@
+-
+ def split_words(txt):
+     '''
+     Given a string of words, return a list of words split on whitespace, if no whitespaces exists in the text you
+@@ -7,5 +6,10 @@ def split_words(txt):
+     Examples
+     split_words("Hello world!") ➞ ["Hello", "world!"]
+     split_words("Hello,world!") ➞ ["Hello", "world!"]
+-    split_words("abcdef") == 3 
++    split_words("abcdef") == 3
+     '''
++    if any(c.isspace() for c in txt):
++        return txt.split()
++    if ',' in txt:
++        return txt.split(',')
++    return sum(1 for c in txt if 'a' <= c <= 'z' and (ord(c) - ord('a')) % 2 == 1)

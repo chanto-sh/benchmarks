@@ -1,0 +1,34 @@
+diff --git a/solution.py b/solution.py
+index 451015d..a592393 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,27 @@
+-def set_left_most_unset_bit(n): 
+-    pass
++def set_left_most_unset_bit(n):
++    """Return n with its left most unset bit set.
++
++    The left most unset bit is the most significant 0 bit within the
++    number's binary representation (up to its highest set bit).  If all
++    bits up to and including the highest set bit are 1, the next higher
++    bit is set instead.  For example: 10 (1010) -> 14 (1110) and
++    12 (1100) -> 14 (1110).
++    """
++    if n < 0:
++        raise ValueError("n must be a non-negative integer")
++
++    result = n
++    found = False
++    bit = 1
++    # Consider every position up to and including the highest set bit;
++    # the last unset bit found this way is the left most one.
++    while bit <= n:
++        if not n & bit:
++            result = n | bit
++            found = True
++        bit <<= 1
++
++    # All bits are set (this includes n == 0), so set the next higher bit.
++    if not found:
++        result = n | bit
++    return result

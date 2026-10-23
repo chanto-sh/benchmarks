@@ -1,0 +1,101 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..ebfd801 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,86 @@
+ """Frequency response of the detector model."""
+ import math
++from decimal import Decimal, localcontext
++
++
++_PI_DECIMAL = Decimal(
++    "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899"
++)
++
++
++def _fresnel_c_series(z):
++    """Fresnel C(z) for moderate z, using high-precision decimal arithmetic.
++
++    C(z) = sum_{n>=0} (-1)^n (pi/2)^(2n) z^(4n+1) / ((2n)! (4n+1)).
++
++    The terms grow before they decay, so extra precision is needed to avoid
++    cancellation for z close to 4.
++    """
++    with localcontext() as ctx:
++        ctx.prec = 50
++        zd = Decimal(z)
++        theta = _PI_DECIMAL * zd * zd / 2
++        term = Decimal(1)
++        total = Decimal(1)
++        n = 0
++        while True:
++            n += 1
++            term *= (
++                -(theta * theta)
++                / (Decimal(2 * n) * Decimal(2 * n - 1))
++                * Decimal(4 * n - 3)
++                / Decimal(4 * n + 1)
++            )
++            total += term
++            if abs(term) < Decimal("1e-45"):
++                break
++        return float(zd * total)
++
++
++def _fresnel_c_asymptotic(z):
++    """Fresnel C(z) for larger z, via its asymptotic expansion."""
++    pi = math.pi
++    theta = pi * z * z / 2
++    prefactor = 1j / (pi * z)
++
++    term = 1.0 + 0.0j
++    series = 1.0 + 0.0j
++    previous = abs(term)
++    n = 0
++    while True:
++        n += 1
++        term *= (2 * n - 1) / (1j * pi * z * z)
++        current = abs(term)
++        series += term
++        if current >= previous:
++            break
++        previous = current
++
++    tail = complex(math.cos(theta), math.sin(theta)) * prefactor * series
++    return 0.5 - tail.real
++
++
++def _fresnel_c(z):
++    if z >= 4.0:
++        return _fresnel_c_asymptotic(z)
++    return _fresnel_c_series(z)
+ 
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = y^2 gives
++
++        response = 2 * integral_0^sqrt(b) cos(t*y^2) dy
++                 = 2 sqrt(b) C(sqrt(2 t b / pi)) / sqrt(2 t b / pi),
++
++    where C is the Fresnel cosine integral.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0 or b == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    z = math.sqrt(2.0 * t * b / math.pi)
++    if z == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    return 2.0 * math.sqrt(b) * _fresnel_c(z) / z

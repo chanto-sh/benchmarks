@@ -1,0 +1,89 @@
+diff --git a/react.py b/react.py
+index ab6be31..48aee1b 100644
+--- a/react.py
++++ b/react.py
+@@ -1,15 +1,78 @@
+ class InputCell:
+     def __init__(self, initial_value):
+-        self.value = None
++        self._value = initial_value
++        self._dependents = []
++
++    @property
++    def value(self):
++        return self._value
++
++    @value.setter
++    def value(self, new_value):
++        if new_value == self._value:
++            return
++        self._value = new_value
++        self._propagate()
++
++    def _add_dependent(self, cell):
++        self._dependents.append(cell)
++
++    def _propagate(self):
++        affected = self._affected_cells()
++        previous_values = {cell: cell._value for cell in affected}
++
++        for cell in affected:
++            cell._recompute()
++
++        for cell in affected:
++            if cell._value != previous_values[cell]:
++                cell._fire_callbacks()
++
++    def _affected_cells(self):
++        visited = set()
++        order = []
++
++        def visit(cell):
++            if cell in visited:
++                return
++            visited.add(cell)
++            for dependent in cell._dependents:
++                visit(dependent)
++            order.append(cell)
++
++        visit(self)
++        order.reverse()
++        return [cell for cell in order if isinstance(cell, ComputeCell)]
+ 
+ 
+ class ComputeCell:
+     def __init__(self, inputs, compute_function):
+-        self.value = None
++        self._inputs = list(inputs)
++        self._compute_function = compute_function
++        self._value = compute_function([cell.value for cell in self._inputs])
++        self._dependents = []
++        self._callbacks = []
++
++        for cell in self._inputs:
++            cell._add_dependent(self)
++
++    @property
++    def value(self):
++        return self._value
++
++    def _add_dependent(self, cell):
++        self._dependents.append(cell)
++
++    def _recompute(self):
++        self._value = self._compute_function([cell.value for cell in self._inputs])
++
++    def _fire_callbacks(self):
++        for callback in list(self._callbacks):
++            callback(self._value)
+ 
+     def add_callback(self, callback):
+-        pass
++        self._callbacks.append(callback)
+ 
+     def remove_callback(self, callback):
+-        pass
+-    
+\ No newline at end of file
++        while callback in self._callbacks:
++            self._callbacks.remove(callback)

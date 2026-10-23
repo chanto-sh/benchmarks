@@ -1,0 +1,52 @@
+diff --git a/affine_cipher.py b/affine_cipher.py
+index 2d41e04..8ac64fc 100644
+--- a/affine_cipher.py
++++ b/affine_cipher.py
+@@ -1,6 +1,45 @@
++from math import gcd
++
++ALPHABET_SIZE = 26
++GROUP_SIZE = 5
++
++
++def _check_coprime(a):
++    if gcd(a, ALPHABET_SIZE) != 1:
++        raise ValueError("a and m must be coprime.")
++
++
++def _clean(text):
++    """Lowercase and keep only letters and digits."""
++    return [char for char in text.lower() if char.isalnum()]
++
++
++def _group(chars):
++    return " ".join(
++        "".join(chars[i : i + GROUP_SIZE]) for i in range(0, len(chars), GROUP_SIZE)
++    )
++
++
+ def encode(plain_text, a, b):
+-    pass
++    _check_coprime(a)
++    encoded = []
++    for char in _clean(plain_text):
++        if char.isdigit():
++            encoded.append(char)
++        else:
++            index = ord(char) - ord("a")
++            encoded.append(chr(ord("a") + (a * index + b) % ALPHABET_SIZE))
++    return _group(encoded)
+ 
+ 
+ def decode(ciphered_text, a, b):
+-    pass
++    _check_coprime(a)
++    inverse = pow(a, -1, ALPHABET_SIZE)
++    decoded = []
++    for char in _clean(ciphered_text):
++        if char.isdigit():
++            decoded.append(char)
++        else:
++            value = ord(char) - ord("a")
++            decoded.append(chr(ord("a") + inverse * (value - b) % ALPHABET_SIZE))
++    return "".join(decoded)

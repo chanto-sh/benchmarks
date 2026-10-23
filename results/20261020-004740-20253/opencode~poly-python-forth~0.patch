@@ -1,0 +1,145 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..d2e7918 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,138 @@
+ class StackUnderflowError(Exception):
+-    pass
++    """Exception raised when the stack does not contain enough items."""
++
++    def __init__(self, message):
++        super().__init__(message)
++        self.message = message
++
++
++def _is_number(token):
++    """Return True if token is a (possibly negative) integer literal."""
++    if not token:
++        return False
++    body = token[1:] if token[0] == "-" else token
++    return bool(body) and body.isdigit()
++
++
++def _arity_error():
++    raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _binary(stack, operation):
++    if len(stack) < 2:
++        _arity_error()
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(operation(left, right))
++
++
++def _divide(left, right):
++    if right == 0:
++        raise ZeroDivisionError("divide by zero")
++    return left // right
++
++
++def _unary(stack, operation, needed=1):
++    if len(stack) < needed:
++        _arity_error()
++    operation(stack)
++
++
++def _dup(stack):
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    stack.pop()
++
++
++def _swap(stack):
++    stack[-2], stack[-1] = stack[-1], stack[-2]
++
++
++def _over(stack):
++    stack.append(stack[-2])
++
++
++_BUILTINS = {
++    "+": lambda stack: _binary(stack, lambda a, b: a + b),
++    "-": lambda stack: _binary(stack, lambda a, b: a - b),
++    "*": lambda stack: _binary(stack, lambda a, b: a * b),
++    "/": lambda stack: _binary(stack, _divide),
++    "dup": lambda stack: _unary(stack, _dup),
++    "drop": lambda stack: _unary(stack, _drop),
++    "swap": lambda stack: _unary(stack, _swap, 2),
++    "over": lambda stack: _unary(stack, _over, 2),
++}
++
++
++def _expand(tokens, words):
++    """Replace user-defined words in tokens with their (already expanded) bodies."""
++    expanded = []
++    for token in tokens:
++        key = token.lower()
++        if key in words:
++            expanded.extend(words[key])
++        else:
++            expanded.append(token)
++    return expanded
++
++
++def _execute(tokens, stack, words):
++    for token in tokens:
++        key = token.lower()
++        if _is_number(token):
++            stack.append(int(token))
++        elif key in words:
++            _execute(words[key], stack, words)
++        elif key in _BUILTINS:
++            _BUILTINS[key](stack)
++        else:
++            raise ValueError("undefined operation")
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    stack = []
++    words = {}
++
++    tokens = []
++    for line in input_data:
++        tokens.extend(line.split())
++
++    index = 0
++    while index < len(tokens):
++        token = tokens[index]
++        key = token.lower()
++
++        if key == ":":
++            # Collect the definition up to the terminating semicolon.
++            index += 1
++            if index >= len(tokens):
++                raise ValueError("illegal operation")
++            name = tokens[index].lower()
++            if _is_number(name):
++                raise ValueError("illegal operation")
++
++            index += 1
++            body = []
++            while index < len(tokens) and tokens[index] != ";":
++                body.append(tokens[index])
++                index += 1
++            if index >= len(tokens):
++                raise ValueError("illegal operation")
++
++            # Expand using the definitions in effect right now, so that a
++            # redefinition may refer to the previous meaning of its own name.
++            words[name] = _expand(body, words)
++        elif _is_number(token):
++            stack.append(int(token))
++        elif key in words:
++            _execute(words[key], stack, words)
++        elif key in _BUILTINS:
++            _BUILTINS[key](stack)
++        else:
++            raise ValueError("undefined operation")
++
++        index += 1
++
++    return stack

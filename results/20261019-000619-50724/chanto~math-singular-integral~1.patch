@@ -1,0 +1,135 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..78eca72 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,120 @@
+ import math
+ 
+ 
++_HALF_PI = math.pi / 2.0
++_GL_ORDER = 16
++
++
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, n + 1):
++        # Chebyshev approximation for the i-th root, then Newton's method.
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(100):
++            p1 = 1.0
++            p2 = 0.0
++            for j in range(1, n + 1):
++                p3 = p2
++                p2 = p1
++                p1 = ((2 * j - 1) * x * p2 - (j - 1) * p3) / j
++            pp = n * (x * p1 - p2) / (x * x - 1.0)
++            dx = p1 / pp
++            x -= dx
++            if abs(dx) < 1e-15:
++                break
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * pp * pp))
++    return nodes, weights
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(_GL_ORDER)
++
++
++def _small_argument(z):
++    """C(z) / z from its power series, accurate near zero."""
++    z4 = z * z
++    z4 *= z4
++    term = 1.0
++    total = 1.0
++    for n in range(1, 40):
++        term *= (
++            -(_HALF_PI * _HALF_PI) * z4
++            * (4 * n - 3)
++            / ((2 * n) * (2 * n - 1) * (4 * n + 1))
++        )
++        total += term
++        if abs(term) < 1e-18:
++            break
++    return total
++
++
++def _quadrature(z):
++    """C(z) = integral_0^z cos(pi*x^2/2) dx by composite Gauss-Legendre.
++
++    The interval is split so that the phase changes by at most pi/4 per panel.
++    """
++    panels = max(1, int(math.ceil(4.0 * z * z)))
++    h = z / panels
++    half_h = 0.5 * h
++    pieces = []
++    for i in range(panels):
++        midpoint = (i + 0.5) * h
++        s = 0.0
++        for x, w in zip(_GL_NODES, _GL_WEIGHTS):
++            u = midpoint + half_h * x
++            s += w * math.cos(_HALF_PI * u * u)
++        pieces.append(half_h * s)
++    return math.fsum(pieces)
++
++
++def _asymptotic(z):
++    """C(z) from its large-argument asymptotic expansion."""
++    q = 1.0 / (math.pi * z * z)
++    q2 = q * q
++
++    # f(z) = 1/(pi z) * sum (-1)^k (4k-1)!! q^(2k)
++    f = 1.0
++    term = 1.0
++    for k in range(1, 40):
++        term *= -(4 * k - 1) * (4 * k - 3) * q2
++        f += term
++        if abs(term) < 1e-18:
++            break
++
++    # g(z) = 1/(pi z) * sum (-1)^k (4k+1)!! q^(2k+1)
++    g = q
++    term = q
++    for k in range(1, 40):
++        term *= -(4 * k + 1) * (4 * k - 1) * q2
++        g += term
++        if abs(term) < 1e-18:
++            break
++
++    phi = _HALF_PI * z * z
++    return 0.5 + (f * math.sin(phi) - g * math.cos(phi)) / (math.pi * z)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    With x = u^2 the integral becomes 2 * integral_0^sqrt(b) cos(t*u^2) du,
++    which is expressed below through the Fresnel integral C:
++
++        integral = 2 sqrt(b) * C(z) / z,   z = sqrt(2 t b / pi).
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    root_b = math.sqrt(b)
++    if t == 0.0:
++        return 2.0 * root_b
++
++    z = math.sqrt(2.0 * t * b / math.pi)
++    if z == 0.0:
++        return 2.0 * root_b
++    if z < 1.0:
++        ratio = _small_argument(z)
++    elif z < 8.0:
++        ratio = _quadrature(z) / z
++    else:
++        ratio = _asymptotic(z) / z
++    return 2.0 * root_b * ratio

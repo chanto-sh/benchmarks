@@ -1,0 +1,133 @@
+diff --git a/pov.go b/pov.go
+index 48e2477..caf0f5e 100644
+--- a/pov.go
++++ b/pov.go
+@@ -1,24 +1,25 @@
+ package pov
+ 
+ type Tree struct {
+-	// Add the needed fields here
++	value    string
++	children []*Tree
+ }
+ 
+ // New creates and returns a new Tree with the given root value and children.
+ func New(value string, children ...*Tree) *Tree {
+-	panic("Please implement this function")
++	return &Tree{value: value, children: children}
+ }
+ 
+ // Value returns the value at the root of a tree.
+ func (tr *Tree) Value() string {
+-	panic("Please implement this function")
++	return tr.value
+ }
+ 
+ // Children returns a slice containing the children of a tree.
+ // There is no need to sort the elements in the result slice,
+ // they can be in any order.
+ func (tr *Tree) Children() []*Tree {
+-	panic("Please implement this function")
++	return tr.children
+ }
+ 
+ // String describes a tree in a compact S-expression format.
+@@ -42,10 +43,96 @@ func (tr *Tree) String() string {
+ 
+ // FromPov returns the pov from the node specified in the argument.
+ func (tr *Tree) FromPov(from string) *Tree {
+-	panic("Please implement this function")
++	node := tr.find(from)
++	if node == nil {
++		return nil
++	}
++	return reroot(node, nil, parents(tr))
+ }
+ 
+ // PathTo returns the shortest path between two nodes in the tree.
+ func (tr *Tree) PathTo(from, to string) []string {
+-	panic("Please implement this function")
++	fromPath, ok := tr.pathFromRoot(from)
++	if !ok {
++		return nil
++	}
++	toPath, ok := tr.pathFromRoot(to)
++	if !ok {
++		return nil
++	}
++
++	// Find the lowest common ancestor: the paths share a prefix that ends at
++	// the deepest common node.
++	i := 0
++	for i < len(fromPath) && i < len(toPath) && fromPath[i] == toPath[i] {
++		i++
++	}
++
++	path := make([]string, 0, len(fromPath)+len(toPath)-2*(i-1))
++	for j := len(fromPath) - 1; j >= i-1; j-- {
++		path = append(path, fromPath[j])
++	}
++	for j := i; j < len(toPath); j++ {
++		path = append(path, toPath[j])
++	}
++	return path
++}
++
++// find returns the node in the tree rooted at tr with the given value, or nil
++// if no such node exists.
++func (tr *Tree) find(value string) *Tree {
++	if tr.value == value {
++		return tr
++	}
++	for _, ch := range tr.children {
++		if found := ch.find(value); found != nil {
++			return found
++		}
++	}
++	return nil
++}
++
++// pathFromRoot returns the values along the path from the root of tr down to
++// the node with the given value, including both endpoints.
++func (tr *Tree) pathFromRoot(value string) ([]string, bool) {
++	if tr.value == value {
++		return []string{tr.value}, true
++	}
++	for _, ch := range tr.children {
++		if suffix, ok := ch.pathFromRoot(value); ok {
++			return append([]string{tr.value}, suffix...), true
++		}
++	}
++	return nil, false
++}
++
++// parents maps every node in the tree rooted at tr to its parent.
++// The root maps to nil.
++func parents(tr *Tree) map[*Tree]*Tree {
++	result := make(map[*Tree]*Tree)
++	var walk func(node, parent *Tree)
++	walk = func(node, parent *Tree) {
++		result[node] = parent
++		for _, ch := range node.children {
++			walk(ch, node)
++		}
++	}
++	walk(tr, nil)
++	return result
++}
++
++// reroot builds a copy of the tree rooted at node, oriented away from cameFrom,
++// the neighbour the recursion arrived from (nil for the new root).
++func reroot(node, cameFrom *Tree, parents map[*Tree]*Tree) *Tree {
++	children := make([]*Tree, 0, len(node.children)+1)
++	for _, ch := range node.children {
++		if ch == cameFrom {
++			continue
++		}
++		children = append(children, reroot(ch, node, parents))
++	}
++	if p := parents[node]; p != nil && p != cameFrom {
++		children = append(children, reroot(p, node, parents))
++	}
++	return New(node.value, children...)
+ }

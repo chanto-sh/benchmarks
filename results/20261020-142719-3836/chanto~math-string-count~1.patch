@@ -1,0 +1,54 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..ab6e13c 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,48 @@
+ MOD = 1_000_000_007
++SIZE = 6
++
++
++def _mat_mul(a, b):
++    result = [[0] * SIZE for _ in range(SIZE)]
++    for i in range(SIZE):
++        for k in range(SIZE):
++            if a[i][k]:
++                aik = a[i][k]
++                for j in range(SIZE):
++                    result[i][j] = (result[i][j] + aik * b[k][j]) % MOD
++    return result
++
++
++def _mat_pow(mat, exp):
++    result = [[int(i == j) for j in range(SIZE)] for i in range(SIZE)]
++    while exp:
++        if exp & 1:
++            result = _mat_mul(result, mat)
++        mat = _mat_mul(mat, mat)
++        exp >>= 1
++    return result
+ 
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    # States 0..2: last letter is not A, C count mod 3 is 0..2.
++    # States 3..5: last letter is A, C count mod 3 is 0..2.
++    transition = [[0] * SIZE for _ in range(SIZE)]
++    for r in range(3):
++        normal = r
++        ended_in_a = 3 + r
++        prev_normal = (r - 1) % 3
++        prev_a = 3 + prev_normal
++
++        # Append B from either kind of state, or C from the previous residue.
++        transition[normal][normal] += 1
++        transition[normal][ended_in_a] += 1
++        transition[normal][prev_normal] += 1
++        transition[normal][prev_a] += 1
++
++        # Append A: only allowed when the previous letter was not A.
++        transition[ended_in_a][normal] += 1
++
++    powered = _mat_pow(transition, n)
++    # Start in state 0 (empty code) and accept any last letter with C count 0.
++    return (powered[0][0] + powered[3][0]) % MOD

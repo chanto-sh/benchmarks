@@ -1,0 +1,21 @@
+diff --git a/solution.py b/solution.py
+index 73e15a0..f8d69cd 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,15 @@
+ def divisible_by_digits(startnum, endnum):
+-    pass
++    """Return numbers in the inclusive range [startnum, endnum] that are
++    divisible by every one of their digits.
++
++    Numbers containing a zero digit are excluded, since division by zero is
++    undefined.
++    """
++    result = []
++    for number in range(startnum, endnum + 1):
++        digits = str(number)
++        if "0" in digits:
++            continue
++        if all(number % int(digit) == 0 for digit in digits):
++            result.append(number)
++    return result

@@ -1,0 +1,208 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..621fd16 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,201 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_BHAT = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++         -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _deriv(state, drag, g):
++    """Derivative of (x, y, vx, vy) for quadratic drag."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (
++        vx,
++        vy,
++        -drag * speed * vx,
++        -g - drag * speed * vy,
++    )
++
++
++def _rk45_step(state, h, drag, g):
++    """Take one Dormand-Prince step and return (5th order, error)."""
++    k = [_deriv(state, drag, g)]
++    for stage in range(1, 7):
++        trial = [
++            state[i] + h * sum(_A[stage][j] * k[j][i]
++                               for j in range(stage))
++            for i in range(4)
++        ]
++        k.append(_deriv(trial, drag, g))
++
++    high = [
++        state[i] + h * sum(_B[j] * k[j][i] for j in range(7))
++        for i in range(4)
++    ]
++    low = [
++        state[i] + h * sum(_BHAT[j] * k[j][i] for j in range(7))
++        for i in range(4)
++    ]
++    error = [high[i] - low[i] for i in range(4)]
++    return high, error
++
++
++def _event_state(state, h, drag, g, component, value):
++    """Locate the first root of `state[component] - value` in [0, h]."""
++    def state_at(fraction):
++        return _rk45_step(state, h * fraction, drag, g)[0]
++
++    def f(fraction):
++        return state_at(fraction)[component] - value
++
++    lo = 0.0
++    hi = 1.0
++    f_lo = f(lo)
++    f_hi = f(hi)
++
++    if f_hi == 0.0:
++        return state_at(hi), h
++    if f_lo == 0.0:
++        return state_at(lo), 0.0
++
++    # The events used here are crossings with a single root.
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        f_mid = f(mid)
++        if f_mid == 0.0:
++            lo = hi = mid
++            break
++        if (f_lo < 0.0) == (f_mid < 0.0):
++            lo = mid
++            f_lo = f_mid
++        else:
++            hi = mid
++        if hi - lo <= 1e-15:
++            break
++
++    fraction = 0.5 * (lo + hi)
++    return state_at(fraction), h * fraction
++
++
++def _vacuum_flight(v0, angle_deg, g, h0):
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    time = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    if time < 0.0:
++        time = 0.0
++    apex = h0 + (vy * vy / (2.0 * g) if vy > 0.0 else 0.0)
++    return {"range": vx * time, "apex": apex, "time": time}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height `h0` at speed `v0` and elevation
++    `angle_deg`.  Quadratic drag is modelled as F = -k |v| v.
++    """
++    values = (v0, angle_deg, mass, k, g, h0)
++    if not all(math.isfinite(value) for value in values):
++        raise ValueError("flight parameters must be finite")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    if k == 0.0:
++        return _vacuum_flight(v0, angle_deg, g, h0)
++
++    theta = math.radians(angle_deg)
++    state = [
++        0.0,
++        h0,
++        v0 * math.cos(theta),
++        v0 * math.sin(theta),
++    ]
++
++    # Starting on the ground without an upward velocity component means there
++    # is no airborne part of the trajectory to integrate.
++    if h0 == 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    t = 0.0
++    apex = h0
++
++    # Initial step: small compared with the vacuum time of flight.  The
++    # adaptive controller handles the rest.
++    vacuum_time = ((state[3]
++                    + math.sqrt(state[3] * state[3] + 2.0 * g * h0)) / g)
++    h = max(1e-9, 1e-4 * vacuum_time)
++
++    rtol = 1e-11
++    atol = 1e-12
++    max_steps = 1_000_000
++
++    for _ in range(max_steps):
++        new_state, error = _rk45_step(state, h, drag, g)
++
++        scale = [
++            atol + rtol * max(abs(state[i]), abs(new_state[i]))
++            for i in range(4)
++        ]
++        err_norm = math.sqrt(sum((error[i] / scale[i]) ** 2
++                                 for i in range(4)) / 4.0)
++
++        if err_norm <= 1.0:
++            old_vy = state[3]
++            old_y = state[1]
++            new_vy = new_state[3]
++            new_y = new_state[1]
++
++            # Apex: vertical velocity crosses zero from above.
++            if old_vy > 0.0 and new_vy <= 0.0:
++                apex_state, _ = _event_state(
++                    state, h, drag, g, 3, 0.0)
++                apex = apex_state[1]
++
++            # Landing: the trajectory crosses y = 0 on its way down.
++            if old_y > 0.0 and new_y <= 0.0:
++                landing_state, tau = _event_state(
++                    state, h, drag, g, 1, 0.0)
++                return {
++                    "range": landing_state[0],
++                    "apex": apex,
++                    "time": t + tau,
++                }
++
++            state = new_state
++            t += h
++
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err_norm ** -0.2
++            factor = min(5.0, max(0.2, factor))
++        h *= factor
++
++    raise RuntimeError("projectile integration did not converge")

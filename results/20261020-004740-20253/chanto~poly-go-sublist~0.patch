@@ -1,0 +1,42 @@
+diff --git a/sublist.go b/sublist.go
+index d6af72d..4c3d244 100644
+--- a/sublist.go
++++ b/sublist.go
+@@ -2,6 +2,36 @@ package sublist
+ 
+ // Relation type is defined in relations.go file.
+ 
++// Sublist determines the relation between l1 and l2.
+ func Sublist(l1, l2 []int) Relation {
+-	panic("Please implement the Sublist function")
++	switch {
++	case contains(l1, l2) && contains(l2, l1):
++		return RelationEqual
++	case contains(l1, l2):
++		return RelationSuperlist
++	case contains(l2, l1):
++		return RelationSublist
++	default:
++		return RelationUnequal
++	}
++}
++
++// contains reports whether sub appears as a contiguous subsequence of list.
++func contains(list, sub []int) bool {
++	if len(sub) > len(list) {
++		return false
++	}
++	for i := 0; i+len(sub) <= len(list); i++ {
++		match := true
++		for j := range sub {
++			if list[i+j] != sub[j] {
++				match = false
++				break
++			}
++		}
++		if match {
++			return true
++		}
++	}
++	return false
+ }

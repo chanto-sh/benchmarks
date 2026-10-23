@@ -1,0 +1,198 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..3ac539f 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,192 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// word is a resolved Forth word: either a number literal, a built-in
++// operation, or a compound definition whose body was bound at definition time.
++type word struct {
++	isNumber bool
++	number   int
++	builtin  string
++	body     []*word
++}
++
++func builtinDefs() map[string]*word {
++	defs := make(map[string]*word, 8)
++	for _, op := range []string{"+", "-", "*", "/", "dup", "drop", "swap", "over"} {
++		defs[op] = &word{builtin: op}
++	}
++	return defs
++}
++
++func isNumber(token string) bool {
++	if token == "" {
++		return false
++	}
++	digits := token
++	if digits[0] == '-' {
++		digits = digits[1:]
++	}
++	if digits == "" {
++		return false
++	}
++	for i := 0; i < len(digits); i++ {
++		if digits[i] < '0' || digits[i] > '9' {
++			return false
++		}
++	}
++	return true
++}
++
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	dict := builtinDefs()
++	stack := []int{}
++
++	for i := 0; i < len(tokens); i++ {
++		token := tokens[i]
++		lower := strings.ToLower(token)
++
++		switch {
++		case token == ":":
++			if i+1 >= len(tokens) {
++				return nil, errors.New("illegal operation")
++			}
++			i++
++			name := tokens[i]
++			if isNumber(name) {
++				return nil, errors.New("illegal operation")
++			}
++
++			var bodyTokens []string
++			i++
++			for ; i < len(tokens) && tokens[i] != ";"; i++ {
++				bodyTokens = append(bodyTokens, tokens[i])
++			}
++			if i >= len(tokens) {
++				return nil, errors.New("illegal operation")
++			}
++
++			body := make([]*word, 0, len(bodyTokens))
++			for _, bt := range bodyTokens {
++				if isNumber(bt) {
++					n, err := strconv.Atoi(bt)
++					if err != nil {
++						return nil, errors.New("illegal operation")
++					}
++					body = append(body, &word{isNumber: true, number: n})
++					continue
++				}
++				def, ok := dict[strings.ToLower(bt)]
++				if !ok {
++					return nil, errors.New("undefined operation")
++				}
++				body = append(body, def)
++			}
++			dict[strings.ToLower(name)] = &word{body: body}
++
++		case isNumber(token):
++			n, err := strconv.Atoi(token)
++			if err != nil {
++				return nil, errors.New("illegal operation")
++			}
++			stack = append(stack, n)
++
++		default:
++			def, ok := dict[lower]
++			if !ok {
++				return nil, errors.New("undefined operation")
++			}
++			var err error
++			stack, err = execute(def, stack)
++			if err != nil {
++				return nil, err
++			}
++		}
++	}
++
++	return stack, nil
++}
++
++func execute(def *word, stack []int) ([]int, error) {
++	if def.isNumber {
++		return append(stack, def.number), nil
++	}
++	if len(def.body) > 0 || def.builtin == "" {
++		for _, sub := range def.body {
++			var err error
++			stack, err = execute(sub, stack)
++			if err != nil {
++				return nil, err
++			}
++		}
++		return stack, nil
++	}
++
++	empty := errors.New("empty stack")
++	onlyOne := errors.New("only one value on the stack")
++
++	switch def.builtin {
++	case "dup":
++		if len(stack) < 1 {
++			return nil, empty
++		}
++		return append(stack, stack[len(stack)-1]), nil
++	case "drop":
++		if len(stack) < 1 {
++			return nil, empty
++		}
++		return stack[:len(stack)-1], nil
++	case "swap":
++		if len(stack) < 1 {
++			return nil, empty
++		}
++		if len(stack) < 2 {
++			return nil, onlyOne
++		}
++		stack[len(stack)-1], stack[len(stack)-2] = stack[len(stack)-2], stack[len(stack)-1]
++		return stack, nil
++	case "over":
++		if len(stack) < 1 {
++			return nil, empty
++		}
++		if len(stack) < 2 {
++			return nil, onlyOne
++		}
++		return append(stack, stack[len(stack)-2]), nil
++	case "+", "-", "*", "/":
++		if len(stack) < 1 {
++			return nil, empty
++		}
++		if len(stack) < 2 {
++			return nil, onlyOne
++		}
++		b := stack[len(stack)-1]
++		a := stack[len(stack)-2]
++		stack = stack[:len(stack)-2]
++		switch def.builtin {
++		case "+":
++			stack = append(stack, a+b)
++		case "-":
++			stack = append(stack, a-b)
++		case "*":
++			stack = append(stack, a*b)
++		case "/":
++			if b == 0 {
++				return nil, errors.New("divide by zero")
++			}
++			stack = append(stack, a/b)
++		}
++		return stack, nil
++	}
++
++	return nil, errors.New("undefined operation")
+ }

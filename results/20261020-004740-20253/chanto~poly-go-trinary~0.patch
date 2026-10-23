@@ -1,0 +1,31 @@
+diff --git a/trinary.go b/trinary.go
+index 87e69f5..4d11e35 100644
+--- a/trinary.go
++++ b/trinary.go
+@@ -1,5 +1,24 @@
+ package trinary
+ 
+-func ParseTrinary(arg string, want int64, ok bool) {
+-	panic("Please implement the ParseTrinary function")
++import "fmt"
++
++func ParseTrinary(arg string) (int64, error) {
++	const maxInt64 = int64(^uint64(0) >> 1)
++
++	if arg == "" {
++		return 0, fmt.Errorf("invalid trinary: %q", arg)
++	}
++
++	var n int64
++	for _, r := range arg {
++		if r < '0' || r > '2' {
++			return 0, fmt.Errorf("invalid trinary: %q", arg)
++		}
++		d := int64(r - '0')
++		if n > (maxInt64-d)/3 {
++			return 0, fmt.Errorf("trinary value out of range: %q", arg)
++		}
++		n = n*3 + d
++	}
++	return n, nil
+ }

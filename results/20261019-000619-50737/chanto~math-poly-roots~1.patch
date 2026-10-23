@@ -1,0 +1,267 @@
+diff --git a/roots.py b/roots.py
+index d624667..b78f048 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,7 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +11,214 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(coeffs):
++    """Drop leading zero coefficients, but keep at least one coefficient."""
++    i = 0
++    while i < len(coeffs) - 1 and coeffs[i] == 0:
++        i += 1
++    return list(coeffs[i:])
++
++
++def _is_zero(poly):
++    return len(poly) == 1 and poly[0] == 0
++
++
++def _derivative(poly):
++    if len(poly) <= 1:
++        return [Fraction(0)]
++    degree = len(poly) - 1
++    return [poly[i] * (degree - i) for i in range(degree)]
++
++
++def _divmod(a, b):
++    """Polynomial division over the rationals, highest degree first."""
++    a = _trim(a)
++    b = _trim(b)
++    if _is_zero(b):
++        raise ZeroDivisionError("polynomial division by zero")
++
++    quotient = [Fraction(0)] * (len(a) - len(b) + 1)
++    remainder = list(a)
++    max_shift = len(a) - len(b)
++
++    while len(remainder) >= len(b) and not _is_zero(remainder):
++        shift = len(remainder) - len(b)
++        factor = remainder[0] / b[0]
++        quotient[max_shift - shift] = factor
++        for i in range(len(b)):
++            remainder[i] -= factor * b[i]
++        remainder = _trim(remainder)
++
++    return _trim(quotient), remainder
++
++
++def _gcd(a, b):
++    a = _trim(a)
++    b = _trim(b)
++    while not _is_zero(b):
++        _, r = _divmod(a, b)
++        a, b = b, r
++    # Normalize to a monic polynomial; only the roots matter here.
++    return [c / a[0] for c in a]
++
++
++def _squarefree_part(poly):
++    """Remove repeated factors, leaving each distinct root exactly once."""
++    poly = _trim(poly)
++    if len(poly) == 1:
++        return poly
++    common = _gcd(poly, _derivative(poly))
++    quotient, remainder = _divmod(poly, common)
++    if not _is_zero(remainder):
++        raise ArithmeticError("non-exact polynomial division")
++    return _trim(quotient)
++
++
++def _divide_by_root(poly, root):
++    """Divide by (x - root), where root is an exact root of poly."""
++    if len(poly) <= 1:
++        return [Fraction(0)]
++    quotient = [poly[0]]
++    for i in range(1, len(poly) - 1):
++        quotient.append(poly[i] + root * quotient[-1])
++    remainder = poly[-1] + root * quotient[-1]
++    if remainder != 0:
++        raise ArithmeticError("not actually a root")
++    return quotient
++
++
++def _sturm_sequence(poly):
++    poly = _trim(poly)
++    if len(poly) == 1:
++        return [poly]
++    sequence = [poly, _derivative(poly)]
++    while not _is_zero(sequence[-1]):
++        _, remainder = _divmod(sequence[-2], sequence[-1])
++        sequence.append(_trim([-c for c in remainder]))
++    sequence.pop()  # drop the trailing zero polynomial
++    return sequence
++
++
++def _sign_variations(sequence, x):
++    variations = 0
++    previous = 0
++    for poly in sequence:
++        value = evaluate(poly, x)
++        if value == 0:
++            continue
++        sign = 1 if value > 0 else -1
++        if previous and sign != previous:
++            variations += 1
++        previous = sign
++    return variations
++
++
++def _pick_split(poly, a, b):
++    """Choose a non-root strictly between a and b."""
++    middle = (a + b) / 2
++    if evaluate(poly, middle) != 0:
++        return middle
++
++    # There are at most degree(poly) roots, so among degree + 1 interior
++    # candidates at least one is not a root.
++    degree = len(poly) - 1
++    denominator = degree + 2
++    for k in range(1, denominator):
++        candidate = a + (b - a) * Fraction(k, denominator)
++        if candidate != a and candidate != b and evaluate(poly, candidate) != 0:
++            return candidate
++    raise ArithmeticError("could not find a non-root split point")
++
++
++def _refine(poly, a, b):
++    """Bisect a bracket containing exactly one simple root."""
++    fa = evaluate(poly, a)
++    fb = evaluate(poly, b)
++    if fa == 0:
++        return a
++    if fb == 0:
++        return b
++    if (fa > 0) == (fb > 0):
++        raise ArithmeticError("bracket does not contain a sign change")
++
++    tolerance = Fraction(1, 10**12)
++    while b - a > tolerance:
++        middle = (a + b) / 2
++        fm = evaluate(poly, middle)
++        if fm == 0:
++            return middle
++        if (fa > 0) == (fm > 0):
++            a, fa = middle, fm
++        else:
++            b, fb = middle, fm
++        if float(a) == float(b):
++            break
++    return (a + b) / 2
++
++
++def _isolate_roots(poly, lo, hi):
++    """Return exact-enough roots strictly between lo and hi, sorted."""
++    sturm = _sturm_sequence(poly)
++    vlo = _sign_variations(sturm, lo)
++    vhi = _sign_variations(sturm, hi)
++    count = vlo - vhi
++    if count <= 0:
++        return []
++
++    roots = []
++    stack = [(lo, vlo, hi, vhi, count)]
++    while stack:
++        a, va, b, vb, count = stack.pop()
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine(poly, a, b))
++            continue
++
++        middle = _pick_split(poly, a, b)
++        vm = _sign_variations(sturm, middle)
++        left_count = va - vm
++        right_count = vm - vb
++        if left_count + right_count != count:
++            raise ArithmeticError("inconsistent Sturm root count")
++        stack.append((middle, vm, b, vb, right_count))
++        stack.append((a, va, middle, vm, left_count))
++
++    return sorted(roots)
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    poly = _trim([Fraction(c) for c in coeffs])
++    if _is_zero(poly):
++        raise ValueError("the zero polynomial has every real number as a root")
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++
++    # Work with a square-free polynomial so repeated roots are found once and
++    # the Sturm count counts distinct roots.
++    poly = _squarefree_part(poly)
++
++    if lo == hi:
++        return [float(lo)] if evaluate(poly, lo) == 0 else []
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Take boundary roots out of the polynomial before using Sturm counts,
++    # which count roots in the open interval when neither endpoint is a root.
++    if evaluate(poly, lo) == 0:
++        roots.append(lo)
++        poly = _divide_by_root(poly, lo)
++    if evaluate(poly, hi) == 0:
++        roots.append(hi)
++        poly = _divide_by_root(poly, hi)
++
++    if len(poly) > 1:
++        roots.extend(_isolate_roots(poly, lo, hi))
++
++    return [float(root) for root in sorted(roots)]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..6a33ada 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,20 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_close_roots(self):
++        # Roots are 1 and 1 + 1e-6.
++        n = 10**6
++        self.assertRoots(real_roots([n, -(2 * n + 1), n + 1], 0, 2),
++                         [1, 1 + 1 / n])
++
++    def test_boundary_roots(self):
++        # (x - 1)(x - 2)(x + 3) = x^3 - 7x + 6
++        self.assertRoots(real_roots([1, 0, -7, 6], -3, 5), [-3, 1, 2])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,92 @@
+diff --git a/bowling.py b/bowling.py
+index de2dbb0..0e6e40a 100644
+--- a/bowling.py
++++ b/bowling.py
+@@ -1,9 +1,84 @@
+ class BowlingGame:
++    """Keep track of the score of a single game of bowling."""
++
+     def __init__(self):
+-        pass
++        self.rolls = []
+ 
+     def roll(self, pins):
+-        pass
++        """Record a roll that knocked down `pins` pins."""
++        if isinstance(pins, bool) or not isinstance(pins, int):
++            raise ValueError("pins must be an integer")
++        if pins < 0:
++            raise ValueError("pins must not be negative")
++        if pins > 10:
++            raise ValueError("pins must not be greater than 10")
++
++        frames = self._frames()
++        if self._is_complete(frames):
++            raise Exception("cannot roll after the game has ended")
++
++        if len(frames) == 10:
++            tenth = frames[-1]
++            if len(tenth) == 1:
++                if tenth[0] != 10 and tenth[0] + pins > 10:
++                    raise ValueError("frame score cannot exceed 10")
++            elif len(tenth) == 2 and tenth[0] == 10:
++                if tenth[1] != 10 and tenth[1] + pins > 10:
++                    raise ValueError("frame score cannot exceed 10")
++        elif frames and len(frames[-1]) == 1 and frames[-1][0] != 10:
++            if frames[-1][0] + pins > 10:
++                raise ValueError("frame score cannot exceed 10")
++
++        self.rolls.append(pins)
+ 
+     def score(self):
+-        pass
++        """Return the total score of a completed game."""
++        frames = self._frames()
++        if not self._is_complete(frames):
++            raise Exception("cannot score an incomplete game")
++
++        total = 0
++        index = 0
++        for frame_number in range(10):
++            if frame_number == 9:
++                # The tenth frame simply counts every pin knocked down.
++                total += sum(self.rolls[index:])
++                break
++            if self.rolls[index] == 10:
++                total += 10 + self.rolls[index + 1] + self.rolls[index + 2]
++                index += 1
++            elif self.rolls[index] + self.rolls[index + 1] == 10:
++                total += 10 + self.rolls[index + 2]
++                index += 2
++            else:
++                total += self.rolls[index] + self.rolls[index + 1]
++                index += 2
++        return total
++
++    def _frames(self):
++        """Split the recorded rolls into frames rolled so far."""
++        frames = []
++        index = 0
++        while index < len(self.rolls) and len(frames) < 10:
++            if len(frames) == 9:
++                frames.append(self.rolls[index:])
++                index = len(self.rolls)
++            elif self.rolls[index] == 10:
++                frames.append(self.rolls[index:index + 1])
++                index += 1
++            else:
++                frames.append(self.rolls[index:index + 2])
++                index += 2
++        return frames
++
++    @staticmethod
++    def _is_complete(frames):
++        """Return True when all ten frames (and required fill balls) are done."""
++        if len(frames) < 10:
++            return False
++        tenth = frames[-1]
++        if len(tenth) >= 3:
++            return True
++        if len(tenth) == 2:
++            return tenth[0] != 10 and tenth[0] + tenth[1] != 10
++        return False

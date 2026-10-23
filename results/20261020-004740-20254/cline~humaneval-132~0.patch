@@ -1,0 +1,18 @@
+diff --git a/solution.py b/solution.py
+index 8d1cb0a..553bc0d 100644
+--- a/solution.py
++++ b/solution.py
+@@ -12,3 +12,13 @@ def is_nested(string):
+     is_nested('[[][]]') ➞ True
+     is_nested('[[]][[') ➞ True
+     '''
++    opens = 0
++    for idx, char in enumerate(string):
++        if char == '[':
++            opens += 1
++        elif opens >= 2:
++            # Two opening brackets already precede this closing bracket.
++            # A later closing bracket completes a nested "[[]]" subsequence.
++            return string.find(']', idx + 1) != -1
++    return False
++

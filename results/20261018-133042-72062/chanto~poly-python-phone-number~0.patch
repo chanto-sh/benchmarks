@@ -1,0 +1,43 @@
+diff --git a/phone_number.py b/phone_number.py
+index ff5b904..8f5fa80 100644
+--- a/phone_number.py
++++ b/phone_number.py
+@@ -1,3 +1,37 @@
+ class PhoneNumber:
+     def __init__(self, number):
+-        pass
++        if any(character.isalpha() for character in number):
++            raise ValueError("letters not permitted")
++
++        cleaned = "".join(
++            character for character in number if character not in " -().+"
++        )
++        if not cleaned.isdigit():
++            raise ValueError("punctuations not permitted")
++
++        if len(cleaned) < 10:
++            raise ValueError("must not be fewer than 10 digits")
++        if len(cleaned) > 11:
++            raise ValueError("must not be greater than 11 digits")
++        if len(cleaned) == 11:
++            if cleaned[0] != "1":
++                raise ValueError("11 digits must start with 1")
++            cleaned = cleaned[1:]
++
++        if cleaned[0] == "0":
++            raise ValueError("area code cannot start with zero")
++        if cleaned[0] == "1":
++            raise ValueError("area code cannot start with one")
++        if cleaned[3] == "0":
++            raise ValueError("exchange code cannot start with zero")
++        if cleaned[3] == "1":
++            raise ValueError("exchange code cannot start with one")
++
++        self.number = cleaned
++
++    @property
++    def area_code(self):
++        return self.number[:3]
++
++    def pretty(self):
++        return f"({self.number[:3]})-{self.number[3:6]}-{self.number[6:]}"

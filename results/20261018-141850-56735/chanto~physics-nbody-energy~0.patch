@@ -1,0 +1,121 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..e33438c 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,31 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses velocity Verlet (a symplectic, time-reversible integrator), so the
++    energy error stays bounded over long runs instead of accumulating.
++    """
++    n = len(masses)
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++
++    acc = accelerations(masses, pos, G)
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        # Kick by half a step, then drift a full step.
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++            pos[i][0] += dt * vel[i][0]
++            pos[i][1] += dt * vel[i][1]
++
++        new_acc = accelerations(masses, pos, G)
++
++        # Kick by the other half step using the new accelerations.
++        for i in range(n):
++            vel[i][0] += half_dt * new_acc[i][0]
++            vel[i][1] += half_dt * new_acc[i][1]
++        acc = new_acc
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..a9a091c 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -17,6 +17,78 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_inputs_are_not_modified(self):
++        masses = [1.0, 2.0]
++        positions = [[-0.5, 0.0], [0.25, 0.0]]
++        velocities = [[0.0, -1.0], [0.0, 0.5]]
++        positions_before = [row[:] for row in positions]
++        velocities_before = [row[:] for row in velocities]
++
++        simulate(masses, positions, velocities, 0.01, 100)
++
++        self.assertEqual(positions, positions_before)
++        self.assertEqual(velocities, velocities_before)
++
++    def test_momentum_conserved_for_unequal_masses(self):
++        masses = [1.0, 2.0]
++        total_mass = sum(masses)
++        v_rel = math.sqrt(total_mass)
++        positions = [[-2.0 / 3.0, 0.0], [1.0 / 3.0, 0.0]]
++        velocities = [[0.0, -2.0 * v_rel / 3.0], [0.0, v_rel / 3.0]]
++
++        def momentum(vel):
++            return (
++                sum(m * v[0] for m, v in zip(masses, vel)),
++                sum(m * v[1] for m, v in zip(masses, vel)),
++            )
++
++        p0 = momentum(velocities)
++        _, final_velocities = simulate(masses, positions, velocities, 0.01, 20000)
++        p1 = momentum(final_velocities)
++
++        self.assertAlmostEqual(p1[0], p0[0], delta=1e-10)
++        self.assertAlmostEqual(p1[1], p0[1], delta=1e-10)
++
++    def test_eccentric_binary_energy_bounded(self):
++        # Equal masses with semi-major axis 1 and eccentricity 0.6, at periapsis.
++        masses = [1.0, 1.0]
++        r_peri = 0.4
++        v_peri = math.sqrt(8.0)
++        positions = [[-r_peri / 2.0, 0.0], [r_peri / 2.0, 0.0]]
++        velocities = [[0.0, -v_peri / 2.0], [0.0, v_peri / 2.0]]
++        e0 = energy(masses, positions, velocities)
++
++        max_relative_error = 0.0
++        for _ in range(200):
++            positions, velocities = simulate(masses, positions, velocities, 0.0005, 100)
++            max_relative_error = max(
++                max_relative_error,
++                abs(energy(masses, positions, velocities) - e0) / abs(e0),
++            )
++
++        self.assertLess(max_relative_error, 1e-5)
++
++    def test_figure_eight_energy_bounded(self):
++        # Chenciner-Montgomery figure-eight choreography.
++        masses = [1.0, 1.0, 1.0]
++        x = 0.97000436
++        y = -0.24308753
++        vx = -0.93240737
++        vy = -0.86473146
++        positions = [[x, y], [-x, -y], [0.0, 0.0]]
++        velocities = [[-vx / 2.0, -vy / 2.0], [-vx / 2.0, -vy / 2.0], [vx, vy]]
++        e0 = energy(masses, positions, velocities)
++
++        max_relative_error = 0.0
++        for _ in range(100):
++            positions, velocities = simulate(masses, positions, velocities, 0.001, 200)
++            max_relative_error = max(
++                max_relative_error,
++                abs(energy(masses, positions, velocities) - e0) / abs(e0),
++            )
++
++        self.assertLess(max_relative_error, 1e-5)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

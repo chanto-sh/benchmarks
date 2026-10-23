@@ -1,0 +1,110 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..adb7bc6
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,76 @@
++# BLOCKED: users.email NOT NULL + case-insensitive UNIQUE
++
++## What was requested
++
++`migrations/002_unique_email.sql` must make `users.email` required (`NOT NULL`) and
++unique ignoring case, without modifying or deleting any customer row. It must apply
++to the anonymised production snapshot (`fixtures/prod_snapshot.sql`).
++
++## Why it is blocked
++
++The prod snapshot already contains data that violates both parts of the requested
++constraint. Enforcing the constraint would require changing or deleting those rows,
++which is explicitly out of scope (Support owns the data).
++
++### 1. NULL email
++
++| id | name         | email |
++|----|--------------|-------|
++| 17 | Goran Okafor | NULL  |
++
++`NOT NULL` cannot be added while this row exists. Backfilling an address would
++modify the customer row; deleting the row is even worse.
++
++### 2. Case-insensitive duplicates
++
++| lower(email)             | ids        | stored values |
++|--------------------------|------------|---------------|
++| `ana.silva@example.com`  | 1, 4, 23   | ids 1 and 23 are `ana.silva@example.com`; id 4 is `Ana.Silva@example.com` |
++
++A `UNIQUE` index on `email COLLATE NOCASE` (or a rebuilt table with such a
++constraint) rejects this data because ids 1, 4 and 23 are the same address
++ignoring case. Resolving it means assigning a different email to a row, merging
++the accounts, or deleting rows — all customer-data changes.
++
++## Evidence
++
++Fresh database: `test_constraint_on_fresh_db` passes — the migration creates
++`email TEXT NOT NULL COLLATE NOCASE UNIQUE`, and inserts of `NULL` or
++`KIM@example.com` (after `kim@example.com`) raise `sqlite3.IntegrityError`.
++
++Prod snapshot:
++
++```
++test_applies_to_prod_snapshot ... ERROR
++sqlite3.IntegrityError: UNIQUE constraint failed: users_new.email
++```
++
++(With duplicates removed, the same migration fails on the NULL row with
++`NOT NULL constraint failed: users_new.email`.)
++
++The migration copies rows into a constrained table inside a single transaction
++and only drops the old table after that copy succeeds. On the prod snapshot the
++copy fails first, so all 40 rows in `users` are unchanged (verified by comparing
++`id, email, name` before and after the failure). No row is updated, inserted or
++deleted.
++
++## What is needed to unblock
++
++Support must clean the source data first, then the same migration can be applied:
++
++1. Give id 17 a real email (or decide how to handle that account).
++2. Resolve ids 1, 4 and 23 so each account has a distinct email, or merge/remove
++   the duplicate accounts.
++
++Note that ids 1 and 23 are exact duplicates (same email, same name, both
++`Ana Silva`), which looks like a duplicate account; ids 1/4 differ in case and
++name (`Ana Silva` vs `Dev Silva`).
++
++## Alternative considered and rejected
++
++Making the unique index partial (for example, excluding rows whose email is
++already duplicated or NULL) would let the migration run, but it would silently
++leave the existing violations in place. That does not make `email` required and
++unique, so it would be a workaround of the requirement rather than a fix.
++Deduplicating or backfilling rows inside the migration was also rejected because
++it modifies customer data owned by Support.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..4b942c1 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,22 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- NOTE: this migration cannot be applied to the production snapshot as-is.
++-- See BLOCKED.md. It is written to fail atomically rather than alter or
++-- discard existing customer rows.
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL COLLATE NOCASE,
++    name TEXT,
++    UNIQUE (email)
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;

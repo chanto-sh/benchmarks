@@ -1,0 +1,18 @@
+diff --git a/solution.py b/solution.py
+index 1fdcbff..5352378 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,12 @@
+ def max_subarray_product(arr):
+-    pass
++    if not arr:
++        raise ValueError("arr must be a non-empty sequence")
++
++    max_prod = min_prod = result = arr[0]
++    for value in arr[1:]:
++        candidates = (value, max_prod * value, min_prod * value)
++        max_prod = max(candidates)
++        min_prod = min(candidates)
++        result = max(result, max_prod)
++
++    return result

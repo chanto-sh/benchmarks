@@ -1,0 +1,200 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..59b8ddc 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,194 @@
+ package poker
+ 
++import (
++	"errors"
++	"fmt"
++	"sort"
++	"strings"
++)
++
++type card struct {
++	rank int
++	suit rune
++}
++
++type handScore struct {
++	hand  string
++	value []int
++}
++
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	if len(hands) == 0 {
++		return nil, errors.New("no hands provided")
++	}
++
++	scored := make([]handScore, 0, len(hands))
++	for _, hand := range hands {
++		cards, err := parseHand(hand)
++		if err != nil {
++			return nil, err
++		}
++		scored = append(scored, handScore{hand: hand, value: evaluateHand(cards)})
++	}
++
++	best := scored[0].value
++	winners := []string{scored[0].hand}
++	for _, hand := range scored[1:] {
++		switch compareScores(hand.value, best) {
++		case 1:
++			best = hand.value
++			winners = []string{hand.hand}
++		case 0:
++			winners = append(winners, hand.hand)
++		}
++	}
++
++	return winners, nil
++}
++
++func parseHand(hand string) ([]card, error) {
++	fields := strings.Fields(hand)
++	if len(fields) != 5 {
++		return nil, fmt.Errorf("invalid hand %q: expected 5 cards", hand)
++	}
++
++	cards := make([]card, 0, len(fields))
++	for _, field := range fields {
++		runes := []rune(field)
++		if len(runes) < 2 || len(runes) > 3 {
++			return nil, fmt.Errorf("invalid card %q", field)
++		}
++
++		suit := runes[len(runes)-1]
++		if !validSuit(suit) {
++			return nil, fmt.Errorf("invalid suit in card %q", field)
++		}
++
++		rank, ok := parseRank(string(runes[:len(runes)-1]))
++		if !ok {
++			return nil, fmt.Errorf("invalid rank in card %q", field)
++		}
++		cards = append(cards, card{rank: rank, suit: suit})
++	}
++
++	return cards, nil
++}
++
++func validSuit(suit rune) bool {
++	switch suit {
++	case '♤', '♡', '♢', '♧':
++		return true
++	default:
++		return false
++	}
++}
++
++func parseRank(rank string) (int, bool) {
++	switch rank {
++	case "2", "3", "4", "5", "6", "7", "8", "9", "10":
++		value := 0
++		for _, digit := range rank {
++			value = value*10 + int(digit-'0')
++		}
++		return value, true
++	case "J":
++		return 11, true
++	case "Q":
++		return 12, true
++	case "K":
++		return 13, true
++	case "A":
++		return 14, true
++	default:
++		return 0, false
++	}
++}
++
++func evaluateHand(cards []card) []int {
++	counts := [15]int{}
++	flush := true
++	for i, c := range cards {
++		counts[c.rank]++
++		if i > 0 && c.suit != cards[0].suit {
++			flush = false
++		}
++	}
++
++	ranks := make([]int, 0, 5)
++	for rank := 14; rank >= 2; rank-- {
++		if counts[rank] > 0 {
++			ranks = append(ranks, rank)
++		}
++	}
++
++	straightHigh := 0
++	if len(ranks) == 5 {
++		switch {
++		case ranks[0]-ranks[4] == 4:
++			straightHigh = ranks[0]
++		case ranks[0] == 14 && ranks[1] == 5:
++			straightHigh = 5
++		}
++	}
++
++	type rankGroup struct {
++		rank  int
++		count int
++	}
++	groups := make([]rankGroup, 0, 5)
++	for _, rank := range ranks {
++		groups = append(groups, rankGroup{rank: rank, count: counts[rank]})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count == groups[j].count {
++			return groups[i].rank > groups[j].rank
++		}
++		return groups[i].count > groups[j].count
++	})
++
++	if flush && straightHigh > 0 {
++		return []int{8, straightHigh}
++	}
++	if groups[0].count == 4 {
++		return []int{7, groups[0].rank, groups[1].rank}
++	}
++	if groups[0].count == 3 && groups[1].count == 2 {
++		return []int{6, groups[0].rank, groups[1].rank}
++	}
++	if flush {
++		return append([]int{5}, ranks...)
++	}
++	if straightHigh > 0 {
++		return []int{4, straightHigh}
++	}
++	if groups[0].count == 3 {
++		score := []int{3, groups[0].rank}
++		for _, group := range groups[1:] {
++			score = append(score, group.rank)
++		}
++		return score
++	}
++	if groups[0].count == 2 && groups[1].count == 2 {
++		return []int{2, groups[0].rank, groups[1].rank, groups[2].rank}
++	}
++	if groups[0].count == 2 {
++		score := []int{1, groups[0].rank}
++		for _, group := range groups[1:] {
++			score = append(score, group.rank)
++		}
++		return score
++	}
++	return append([]int{0}, ranks...)
++}
++
++func compareScores(a, b []int) int {
++	for i := 0; i < len(a) && i < len(b); i++ {
++		if a[i] > b[i] {
++			return 1
++		}
++		if a[i] < b[i] {
++			return -1
++		}
++	}
++	return 0
+ }

@@ -1,0 +1,76 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..4bde41f 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,69 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _interleave(values):
++    """Bijection from k-tuples of non-negative ints to non-negative ints.
++
++    Bit j of element i becomes bit k*j + i of the result.
++    """
++    k = len(values)
++    if k == 0:
++        return 0
++
++    max_bits = max(v.bit_length() for v in values)
++    working = list(values)
++    result = 0
++    shift = 0
++    for _ in range(max_bits):
++        block = 0
++        for i, v in enumerate(working):
++            block |= (v & 1) << i
++            working[i] = v >> 1
++        result |= block << shift
++        shift += k
++    return result
++
++
++def _deinterleave(k, n):
++    """Inverse of _interleave for a fixed length k."""
++    if k == 0:
++        return []
++
++    values = [0] * k
++    if n == 0:
++        return values
++
++    mask = (1 << k) - 1
++    j = 0
++    while n:
++        block = n & mask
++        n >>= k
++        while block:
++            low = block & -block
++            i = low.bit_length() - 1
++            values[i] |= 1 << j
++            block ^= low
++        j += 1
++    return values
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    k = len(lst)
++    if k == 0:
++        return 0
++    data = _interleave(lst)
++    # Every positive key is uniquely odd_part * 2**a; use a = k - 1.
++    return (2 * data + 1) << (k - 1)
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("key must be non-negative")
++    if n == 0:
++        return []
++
++    a = (n & -n).bit_length() - 1
++    odd = n >> a
++    return _deinterleave(a + 1, (odd - 1) >> 1)

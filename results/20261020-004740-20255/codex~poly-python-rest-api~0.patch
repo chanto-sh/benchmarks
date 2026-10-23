@@ -1,0 +1,119 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..b250844 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,111 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        self.database = database if database is not None else {"users": []}
++        self.database.setdefault("users", [])
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url != "/users":
++            raise ValueError(f"Unknown URL: {url}")
++
++        users = self.database["users"]
++
++        if payload is not None:
++            requested = set(self._parse_payload(payload).get("users", []))
++            users = [user for user in users if user["name"] in requested]
++
++        return json.dumps(
++            {
++                "users": [
++                    self._user_response(user)
++                    for user in sorted(users, key=lambda user: user["name"])
++                ]
++            }
++        )
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = self._parse_payload(payload)
++
++        if url == "/add":
++            return self._add_user(data["user"])
++        if url == "/iou":
++            return self._add_iou(data["lender"], data["borrower"], data["amount"])
++
++        raise ValueError(f"Unknown URL: {url}")
++
++    @staticmethod
++    def _parse_payload(payload):
++        if isinstance(payload, str):
++            return json.loads(payload)
++        return payload or {}
++
++    def _find_user(self, name):
++        for user in self.database["users"]:
++            if user["name"] == name:
++                return user
++        raise ValueError(f"Unknown user: {name}")
++
++    def _add_user(self, name):
++        if any(user["name"] == name for user in self.database["users"]):
++            raise ValueError(f"User already exists: {name}")
++
++        user = {"name": name, "owes": {}, "owed_by": {}, "balance": 0.0}
++        self.database["users"].append(user)
++        return json.dumps(self._user_response(user))
++
++    def _add_iou(self, lender_name, borrower_name, amount):
++        lender = self._find_user(lender_name)
++        borrower = self._find_user(borrower_name)
++        amount = float(amount)
++
++        # Track the net debt between the two users. A positive value means the
++        # lender owes the borrower; a negative value means the reverse.
++        net_lender_owes = (
++            float(lender["owes"].get(borrower_name, 0.0))
++            - float(borrower["owes"].get(lender_name, 0.0))
++            - amount
++        )
++
++        lender["owes"].pop(borrower_name, None)
++        lender["owed_by"].pop(borrower_name, None)
++        borrower["owes"].pop(lender_name, None)
++        borrower["owed_by"].pop(lender_name, None)
++
++        net_lender_owes = self._clean_amount(net_lender_owes)
++        if net_lender_owes > 0:
++            lender["owes"][borrower_name] = net_lender_owes
++            borrower["owed_by"][lender_name] = net_lender_owes
++        elif net_lender_owes < 0:
++            amount_owed = self._clean_amount(-net_lender_owes)
++            borrower["owes"][lender_name] = amount_owed
++            lender["owed_by"][borrower_name] = amount_owed
++
++        self._update_balance(lender)
++        self._update_balance(borrower)
++
++        return json.dumps(
++            {
++                "users": [
++                    self._user_response(user)
++                    for user in sorted((lender, borrower), key=lambda user: user["name"])
++                ]
++            }
++        )
++
++    @staticmethod
++    def _clean_amount(amount):
++        return round(float(amount), 10)
++
++    def _update_balance(self, user):
++        balance = sum(user["owed_by"].values()) - sum(user["owes"].values())
++        user["balance"] = self._clean_amount(balance)
++
++    def _user_response(self, user):
++        return {
++            "name": user["name"],
++            "owes": dict(sorted(user["owes"].items())),
++            "owed_by": dict(sorted(user["owed_by"].items())),
++            "balance": self._clean_amount(user["balance"]),
++        }

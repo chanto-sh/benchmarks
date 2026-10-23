@@ -1,0 +1,52 @@
+diff --git a/game.py b/game.py
+index 768dec9..d3480e7 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,46 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    if not 1 <= k <= n:
++        raise ValueError("require 1 <= k <= n")
++
++    # E[i] = 1 + (1/k) * sum(E[next]) for i < n, with E[n] = 0.
++    # Build the linear system A * E = b and solve it exactly.
++    size = n
++    p = Fraction(1, k)
++    A = [[Fraction(0) for _ in range(size)] for _ in range(size)]
++    b = [Fraction(1) for _ in range(size)]
++
++    for i in range(size):
++        A[i][i] += 1
++        for roll in range(1, k + 1):
++            target = i + roll
++            if target > n:
++                target = 2 * n - target
++            if target == n:
++                continue
++            A[i][target] -= p
++
++    # Gauss-Jordan elimination over the rationals.
++    for col in range(size):
++        pivot = next(row for row in range(col, size) if A[row][col] != 0)
++        if pivot != col:
++            A[col], A[pivot] = A[pivot], A[col]
++            b[col], b[pivot] = b[pivot], b[col]
++
++        scale = A[col][col]
++        A[col] = [value / scale for value in A[col]]
++        b[col] /= scale
++
++        for row in range(size):
++            if row == col:
++                continue
++            factor = A[row][col]
++            if factor == 0:
++                continue
++            A[row] = [
++                A[row][c] - factor * A[col][c] for c in range(size)
++            ]
++            b[row] -= factor * b[col]
++
++    return b[0]

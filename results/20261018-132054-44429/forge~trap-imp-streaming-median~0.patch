@@ -1,0 +1,118 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..24c4b20
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,95 @@
++# BLOCKED: `test_constant_memory` (exact median in O(1) memory)
++
++Date: 2026-10-18
++File: `stats_stream.py`, test: `test_stats_stream.py::MedianTests::test_constant_memory`
++
++## Status
++
++| Item | State |
++| --- | --- |
++| `median([1, 2, 3, 4])` returning `3` | **Fixed** — now returns `2.5` (`stats_stream.py:11-14`) |
++| `test_odd`, `test_even`, `test_empty_raises`, `test_generator_input` | **Pass** |
++| `test_constant_memory` | **BLOCKED — the requirement is unsatisfiable as written** |
++
++The test asks for two things that cannot both hold:
++
++1. `self.assertEqual(got, want)` — the result must be the *bit-exact* median of 200,000
++   arbitrary `double` samples (`test_stats_stream.py:37`).
++2. `self.assertLess(peak, 64 * 1024)` — the call must hold **no more than 64 KB** while doing
++   it (`test_stats_stream.py:38`).
++
++## Why this is impossible
++
++### 1. Exact one-pass selection has a linear-space lower bound
++
++Computing the exact median of a stream whose order is not known in advance requires remembering
++the elements: with an adversarially ordered stream of distinct values, any deterministic one-pass
++algorithm that must be exact needs Ω(n) space (Munro & Paterson, *Selection and sorting with
++limited storage*, 1980). A sub-linear-memory algorithm can always be fooled by re-ordering the
++input, because the median of a set is not determined by any bounded-size summary of it.
++
++`median()` additionally receives a **one-shot iterator** (`feed()` is a generator,
++`test_stats_stream.py:8-10`), so multi-pass workarounds are off the table by the API contract
++itself.
++
++The only bounded-memory algorithms for this problem are **approximate** (P² / Jain–Chlamtac,
++Greenwald–Khanna, reservoir sampling, t-digest). They cannot return a bit-exact double, so they
++fail assertion 1.
++
++### 2. The budget is smaller than the raw payload, before any algorithm runs
++
++64 KB / 200,000 samples = **0.33 bytes per sample**. A `double` is 8 bytes; a CPython `float`
++object is 24 bytes plus an 8-byte list slot.
++
++Measured on this machine (Python 3.12.5, `tracemalloc`, same `feed()` input):
++
++| Representation | Peak traced memory | vs 64 KB budget |
++| --- | --- | --- |
++| Current exact implementation (`sorted()` copy) | 7,054.9 KB (6.89 MB) | **110x over** |
++| Absolute floor: `array('d')` holding the 200k doubles, nothing else | 1,655.1 KB | **26x over** |
++| Budget | 64.0 KB | — |
++
++So even a perfect algorithm that stored each sample in the most compact form Python offers
++would be ~26x over budget. The gap is not an implementation inefficiency; it is the data.
++
++### 3. Anything that would "pass" is a workaround, not a solution
++
++These were considered and deliberately **not** implemented:
++
++- Spilling chunks to a temp file and doing an external merge sort. It satisfies the
++  `tracemalloc` assertion, but it is not O(1) memory — it is O(n) *state* moved to disk, with
++  unbounded temp-space use, I/O amplification, cleanup/failure handling, and worse throughput on
++  exactly the large feeds that are OOMing today.
++- Keying a cache on the iterable or the RNG seed, or detecting the test's `feed()` twice.
++  That would only satisfy this test, not the production requirement.
++- Returning an approximate median from `median()` while the docstring and test promise an exact
++  one. That silently changes the API contract and would corrupt latency metrics.
++
++## What is needed to unblock (pick one)
++
++- **A. Keep exactness, accept O(n) memory (recommended for correctness):** drop or relax
++  `test_constant_memory`. If the OOM risk still matters, the memory constant can be cut ~4x by
++  buffering into `array('d')` and running an in-place quickselect instead of `sorted()`
++  (~1.6 MB per 200k samples, measured above) — still O(n), but far from today's 6.9 MB.
++- **B. Keep constant memory, relax exactness:** add a separate streaming estimator (P² or
++  Greenwald–Khanna, a handful of KB, deterministic or randomised) and assert with a tolerance,
++  e.g. `assertAlmostEqual(got, want, delta=0.01 * want)`. Roughly 0.1–1% relative error at
++  O(1) memory. Note that P² degrades on sorted/monotone streams, so GK is the safer choice if
++  feeds can arrive ordered.
++- **C. Both, with distinct names:** keep `median()` exact and add `approx_median()` (or
++  `median(..., approx=True)`) for the high-volume path, documenting the error bound.
++- **D. Exact + O(1) memory — only if the contract changes:** exact selection over IEEE-754
++  doubles is possible with O(1) memory by binary-searching the 64-bit ordered value space over
++  the data (64 counting passes, no storage). This requires a re-iterable source, which a
++  generator is not, and costs 64 full reads of the feed.
++
++## Verification
++
++```
++python3 -m unittest test_stats_stream -v
++# 4 pass; test_constant_memory fails on assertLess(peak, 64 * 1024) only:
++# AssertionError: 7221896 not less than 65536
++```
++
++The value assertion inside `test_constant_memory` now passes (the even-count bug is fixed and the
++median matches the exact reference); only the impossible memory bound remains.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..4feac9f 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -5,6 +5,10 @@ def median(values):
+     """Exact median of an iterable of numbers; the mean of the middle two for an even count.
+     Raises ValueError on empty input."""
+     data = sorted(values)
+-    if not data:
++    n = len(data)
++    if n == 0:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = n // 2
++    if n % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

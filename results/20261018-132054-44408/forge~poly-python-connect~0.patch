@@ -1,0 +1,75 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..19b312e 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,67 @@
+-
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.rows = [
++            line.split() for line in board.splitlines() if line.strip()
++        ]
++        self.height = len(self.rows)
++        self.width = max((len(row) for row in self.rows), default=0)
++
++    def _neighbours(self, row, col):
++        """Yield the coordinates of the (up to) six hex-adjacent cells.
++
++        Each row is shifted right by half a cell relative to the row above,
++        so the neighbours found on the row above and below differ.
++        """
++        candidates = (
++            (row, col - 1),
++            (row, col + 1),
++            (row - 1, col),
++            (row - 1, col + 1),
++            (row + 1, col - 1),
++            (row + 1, col),
++        )
++        for r, c in candidates:
++            if 0 <= r < self.height and 0 <= c < len(self.rows[r]):
++                yield r, c
++
++    def _connected(self, player, starts, is_goal):
++        """Return True if `player` links any start cell to any goal cell."""
++        seen = set()
++        stack = []
++        for row, col in starts:
++            if col < len(self.rows[row]) and self.rows[row][col] == player:
++                seen.add((row, col))
++                stack.append((row, col))
++
++        while stack:
++            row, col = stack.pop()
++            if is_goal(row, col):
++                return True
++            for nxt in self._neighbours(row, col):
++                if nxt not in seen and self.rows[nxt[0]][nxt[1]] == player:
++                    seen.add(nxt)
++                    stack.append(nxt)
++
++        return False
+ 
+     def get_winner(self):
+-        pass
++        if self.height == 0 or self.width == 0:
++            return ""
++
++        last_col = self.width - 1
++        if self._connected(
++            "X",
++            ((r, 0) for r in range(self.height)),
++            lambda r, c: c == last_col,
++        ):
++            return "X"
++
++        last_row = self.height - 1
++        if self._connected(
++            "O",
++            ((0, c) for c in range(self.width)),
++            lambda r, c: r == last_row,
++        ):
++            return "O"
++
++        return ""

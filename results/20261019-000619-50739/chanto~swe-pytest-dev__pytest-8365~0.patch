@@ -1,0 +1,85 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..69cc486
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed a crash when the user name returned by :func:`getpass.getuser` contains
++characters which are not valid in directory names, for example when using
++``tmpdir`` or ``tmp_path`` over SSH on Windows.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..ef40513 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -114,7 +114,7 @@ class TempPathFactory:
+             user = get_user() or "unknown"
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+-            rootdir = temproot.joinpath(f"pytest-of-{user}")
++            rootdir = temproot.joinpath(f"pytest-of-{_sanitize_for_path(user)}")
+             rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+@@ -159,6 +159,15 @@ def get_user() -> Optional[str]:
+         return None
+ 
+ 
++def _sanitize_for_path(value: str, replace_with: str = "_") -> str:
++    """Sanitize the value to be used as part of a path.
++
++    The value is sanitized by replacing all characters that are not
++    alphanumeric, underscore, or dot with ``replace_with``.
++    """
++    return re.sub(r"[^a-zA-Z0-9_.]", replace_with, value)
++
++
+ def pytest_configure(config: Config) -> None:
+     """Create a TempdirFactory and attach it to the config object.
+ 
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..dc64382 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -19,6 +19,7 @@ from _pytest.pathlib import on_rm_rf_error
+ from _pytest.pathlib import register_cleanup_lock_removal
+ from _pytest.pathlib import rm_rf
+ from _pytest.pytester import Pytester
++from _pytest.tmpdir import _sanitize_for_path
+ from _pytest.tmpdir import get_user
+ from _pytest.tmpdir import TempdirFactory
+ from _pytest.tmpdir import TempPathFactory
+@@ -246,6 +247,34 @@ def test_get_user(monkeypatch):
+     assert get_user() is None
+ 
+ 
++@pytest.mark.parametrize(
++    "value, expected",
++    [
++        ("john_doe", "john_doe"),
++        ("john.doe", "john.doe"),
++        ("contoso\\john_doe", "contoso_john_doe"),
++        ("contoso/john_doe", "contoso_john_doe"),
++        ('a:b*c?d"e<f>g|h', "a_b_c_d_e_f_g_h"),
++        ("with space", "with_space"),
++    ],
++)
++def test_sanitize_for_path(value: str, expected: str) -> None:
++    assert _sanitize_for_path(value) == expected
++
++
++def test_basetemp_sanitizes_user(monkeypatch, tmp_path: Path) -> None:
++    """The user name is sanitized before being used in the base temp path."""
++    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path))
++    monkeypatch.setattr("_pytest.tmpdir.get_user", lambda: "contoso\\john_doe")
++    factory = TempPathFactory(
++        given_basetemp=None, trace=lambda *args: None, _ispytest=True
++    )
++
++    basetemp = factory.getbasetemp()
++
++    assert basetemp.parent.name == "pytest-of-contoso_john_doe"
++
++
+ class TestNumberedDir:
+     PREFIX = "fun-"
+ 

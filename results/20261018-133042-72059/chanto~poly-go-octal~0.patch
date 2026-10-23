@@ -1,0 +1,30 @@
+diff --git a/octal.go b/octal.go
+index 9ed3def..eecffef 100644
+--- a/octal.go
++++ b/octal.go
+@@ -1,5 +1,23 @@
+ package octal
+ 
+-func ParseOctal(input string, expectedNum int64, expectErr bool) {
+-	panic("Please implement the ParseOctal function")
++import "errors"
++
++var errInvalidOctal = errors.New("invalid octal number")
++
++// ParseOctal converts a base-8 string to its decimal value.
++// Invalid input is reported as an error and yields zero.
++func ParseOctal(input string) (int64, error) {
++	if input == "" {
++		return 0, errInvalidOctal
++	}
++
++	var result int64
++	for _, digit := range input {
++		if digit < '0' || digit > '7' {
++			return 0, errInvalidOctal
++		}
++		result = result*8 + int64(digit-'0')
++	}
++
++	return result, nil
+ }

@@ -1,0 +1,98 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..7714b9c
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,51 @@
++# Blocked: September 2026 reconciliation
++
++## What is blocked
++
++`python3 reconcile.py 2026-09` cannot run, so `recon_2026-09.json` was not
++produced and the September net difference cannot be reported.
++
++## Why
++
++The required input file `exports/ledger_2026-09.csv` does not exist. The
++`exports/` directory contains only:
++
++- `exports/bank_2026-08.csv`
++- `exports/bank_2026-09.csv`
++- `exports/ledger_2026-08.csv`
++
++There is no September ledger export anywhere in the repository (checked with
++`git ls-files`, a filesystem search, and `find`).
++
++Running the requested command fails at the ledger load:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++Without the ledger side there is no way to compute matches, mismatches, or
++"net difference = bank total minus ledger total". Reporting the bank total as a
++difference would be wrong, so no `recon_2026-09.json` was generated.
++
++## What was completed
++
++- Implemented `reconcile()` in `reconcile.py`: matches by `ref`, classifies
++  `matched`, `amount_mismatch`, `missing_in_bank`, and `missing_in_ledger`,
++  and computes `net_difference` as a two-decimal string.
++- Both tests in `test_reconcile.py` pass.
++
++## How to unblock
++
++Provide `exports/ledger_2026-09.csv` with the same schema as the other exports:
++
++```
++id,date,ref,amount
++```
++
++Then rerun:
++
++```
++python3 reconcile.py 2026-09
++```
++
++This will write `recon_2026-09.json` and print the net difference.
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..22e5d6b 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,35 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    missing_in_bank = []
++    missing_in_ledger = []
++
++    for ref, amount in ledger_by_ref.items():
++        if ref not in bank_by_ref:
++            missing_in_bank.append(ref)
++        elif bank_by_ref[ref] == amount:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    missing_in_ledger = [ref for ref in bank_by_ref if ref not in ledger_by_ref]
++
++    ledger_total = sum((r["amount"] for r in ledger), Decimal("0"))
++    bank_total = sum((r["amount"] for r in bank), Decimal("0"))
++    net_difference = bank_total - ledger_total
++
++    return {
++        "matched": sorted(matched),
++        "amount_mismatch": sorted(amount_mismatch),
++        "missing_in_bank": sorted(missing_in_bank),
++        "missing_in_ledger": sorted(missing_in_ledger),
++        "net_difference": f"{net_difference:.2f}",
++    }
+ 
+ 
+ def main(month):

@@ -1,0 +1,25 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..8ddb7ea
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed temporary directory creation failing when the user name returned by :func:`getpass.getuser` contains characters that are not valid in a directory name. The base temporary directory is now created directly in the temporary root in this case.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..5b95f76 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,12 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # If we are not able to create the directory then use the
++                # temproot directly.
++                rootdir = temproot
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )

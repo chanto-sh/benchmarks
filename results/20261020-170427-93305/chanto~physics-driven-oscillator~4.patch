@@ -1,0 +1,71 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..04a26e6 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,64 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_parts(m, k, c, F0, omega):
++    """Return P, Q such that the particular solution is P cos(wt) + Q sin(wt)."""
++    elastic = k - m * omega * omega
++    damping = c * omega
++    denom = math.hypot(elastic, damping)
++    if denom == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0
++        raise ValueError("steady state is undefined at undamped resonance")
++    scale = F0 / denom
++    return scale * (elastic / denom), scale * (damping / denom)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    scale = math.hypot(k - m * omega * omega, c * omega)
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        raise ValueError("steady state is undefined at undamped resonance")
++    return F0 / scale
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    p, q = _steady_state_parts(m, k, c, F0, omega)
++
++    # Initial displacement and velocity of the homogeneous part.
++    xh0 = x0 - p
++    vh0 = v0 - q * omega
++    alpha = -c / (2.0 * m)
++    disc = c * c - 4.0 * m * k
++
++    if disc < 0.0:
++        # Underdamped: u = e^(alpha t) cos(beta t),
++        #              v = e^(alpha t) sin(beta t) / beta.
++        beta = math.sqrt(-disc) / (2.0 * m)
++        decay = math.exp(alpha * t)
++        phase = beta * t
++        ratio = 1.0 if phase == 0.0 else math.sin(phase) / phase
++        u = decay * math.cos(phase)
++        v = decay * t * ratio
++    elif disc > 0.0:
++        # Overdamped, written with the larger root r1 and gap = r1 - r2.
++        # Factoring out exp(r1 t) avoids cancellation and overflow.
++        root = math.sqrt(disc)
++        r1 = -2.0 * k / (c + root)
++        gap = root / m
++        decay = math.exp(r1 * t)
++        u = 0.5 * decay * (1.0 + math.exp(-gap * t))
++        v = -decay * math.expm1(-gap * t) / gap
++    else:
++        # Critically damped: u = e^(alpha t), v = t e^(alpha t).
++        decay = math.exp(alpha * t)
++        u = decay
++        v = t * decay
++
++    homogeneous = xh0 * u + (vh0 - alpha * xh0) * v
++    return p * math.cos(omega * t) + q * math.sin(omega * t) + homogeneous

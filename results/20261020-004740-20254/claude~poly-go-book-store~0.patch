@@ -1,0 +1,86 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..cd3de54 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,80 @@
+ package bookstore
+ 
++// bookPrice is the price in cents of a single book.
++const bookPrice = 800
++
++// discounts maps the size of a group of distinct books to its percentage
++// discount. Sizes 1 through 5 are possible in this series.
++var discounts = [6]int{0, 0, 5, 10, 20, 25}
++
++// Cost returns the total cost, in cents, of a basket of books from the same
++// five-book series, applying the grouping that yields the largest discount.
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	var counts [5]int
++	for _, book := range books {
++		if book >= 1 && book <= 5 {
++			counts[book-1]++
++		}
++	}
++	return cost(counts, make(map[[5]int]int))
++}
++
++// cost returns the cheapest price for the given remaining copies of each book.
++// It tries every possible group of distinct books and memoizes the result.
++func cost(counts [5]int, memo map[[5]int]int) int {
++	sortDescending(&counts)
++
++	if cached, ok := memo[counts]; ok {
++		return cached
++	}
++
++	// No books left.
++	remaining := 0
++	for _, c := range counts {
++		remaining += c
++	}
++	if remaining == 0 {
++		return 0
++	}
++
++	best := -1
++	// Each mask selects the distinct books that form the next group.
++	for mask := 1; mask < 1<<5; mask++ {
++		var next [5]int
++		groupSize := 0
++		valid := true
++		for i := 0; i < 5; i++ {
++			next[i] = counts[i]
++			if mask&(1<<i) != 0 {
++				if counts[i] == 0 {
++					valid = false
++					break
++				}
++				next[i]--
++				groupSize++
++			}
++		}
++		if !valid {
++			continue
++		}
++
++		groupCost := bookPrice * groupSize * (100 - discounts[groupSize]) / 100
++		total := groupCost + cost(next, memo)
++		if best < 0 || total < best {
++			best = total
++		}
++	}
++
++	memo[counts] = best
++	return best
++}
++
++// sortDescending orders the five counters from largest to smallest so that
++// equivalent states share a single memoization entry.
++func sortDescending(counts *[5]int) {
++	for i := 1; i < len(counts); i++ {
++		for j := i; j > 0 && counts[j] > counts[j-1]; j-- {
++			counts[j], counts[j-1] = counts[j-1], counts[j]
++		}
++	}
+ }

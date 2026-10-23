@@ -1,0 +1,78 @@
+diff --git a/stats.py b/stats.py
+index add4f59..c3b921c 100644
+--- a/stats.py
++++ b/stats.py
+@@ -2,20 +2,67 @@
+ import math
+ 
+ 
++def _variance_from_deviations(ds, n):
++    """Population variance of deviations, scaled to avoid overflow."""
++    scale = max(abs(d) for d in ds)
++    if scale == 0.0:
++        return 0.0
++    if not math.isfinite(scale):
++        return math.inf
++    # Sum squared normalized deviations in [0, 1], then scale back one
++    # factor at a time so that a finite variance does not overflow early.
++    normalized = math.fsum((d / scale) ** 2 for d in ds)
++    return (normalized / n) * scale * scale
++
++
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires a non-empty sequence")
++
++    # Work relative to the first reading so a large common offset cancels
++    # exactly, then normalize the offsets before summing to avoid overflow.
++    origin = xs[0]
++    offsets = [x - origin for x in xs]
++
++    if all(math.isfinite(d) for d in offsets):
++        max_offset = max(abs(d) for d in offsets)
++        if max_offset == 0.0:
++            mean_offset = 0.0
++        else:
++            mean_offset = (
++                math.fsum(d / max_offset for d in offsets) / n
++            ) * max_offset
++        mean = origin + mean_offset
++        return mean, _variance_from_deviations(
++            [d - mean_offset for d in offsets], n
++        )
++
++    # Subtracting the origin overflowed (values span most of the float
++    # range).  Scale first so both the mean and variance stay finite.
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0, 0.0
++    scaled = [x / scale for x in xs]
++    mean_scaled = math.fsum(scaled) / n
++    variance_scaled = _variance_from_deviations(
++        [x - mean_scaled for x in scaled], n
++    )
++    return mean_scaled * scale, variance_scaled * scale * scale
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    maximum = max(xs)
++    # Shifting by the maximum keeps every exponential in (0, 1].
++    return maximum + math.log(
++        math.fsum(math.exp(x - maximum) for x in xs)
++    )
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

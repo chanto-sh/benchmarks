@@ -1,0 +1,204 @@
+diff --git a/roots.py b/roots.py
+index d624667..a9b8ad5 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,174 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(poly):
++    """Drop leading zero coefficients; zero is represented by []."""
++    i = 0
++    while i < len(poly) and poly[i] == 0:
++        i += 1
++    return list(poly[i:])
++
++
++def _derivative(poly):
++    """Derivative of a highest-degree-first polynomial."""
++    n = len(poly) - 1
++    if n <= 0:
++        return []
++    return [poly[i] * (n - i) for i in range(n)]
++
++
++def _divmod_frac(a, b):
++    """Exact polynomial division over the rationals."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    lead = b[0]
++    for i in range(len(q)):
++        coeff = a[i] / lead
++        q[i] = coeff
++        if coeff:
++            for j in range(len(b)):
++                a[i + j] -= coeff * b[j]
++    return q, _trim(a[len(q):])
++
++
++def _poly_gcd(a, b):
++    """Monic-free polynomial gcd over the rationals."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    while b:
++        _, r = _divmod_frac(a, b)
++        a, b = b, r
++    return a
++
++
++def _normalize_int(poly):
++    """Scale a rational polynomial to primitive integers, preserving sign."""
++    poly = _trim([Fraction(c) for c in poly])
++    if not poly:
++        return []
++
++    den = 1
++    for c in poly:
++        den = den * c.denominator // gcd(den, c.denominator)
++    ints = [(c * den).numerator for c in poly]
++
++    content = 0
++    for c in ints:
++        content = gcd(content, abs(c))
++    return _trim([c // content for c in ints])
++
++
++def _sign_at(poly, x):
++    """Exact sign of poly(x), evaluated without constructing a Fraction."""
++    p, q = x.numerator, x.denominator
++    y = 0
++    q_power = 1
++    for c in poly:
++        y = y * p + c * q_power
++        q_power *= q
++    return (y > 0) - (y < 0)
++
++
++def _variations(sturm, x):
++    """Number of sign variations in the Sturm sequence at x."""
++    variations = 0
++    previous = 0
++    for poly in sturm:
++        sign = _sign_at(poly, x)
++        if sign:
++            if previous and sign != previous:
++                variations += 1
++            previous = sign
++    return variations
++
++
++def _sturm_sequence(poly):
++    """Sturm sequence for a squarefree integer polynomial."""
++    derivative = _normalize_int(_derivative(poly))
++    if not derivative:
++        return [poly]
++
++    sturm = [poly, derivative]
++    while len(sturm[-1]) > 1:
++        _, remainder = _divmod_frac(sturm[-2], sturm[-1])
++        if not remainder:
++            break
++        sturm.append(_normalize_int([-c for c in remainder]))
++    return sturm
++
++
++def _refine(sturm, a, va, b, vb, target_width):
++    """Narrow an interval known to contain exactly one root in (a, b]."""
++    if _sign_at(sturm[0], b) == 0:
++        return b
++    while b - a > target_width:
++        m = (a + b) / 2
++        vm = _variations(sturm, m)
++        if va - vm:
++            b, vb = m, vm
++        else:
++            a, va = m, vm
++    return (a + b) / 2
++
++
++def _isolate(sturm, lo, vlo, hi, vhi, target_width):
++    """Return all roots in (lo, hi], sorted, one per half-open interval."""
++    roots = []
++    # Intervals are (a, b] and are pushed right-first so left is popped first.
++    stack = [(lo, vlo, hi, vhi)]
++    while stack:
++        a, va, b, vb = stack.pop()
++        count = va - vb
++        if count <= 0:
++            continue
++
++        if count == 1:
++            roots.append(_refine(sturm, a, va, b, vb, target_width))
++            continue
++
++        m = (a + b) / 2
++        vm = _variations(sturm, m)
++        stack.append((m, vm, b, vb))
++        stack.append((a, va, m, vm))
++    return roots
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: ints or fractions.Fraction.
+     """
+-    n = 1000
+-    roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    poly = _trim([int(c) for c in coeffs])
++    if not poly:
++        raise ValueError("polynomial must not be all zero")
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi or len(poly) == 1:
++        return []
++
++    if lo == hi:
++        return [float(lo)] if _sign_at(poly, lo) == 0 else []
++
++    # Repeated roots would make the Sturm count disagree with the number of
++    # distinct roots, so count roots of the squarefree part instead.
++    common = _normalize_int(_poly_gcd(poly, _derivative(poly)))
++    squarefree, _ = _divmod_frac(poly, common)
++    squarefree = _normalize_int(squarefree)
++    sturm = _sturm_sequence(squarefree)
++
++    result = []
++    if _sign_at(poly, lo) == 0:
++        result.append(lo)
++
++    vlo = _variations(sturm, lo)
++    vhi = _variations(sturm, hi)
++    # Sturm's theorem counts roots in (lo, hi]; lo was handled above.
++    result.extend(_isolate(sturm, lo, vlo, hi, vhi, Fraction(1, 10**12)))
++    return [float(root) for root in result]

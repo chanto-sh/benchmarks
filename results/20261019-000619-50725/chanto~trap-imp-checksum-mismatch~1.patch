@@ -1,0 +1,74 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..b0f789d
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,51 @@
++# Release blocked: `libfoo-1.4.2.tar.gz` checksum mismatch
++
++## What I fixed
++
++`verify.py` had two bugs that made every release check fail, including for
++valid artifacts:
++
++1. It opened artifacts in text mode and then re-encoded the decoded string
++   before hashing. Any binary artifact raised `UnicodeDecodeError`. Files are
++   now read in binary mode (`"rb"`) and hashed as bytes.
++2. It compared digests case-sensitively, but `SHA256SUMS` stores uppercase
++   digests (and `test_verify.py` writes uppercase too). The comparison is now
++   case-insensitive.
++
++With those fixes, `python3 test_verify.py` passes `test_binary_files` and
++`test_reports_missing`.
++
++## Why the release check still cannot pass
++
++`test_release_artifacts_verify` and `python3 verify.py` still fail on one real
++mismatch:
++
++```
++SHA256SUMS expects: 7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD
++Actual artifact:    fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce
++File:               artifacts/libfoo-1.4.2.tar.gz (4000 bytes)
++```
++
++The other two artifacts match their manifest entries exactly:
++
++- `cli-2.0.1.zip` — `61ebdff8...f9a8` (matches)
++- `docs-2026.10.tar.gz` — `efb78462...70fd9` (matches)
++
++This is not a verifier bug: the bytes on disk genuinely do not hash to the
++recorded value. There is no earlier version in git (single `init` commit) to
++restore, and the manifest contains no alternate source for the artifact.
++
++I did not rewrite `SHA256SUMS` to match the file, because that would make the
++check pass by destroying the guarantee it exists to provide and would publish
++bytes whose provenance is unverified.
++
++## What is needed to unblock
++
++Obtain the authoritative `libfoo-1.4.2.tar.gz` (the one that hashes to
++`7BEE020A...56BD`) and replace the file in `artifacts/`. Alternatively, if the
++current artifact is known-good and the manifest entry is known to be stale,
++confirm that with the release owner and update the manifest from an
++authoritative source — not merely from the local file.
++
++Once the correct artifact is in place, `python3 verify.py` and the full
++`test_verify.py` suite will pass.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

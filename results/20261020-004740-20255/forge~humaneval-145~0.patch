@@ -1,0 +1,18 @@
+diff --git a/solution.py b/solution.py
+index 2eab097..b7be85d 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,13 @@ def order_by_points(nums):
+     >>> order_by_points([1, 11, -1, -11, -12]) == [-1, -11, 1, -12, 11]
+     >>> order_by_points([]) == []
+     """
++    def digit_sum(n):
++        # For negative numbers, the leading digit carries the sign, so
++        # -12 is scored as -1 + 2 == 1.
++        digits = [int(d) for d in str(abs(n))]
++        if n < 0:
++            digits[0] = -digits[0]
++        return sum(digits)
++
++    # sorted() is stable, so equal digit sums keep their original order.
++    return sorted(nums, key=digit_sum)

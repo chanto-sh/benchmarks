@@ -1,0 +1,69 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..145634b 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,3 +1,4 @@
++import math
+ from fractions import Fraction
+ 
+ 
+@@ -6,4 +7,58 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or m <= 0:
++        return Fraction(0)
++
++    n = r + b + g
++
++    if g == 0:
++        # No green can stop the deal: draw min(m, n) cards.
++        drawn = min(m, n)
++        if drawn == n:
++            return Fraction(1 if k <= r else 0)
++        j_start = max(k, drawn - b)
++        j_end = min(r, drawn)
++        return sum(
++            (
++                Fraction(
++                    math.comb(r, j) * math.comb(b, drawn - j),
++                    math.comb(n, drawn),
++                )
++                for j in range(j_start, j_end + 1)
++            ),
++            Fraction(0),
++        )
++
++    total = Fraction(0)
++
++    # The first green is at position t <= m: the t-1 preceding cards are
++    # red/blue, with j reds, and the t-th card is one of the g greens.
++    for t in range(1, min(m, n) + 1):
++        denominator = math.perm(n, t)
++        j_start = max(k, t - 1 - b)
++        j_end = min(r, t - 1)
++        for j in range(j_start, j_end + 1):
++            numerator = (
++                math.comb(t - 1, j)
++                * math.perm(r, j)
++                * math.perm(b, t - 1 - j)
++                * g
++            )
++            total += Fraction(numerator, denominator)
++
++    # No green among the first m cards (possible only when m < n): the deal
++    # stops after exactly m cards.
++    if m < n:
++        denominator = math.perm(n, m)
++        j_start = max(k, m - b)
++        j_end = min(r, m)
++        for j in range(j_start, j_end + 1):
++            numerator = (
++                math.comb(m, j) * math.perm(r, j) * math.perm(b, m - j)
++            )
++            total += Fraction(numerator, denominator)
++
++    return total

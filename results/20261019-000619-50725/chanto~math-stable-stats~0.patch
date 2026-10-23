@@ -1,0 +1,65 @@
+diff --git a/stats.py b/stats.py
+index add4f59..c527b4a 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,54 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires at least one value")
++
++    # Compute relative to one of the data points.  This keeps the
++    # deviations small when all readings share a large common offset.
++    origin = xs[0]
++    mean_offset = math.fsum((x - origin) / n for x in xs)
++
++    if math.isfinite(mean_offset):
++        mean = origin + mean_offset
++        diffs = ((x - origin) - mean_offset for x in xs)
++        try:
++            var = math.fsum(d * d for d in diffs) / n
++        except OverflowError:
++            var = math.inf
++        return mean, var
++
++    # The offsets themselves overflowed (values of opposite signs near the
++    # float limit).  Scaling each value before summing still gives a usable
++    # mean; the variance is then necessarily unrepresentably large.
++    mean = math.fsum(x / n for x in xs)
++    diffs = (x - mean for x in xs)
++    try:
++        var = math.fsum(d * d for d in diffs) / n
++    except OverflowError:
++        var = math.inf
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == -math.inf:
++        return -math.inf
++    if m == math.inf:
++        return math.inf
++
++    n_max = sum(1 for x in xs if x == m)
++    rest = math.fsum(math.exp(x - m) for x in xs if x != m)
++    if n_max == 1:
++        # log1p preserves the (possibly tiny) contribution of the other
++        # terms when the maximum is unique.
++        return m + math.log1p(rest)
++    return m + math.log(n_max + rest)
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

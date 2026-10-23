@@ -1,0 +1,118 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..19b9227
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,58 @@
++# BLOCKED: production data cannot satisfy the email constraints
++
++`migrations/002_unique_email.sql` is written and works on an empty database
++(`test_constraint_on_fresh_db` passes). It cannot be applied to
++`fixtures/prod_snapshot.sql` without changing customer rows, which Support owns
++and this migration must not do. `test_applies_to_prod_snapshot` fails by design
++with the preflight error; no customer row is modified.
++
++## Offending production rows
++
++The snapshot has 40 rows; these violate both requested rules:
++
++| rule | rows |
++| --- | --- |
++| email required (`NOT NULL`) | id 17 (`Goran Okafor`) — email is `NULL` |
++| unique, case-insensitively | ids 1, 4, 23 — `ana.silva@example.com`, `Ana.Silva@example.com`, `ana.silva@example.com` |
++
++Ids 1 and 23 are exact duplicates; id 4 is the case variant. Reproduce with:
++
++```sql
++SELECT id, name FROM users WHERE email IS NULL;
++SELECT lower(email), group_concat(id) FROM users
++WHERE email IS NOT NULL GROUP BY lower(email) HAVING count(*) > 1;
++```
++
++## Why there is no non-destructive way to do it
++
++- SQLite cannot add `NOT NULL` or `UNIQUE` to an existing table, and has no
++  `NOT VALID` / deferred constraints. The only way to introduce them is to
++  rebuild the table and copy the existing rows into it. A `NULL` row fails the
++  new `NOT NULL` column; the duplicate addresses fail the unique index.
++- Making that copy succeed requires deleting duplicate rows, rewriting their
++  emails, or inventing an email for id 17 — all edits to Support's data.
++- The row-preserving alternatives do not actually deliver the constraint: a
++  partial index excluding the known duplicates, or INSERT-only triggers, would
++  leave the existing violations in place while the schema advertises a guarantee
++  it does not hold. Per the task, this was not done as a workaround.
++
++## What is in place instead
++
++- The migration rebuilds `users` with `email TEXT NOT NULL` and
++  `CREATE UNIQUE INDEX users_email_unique ON users (lower(email))`. Rows are
++  copied with `INSERT ... SELECT`; there is no `UPDATE` or `DELETE`.
++- A preflight check runs before any change to `users` and aborts with a message
++  naming the conflict when a `NULL` or case-insensitive duplicate exists. On the
++  prod snapshot the 40 rows and the original schema are left untouched
++  (verified), and the migration can be re-run safely.
++- No edit to the migration is needed once the data is clean.
++
++## What Support needs to decide
++
++1. Ids 1 and 23 share the exact email and name (`Ana Silva`); id 1 also collides
++   with id 4 (`Dev Silva`). Decide which records are the same person and which
++   addresses are correct.
++2. Id 17 (`Goran Okafor`) has no email: supply one, or confirm the account
++   should be removed.
++
++After those rows are resolved, `python -m pytest -q` should pass both tests.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..2a6484f 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,48 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL or a UNIQUE constraint to an existing table, so the
++-- table is rebuilt with the standard procedure and a unique index on
++-- lower(email) enforces case-insensitive uniqueness. The rebuild copies every
++-- row verbatim: no customer row is updated or deleted.
++--
++-- A preflight check runs first and aborts before `users` is touched if the
++-- existing data cannot satisfy the constraints. See BLOCKED.md: the production
++-- snapshot currently fails that check and only Support can fix the rows.
++
++DROP TABLE IF EXISTS temp._users_email_preflight;
++
++CREATE TEMP TABLE _users_email_preflight (
++    ok INTEGER NOT NULL,
++    CONSTRAINT "users.email contains NULLs or case-insensitive duplicates; Support must resolve these rows before this migration can run" CHECK (ok = 1)
++);
++
++INSERT INTO _users_email_preflight (ok)
++SELECT CASE WHEN EXISTS (SELECT 1 FROM users WHERE email IS NULL)
++               OR EXISTS (
++                   SELECT 1 FROM users
++                   WHERE email IS NOT NULL
++                   GROUP BY lower(email)
++                   HAVING count(*) > 1
++               )
++            THEN 0 ELSE 1 END;
++
++DROP TABLE _users_email_preflight;
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_unique ON users (lower(email));
++
++COMMIT;

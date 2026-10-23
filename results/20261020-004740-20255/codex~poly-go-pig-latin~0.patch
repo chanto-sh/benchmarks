@@ -1,0 +1,58 @@
+diff --git a/pig_latin.go b/pig_latin.go
+index 2836af2..79ee4ce 100644
+--- a/pig_latin.go
++++ b/pig_latin.go
+@@ -1,5 +1,52 @@
+ package piglatin
+ 
++import "strings"
++
+ func Sentence(sentence string) string {
+-	panic("Please implement the Sentence function")
++	words := strings.Split(sentence, " ")
++	for i, word := range words {
++		if word != "" {
++			words[i] = translate(word)
++		}
++	}
++	return strings.Join(words, " ")
++}
++
++func translate(word string) string {
++	if startsWithVowelSound(word) {
++		return word + "ay"
++	}
++
++	split := 0
++	for split < len(word) {
++		switch {
++		case isVowel(word[split]):
++			return word[split:] + word[:split] + "ay"
++		case word[split] == 'q' && split+1 < len(word) && word[split+1] == 'u':
++			split += 2
++			return word[split:] + word[:split] + "ay"
++		case word[split] == 'y' && split > 0:
++			return word[split:] + word[:split] + "ay"
++		default:
++			split++
++		}
++	}
++
++	return word + "ay"
++}
++
++func startsWithVowelSound(word string) bool {
++	if word == "" {
++		return false
++	}
++	return isVowel(word[0]) || strings.HasPrefix(word, "xr") || strings.HasPrefix(word, "yt")
++}
++
++func isVowel(letter byte) bool {
++	switch letter {
++	case 'a', 'e', 'i', 'o', 'u':
++		return true
++	default:
++		return false
++	}
+ }

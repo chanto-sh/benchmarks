@@ -1,0 +1,120 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..74d1b23 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,113 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _detuning(k, m, omega):
++    """Return k - m*omega**2, using extra precision if cancellation is severe."""
++    detuning = k - m * omega * omega
++    scale = max(abs(k), abs(m * omega * omega))
++    if scale and abs(detuning) < 1e-8 * scale:
++        # Recover the low-order bits lost in the subtraction.
++        from decimal import Decimal, localcontext
++
++        with localcontext() as ctx:
++            ctx.prec = 50
++            detuning = float(
++                Decimal(k) - Decimal(m) * Decimal(omega) * Decimal(omega)
++            )
++    return detuning
++
++
++def _forcing_coefficients(m, k, c, F0, omega):
++    """Return A, B, amplitude for x_p = A cos(omega t) + B sin(omega t)."""
++    detuning = _detuning(k, m, omega)
++    damping = c * omega
++    size = math.hypot(detuning, damping)
++
++    if size == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0, 0.0
++        raise ValueError("no bounded steady-state response at resonance")
++
++    # Normalizing by size avoids forming the squared denominator, which is
++    # prone to overflow/underflow for extreme parameter values.
++    scale = F0 / size
++    return (
++        scale * (detuning / size),
++        scale * (damping / size),
++        abs(F0) / size,
++    )
++
++
++def _sinc(x):
++    """sin(x) / x, accurate near x = 0."""
++    if abs(x) < 1e-4:
++        x2 = x * x
++        return 1.0 - x2 / 6.0 + x2 * x2 / 120.0 - x2 * x2 * x2 / 5040.0
++    return math.sin(x) / x
++
++
++def _exprel(x):
++    """(exp(x) - 1) / x, accurate near x = 0."""
++    if abs(x) < 1e-8:
++        return 1.0 + x / 2.0 + x * x / 6.0 + x * x * x / 24.0
++    return math.expm1(x) / x
++
++
++def _homogeneous(gamma, delta_sq, y0, y1, t):
++    """Homogeneous solution with y(0) = y0 and y'(0) = y1."""
++    if delta_sq < 0.0:
++        # Underdamped: roots -gamma +/- i*omega_d.
++        omega_d = math.sqrt(-delta_sq)
++        phase = omega_d * t
++        return math.exp(-gamma * t) * (
++            y0 * math.cos(phase) + (y1 + gamma * y0) * t * _sinc(phase)
++        )
++
++    if delta_sq == 0.0:
++        # Critically damped: a repeated root -gamma.
++        return math.exp(-gamma * t) * (y0 + (y1 + gamma * y0) * t)
++
++    # Overdamped: roots -gamma +/- delta.  Write the decaying factors as
++    # exp(-(gamma-delta)t) and exp(-(gamma+delta)t) so that no intermediate
++    # exponential can overflow when their product is moderate.
++    delta = math.sqrt(delta_sq)
++    e_plus = math.exp(-(gamma - delta) * t)
++    e_minus = math.exp(-(gamma + delta) * t)
++    cosh_factor = 0.5 * (e_plus + e_minus)
++
++    d = delta * t
++    if d >= 0.0:
++        sinh_factor = e_plus * t * _exprel(-2.0 * d)
++    else:
++        sinh_factor = e_minus * t * _exprel(2.0 * d)
++
++    return y0 * cosh_factor + (y1 + gamma * y0) * sinh_factor
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return _forcing_coefficients(m, k, c, F0, omega)[2]
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, b, _ = _forcing_coefficients(m, k, c, F0, omega)
++
++    if t == 0.0:
++        return x0
++
++    # Initial conditions for the homogeneous part after removing the
++    # particular solution A cos(omega t) + B sin(omega t).
++    y0 = x0 - a
++    y1 = v0 - b * omega
++
++    gamma = c / (2.0 * m)
++    delta_sq = gamma * gamma - k / m
++
++    return (
++        a * math.cos(omega * t)
++        + b * math.sin(omega * t)
++        + _homogeneous(gamma, delta_sq, y0, y1, t)
++    )

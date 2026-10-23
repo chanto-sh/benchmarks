@@ -1,0 +1,76 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..d3844a5 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,69 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++_BASE = 255
++
++
++def _encode_value(a):
++    """Bijection from non-negative ints to byte strings over 1..255.
++
++    Zero maps to the empty string; positive ints use bijective base 255.
++    """
++    if a == 0:
++        return b""
++    digits = bytearray()
++    while a:
++        a, r = divmod(a - 1, _BASE)
++        digits.append(r + 1)
++    digits.reverse()
++    return bytes(digits)
++
++
++def _decode_value(block):
++    """Inverse of _encode_value."""
++    value = 0
++    for digit in block:
++        value = value * _BASE + digit
++    return value
++
++
++def _bytes_to_int(data):
++    """Bijection from finite byte strings to non-negative ints.
++
++    Strings of length L occupy the contiguous interval
++    [offset(L), offset(L) + 256**L - 1], with offset(L) = (256**L - 1) / 255.
++    """
++    length = len(data)
++    offset = ((1 << (8 * length)) - 1) // 255
++    return offset + int.from_bytes(data, "big")
++
++
++def _int_to_bytes(n):
++    """Inverse of _bytes_to_int."""
++    if n == 0:
++        return b""
++    length = ((255 * n + 1).bit_length() - 1) // 8
++    offset = ((1 << (8 * length)) - 1) // 255
++    return (n - offset).to_bytes(length, "big")
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    # Non-empty lists <-> arbitrary byte strings: blocks of bytes in 1..255,
++    # separated by zero bytes.  Each block is a value in bijective base 255.
++    data = b"\x00".join(_encode_value(a) for a in lst)
++
++    # Shift by one so that the empty list can own key 0, while every
++    # non-empty list owns a positive key.
++    return _bytes_to_int(data) + 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++
++    data = _int_to_bytes(n - 1)
++    return [_decode_value(block) for block in data.split(b"\x00")]

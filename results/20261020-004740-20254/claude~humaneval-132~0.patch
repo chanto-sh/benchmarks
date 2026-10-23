@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index 8d1cb0a..82e4316 100644
+--- a/solution.py
++++ b/solution.py
+@@ -12,3 +12,11 @@ def is_nested(string):
+     is_nested('[[][]]') ➞ True
+     is_nested('[[]][[') ➞ True
+     '''
++    opens = 0
++    for i, char in enumerate(string):
++        if char == '[':
++            opens += 1
++        elif opens >= 2 and ']' in string[i + 1:]:
++            # Two '[' before this ']', plus another ']' later: "[ [ ] ]".
++            return True
++    return False

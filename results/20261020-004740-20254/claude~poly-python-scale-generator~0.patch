@@ -1,0 +1,37 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..77d9be0 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,29 @@
++SHARP_SCALE = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++FLAT_SCALE = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++# Tonics whose major scales are written with flats.
++MAJOR_FLAT_TONICS = {"F", "Bb", "Eb", "Ab", "Db", "Gb"}
++# Tonics whose minor scales are written with flats.
++MINOR_FLAT_TONICS = {"D", "G", "C", "F", "Bb", "Eb"}
++
++INTERVAL_STEPS = {"m": 1, "M": 2, "A": 3}
++
++
+ class Scale:
+     def __init__(self, tonic):
+-        pass
++        self.tonic = tonic
++        self.note = tonic.capitalize()
++        flat_tonics = MAJOR_FLAT_TONICS if tonic[0].isupper() else MINOR_FLAT_TONICS
++        self.notes = FLAT_SCALE if self.note in flat_tonics else SHARP_SCALE
++        self.index = self.notes.index(self.note)
+ 
+     def chromatic(self):
+-        pass
++        return self.notes[self.index:] + self.notes[:self.index]
+ 
+     def interval(self, intervals):
+-        pass
++        scale = [self.note]
++        index = self.index
++        for interval in intervals:
++            index = (index + INTERVAL_STEPS[interval]) % len(self.notes)
++            scale.append(self.notes[index])
++        return scale

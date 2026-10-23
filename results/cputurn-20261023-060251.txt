@@ -1,0 +1,45 @@
+# cputurn.py: per-turn CPU and peak memory against the instant mock model
+# command: python3 cputurn.py chanto forge pi crush claude goose qwen cline opencode codex aider kilo cn openhands --reps 10 --turns 40
+# machine: MacBookPro18,2 Apple M1 Max, 32 GB, macOS 26.3
+# chanto: chanto 0.1.12 (~/IdeaProjects/chanto/target/release/chanto)
+# forge: forge 2.13.21 (~/.local/share/chanto-bench/agents/node_modules/.bin/forge)
+# pi: 1.1.0 (~/.local/share/chanto-bench/agents/node_modules/.bin/pi)
+# crush: crush version v0.98.1 (~/.local/share/chanto-bench/agents/node_modules/.bin/crush)
+# claude: 2.1.302 (Claude Code) (~/.local/share/chanto-bench/agents/node_modules/.bin/claude)
+# goose: 1.54.0 (~/.local/share/chanto-bench/bin/goose)
+# qwen: 0.25.1 (~/.local/share/chanto-bench/agents/node_modules/.bin/qwen)
+# cline: 3.0.70 (~/.local/share/chanto-bench/agents/node_modules/cline/bin/cline)
+# opencode: opencode v2.0.22 (~/.local/share/chanto-bench/bin/opencode)
+# codex: codex-cli 0.162.1 (~/.local/share/chanto-bench/agents/node_modules/.bin/codex)
+# aider: aider 0.86.2 (~/.local/share/uv/tools/aider-chat/bin/aider)
+# kilo: 7.8.8 (~/.local/share/chanto-bench/agents/node_modules/.bin/kilo)
+# cn: 1.5.47 (~/.local/share/chanto-bench/agents/node_modules/.bin/cn)
+# openhands: OpenHands CLI 1.16.0 (~/.local/share/uv/tools/openhands/bin/openhands)
+# mock: stressmock.py; enum arguments get a listed value; finish tools matched by whole name or _suffix;
+#       Anthropic count_tokens calls answered but not counted as turns
+# openhands: shell commands as subprocesses (tmux hidden from PATH)
+# aider: driven through its stdin REPL, one model request per message
+# date: 2026-10-23T06:03:06Z
+
+CPU/turn: 40 turns, 50 KB/turn, 10 reps (model instant, CPU excl. model)
+
+agent       turns reps            CPU ms/turn (time-l)             peak RSS MB
+------------------------------------------------------------------------------
+chanto         41   10        4.8 |    4.9± 0.5 (  9%)    32.4 |   32.7± 3.2 ( 10%)
+forge          41   10       11.8 |   11.9± 0.4 (  3%)   105.4 |  105.7± 2.0 (  2%)
+pi             41   10       11.8 |   11.9± 0.2 (  1%)   193.7 |  194.3± 2.2 (  1%)
+crush          41   10       19.8 |   20.1± 1.0 (  5%)   188.1 |  187.8± 2.0 (  1%)
+claude         41   10       34.1 |   34.2± 0.6 (  2%)   390.1 |  390.0± 7.0 (  2%)
+goose          41   10       17.8 |   17.9± 0.6 (  3%)   169.8 |  170.8± 2.0 (  1%)
+qwen           42   10       44.5 |   45.3± 1.6 (  4%)   257.9 |  263.1±16.0 (  6%)
+cline          42   10       56.1 |   56.5± 1.1 (  2%)   821.3 |  830.4±33.9 (  4%)
+opencode       41   10       65.6 |   67.0± 2.7 (  4%)   583.2 |  600.1±49.2 (  8%)
+codex          41   10       44.6 |   48.8±13.3 ( 27%)   216.5 |  215.6± 5.0 (  2%)
+aider          40   10      125.8 |  126.7± 4.6 (  4%)   255.7 |  255.7± 1.1 (  0%)
+kilo           42   10      177.6 |  177.4± 3.4 (  2%)  1144.5 | 1151.5±32.6 (  3%)
+cn             41   10       62.2 |   63.0± 2.8 (  4%)   348.4 |  348.0± 1.7 (  0%)
+openhands      42   10      200.5 |  199.6± 5.5 (  3%)   415.4 |  415.6± 2.3 (  1%)
+
+Each cell: median | mean±sd (CV%). Low CV% + separated means = a real difference.
+peak RSS = max process-tree resident set over the run (sampled every 60 ms).
+turns = model requests the agent made (short = it quit early vs the mock).

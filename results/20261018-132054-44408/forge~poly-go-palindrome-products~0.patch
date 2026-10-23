@@ -1,0 +1,80 @@
+diff --git a/palindrome_products.go b/palindrome_products.go
+index 892101c..eb45fa8 100644
+--- a/palindrome_products.go
++++ b/palindrome_products.go
+@@ -1,7 +1,73 @@
+ package palindrome
+ 
+-// Define Product type here.
++import "fmt"
+ 
++// Product represents a product that is a palindrome and the factorizations
++// within the requested range that produce it.
++type Product struct {
++	Value          int
++	Factorizations [][2]int
++}
++
++// Products returns the smallest and largest palindromic products that can be
++// formed by multiplying two factors in the inclusive range [fmin, fmax].
++// If more than one pair of factors yields the same product, all pairs are
++// reported, each pair with the smaller factor first.
+ func Products(fmin, fmax int) (Product, Product, error) {
+-	panic("Please implement the Products function")
++	if fmin > fmax {
++		return Product{}, Product{}, fmt.Errorf("fmin > fmax: %d > %d", fmin, fmax)
++	}
++
++	var pmin, pmax Product
++	found := false
++
++	for a := fmin; a <= fmax; a++ {
++		for b := a; b <= fmax; b++ {
++			v := a * b
++			if !isPalindrome(v) {
++				continue
++			}
++			factorization := [2]int{a, b}
++
++			if !found {
++				pmin = Product{Value: v, Factorizations: [][2]int{factorization}}
++				pmax = Product{Value: v, Factorizations: [][2]int{factorization}}
++				found = true
++				continue
++			}
++
++			switch {
++			case v < pmin.Value:
++				pmin = Product{Value: v, Factorizations: [][2]int{factorization}}
++			case v == pmin.Value:
++				pmin.Factorizations = append(pmin.Factorizations, factorization)
++			}
++
++			switch {
++			case v > pmax.Value:
++				pmax = Product{Value: v, Factorizations: [][2]int{factorization}}
++			case v == pmax.Value:
++				pmax.Factorizations = append(pmax.Factorizations, factorization)
++			}
++		}
++	}
++
++	if !found {
++		return Product{}, Product{}, fmt.Errorf("no palindromes in range [%d, %d]", fmin, fmax)
++	}
++
++	return pmin, pmax, nil
++}
++
++// isPalindrome reports whether n reads the same forwards and backwards.
++// The sign is kept in place, so negative palindromes such as -121 count.
++func isPalindrome(n int) bool {
++	if n < 0 {
++		n = -n
++	}
++	reversed := 0
++	for m := n; m > 0; m /= 10 {
++		reversed = reversed*10 + m%10
++	}
++	return reversed == n
+ }

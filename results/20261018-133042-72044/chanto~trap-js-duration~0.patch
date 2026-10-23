@@ -1,0 +1,33 @@
+diff --git a/duration.js b/duration.js
+index b0db981..4768636 100644
+--- a/duration.js
++++ b/duration.js
+@@ -1,9 +1,25 @@
+ // Parse a duration like "1h30m", "45s", "2d", "1h 5m 3s" or "1.5h" into seconds.
+ // Throws an Error for empty or malformed input (e.g. "", "abc", "5x", "h").
+ function parseDuration(s) {
+-  const m = /^(\d+)([smhd])$/.exec(s);
+-  const unit = { s: 1, m: 60, h: 3600, d: 86400 }[m[2]];
+-  return Number(m[1]) * unit;
++  const units = { s: 1, m: 60, h: 3600, d: 86400 };
++  const segment = /(\d+(?:\.\d+)?)([smhd])/g;
++  let total = 0;
++  let pos = 0;
++  let found = false;
++  let m;
++  while ((m = segment.exec(s)) !== null) {
++    const gap = s.slice(pos, m.index);
++    if (found ? !/^\s*$/.test(gap) : gap !== "") {
++      throw new Error(`Invalid duration: ${s}`);
++    }
++    total += Number(m[1]) * units[m[2]];
++    pos = segment.lastIndex;
++    found = true;
++  }
++  if (!found || !/^\s*$/.test(s.slice(pos))) {
++    throw new Error(`Invalid duration: ${s}`);
++  }
++  return total;
+ }
+ 
+ module.exports = { parseDuration };

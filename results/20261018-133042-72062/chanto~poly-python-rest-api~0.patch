@@ -1,0 +1,84 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..41e23de 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,76 @@
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        database = database or {"users": []}
++        self.users = {
++            user["name"]: {
++                "name": user["name"],
++                "owes": dict(user.get("owes", {})),
++                "owed_by": dict(user.get("owed_by", {})),
++                "balance": user.get("balance", 0.0),
++            }
++            for user in database.get("users", [])
++        }
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            names = sorted(self.users)
++            if payload:
++                requested = set(json.loads(payload).get("users", []))
++                names = [name for name in names if name in requested]
++            return json.dumps({"users": [self.users[name] for name in names]})
++        raise ValueError(f"Unknown url: {url}")
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = json.loads(payload) if payload else {}
++        if url == "/add":
++            name = data["user"]
++            user = {
++                "name": name,
++                "owes": {},
++                "owed_by": {},
++                "balance": 0.0,
++            }
++            self.users[name] = user
++            return json.dumps(user)
++        if url == "/iou":
++            return self._create_iou(
++                data["lender"], data["borrower"], data["amount"]
++            )
++        raise ValueError(f"Unknown url: {url}")
++
++    def _create_iou(self, lender, borrower, amount):
++        lender_user = self.users[lender]
++        borrower_user = self.users[borrower]
++
++        # Amount the lender already owes the borrower.
++        existing = lender_user["owes"].get(borrower, 0.0)
++        if existing:
++            if amount >= existing:
++                del lender_user["owes"][borrower]
++                del borrower_user["owed_by"][lender]
++                remaining = amount - existing
++                if remaining:
++                    borrower_user["owes"][lender] = remaining
++                    lender_user["owed_by"][borrower] = remaining
++            else:
++                left = existing - amount
++                lender_user["owes"][borrower] = left
++                borrower_user["owed_by"][lender] = left
++        else:
++            borrower_user["owes"][lender] = (
++                borrower_user["owes"].get(lender, 0.0) + amount
++            )
++            lender_user["owed_by"][borrower] = (
++                lender_user["owed_by"].get(borrower, 0.0) + amount
++            )
++
++        for user in (lender_user, borrower_user):
++            user["balance"] = round(
++                sum(user["owed_by"].values()) - sum(user["owes"].values()), 2
++            )
++
++        names = sorted([lender, borrower])
++        return json.dumps({"users": [self.users[name] for name in names]})

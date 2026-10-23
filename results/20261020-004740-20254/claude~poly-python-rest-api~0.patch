@@ -1,0 +1,95 @@
+diff --git a/rest_api.py b/rest_api.py
+index 0e448a4..bbd4b1d 100644
+--- a/rest_api.py
++++ b/rest_api.py
+@@ -1,9 +1,87 @@
++import copy
++import json
++
++
+ class RestAPI:
+     def __init__(self, database=None):
+-        pass
++        database = database or {"users": []}
++        self.database = copy.deepcopy(database)
++        for user in self.database.get("users", []):
++            user.setdefault("owes", {})
++            user.setdefault("owed_by", {})
++            user["balance"] = self._balance(user)
+ 
+     def get(self, url, payload=None):
+-        pass
++        if url == "/users":
++            requested = self._parse(payload) or {}
++            names = requested.get("users")
++            users = self.database["users"]
++            if names is not None:
++                wanted = set(names)
++                users = [user for user in users if user["name"] in wanted]
++            return self._dump({"users": sorted(users, key=lambda u: u["name"])})
++        raise ValueError(f"Unknown URL: {url}")
+ 
+     def post(self, url, payload=None):
+-        pass
++        data = self._parse(payload) or {}
++        if url == "/add":
++            return self._add_user(data["user"])
++        if url == "/iou":
++            return self._add_iou(data["lender"], data["borrower"], data["amount"])
++        raise ValueError(f"Unknown URL: {url}")
++
++    def _add_user(self, name):
++        user = {"name": name, "owes": {}, "owed_by": {}, "balance": 0.0}
++        self.database["users"].append(user)
++        return self._dump(user)
++
++    def _add_iou(self, lender_name, borrower_name, amount):
++        lender = self._find(lender_name)
++        borrower = self._find(borrower_name)
++
++        # Net the new loan against any existing debt between this pair.
++        net = (
++            borrower["owes"].get(lender_name, 0.0)
++            - borrower["owed_by"].get(lender_name, 0.0)
++            + amount
++        )
++        net = round(net, 10)
++
++        borrower["owes"].pop(lender_name, None)
++        borrower["owed_by"].pop(lender_name, None)
++        lender["owes"].pop(borrower_name, None)
++        lender["owed_by"].pop(borrower_name, None)
++
++        if net > 0:
++            borrower["owes"][lender_name] = net
++            lender["owed_by"][borrower_name] = net
++        elif net < 0:
++            lender["owes"][borrower_name] = -net
++            borrower["owed_by"][lender_name] = -net
++
++        for user in (lender, borrower):
++            user["balance"] = self._balance(user)
++
++        return self._dump({"users": sorted([lender, borrower], key=lambda u: u["name"])})
++
++    def _find(self, name):
++        for user in self.database["users"]:
++            if user["name"] == name:
++                return user
++        raise ValueError(f"Unknown user: {name}")
++
++    @staticmethod
++    def _balance(user):
++        return float(
++            round(sum(user["owed_by"].values()) - sum(user["owes"].values()), 10)
++        )
++
++    @staticmethod
++    def _parse(payload):
++        if payload is None or isinstance(payload, dict):
++            return payload
++        return json.loads(payload)
++
++    @staticmethod
++    def _dump(value):
++        return json.dumps(value)

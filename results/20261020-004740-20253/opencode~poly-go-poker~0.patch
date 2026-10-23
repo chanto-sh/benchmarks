@@ -1,0 +1,251 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..8ec26ce 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,245 @@
+ package poker
+ 
++import (
++	"errors"
++	"sort"
++	"strings"
++)
++
++var errInvalidHand = errors.New("invalid hand")
++
++// handValue is a comparable score for a hand. Larger is better: the first
++// element is the hand category, followed by up to five tie-breaking ranks in
++// order of significance.
++type handValue [6]int
++
++// parseHand validates and converts a hand string into rank values and whether
++// all cards share a suit.
++func parseHand(hand string) ([5]int, bool, error) {
++	var ranks [5]int
++
++	cards := strings.Split(hand, " ")
++	if len(cards) != 5 {
++		return ranks, false, errInvalidHand
++	}
++
++	var suit rune
++	flush := true
++	for i, card := range cards {
++		runes := []rune(card)
++		if len(runes) != 2 && len(runes) != 3 {
++			return ranks, false, errInvalidHand
++		}
++
++		// The rank is everything but the final rune.
++		rank, ok := parseRank(string(runes[:len(runes)-1]))
++		if !ok {
++			return ranks, false, errInvalidHand
++		}
++		cardSuit := runes[len(runes)-1]
++		if !isSuit(cardSuit) {
++			return ranks, false, errInvalidHand
++		}
++
++		if i == 0 {
++			suit = cardSuit
++		} else if cardSuit != suit {
++			flush = false
++		}
++		ranks[i] = rank
++	}
++
++	return ranks, flush, nil
++}
++
++func parseRank(s string) (int, bool) {
++	switch s {
++	case "2":
++		return 2, true
++	case "3":
++		return 3, true
++	case "4":
++		return 4, true
++	case "5":
++		return 5, true
++	case "6":
++		return 6, true
++	case "7":
++		return 7, true
++	case "8":
++		return 8, true
++	case "9":
++		return 9, true
++	case "10":
++		return 10, true
++	case "J":
++		return 11, true
++	case "Q":
++		return 12, true
++	case "K":
++		return 13, true
++	case "A":
++		return 14, true
++	}
++	return 0, false
++}
++
++func isSuit(r rune) bool {
++	switch r {
++	case '♤', '♡', '♢', '♧':
++		return true
++	}
++	return false
++}
++
++// evaluate returns the value of a hand, or an error if it is malformed.
++func evaluate(hand string) (handValue, error) {
++	ranks, flush, err := parseHand(hand)
++	if err != nil {
++		return handValue{}, err
++	}
++
++	sorted := make([]int, len(ranks))
++	copy(sorted, ranks[:])
++	sort.Sort(sort.Reverse(sort.IntSlice(sorted)))
++
++	straight, high := straightHigh(sorted)
++
++	// Group ranks by how often they occur. Groups are ordered by count (desc)
++	// and then by rank (desc), which is exactly the tie-breaking order used by
++	// every category below.
++	type group struct {
++		rank  int
++		count int
++	}
++	var groups []group
++	counts := make(map[int]int)
++	for _, r := range sorted {
++		counts[r]++
++	}
++	for r, c := range counts {
++		groups = append(groups, group{r, c})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count != groups[j].count {
++			return groups[i].count > groups[j].count
++		}
++		return groups[i].rank > groups[j].rank
++	})
++
++	var v handValue
++	if straight && flush {
++		v[0] = 8
++		v[1] = high
++		return v, nil
++	}
++	if groups[0].count == 4 {
++		v[0] = 7
++		v[1] = groups[0].rank
++		v[2] = groups[1].rank
++		return v, nil
++	}
++	if groups[0].count == 3 && groups[1].count == 2 {
++		v[0] = 6
++		v[1] = groups[0].rank
++		v[2] = groups[1].rank
++		return v, nil
++	}
++	if flush {
++		v[0] = 5
++		copy(v[1:], sorted)
++		return v, nil
++	}
++	if straight {
++		v[0] = 4
++		v[1] = high
++		return v, nil
++	}
++	if groups[0].count == 3 {
++		v[0] = 3
++		v[1] = groups[0].rank
++		v[2] = groups[1].rank
++		v[3] = groups[2].rank
++		return v, nil
++	}
++	if groups[0].count == 2 && groups[1].count == 2 {
++		v[0] = 2
++		v[1] = groups[0].rank
++		v[2] = groups[1].rank
++		v[3] = groups[2].rank
++		return v, nil
++	}
++	if groups[0].count == 2 {
++		v[0] = 1
++		v[1] = groups[0].rank
++		v[2] = groups[1].rank
++		v[3] = groups[2].rank
++		v[4] = groups[3].rank
++		return v, nil
++	}
++	v[0] = 0
++	copy(v[1:], sorted)
++	return v, nil
++}
++
++// straightHigh reports whether the sorted, descending ranks form a straight
++// and, if so, the value of its highest card. Five-high straights treat the ace
++// as low.
++func straightHigh(sorted []int) (bool, int) {
++	if len(sorted) != 5 {
++		return false, 0
++	}
++
++	// With duplicate ranks, not a straight.
++	for i := 1; i < len(sorted); i++ {
++		if sorted[i] == sorted[i-1] {
++			return false, 0
++		}
++	}
++
++	if sorted[0]-sorted[4] == 4 {
++		return true, sorted[0]
++	}
++	// A-2-3-4-5: ace (14) plays low, making the high card a five.
++	if sorted[0] == 14 && sorted[1] == 5 && sorted[2] == 4 && sorted[3] == 3 && sorted[4] == 2 {
++		return true, 5
++	}
++	return false, 0
++}
++
++// BestHand returns the best hand or, in the case of a tie, all best hands.
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	if len(hands) == 0 {
++		return nil, nil
++	}
++
++	values := make([]handValue, len(hands))
++	var best handValue
++	for i, hand := range hands {
++		v, err := evaluate(hand)
++		if err != nil {
++			return nil, err
++		}
++		values[i] = v
++		if i == 0 || v.greaterThan(best) {
++			best = v
++		}
++	}
++
++	var result []string
++	for i, v := range values {
++		if v == best {
++			result = append(result, hands[i])
++		}
++	}
++	return result, nil
++}
++
++func (v handValue) greaterThan(other handValue) bool {
++	for i := range v {
++		if v[i] != other[i] {
++			return v[i] > other[i]
++		}
++	}
++	return false
+ }

@@ -1,0 +1,303 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..837d5ab 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,296 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++
++_A71 = 35.0 / 384.0
++_A73 = 500.0 / 1113.0
++_A74 = 125.0 / 192.0
++_A75 = -2187.0 / 6784.0
++_A76 = 11.0 / 84.0
++
++_B1 = 5179.0 / 57600.0
++_B3 = 7571.0 / 16695.0
++_B4 = 393.0 / 640.0
++_B5 = -92097.0 / 339200.0
++_B6 = 187.0 / 2100.0
++_B7 = 1.0 / 40.0
++
++# Dense-output coefficients (the same interpolation used by SciPy's RK45).
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0,
++     8663915743.0 / 2820520608.0, -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0,
++     -68118460800.0 / 10900136933.0, 87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0,
++     14199869525.0 / 1410260304.0, -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0,
++     -318862633887.0 / 49829197408.0, 701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0,
++     2019193451.0 / 616988883.0, -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0,
++     -110615467.0 / 29380423.0, 69997945.0 / 29380423.0),
++)
++
++
++def _deriv(state, c, g):
++    """State is (x, y, vx, vy).  Drag is -c |v| v."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -c * speed * vx, -c * speed * vy - g)
++
++
++def _combine(state, h, terms):
++    """Return state + h * sum(coeff * stage)."""
++    return tuple(
++        state[i] + h * sum(coeff * stage[i] for coeff, stage in terms)
++        for i in range(4)
++    )
++
++
++def _rk45_step(state, h, c, g):
++    """One Dormand-Prince 5(4) step, with its embedded error estimate."""
++    k1 = _deriv(state, c, g)
++    k2 = _deriv(_combine(state, h, ((_A21, k1),)), c, g)
++    k3 = _deriv(_combine(state, h, ((_A31, k1), (_A32, k2))), c, g)
++    k4 = _deriv(
++        _combine(state, h, ((_A41, k1), (_A42, k2), (_A43, k3))), c, g
++    )
++    k5 = _deriv(
++        _combine(
++            state, h, ((_A51, k1), (_A52, k2), (_A53, k3), (_A54, k4))
++        ),
++        c,
++        g,
++    )
++    k6 = _deriv(
++        _combine(
++            state,
++            h,
++            (
++                (_A61, k1),
++                (_A62, k2),
++                (_A63, k3),
++                (_A64, k4),
++                (_A65, k5),
++            ),
++        ),
++        c,
++        g,
++    )
++    y5 = _combine(
++        state,
++        h,
++        (
++            (_A71, k1),
++            (_A73, k3),
++            (_A74, k4),
++            (_A75, k5),
++            (_A76, k6),
++        ),
++    )
++    k7 = _deriv(y5, c, g)
++    y4 = _combine(
++        state,
++        h,
++        (
++            (_B1, k1),
++            (_B3, k3),
++            (_B4, k4),
++            (_B5, k5),
++            (_B6, k6),
++            (_B7, k7),
++        ),
++    )
++    return y5, tuple(y5[i] - y4[i] for i in range(4)), (k1, k2, k3, k4, k5, k6, k7)
++
++
++def _dense_coefficients(stages, component):
++    """Polynomial coefficients for the DOPRI5 dense output of one component."""
++    return tuple(
++        sum(stages[s][component] * _P[s][j] for s in range(7))
++        for j in range(4)
++    )
++
++
++def _dense_value(state, h, coefficients, theta):
++    """Evaluate the dense-output polynomial at y(t + theta*h)."""
++    q0, q1, q2, q3 = coefficients
++    return state + h * theta * (q0 + theta * (q1 + theta * (q2 + theta * q3)))
++
++
++def _event_theta(state, h, coefficients, lo=0.0, hi=1.0):
++    """Bisect for the zero of a dense-output component on [lo, hi]."""
++    f_lo = _dense_value(state, h, coefficients, lo)
++    f_hi = _dense_value(state, h, coefficients, hi)
++
++    if f_lo == 0.0:
++        return lo
++    if f_hi == 0.0:
++        return hi
++
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        f_mid = _dense_value(state, h, coefficients, mid)
++        if (f_lo < 0.0) == (f_mid < 0.0):
++            lo = mid
++            f_lo = f_mid
++        else:
++            hi = mid
++            f_hi = f_mid
++        if hi - lo <= 4.0e-16:
++            break
++    return 0.5 * (lo + hi)
++
++
++def _vacuum(v0, theta, h0, g):
++    """Closed-form solution for k = 0."""
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    if vy > 0.0:
++        apex = h0 + vy * vy / (2.0 * g)
++    else:
++        apex = h0
++
++    t = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    return {"range": vx * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from (0, h0) with speed v0 at elevation
++    ``angle_deg``.  The quadratic drag force is ``-k |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    c = k / mass
++
++    if c == 0.0:
++        return _vacuum(v0, theta, h0, g)
++
++    state = (0.0, float(h0), v0 * math.cos(theta), v0 * math.sin(theta))
++    t = 0.0
++
++    # A projectile already at ground level and not moving upwards is done.
++    if state[1] == 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    apex_done = state[3] <= 0.0
++    apex = state[1]
++
++    speed = math.hypot(state[2], state[3])
++    if speed > 0.0 and g > 0.0:
++        time_scale = speed / g + math.sqrt(2.0 * state[1] / g)
++    else:
++        time_scale = 1.0
++    if c > 0.0 and speed > 0.0:
++        time_scale = min(time_scale, 1.0 / (c * speed))
++    h = max(1.0e-14, min(0.01, 0.01 * time_scale))
++
++    rtol = 1.0e-11
++    atol = 1.0e-12
++    max_steps = 1000000
++
++    for _ in range(max_steps):
++        y_new, error, stages = _rk45_step(state, h, c, g)
++
++        norm = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(state[i]), abs(y_new[i]))
++            norm = max(norm, abs(error[i]) / scale)
++
++        if not math.isfinite(norm):
++            h *= 0.2
++            continue
++
++        # Reject a step whose local error is too large.
++        if norm > 1.0:
++            factor = 0.9 * norm ** -0.2 if norm > 0.0 else 0.2
++            h *= max(0.2, min(0.9, factor))
++            continue
++
++        factor = 5.0 if norm == 0.0 else 0.9 * norm ** -0.2
++        h_next = h * max(0.2, min(5.0, factor))
++
++        # Locate the first event in this step.  Apex is dy/dt = 0; ground
++        # is y = 0.  Both are found from the DOPRI5 dense output.
++        apex_theta = None
++        if not apex_done and state[3] > 0.0 and y_new[3] <= 0.0:
++            coeff = _dense_coefficients(stages, 3)
++            apex_theta = _event_theta(state[3], h, coeff)
++
++        ground_theta = None
++        if state[1] > 0.0 and y_new[1] <= 0.0:
++            coeff = _dense_coefficients(stages, 1)
++            ground_theta = _event_theta(state[1], h, coeff)
++
++        event_theta = None
++        event_is_apex = False
++        if apex_theta is not None:
++            event_theta = apex_theta
++            event_is_apex = True
++        if ground_theta is not None and (
++            event_theta is None or ground_theta < event_theta
++        ):
++            event_theta = ground_theta
++            event_is_apex = False
++
++        if event_theta is not None:
++            # Reconstruct all four state components at the event.
++            event_state = tuple(
++                _dense_value(
++                    state[i], h, _dense_coefficients(stages, i), event_theta
++                )
++                for i in range(4)
++            )
++            event_time = t + event_theta * h
++
++            if event_is_apex:
++                state = event_state
++                t = event_time
++                apex = state[1]
++                apex_done = True
++                h = h_next
++                continue
++
++            return {
++                "range": event_state[0],
++                "apex": apex,
++                "time": event_time,
++            }
++
++        state = y_new
++        t += h
++        h = h_next
++
++    raise RuntimeError("projectile integration did not reach the ground")

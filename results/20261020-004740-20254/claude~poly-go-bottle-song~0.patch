@@ -1,0 +1,65 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..35a299a 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,59 @@
+ package bottlesong
+ 
++import "fmt"
++
++var numberWords = []string{
++	"No", "One", "Two", "Three", "Four", "Five",
++	"Six", "Seven", "Eight", "Nine", "Ten",
++}
++
++func numberWord(n int) string {
++	if n < 0 || n >= len(numberWords) {
++		panic(fmt.Sprintf("bottlesong: unsupported bottle count %d", n))
++	}
++	return numberWords[n]
++}
++
++func bottles(n int) string {
++	if n == 1 {
++		return "bottle"
++	}
++	return "bottles"
++}
++
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	var verses []string
++
++	for i := 0; i < takeDown; i++ {
++		remaining := startBottles - i
++		if remaining < 0 {
++			break
++		}
++		next := remaining - 1
++
++		verse := []string{
++			fmt.Sprintf("%s green %s hanging on the wall,", numberWord(remaining), bottles(remaining)),
++			fmt.Sprintf("%s green %s hanging on the wall,", numberWord(remaining), bottles(remaining)),
++			"And if one green bottle should accidentally fall,",
++			fmt.Sprintf("There'll be %s green %s hanging on the wall.",
++				lowerFirst(numberWord(next)), bottles(next)),
++		}
++		verses = append(verses, verse...)
++		if i < takeDown-1 {
++			verses = append(verses, "")
++		}
++	}
++
++	return verses
++}
++
++func lowerFirst(s string) string {
++	if s == "" {
++		return s
++	}
++	r := []rune(s)
++	if r[0] >= 'A' && r[0] <= 'Z' {
++		r[0] += 'a' - 'A'
++	}
++	return string(r)
+ }

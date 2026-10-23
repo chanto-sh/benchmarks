@@ -1,0 +1,90 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..0a708c4
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,52 @@
++"""Tests for text_utils.slugify."""
++
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyTests(unittest.TestCase):
++    def test_basic(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++
++    def test_accents(self):
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++        self.assertEqual(slugify("ñ ü é"), "n-u-e")
++
++    def test_collapses_separators(self):
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++        self.assertEqual(slugify("already-a-slug"), "already-a-slug")
++
++    def test_strips_leading_and_trailing_separators(self):
++        self.assertEqual(slugify("--Hello--"), "hello")
++        self.assertEqual(slugify("...hi..."), "hi")
++
++    def test_no_alphanumerics(self):
++        self.assertEqual(slugify("!!!"), "")
++        self.assertEqual(slugify("   "), "")
++
++    def test_digits_are_kept(self):
++        self.assertEqual(slugify("Python 3.12!"), "python-3-12")
++
++    def test_max_length_cuts_at_hyphen_boundary(self):
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++
++    def test_max_length_exact_boundary_is_kept(self):
++        self.assertEqual(slugify("The quick brown fox", max_length=9), "the-quick")
++
++    def test_max_length_longer_than_slug(self):
++        self.assertEqual(slugify("Hello World", max_length=100), "hello-world")
++
++    def test_max_length_single_word(self):
++        self.assertEqual(slugify("abcdefgh", max_length=4), "abcd")
++
++    def test_max_length_never_leaves_trailing_hyphen(self):
++        self.assertEqual(slugify("ab cd ef", max_length=3), "ab")
++        self.assertEqual(slugify("a b c", max_length=2), "a")
++
++    def test_max_length_zero(self):
++        self.assertEqual(slugify("hello", max_length=0), "")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..18d1865 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,8 @@
+ """Text helpers."""
+ 
++import re
++import unicodedata
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +23,17 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    decomposed = unicodedata.normalize("NFKD", text)
++    without_marks = "".join(c for c in decomposed if not unicodedata.combining(c))
++    slug = re.sub(r"[^a-z0-9]+", "-", without_marks.lower()).strip("-")
++
++    if max_length is not None and len(slug) > max_length:
++        if max_length <= 0:
++            return ""
++        truncated = slug[:max_length]
++        # If the cut lands on a boundary, keep the whole segment.
++        if max_length < len(slug) and slug[max_length] != "-" and "-" in truncated:
++            truncated = truncated.rsplit("-", 1)[0]
++        slug = truncated.rstrip("-")
++
++    return slug

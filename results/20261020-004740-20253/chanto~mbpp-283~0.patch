@@ -1,0 +1,12 @@
+diff --git a/solution.py b/solution.py
+index df33a95..7387143 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,5 @@
+-def validate(n): 
+-    pass
++from collections import Counter
++
++
++def validate(n):
++    return all(freq <= int(digit) for digit, freq in Counter(str(abs(n))).items())

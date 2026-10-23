@@ -1,0 +1,46 @@
+diff --git a/game.py b/game.py
+index 768dec9..ec08176 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,40 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Unknowns are E[0], ..., E[n-1]; E[n] is the absorbing state (zero).
++    # For every i < n: E[i] - (1/k) * sum(E[next(i, d)]) = 1.
++    matrix = [[Fraction(0) for _ in range(n + 1)] for _ in range(n)]
++
++    for i in range(n):
++        row = matrix[i]
++        row[i] += 1
++        row[n] = 1
++        for d in range(1, k + 1):
++            landed = i + d
++            if landed > n:
++                landed = 2 * n - landed
++            if landed != n:
++                row[landed] -= Fraction(1, k)
++
++    # Solve the system exactly with Gaussian elimination.
++    for col in range(n):
++        pivot = next(r for r in range(col, n) if matrix[r][col] != 0)
++        if pivot != col:
++            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++
++        pivot_row = matrix[col]
++        pivot_value = pivot_row[col]
++        for c in range(col, n + 1):
++            pivot_row[c] /= pivot_value
++
++        for r in range(n):
++            if r == col:
++                continue
++            factor = matrix[r][col]
++            if factor == 0:
++                continue
++            row = matrix[r]
++            for c in range(col, n + 1):
++                row[c] -= factor * pivot_row[c]
++
++    return matrix[0][n]

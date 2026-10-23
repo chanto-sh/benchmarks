@@ -1,0 +1,12 @@
+diff --git a/solution.py b/solution.py
+index b6b6d0f..a3feb31 100644
+--- a/solution.py
++++ b/solution.py
+@@ -34,3 +34,7 @@ def max_fill(grid, capacity):
+         * grid[i][j] -> 0 | 1
+         * 1 <= capacity <= 10
+     """
++    total = 0
++    for row in grid:
++        total += math.ceil(sum(row) / capacity)
++    return total

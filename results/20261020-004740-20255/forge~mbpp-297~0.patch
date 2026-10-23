@@ -1,0 +1,22 @@
+diff --git a/solution.py b/solution.py
+index eddef7b..1cd508a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,16 @@
+ def flatten_list(list1):
+-    pass
++    """Recursively flatten a nested list structure into a single flat list.
++
++    Only list instances are descended into; every other element (including
++    strings, tuples, dicts, numbers) is kept as a single item.
++
++    >>> flatten_list([0, 10, [20, 30], 40, [50, [60, 70]]])
++    [0, 10, 20, 30, 40, 50, 60, 70]
++    """
++    flat = []
++    for item in list1:
++        if isinstance(item, list):
++            flat.extend(flatten_list(item))
++        else:
++            flat.append(item)
++    return flat

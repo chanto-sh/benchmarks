@@ -1,0 +1,226 @@
+diff --git a/roots.py b/roots.py
+index d624667..45da798 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,197 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(poly):
++    """Drop leading zero coefficients, keeping at least one coefficient."""
++    i = 0
++    while i < len(poly) - 1 and poly[i] == 0:
++        i += 1
++    return list(poly[i:])
++
++
++def _is_zero(poly):
++    return all(c == 0 for c in poly)
++
++
++def _derivative(poly):
++    degree = len(poly) - 1
++    if degree <= 0:
++        return [Fraction(0)]
++    return [Fraction(poly[i]) * (degree - i) for i in range(degree)]
++
++
++def _divmod(a, b):
++    """Polynomial division over the rationals, highest degree first."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    if _is_zero(b):
++        raise ZeroDivisionError("polynomial division by zero")
++    if _is_zero(a) or len(a) < len(b):
++        return [Fraction(0)], a
++
++    quotient = [Fraction(0)] * (len(a) - len(b) + 1)
++    remainder = a[:]
++    while not _is_zero(remainder) and len(remainder) >= len(b):
++        shift = len(remainder) - len(b)
++        coeff = remainder[0] / b[0]
++        quotient[len(a) - len(remainder)] = coeff
++        for i in range(len(b)):
++            remainder[i] -= coeff * b[i]
++        remainder = _trim(remainder)
++    return _trim(quotient), remainder
++
++
++def _primitive(poly):
++    """Scale a rational polynomial to a primitive integer polynomial.
++
++    The scale factor is positive, so signs (and therefore Sturm signs) are
++    preserved.
++    """
++    poly = _trim([Fraction(c) for c in poly])
++    if _is_zero(poly):
++        return [Fraction(0)]
++
++    denominator = 1
++    for c in poly:
++        d = c.denominator
++        denominator = denominator // gcd(denominator, d) * d
++
++    integers = [c.numerator * (denominator // c.denominator) for c in poly]
++    content = 0
++    for value in integers:
++        content = gcd(content, abs(value))
++    if content:
++        integers = [value // content for value in integers]
++    return [Fraction(value) for value in integers]
++
++
++def _gcd(a, b):
++    a = _primitive(a)
++    b = _primitive(b)
++    while not _is_zero(b):
++        _, remainder = _divmod(a, b)
++        a, b = b, _primitive(remainder)
++    return _primitive(a)
++
++
++def _square_free_part(poly):
++    """Polynomial with the same roots as poly, but all roots simple."""
++    poly = _primitive(poly)
++    derivative = _derivative(poly)
++    if _is_zero(derivative):
++        return poly
++    common = _gcd(poly, derivative)
++    quotient, _ = _divmod(poly, common)
++    return _primitive(quotient)
++
++
++def _sturm_sequence(poly):
++    """Sturm sequence of a square-free polynomial."""
++    previous = _primitive(poly)
++    current = _primitive(_derivative(previous))
++    if _is_zero(current):
++        return [previous]
++
++    sequence = [previous, current]
++    while True:
++        _, remainder = _divmod(previous, current)
++        if _is_zero(remainder):
++            break
++        following = _primitive([-c for c in remainder])
++        sequence.append(following)
++        previous, current = current, following
++    return sequence
++
++
++def _variations(sequence, x):
++    """Number of sign changes in a Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    last_sign = 0
++    for poly in sequence:
++        value = evaluate(poly, x)
++        if value > 0:
++            sign = 1
++        elif value < 0:
++            sign = -1
++        else:
++            continue
++        if last_sign and sign != last_sign:
++            changes += 1
++        last_sign = sign
++    return changes
++
++
++def _count_open(sequence, poly, a, b):
++    """Number of distinct roots strictly between a and b."""
++    if a >= b:
++        return 0
++    count = _variations(sequence, a) - _variations(sequence, b)
++    if evaluate(poly, b) == 0:
++        count -= 1
++    return count
++
++
++def _isolate_one(poly, sequence, a, b):
++    """Locate the single root strictly inside (a, b)."""
++    tolerance = Fraction(1, 10**12)
++    while b - a > tolerance:
++        middle = (a + b) / 2
++        if evaluate(poly, middle) == 0:
++            return middle
++        if _count_open(sequence, poly, a, middle) > 0:
++            b = middle
++        else:
++            a = middle
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    poly = _trim([Fraction(c) for c in coeffs])
++    if _is_zero(poly):
++        raise ValueError("zero polynomial")
++    if len(poly) == 1:
++        return []
++
++    lo = Fraction(lo)
++    hi = Fraction(hi)
++    if lo > hi:
++        return []
++
++    poly = _square_free_part(poly)
++    sequence = _sturm_sequence(poly)
++
++    at_lo = evaluate(poly, lo) == 0
++    at_hi = evaluate(poly, hi) == 0
++
++    if lo == hi:
++        return [float(lo)] if at_lo else []
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if at_lo:
++        roots.append(lo)
++    if at_hi:
++        roots.append(hi)
++
++    # Open intervals exclude endpoints, so roots already recorded above are
++    # never added twice.  Splitting at an exact rational root records it.
++    stack = [(lo, hi)]
++    while stack:
++        a, b = stack.pop()
++        count = _count_open(sequence, poly, a, b)
++        if count <= 0:
++            continue
++        if count == 1:
++            roots.append(_isolate_one(poly, sequence, a, b))
++        else:
++            middle = (a + b) / 2
++            if evaluate(poly, middle) == 0:
++                roots.append(middle)
++            stack.append((a, middle))
++            stack.append((middle, b))
++
++    roots.sort()
++    return [float(root) for root in roots]

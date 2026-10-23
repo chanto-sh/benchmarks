@@ -1,0 +1,35 @@
+diff --git a/trinary.go b/trinary.go
+index 87e69f5..ba6f9dd 100644
+--- a/trinary.go
++++ b/trinary.go
+@@ -1,5 +1,28 @@
+ package trinary
+ 
+-func ParseTrinary(arg string, want int64, ok bool) {
+-	panic("Please implement the ParseTrinary function")
++import (
++	"errors"
++	"math"
++)
++
++// ParseTrinary converts a trinary string to its decimal value. It returns an
++// error if the string contains characters other than '0', '1' and '2', or if
++// the value does not fit in an int64.
++func ParseTrinary(arg string) (int64, error) {
++	if arg == "" {
++		return 0, errors.New("empty string is not a valid trinary number")
++	}
++
++	var value int64
++	for _, c := range arg {
++		if c < '0' || c > '2' {
++			return 0, errors.New("invalid trinary digit")
++		}
++		digit := int64(c - '0')
++		if value > (math.MaxInt64-digit)/3 {
++			return 0, errors.New("trinary value overflows int64")
++		}
++		value = value*3 + digit
++	}
++	return value, nil
+ }

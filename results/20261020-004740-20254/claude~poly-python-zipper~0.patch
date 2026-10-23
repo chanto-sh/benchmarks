@@ -1,0 +1,101 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..62728c8 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,84 @@
+ class Zipper:
++    """A zipper for a binary tree of {"value", "left", "right"} dicts."""
++
++    def __init__(self, tree, breadcrumbs=None):
++        self._tree = tree
++        # Breadcrumbs are stored outermost-last: a list of
++        # (parent_value, left_sibling, right_sibling, side) tuples.
++        self._breadcrumbs = breadcrumbs or []
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        if tree is None:
++            return None
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return self._tree["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        tree = dict(self._tree)
++        tree["value"] = value
++        return Zipper(tree, self._breadcrumbs)
+ 
+     def left(self):
+-        pass
++        child = self._tree["left"]
++        if child is None:
++            return None
++        crumb = (
++            self._tree["value"],
++            None,
++            self._tree["right"],
++            "left",
++        )
++        return Zipper(child, self._breadcrumbs + [crumb])
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, tree):
++        new_tree = dict(self._tree)
++        new_tree["left"] = tree
++        return Zipper(new_tree, self._breadcrumbs)
+ 
+     def right(self):
+-        pass
++        child = self._tree["right"]
++        if child is None:
++            return None
++        crumb = (
++            self._tree["value"],
++            self._tree["left"],
++            None,
++            "right",
++        )
++        return Zipper(child, self._breadcrumbs + [crumb])
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, tree):
++        new_tree = dict(self._tree)
++        new_tree["right"] = tree
++        return Zipper(new_tree, self._breadcrumbs)
+ 
+     def up(self):
+-        pass
++        if not self._breadcrumbs:
++            return None
++        parent_value, left_sibling, right_sibling, side = self._breadcrumbs[-1]
++        parent = {"value": parent_value, "left": left_sibling, "right": right_sibling}
++        if side == "left":
++            parent["left"] = self._tree
++        else:
++            parent["right"] = self._tree
++        return Zipper(parent, self._breadcrumbs[:-1])
+ 
+     def to_tree(self):
+-        pass
++        tree = self._tree
++        for parent_value, left_sibling, right_sibling, side in reversed(
++            self._breadcrumbs
++        ):
++            parent = {
++                "value": parent_value,
++                "left": left_sibling,
++                "right": right_sibling,
++            }
++            if side == "left":
++                parent["left"] = tree
++            else:
++                parent["right"] = tree
++            tree = parent
++        return tree

@@ -1,0 +1,55 @@
+diff --git a/game.py b/game.py
+index 768dec9..2c4c421 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,49 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # E[i] is the expected number of turns from square i (0 <= i < n), with
++    # E[n] = 0.  From i a roll d lands on i + d when that is at most n, and
++    # otherwise bounces back to 2*n - i - d.  Thus, for every i < n:
++    #
++    #     k*E[i] - sum(E[next(i, d)]) = k
++    #
++    # which is a linear system over the n non-absorbing squares.
++    size = n
++    matrix = [[Fraction(0)] * size for _ in range(size)]
++    rhs = [Fraction(k)] * size
++
++    for i in range(size):
++        matrix[i][i] = Fraction(k)
++        for d in range(1, k + 1):
++            target = i + d
++            if target == n:
++                continue  # absorbed; E[n] = 0
++            if target > n:
++                target = 2 * n - target
++            matrix[i][target] -= 1
++
++    # Gaussian elimination with exact rational arithmetic and row pivoting.
++    for col in range(size):
++        pivot = next(row for row in range(col, size) if matrix[row][col] != 0)
++        if pivot != col:
++            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++            rhs[col], rhs[pivot] = rhs[pivot], rhs[col]
++
++        pivot_value = matrix[col][col]
++        for row in range(col + 1, size):
++            factor = matrix[row][col] / pivot_value
++            if factor == 0:
++                continue
++            matrix[row][col] = Fraction(0)
++            for c in range(col + 1, size):
++                matrix[row][c] -= factor * matrix[col][c]
++            rhs[row] -= factor * rhs[col]
++
++    solution = [Fraction(0)] * size
++    for i in range(size - 1, -1, -1):
++        total = rhs[i]
++        for j in range(i + 1, size):
++            total -= matrix[i][j] * solution[j]
++        solution[i] = total / matrix[i][i]
++
++    return solution[0]

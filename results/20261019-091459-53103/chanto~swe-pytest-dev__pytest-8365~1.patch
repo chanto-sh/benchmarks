@@ -1,0 +1,78 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..fc29f6f
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed ``tmpdir``, ``tmpdir_factory`` and ``tmp_path_factory`` when the current user name contains characters which are not valid in directory names (such as ``\`` on Windows).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..bfadcac 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -154,9 +154,12 @@ def get_user() -> Optional[str]:
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        user = getpass.getuser()
+     except (ImportError, KeyError):
+         return None
++    # The user name might contain characters which are not valid in a
++    # directory name (e.g. a backslash on Windows, see #8365).
++    return re.sub(r"[\W]", "_", user)
+ 
+ 
+ def pytest_configure(config: Config) -> None:
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..433ed18 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -246,6 +246,48 @@ def test_get_user(monkeypatch):
+     assert get_user() is None
+ 
+ 
++@pytest.mark.parametrize(
++    "user, expected",
++    [
++        ("regular_user", "regular_user"),
++        ("contoso\\john_doe", "contoso_john_doe"),
++        ("os/\\*?<>|agnostic", "os_______agnostic"),
++    ],
++)
++def test_get_user_sanitizes_illegal_characters(monkeypatch, user, expected):
++    """Test that get_user() replaces characters which are not valid in
++    directory names (#8365).
++    """
++    import getpass
++
++    monkeypatch.setattr(getpass, "getuser", lambda: user)
++    assert get_user() == expected
++
++
++def test_tmpdir_username_with_illegal_characters(
++    pytester: Pytester, monkeypatch
++) -> None:
++    """Test that tmpdir works when the user name contains characters which
++    are not valid in directory names (#8365).
++    """
++    import getpass
++
++    monkeypatch.setattr(getpass, "getuser", lambda: "contoso\\john_doe")
++    temproot = pytester.path / "temproot"
++    temproot.mkdir()
++    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(temproot))
++    pytester.makepyfile(
++        """
++        def test_some(tmpdir, tmp_path):
++            assert tmpdir.isdir()
++            assert tmp_path.is_dir()
++    """
++    )
++    reprec = pytester.inline_run()
++    reprec.assertoutcome(passed=1)
++    assert (temproot / "pytest-of-contoso_john_doe").is_dir()
++
++
+ class TestNumberedDir:
+     PREFIX = "fun-"
+ 

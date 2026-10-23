@@ -1,0 +1,98 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..94e5835 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,92 @@
+ package scale
+ 
++import "strings"
++
++var sharpChromatic = []string{
++	"A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#",
++}
++
++var flatChromatic = []string{
++	"A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab",
++}
++
++var sharpMajorTonics = map[string]bool{
++	"C": true, "G": true, "D": true, "A": true, "E": true, "B": true, "F#": true,
++}
++
++var sharpMinorTonics = map[string]bool{
++	"a": true, "e": true, "b": true, "f#": true, "c#": true, "g#": true, "d#": true,
++}
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	lowercase := tonic != "" && tonic[0] >= 'a' && tonic[0] <= 'z'
++
++	name := tonic
++	if tonic != "" {
++		name = strings.ToUpper(tonic[:1]) + tonic[1:]
++	}
++
++	var useSharps bool
++	if lowercase {
++		useSharps = sharpMinorTonics[strings.ToLower(name)]
++	} else {
++		useSharps = sharpMajorTonics[name]
++	}
++
++	chromatic := flatChromatic
++	if useSharps {
++		chromatic = sharpChromatic
++	}
++
++	start := indexOf(chromatic, name)
++	if start == -1 {
++		// Fall back to the other spelling if the tonic is not in the
++		// preferred chromatic scale.
++		if useSharps {
++			chromatic = flatChromatic
++		} else {
++			chromatic = sharpChromatic
++		}
++		start = indexOf(chromatic, name)
++	}
++	if start == -1 {
++		return nil
++	}
++
++	if interval == "" {
++		notes := make([]string, 12)
++		for i := range notes {
++			notes[i] = chromatic[(start+i)%12]
++		}
++		return notes
++	}
++
++	notes := make([]string, 0, len(interval)+1)
++	notes = append(notes, chromatic[start])
++
++	pos := start
++	for _, step := range interval {
++		switch step {
++		case 'm':
++			pos++
++		case 'M':
++			pos += 2
++		case 'A':
++			pos += 3
++		default:
++			continue
++		}
++		notes = append(notes, chromatic[pos%12])
++	}
++
++	return notes
++}
++
++func indexOf(notes []string, name string) int {
++	for i, note := range notes {
++		if note == name {
++			return i
++		}
++	}
++	return -1
+ }

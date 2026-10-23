@@ -1,0 +1,71 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..964901d 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,65 @@
+ package bookstore
+ 
++import (
++	"fmt"
++	"sort"
++)
++
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	counts := make([]int, 5)
++	for _, book := range books {
++		if book >= 1 && book <= len(counts) {
++			counts[book-1]++
++		}
++	}
++
++	groupPrices := [...]int{0, 800, 1520, 2160, 2560, 3000}
++	memo := make(map[string]int)
++
++	var minimumCost func([]int) int
++	minimumCost = func(remaining []int) int {
++		sort.Sort(sort.Reverse(sort.IntSlice(remaining)))
++
++		key := fmt.Sprint(remaining)
++		if cost, ok := memo[key]; ok {
++			return cost
++		}
++
++		totalBooks := 0
++		for _, count := range remaining {
++			totalBooks += count
++		}
++		if totalBooks == 0 {
++			return 0
++		}
++
++		best := int(^uint(0) >> 1)
++		for mask := 1; mask < 1<<len(remaining); mask++ {
++			groupSize := 0
++			next := append([]int(nil), remaining...)
++			for i := range next {
++				if mask&(1<<i) != 0 {
++					if next[i] == 0 {
++						groupSize = 0
++						break
++					}
++					next[i]--
++					groupSize++
++				}
++			}
++			if groupSize == 0 {
++				continue
++			}
++
++			cost := groupPrices[groupSize] + minimumCost(next)
++			if cost < best {
++				best = cost
++			}
++		}
++
++		memo[key] = best
++		return best
++	}
++
++	return minimumCost(counts)
+ }

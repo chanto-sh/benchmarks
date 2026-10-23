@@ -1,0 +1,49 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..78b9472
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed ``tmpdir``, ``tmpdir_factory`` and ``tmp_path_factory`` failing when the
++username contains characters which are not allowed in directory names (for
++example ``contoso\john_doe``).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..f99a67f 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,14 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # Use a different version of the string which is safe for
++                # the filesystem, in case the user name contains characters
++                # which are not allowed on this filesystem.
++                rootdir = temproot.joinpath(f"pytest-of-{user}".encode("utf-8").hex())
++                rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..c04ee72 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -67,6 +67,15 @@ class TestTempdirHandler:
+         t = TempPathFactory.from_config(config, _ispytest=True)
+         assert t.getbasetemp().resolve() == (tmp_path / "hello").resolve()
+ 
++    def test_getbasetemp_username_illegal_chars(self, tmp_path, monkeypatch):
++        """#8365: the username may contain characters which are not allowed in
++        a path (e.g. ``contoso\\john_doe``)."""
++        monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path))
++        monkeypatch.setattr("_pytest.tmpdir.get_user", lambda: "contoso/john_doe")
++        t = TempPathFactory(None, lambda *args: None, _ispytest=True)
++        basetemp = t.getbasetemp()
++        assert basetemp.is_dir()
++
+ 
+ class TestConfigTmpdir:
+     def test_getbasetemp_custom_removes_old(self, pytester: Pytester) -> None:

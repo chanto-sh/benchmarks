@@ -1,0 +1,68 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..f5bec3b 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,62 @@
++from collections import defaultdict
++
++
+ def can_chain(dominoes):
+-    pass
++    if not dominoes:
++        return []
++
++    # Each half of a domino is a vertex, each domino is an edge. A valid chain
++    # is an Eulerian circuit: every vertex must have even degree and all edges
++    # must lie in a single connected component.
++    adjacency = defaultdict(list)
++    for index, (left, right) in enumerate(dominoes):
++        adjacency[left].append((right, index))
++        adjacency[right].append((left, index))
++
++    if any(len(edges) % 2 for edges in adjacency.values()):
++        return None
++
++    start = next(iter(adjacency))
++    seen = {start}
++    to_visit = [start]
++    while to_visit:
++        vertex = to_visit.pop()
++        for neighbor, _ in adjacency[vertex]:
++            if neighbor not in seen:
++                seen.add(neighbor)
++                to_visit.append(neighbor)
++    if len(seen) != len(adjacency):
++        return None
++
++    # Hierholzer's algorithm: walk until stuck, then splice in cycles.
++    used = [False] * len(dominoes)
++    next_edge = defaultdict(int)
++    trail = []
++    stack = [(start, None)]
++    while stack:
++        vertex, incoming = stack[-1]
++        if next_edge[vertex] < len(adjacency[vertex]):
++            neighbor, index = adjacency[vertex][next_edge[vertex]]
++            next_edge[vertex] += 1
++            if used[index]:
++                continue
++            used[index] = True
++            stack.append((neighbor, index))
++        else:
++            stack.pop()
++            if incoming is not None:
++                trail.append(incoming)
++    trail.reverse()
++
++    # Orient each domino so it follows the trail.
++    chain = []
++    current = start
++    for index in trail:
++        left, right = dominoes[index]
++        if left == current:
++            chain.append((left, right))
++            current = right
++        else:
++            chain.append((right, left))
++            current = left
++    return chain

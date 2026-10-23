@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index f91b0ed..5d6ee1e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,7 @@
+-def find_Rotations(s): 
+-    pass
++def find_Rotations(s):
++    n = len(s)
++    doubled = s + s
++    for k in range(1, n + 1):
++        if doubled[k:k + n] == s:
++            return k
++    return n

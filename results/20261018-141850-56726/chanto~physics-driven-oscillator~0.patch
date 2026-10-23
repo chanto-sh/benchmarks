@@ -1,0 +1,146 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..9cc84c5 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,139 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import cmath
++import math
++
++
++def _complex_expm1(z):
++    """exp(z) - 1 without cancellation for small |z|."""
++    if abs(z) >= 0.5:
++        return cmath.exp(z) - 1.0
++
++    term = z
++    total = z
++    n = 2
++    while n < 50:
++        term *= z / n
++        total += term
++        if abs(term) <= 1e-17 * abs(total):
++            break
++        n += 1
++    return total
++
++
++def _sinc(x):
++    """sin(x) / x, with the limiting value at zero."""
++    if x == 0.0:
++        return 1.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the limiting value at zero."""
++    if x == 0.0:
++        return 1.0
++    return math.sinh(x) / x
++
++
++def _detuning(m, k, omega):
++    """k - m*omega^2, factored to stay accurate near resonance."""
++    natural_frequency = math.sqrt(k / m)
++    return m * (natural_frequency - omega) * (natural_frequency + omega)
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return P and Q for the particular solution P cos(wt) + Q sin(wt)."""
++    detuning = _detuning(m, k, omega)
++    damping = c * omega
++    denominator = math.hypot(detuning, damping)
++    if denominator == 0.0:
++        return None, None, denominator
++
++    scale = F0 / denominator
++    return scale * (detuning / denominator), scale * (damping / denominator), denominator
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    denominator = math.hypot(_detuning(m, k, omega), c * omega)
++    if denominator == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        return math.copysign(math.inf, F0)
++    return F0 / denominator
++
++
++def _overdamped_transient(C, S, a, d, t, natural_frequency_sq):
++    x = d * t
++    if abs(x) < 50.0:
++        return math.exp(-a * t) * (C * math.cosh(x) + S * t * _sinhc(x))
++
++    # Evaluate the two decaying exponentials separately so that neither
++    # cosh(d*t) nor sinh(d*t) can overflow before multiplication by exp(-a*t).
++    r1 = -natural_frequency_sq / (a + d)  # -a + d, without cancellation
++    r2 = -a - d
++    e1 = math.exp(r1 * t) if r1 * t > -745.0 else 0.0
++    e2 = math.exp(r2 * t) if r2 * t > -745.0 else 0.0
++    return 0.5 * ((C + S / d) * e1 + (C - S / d) * e2)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    P, Q, denominator = _steady_state_coefficients(m, k, c, F0, omega)
++
++    if denominator == 0.0:
++        # Undamped forcing exactly at the natural frequency.
++        natural_frequency = math.sqrt(k / m)
++        theta = natural_frequency * t
++        particular = F0 / (2.0 * m * natural_frequency) * t * math.sin(theta)
++        homogeneous = x0 * math.cos(theta) + v0 * t * _sinc(theta)
++        return particular + homogeneous
++
++    a = c / (2.0 * m)
++    natural_frequency_sq = k / m
++
++    # The homogeneous solution has roots -a +/- d, where d^2 = a^2 - k/m.
++    critical_c = 2.0 * math.sqrt(m * k)
++    discriminant = (c - critical_c) * (c + critical_c)
++
++    if discriminant < 0.0:
++        d = math.sqrt(-discriminant) / (2.0 * m)
++        theta = d * t
++        decay = math.exp(-a * t)
++        h1 = decay * math.cos(theta)
++        h2 = decay * t * _sinc(theta)
++        g1 = h1 + a * h2
++
++        # Write the forced response as
++        #   x0*g1 + v0*h2 + P*(cos(wt) - g1) + Q*(sin(wt) - w*h2).
++        # The differences are evaluated from the difference of two nearby
++        # complex exponentials, avoiding cancellation when w is close to the
++        # natural frequency and the damping is small.
++        z1 = complex(0.0, omega * t)
++        z2 = complex(-a * t, theta)
++        delta = z1 - z2
++        if abs(delta) < 0.5:
++            exponential_difference = cmath.exp(z2) * _complex_expm1(delta)
++        else:
++            exponential_difference = cmath.exp(z1) - cmath.exp(z2)
++
++        cos_difference = exponential_difference.real - a * h2
++        sin_difference = exponential_difference.imag + (d - omega) * h2
++        return (
++            x0 * g1
++            + v0 * h2
++            + P * cos_difference
++            + Q * sin_difference
++        )
++
++    C = x0 - P
++    S = v0 - Q * omega + a * C
++
++    if discriminant == 0.0:
++        homogeneous = math.exp(-a * t) * (C + S * t)
++    else:
++        d = math.sqrt(discriminant) / (2.0 * m)
++        homogeneous = _overdamped_transient(C, S, a, d, t, natural_frequency_sq)
++
++    particular = P * math.cos(omega * t) + Q * math.sin(omega * t)
++    return particular + homogeneous

@@ -1,0 +1,49 @@
+diff --git a/grep.py b/grep.py
+index 3c8a8e1..07521ef 100644
+--- a/grep.py
++++ b/grep.py
+@@ -1,2 +1,43 @@
+ def grep(pattern, flags, files):
+-    pass
++    enabled_flags = set(flags.split())
++    show_line_numbers = "-n" in enabled_flags
++    show_file_names = "-l" in enabled_flags
++    case_insensitive = "-i" in enabled_flags
++    invert_match = "-v" in enabled_flags
++    match_entire_line = "-x" in enabled_flags
++
++    if case_insensitive:
++        pattern = pattern.lower()
++
++    results = []
++    include_file_name = len(files) > 1
++
++    for file_name in files:
++        with open(file_name) as file:
++            matching_lines = []
++
++            for line_number, line in enumerate(file.read().splitlines(), start=1):
++                candidate = line.lower() if case_insensitive else line
++                matches = (
++                    candidate == pattern
++                    if match_entire_line
++                    else pattern in candidate
++                )
++
++                if matches != invert_match:
++                    if show_file_names:
++                        matching_lines.append(file_name)
++                        break
++
++                    prefix = file_name + ":" if include_file_name else ""
++                    if show_line_numbers:
++                        prefix += str(line_number) + ":"
++                    matching_lines.append(prefix + line)
++
++            if show_file_names:
++                if matching_lines:
++                    results.append(matching_lines[0] + "\n")
++            else:
++                results.extend(line + "\n" for line in matching_lines)
++
++    return "".join(results)

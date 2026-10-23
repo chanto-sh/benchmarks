@@ -1,0 +1,39 @@
+diff --git a/dot_dsl.py b/dot_dsl.py
+index e22a618..4486b69 100644
+--- a/dot_dsl.py
++++ b/dot_dsl.py
+@@ -24,4 +24,33 @@ class Edge:
+ 
+ class Graph:
+     def __init__(self, data=None):
+-        pass
++        self.nodes = []
++        self.edges = []
++        self.attrs = {}
++
++        if data is None:
++            return
++
++        if not isinstance(data, (list, tuple)):
++            raise TypeError("Graph data malformed")
++
++        for item in data:
++            if not isinstance(item, (list, tuple)) or len(item) < 3:
++                raise TypeError("Graph item incomplete")
++
++            kind = item[0]
++
++            if kind == ATTR:
++                if len(item) != 3 or not isinstance(item[1], str):
++                    raise ValueError("Attribute is malformed")
++                self.attrs[item[1]] = item[2]
++            elif kind == NODE:
++                if len(item) != 3 or not isinstance(item[2], dict):
++                    raise ValueError("Node is malformed")
++                self.nodes.append(Node(item[1], item[2]))
++            elif kind == EDGE:
++                if len(item) != 4 or not isinstance(item[3], dict):
++                    raise ValueError("Edge is malformed")
++                self.edges.append(Edge(item[1], item[2], item[3]))
++            else:
++                raise ValueError("Unknown item")

@@ -1,0 +1,104 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..137a423 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,98 @@
+ package bookstore
+ 
++import "sort"
++
++// groupCost holds the cost in cents of one group of distinct books, indexed by
++// the number of books in the group. The discounts are 5% for 2 books, 10% for
++// 3, 20% for 4 and 25% for all 5.
++var groupCost = [6]int{0, 800, 1520, 2160, 2560, 3000}
++
++// Cost calculates the total cost in cents of a basket of books, applying the
++// grouping that gives the biggest possible discount.
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	if len(books) == 0 {
++		return 0
++	}
++
++	// How many copies of each distinct title are in the basket?
++	countsByTitle := make(map[int]int)
++	for _, book := range books {
++		countsByTitle[book]++
++	}
++	counts := make([]int, 0, len(countsByTitle))
++	for _, count := range countsByTitle {
++		counts = append(counts, count)
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(counts)))
++
++	// A grouping is described by the number of groups of each size:
++	// groups[i] is the number of groups containing i distinct books.
++	var groups [6]int
++	best := -1
++
++	total := len(books)
++	for groups[5] = 0; groups[5]*5 <= total; groups[5]++ {
++		afterFive := total - groups[5]*5
++		for groups[4] = 0; groups[4]*4 <= afterFive; groups[4]++ {
++			afterFour := afterFive - groups[4]*4
++			for groups[3] = 0; groups[3]*3 <= afterFour; groups[3]++ {
++				afterThree := afterFour - groups[3]*3
++				for groups[2] = 0; groups[2]*2 <= afterThree; groups[2]++ {
++					groups[1] = afterThree - groups[2]*2
++
++					if !groupingPossible(counts, groups) {
++						continue
++					}
++
++					cost := 0
++					for size := 1; size <= 5; size++ {
++						cost += groups[size] * groupCost[size]
++					}
++					if best == -1 || cost < best {
++						best = cost
++					}
++				}
++			}
++		}
++	}
++
++	return best
++}
++
++// groupingPossible reports whether the titles with the given copy counts can be
++// arranged into groups with the given sizes. Each group must contain distinct
++// titles, so this is a bipartite degree sequence problem: titles on one side
++// with degree equal to their copy count, groups on the other side with degree
++// equal to their size. The Gale-Ryser theorem gives the exact feasibility test.
++func groupingPossible(counts []int, groups [6]int) bool {
++	// The largest copy count cannot exceed the number of groups, because each
++	// copy of a title has to go into a different group.
++	totalGroups := 0
++	for size := 1; size <= 5; size++ {
++		totalGroups += groups[size]
++	}
++	if counts[0] > totalGroups {
++		return false
++	}
++
++	leftSum := 0
++	for i, count := range counts {
++		leftSum += count
++		titles := i + 1 // number of titles considered so far
++
++		// The right side contributes min(titles, groupSize) per group.
++		rightSum := 0
++		for size := 1; size <= 5; size++ {
++			if size < titles {
++				rightSum += groups[size] * size
++			} else {
++				rightSum += groups[size] * titles
++			}
++		}
++		if leftSum > rightSum {
++			return false
++		}
++	}
++
++	return true
+ }

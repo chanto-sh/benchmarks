@@ -1,0 +1,75 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..20659db 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,68 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++_CHUNK_BITS = 30
++_CHUNK_MASK = (1 << _CHUNK_BITS) - 1
++
++
++def _interleave(values):
++    """Bijection from tuples of k ints to ints, using k interleaved bit lanes."""
++    k = len(values)
++    if not k:
++        return 0
++
++    rounds = (max(value.bit_length() for value in values)
++              + _CHUNK_BITS - 1) // _CHUNK_BITS
++    result = 0
++    for round_index in range(rounds):
++        value_shift = round_index * _CHUNK_BITS
++        key_shift = round_index * k * _CHUNK_BITS
++        for lane, value in enumerate(values):
++            chunk = (value >> value_shift) & _CHUNK_MASK
++            if chunk:
++                result |= chunk << (key_shift + lane * _CHUNK_BITS)
++    return result
++
++
++def _deinterleave(n, k):
++    """Inverse of _interleave for a known number of lanes."""
++    if not k:
++        return []
++
++    digits = (n.bit_length() + _CHUNK_BITS - 1) // _CHUNK_BITS
++    rounds = (digits + k - 1) // k
++    values = [0] * k
++    for round_index in range(rounds):
++        segment = n >> (round_index * k * _CHUNK_BITS)
++        value_shift = round_index * _CHUNK_BITS
++        for lane in range(k):
++            chunk = segment & _CHUNK_MASK
++            if chunk:
++                values[lane] |= chunk << value_shift
++            segment >>= _CHUNK_BITS
++    return values
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    length = len(lst)
++    payload = _interleave(lst)
++    if payload == 0:
++        return 1 << (length - 1)
++    return (1 << (length - 1 + payload.bit_length())) + payload
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++
++    key_bits = n.bit_length()
++    payload = n - (1 << (key_bits - 1))
++    if payload == 0:
++        return [0] * key_bits
++
++    length = key_bits - payload.bit_length()
++    return _deinterleave(payload, length)

@@ -1,0 +1,204 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..3977c20 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,198 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++// Solve attempts to solve an alphametics puzzle such as "SEND + MORE == MONEY"
++// and returns a map of letter to digit substitutions, or an error when the
++// puzzle is malformed or has no solution.
++//
++// The search proceeds column by column from the least significant digit. For
++// each column the sum of the already fixed letters plus the incoming carry must
++// agree with the result letter modulo ten; that constraint prunes the search
++// far more aggressively than testing whole sums at the end.
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	addends, result, err := parse(puzzle)
++	if err != nil {
++		return nil, err
++	}
++
++	// Index the letters and remember which ones appear first in a
++	// multi-digit number (those may not be zero).
++	index := make(map[byte]int)
++	var letters []byte
++	leading := make([]bool, 0, 10)
++
++	lookup := func(word string) []int {
++		ids := make([]int, len(word))
++		for i := 0; i < len(word); i++ {
++			id, ok := index[word[i]]
++			if !ok {
++				id = len(letters)
++				index[word[i]] = id
++				letters = append(letters, word[i])
++				leading = append(leading, false)
++			}
++			if i == 0 && len(word) > 1 {
++				leading[id] = true
++			}
++			ids[i] = id
++		}
++		return ids
++	}
++
++	addendIDs := make([][]int, len(addends))
++	for i, w := range addends {
++		addendIDs[i] = lookup(w)
++	}
++	resultIDs := lookup(result)
++
++	if len(letters) > 10 {
++		return nil, errors.New("too many distinct letters to solve")
++	}
++
++	// maxLen is the number of columns that need to be considered.
++	maxLen := len(resultIDs)
++	for _, ids := range addendIDs {
++		if len(ids) > maxLen {
++			maxLen = len(ids)
++		}
++	}
++
++	// Per column (0 == least significant), how many times each letter id
++	// contributes to the sum, plus the result letter id (-1 when the result has
++	// no digit in that column). Grouping equal letters keeps the per-node work
++	// proportional to the number of distinct letters, not to the addend count.
++	type term struct {
++		id    int
++		count int
++	}
++	colAddends := make([][]term, maxLen)
++	colResult := make([]int, maxLen)
++	for col := 0; col < maxLen; col++ {
++		colResult[col] = -1
++		if len(resultIDs) > col {
++			colResult[col] = resultIDs[len(resultIDs)-1-col]
++		}
++		pos := make(map[int]int, len(addendIDs))
++		for _, ids := range addendIDs {
++			if len(ids) > col {
++				id := ids[len(ids)-1-col]
++				if idx, ok := pos[id]; ok {
++					colAddends[col][idx].count++
++					continue
++				}
++				pos[id] = len(colAddends[col])
++				colAddends[col] = append(colAddends[col], term{id: id, count: 1})
++			}
++		}
++	}
++
++	digits := make([]int, len(letters))
++	for i := range digits {
++		digits[i] = -1
++	}
++	used := make([]bool, 10)
++
++	var dfs func(col, carry int) bool
++	dfs = func(col, carry int) bool {
++		if col == maxLen {
++			return carry == 0
++		}
++
++		// Letters of this column that still need a digit, in the order they
++		// occur in the addends.
++		var pending []term
++		for _, t := range colAddends[col] {
++			if digits[t.id] < 0 {
++				pending = append(pending, t)
++			}
++		}
++
++		var fill func(k int) bool
++		fill = func(k int) bool {
++			if k < len(pending) {
++				id := pending[k].id
++				for d := 0; d < 10; d++ {
++					if used[d] || (d == 0 && leading[id]) {
++						continue
++					}
++					digits[id] = d
++					used[d] = true
++					if fill(k + 1) {
++						return true
++					}
++					used[d] = false
++					digits[id] = -1
++				}
++				return false
++			}
++
++			sum := carry
++			for _, t := range colAddends[col] {
++				sum += t.count * digits[t.id]
++			}
++			need := sum % 10
++
++			rid := colResult[col]
++			if rid < 0 {
++				// No result digit in this column: the sum must vanish here.
++				if need != 0 {
++					return false
++				}
++				return dfs(col+1, sum/10)
++			}
++			if digits[rid] >= 0 {
++				if digits[rid] != need {
++					return false
++				}
++				return dfs(col+1, sum/10)
++			}
++			// The result letter's digit is forced by this column.
++			if used[need] || (need == 0 && leading[rid]) {
++				return false
++			}
++			digits[rid] = need
++			used[need] = true
++			if dfs(col+1, sum/10) {
++				return true
++			}
++			used[need] = false
++			digits[rid] = -1
++			return false
++		}
++
++		return fill(0)
++	}
++
++	if !dfs(0, 0) {
++		return nil, errors.New("no solution found")
++	}
++
++	solution := make(map[string]int, len(letters))
++	for i, c := range letters {
++		solution[string(c)] = digits[i]
++	}
++	return solution, nil
++}
++
++// parse splits a puzzle into its addends and result word, stripping spaces.
++func parse(puzzle string) (addends []string, result string, err error) {
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, "", errors.New("puzzle must contain exactly one ==")
++	}
++	for _, token := range strings.Split(parts[0], "+") {
++		word := strings.ReplaceAll(token, " ", "")
++		if word != "" {
++			addends = append(addends, word)
++		}
++	}
++	result = strings.ReplaceAll(parts[1], " ", "")
++	if len(addends) == 0 || result == "" {
++		return nil, "", errors.New("puzzle is missing addends or result")
++	}
++	return addends, result, nil
+ }

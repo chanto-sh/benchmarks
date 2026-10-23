@@ -1,0 +1,61 @@
+diff --git a/src/greeting.js b/src/greeting.js
+index 49ae8c1..455aa2d 100644
+--- a/src/greeting.js
++++ b/src/greeting.js
+@@ -1,7 +1,7 @@
+-const { getUserName } = require("./user");
++const { getDisplayName } = require("./user");
+ 
+ function greet(user) {
+-  return `Hello, ${getUserName(user)}!`;
++  return `Hello, ${getDisplayName(user)}!`;
+ }
+ 
+ module.exports = { greet };
+diff --git a/src/report.js b/src/report.js
+index 2996d52..0f3d0a3 100644
+--- a/src/report.js
++++ b/src/report.js
+@@ -1,7 +1,7 @@
+-const { getUserName } = require("./user");
++const { getDisplayName } = require("./user");
+ 
+ function report(users) {
+-  return users.map((u) => getUserName(u)).join(", ");
++  return users.map((u) => getDisplayName(u)).join(", ");
+ }
+ 
+ module.exports = { report };
+diff --git a/src/user.js b/src/user.js
+index b6e6194..23954ef 100644
+--- a/src/user.js
++++ b/src/user.js
+@@ -1,6 +1,6 @@
+-function getUserName(user) {
++function getDisplayName(user) {
+   if (!user) return "anonymous";
+   return user.nickname || `${user.first} ${user.last}`;
+ }
+ 
+-module.exports = { getUserName };
++module.exports = { getDisplayName };
+diff --git a/test.js b/test.js
+index 289bcda..bf25dde 100644
+--- a/test.js
++++ b/test.js
+@@ -1,11 +1,11 @@
+ const assert = require("assert");
+-const { getUserName } = require("./src/user");
++const { getDisplayName } = require("./src/user");
+ const { greet } = require("./src/greeting");
+ const { report } = require("./src/report");
+ 
+-assert.strictEqual(getUserName({ first: "Ada", last: "Lovelace" }), "Ada Lovelace");
+-assert.strictEqual(getUserName({ nickname: "ada" }), "ada");
+-assert.strictEqual(getUserName(null), "anonymous");
++assert.strictEqual(getDisplayName({ first: "Ada", last: "Lovelace" }), "Ada Lovelace");
++assert.strictEqual(getDisplayName({ nickname: "ada" }), "ada");
++assert.strictEqual(getDisplayName(null), "anonymous");
+ assert.strictEqual(greet({ nickname: "bob" }), "Hello, bob!");
+ assert.strictEqual(report([{ nickname: "a" }, { first: "B", last: "C" }]), "a, B C");
+ console.log("all tests passed");

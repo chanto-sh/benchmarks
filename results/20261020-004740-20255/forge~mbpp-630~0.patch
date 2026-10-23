@@ -1,0 +1,20 @@
+diff --git a/solution.py b/solution.py
+index bab6eae..bd7633f 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,13 @@
+-def adjac(ele, sub = []): 
+-    pass
++def adjac(ele, sub=[]):
++    """Return every coordinate adjacent to `ele`, including `ele` itself.
++
++    For an n-dimensional coordinate tuple each component is varied over
++    ``component - 1, component, component + 1``, producing the full
++    (3 x 3 x ... x 3) neighbourhood in lexicographic order.
++    """
++    if not ele:
++        return [tuple(sub)]
++    results = []
++    for value in range(ele[0] - 1, ele[0] + 2):
++        results.extend(adjac(ele[1:], sub + [value]))
++    return results

@@ -1,0 +1,17 @@
+diff --git a/solution.py b/solution.py
+index f91b0ed..8d73b88 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,10 @@
+-def find_Rotations(s): 
+-    pass
++def find_Rotations(s):
++    """Return the smallest positive rotation that leaves ``s`` unchanged."""
++    n = len(s)
++    if n == 0:
++        return 0
++    doubled = s + s
++    for rotation in range(1, n + 1):
++        if doubled[rotation:rotation + n] == s:
++            return rotation
++    return n

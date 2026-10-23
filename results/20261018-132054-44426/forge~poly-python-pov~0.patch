@@ -1,0 +1,47 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..3a5c106 100644
+--- a/pov.py
++++ b/pov.py
+@@ -18,8 +18,40 @@ class Tree:
+     def __eq__(self, other):
+         return self.__dict__() == other.__dict__()
+ 
++    def _find_path(self, target):
++        """Return the list of nodes from this node down to `target`, or None."""
++        if self.label == target:
++            return [self]
++        for child in self.children:
++            path = child._find_path(target)
++            if path is not None:
++                return [self] + path
++        return None
++
+     def from_pov(self, from_node):
+-        pass
++        path = self._find_path(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++
++        new_root = Tree(path[-1].label, list(path[-1].children))
++        current = new_root
++
++        # Walk back up towards the original root, making each former parent a
++        # child of the node below it (minus the child we came from).
++        for index in range(len(path) - 1, 0, -1):
++            node = path[index]
++            parent = path[index - 1]
++            reoriented = Tree(
++                parent.label, [c for c in parent.children if c is not node]
++            )
++            current.children.append(reoriented)
++            current = reoriented
++
++        return new_root
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        reoriented = self.from_pov(from_node)
++        path = reoriented._find_path(to_node)
++        if path is None:
++            raise ValueError("No path found")
++        return [node.label for node in path]

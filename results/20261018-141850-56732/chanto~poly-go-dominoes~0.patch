@@ -1,0 +1,69 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..a199312 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,61 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a domino tile with two numbered sides.
++type Domino [2]int
+ 
+-func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++// MakeChain attempts to arrange the given dominoes into a legal chain.
++// A chain is legal when the touching sides of adjacent dominoes match and
++// the two outer sides of the chain match as well.
++func MakeChain(input []Domino) (chain []Domino, ok bool) {
++	used := make([]bool, len(input))
++	chain = make([]Domino, 0, len(input))
++
++	var search func() bool
++	search = func() bool {
++		if len(chain) == len(input) {
++			return len(chain) == 0 || chain[0][0] == chain[len(chain)-1][1]
++		}
++
++		for i, d := range input {
++			if used[i] {
++				continue
++			}
++
++			// A domino can be placed in either orientation.
++			place := func(tile Domino) bool {
++				used[i] = true
++				chain = append(chain, tile)
++				if search() {
++					return true
++				}
++				chain = chain[:len(chain)-1]
++				used[i] = false
++				return false
++			}
++
++			if len(chain) == 0 {
++				if place(d) {
++					return true
++				}
++				if d[0] != d[1] && place(Domino{d[1], d[0]}) {
++					return true
++				}
++				continue
++			}
++
++			last := chain[len(chain)-1][1]
++			if d[0] == last && place(d) {
++				return true
++			}
++			if d[1] == last && d[0] != d[1] && place(Domino{d[1], d[0]}) {
++				return true
++			}
++		}
++		return false
++	}
++
++	if search() {
++		return chain, true
++	}
++	return nil, false
+ }

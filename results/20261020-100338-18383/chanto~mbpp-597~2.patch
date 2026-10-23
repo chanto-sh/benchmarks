@@ -1,0 +1,33 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..33037a3 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,27 @@
+ def find_kth(arr1, arr2, k):
+-    pass
++    i = j = 0
++    while i < len(arr1) and j < len(arr2):
++        if arr1[i] <= arr2[j]:
++            k -= 1
++            if k == 0:
++                return arr1[i]
++            i += 1
++        else:
++            k -= 1
++            if k == 0:
++                return arr2[j]
++            j += 1
++
++    while i < len(arr1):
++        k -= 1
++        if k == 0:
++            return arr1[i]
++        i += 1
++
++    while j < len(arr2):
++        k -= 1
++        if k == 0:
++            return arr2[j]
++        j += 1
++
++    return None

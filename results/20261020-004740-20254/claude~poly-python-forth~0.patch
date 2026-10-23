@@ -1,0 +1,164 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..bcf5302 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,157 @@
++"""A tiny evaluator for a subset of the Forth stack language."""
++
++import re
++
++_NUMBER_RE = re.compile(r"-?[0-9]+\Z")
++
++
+ class StackUnderflowError(Exception):
+-    pass
++    """Raised when there are not enough items on the stack."""
++
++
++def _require(stack, count):
++    if len(stack) < count:
++        raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _add(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left + right)
++
++
++def _subtract(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left - right)
++
++
++def _multiply(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left * right)
++
++
++def _divide(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    if right == 0:
++        raise ZeroDivisionError("divide by zero")
++    # Forth division truncates toward zero.
++    quotient = abs(left) // abs(right)
++    stack.append(-quotient if (left < 0) != (right < 0) else quotient)
++
++
++def _dup(stack):
++    _require(stack, 1)
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    _require(stack, 1)
++    stack.pop()
++
++
++def _swap(stack):
++    _require(stack, 2)
++    stack[-2], stack[-1] = stack[-1], stack[-2]
++
++
++def _over(stack):
++    _require(stack, 2)
++    stack.append(stack[-2])
++
++
++_BUILTINS = {
++    "+": _add,
++    "-": _subtract,
++    "*": _multiply,
++    "/": _divide,
++    "DUP": _dup,
++    "DROP": _drop,
++    "SWAP": _swap,
++    "OVER": _over,
++}
++_BUILTINS = {name.lower(): operation for name, operation in _BUILTINS.items()}
++
++
++def _compile(word, dictionary, defining=None):
++    """Compile a single token into executable operations.
++
++    User-defined words are expanded while compiling so that later
++    redefinitions do not change the behaviour of existing definitions.
++    """
++    if _NUMBER_RE.fullmatch(word):
++        return [("push", int(word))]
++
++    name = word.lower()
++    if name in dictionary:
++        return list(dictionary[name])
++    if name in _BUILTINS:
++        return [("call", _BUILTINS[name])]
++    if name == defining:
++        # A self-reference with no previous definition can never resolve.
++        raise ValueError("undefined operation")
++    return [("unknown", name)]
++
++
++def _execute(operations, stack):
++    for kind, value in operations:
++        if kind == "push":
++            stack.append(value)
++        elif kind == "call":
++            value(stack)
++        else:
++            raise ValueError("undefined operation")
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    tokens = " ".join(input_data).split()
++    stack = []
++    dictionary = {}
++    index = 0
++
++    while index < len(tokens):
++        token = tokens[index]
++
++        if token == ":":
++            index += 1
++            if index >= len(tokens):
++                raise ValueError("undefined operation")
++            word = tokens[index]
++            if _NUMBER_RE.fullmatch(word):
++                raise ValueError("illegal operation")
++            name = word.lower()
++            index += 1
++
++            body = []
++            while index < len(tokens) and tokens[index] != ";":
++                body.extend(_compile(tokens[index], dictionary, defining=name))
++                index += 1
++            if index >= len(tokens):
++                raise ValueError("undefined operation")
++
++            dictionary[name] = body
++            index += 1  # consume the closing ';'
++            continue
++
++        if token == ";":
++            raise ValueError("undefined operation")
++
++        if _NUMBER_RE.fullmatch(token):
++            stack.append(int(token))
++        else:
++            name = token.lower()
++            if name in dictionary:
++                _execute(dictionary[name], stack)
++            elif name in _BUILTINS:
++                _BUILTINS[name](stack)
++            else:
++                raise ValueError("undefined operation")
++        index += 1
++
++    return stack

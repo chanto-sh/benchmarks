@@ -1,0 +1,62 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..b783703 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,56 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    if start_bucket == "one":
++        start = (bucket_one, 0)
++    elif start_bucket == "two":
++        start = (0, bucket_two)
++    else:
++        raise ValueError("start_bucket must be either 'one' or 'two'.")
++
++    def forbidden(one, two):
++        if start_bucket == "one":
++            return one == 0 and two == bucket_two
++        return two == 0 and one == bucket_one
++
++    def result(one, two, actions):
++        if one == goal:
++            return (actions, "one", two)
++        return (actions, "two", one)
++
++    if start[0] == goal:
++        return result(start[0], start[1], 1)
++    if start[1] == goal:
++        return result(start[0], start[1], 1)
++
++    queue = deque([(start, 1)])
++    seen = {start}
++
++    while queue:
++        (one, two), actions = queue.popleft()
++
++        for nxt in (
++            (bucket_one, two),
++            (one, bucket_two),
++            (0, two),
++            (one, 0),
++            _pour(one, two, bucket_two),
++            _pour(two, one, bucket_one)[::-1],
++        ):
++            if nxt in seen or forbidden(*nxt):
++                continue
++            if goal in nxt:
++                return result(nxt[0], nxt[1], actions + 1)
++            seen.add(nxt)
++            queue.append((nxt, actions + 1))
++
++    raise ValueError(
++        f"Goal {goal} liters cannot be measured with buckets of "
++        f"{bucket_one} and {bucket_two} liters."
++    )
++
++
++def _pour(source, target, target_capacity):
++    amount = min(source, target_capacity - target)
++    return (source - amount, target + amount)

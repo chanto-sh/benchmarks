@@ -1,0 +1,115 @@
+diff --git a/linalg.py b/linalg.py
+index 4060bd6..cbb6840 100644
+--- a/linalg.py
++++ b/linalg.py
+@@ -3,52 +3,91 @@
+ Students submit integer/rational matrices; we compare their answers to these.
+ """
+ 
++from fractions import Fraction
++
+ 
+ def _eliminate(A):
+-    A = [[float(x) for x in row] for row in A]
+-    n, m = len(A), len(A[0])
+-    sign = 1.0
++    """Row-reduce A to row echelon form using exact arithmetic.
++
++    Returns the reduced matrix and the sign of any row swaps performed.
++    """
++    A = [[Fraction(x) for x in row] for row in A]
++    n = len(A)
++    m = len(A[0]) if n else 0
++    sign = 1
+     r = 0
+     for c in range(m):
+         if r == n:
+             break
+-        if abs(A[r][c]) < 1e-12:
++        pivot = next((i for i in range(r, n) if A[i][c] != 0), None)
++        if pivot is None:
+             continue
++        if pivot != r:
++            A[r], A[pivot] = A[pivot], A[r]
++            sign = -sign
++        pv = A[r][c]
+         for i in range(r + 1, n):
+-            f = A[i][c] / A[r][c]
+-            for j in range(c, m):
+-                A[i][j] -= f * A[r][j]
++            if A[i][c] != 0:
++                f = A[i][c] / pv
++                A[i][c] = Fraction(0)
++                for j in range(c + 1, m):
++                    A[i][j] -= f * A[r][j]
+         r += 1
+     return A, sign
+ 
+ 
+ def det(A):
+     """Determinant of a square matrix (list of rows)."""
++    n = len(A)
++    if any(len(row) != n for row in A):
++        raise ValueError("determinant requires a square matrix")
++    if n == 0:
++        return Fraction(1)
+     U, sign = _eliminate(A)
+-    p = sign
+-    for i in range(len(U)):
++    p = Fraction(sign)
++    for i in range(n):
+         p *= U[i][i]
+     return p
+ 
+ 
+ def rank(A):
+     """Rank of an n x m matrix."""
++    if not A:
++        return 0
+     U, _ = _eliminate(A)
+-    return sum(1 for row in U if any(abs(x) > 1e-12 for x in row))
++    return sum(1 for row in U if any(x != 0 for x in row))
+ 
+ 
+ def solve(A, b):
+     """Solution x of A x = b for square A, or None if there is no unique solution."""
+     n = len(A)
+-    if abs(det(A)) < 1e-12:
+-        return None
+-    M = [[float(x) for x in row] + [float(v)] for row, v in zip(A, b)]
++    if any(len(row) != n for row in A):
++        raise ValueError("solve requires a square matrix")
++    M = [[Fraction(x) for x in row] + [Fraction(v)] for row, v in zip(A, b)]
++
++    r = 0
+     for c in range(n):
+-        for i in range(c + 1, n):
+-            f = M[i][c] / M[c][c]
+-            for j in range(c, n + 1):
+-                M[i][j] -= f * M[c][j]
+-    x = [0.0] * n
++        pivot = next((i for i in range(r, n) if M[i][c] != 0), None)
++        if pivot is None:
++            continue
++        if pivot != r:
++            M[r], M[pivot] = M[pivot], M[r]
++        pv = M[r][c]
++        for i in range(r + 1, n):
++            if M[i][c] != 0:
++                f = M[i][c] / pv
++                M[i][c] = Fraction(0)
++                for j in range(c + 1, n + 1):
++                    M[i][j] -= f * M[r][j]
++        r += 1
++
++    if r < n:
++        return None
++
++    x = [Fraction(0)] * n
+     for i in reversed(range(n)):
+-        x[i] = (M[i][n] - sum(M[i][j] * x[j] for j in range(i + 1, n))) / M[i][i]
++        s = M[i][n]
++        for j in range(i + 1, n):
++            s -= M[i][j] * x[j]
++        x[i] = s / M[i][i]
+     return x

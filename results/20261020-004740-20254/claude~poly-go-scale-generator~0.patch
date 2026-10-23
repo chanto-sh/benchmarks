@@ -1,0 +1,84 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..48fde3e 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,78 @@
+ package scale
+ 
++import "strings"
++
++// All twelve pitch classes, spelled with sharps and with flats.
++var sharpChromatic = []string{
++	"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
++}
++
++var flatChromatic = []string{
++	"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
++}
++
++// Position of each spelled note within the chromatic scale.
++var pitchClasses = map[string]int{
++	"C": 0, "C#": 1, "Db": 1,
++	"D": 2, "D#": 3, "Eb": 3,
++	"E": 4, "Fb": 4, "E#": 5,
++	"F": 5, "F#": 6, "Gb": 6,
++	"G": 7, "G#": 8, "Ab": 8,
++	"A": 9, "A#": 10, "Bb": 10,
++	"B": 11, "Cb": 11,
++}
++
++// Keys whose scales are conventionally written with flats. A lowercase tonic
++// denotes a minor key, an uppercase one a major key.
++var majorFlatKeys = map[string]bool{
++	"F": true, "Bb": true, "Eb": true, "Ab": true, "Db": true, "Gb": true,
++}
++
++var minorFlatKeys = map[string]bool{
++	"D": true, "G": true, "C": true, "F": true, "Bb": true, "Eb": true,
++}
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	if tonic == "" {
++		return nil
++	}
++
++	// The case of the first letter signals major (upper) or minor (lower).
++	isMinor := tonic[0] >= 'a' && tonic[0] <= 'z'
++	name := strings.ToUpper(tonic[:1]) + strings.ToLower(tonic[1:])
++
++	root, ok := pitchClasses[name]
++	if !ok {
++		return nil
++	}
++
++	chromatic := sharpChromatic
++	if (isMinor && minorFlatKeys[name]) || (!isMinor && majorFlatKeys[name]) {
++		chromatic = flatChromatic
++	}
++
++	// No interval pattern means the full chromatic scale.
++	if interval == "" {
++		scale := make([]string, 12)
++		for i := range scale {
++			scale[i] = chromatic[(root+i)%12]
++		}
++		return scale
++	}
++
++	scale := make([]string, 0, len(interval)+1)
++	scale = append(scale, chromatic[root])
++	pos := root
++	for _, step := range interval {
++		switch step {
++		case 'm':
++			pos = (pos + 1) % 12
++		case 'M':
++			pos = (pos + 2) % 12
++		case 'A':
++			pos = (pos + 3) % 12
++		}
++		scale = append(scale, chromatic[pos])
++	}
++	return scale
+ }

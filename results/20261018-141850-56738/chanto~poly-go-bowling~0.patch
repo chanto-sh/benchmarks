@@ -1,0 +1,104 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..155e9e3 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,95 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
++
++var (
++	errNegative    = errors.New("Negative roll is invalid")
++	errExceedsPins = errors.New("Pin count exceeds pins on the lane")
++	errGameOver    = errors.New("Cannot roll after game is over")
++	errGameNotOver = errors.New("Score cannot be taken until the end of the game")
++)
++
++// Game keeps track of the rolls in a game of bowling.
++type Game struct {
++	rolls      []int
++	frame      int // 0-based index of the current frame; 10 means the game is over
++	frameRolls []int
++}
+ 
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{}
+ }
+ 
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if pins < 0 {
++		return errNegative
++	}
++	if pins > 10 {
++		return errExceedsPins
++	}
++	if g.frame >= 10 {
++		return errGameOver
++	}
++
++	if g.frame < 9 {
++		if len(g.frameRolls) == 1 && g.frameRolls[0]+pins > 10 {
++			return errExceedsPins
++		}
++		g.frameRolls = append(g.frameRolls, pins)
++		g.rolls = append(g.rolls, pins)
++		if g.frameRolls[0] == 10 || len(g.frameRolls) == 2 {
++			g.frame++
++			g.frameRolls = nil
++		}
++		return nil
++	}
++
++	// Tenth frame.
++	switch len(g.frameRolls) {
++	case 0:
++		// First roll, anything up to 10 is fine.
++	case 1:
++		if g.frameRolls[0] != 10 && g.frameRolls[0]+pins > 10 {
++			return errExceedsPins
++		}
++	case 2:
++		if g.frameRolls[0] == 10 && g.frameRolls[1] != 10 && g.frameRolls[1]+pins > 10 {
++			return errExceedsPins
++		}
++	}
++	g.frameRolls = append(g.frameRolls, pins)
++	g.rolls = append(g.rolls, pins)
++
++	switch len(g.frameRolls) {
++	case 2:
++		if g.frameRolls[0] != 10 && g.frameRolls[0]+g.frameRolls[1] != 10 {
++			g.frame = 10
++		}
++	case 3:
++		g.frame = 10
++	}
++	return nil
+ }
+ 
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	if g.frame < 10 {
++		return 0, errGameNotOver
++	}
++
++	total := 0
++	index := 0
++	for frame := 0; frame < 10; frame++ {
++		switch {
++		case g.rolls[index] == 10:
++			total += 10 + g.rolls[index+1] + g.rolls[index+2]
++			index++
++		case g.rolls[index]+g.rolls[index+1] == 10:
++			total += 10 + g.rolls[index+2]
++			index += 2
++		default:
++			total += g.rolls[index] + g.rolls[index+1]
++			index += 2
++		}
++	}
++	return total, nil
+ }

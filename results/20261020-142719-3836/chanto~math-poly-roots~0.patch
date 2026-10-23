@@ -1,0 +1,241 @@
+diff --git a/roots.py b/roots.py
+index d624667..b7cc104 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,212 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Drop leading zero coefficients; the zero polynomial is []."""
++    i = 0
++    while i < len(p) and p[i] == 0:
++        i += 1
++    return p[i:]
++
++
++def _primitive(p):
++    """Divide by the positive content of an integer polynomial."""
++    p = _trim(p)
++    if not p:
++        return []
++    common = 0
++    for c in p:
++        common = gcd(common, abs(c))
++    if common > 1:
++        p = [c // common for c in p]
++    return p
++
++
++def _derivative(p):
++    n = len(p) - 1
++    return [p[i] * (n - i) for i in range(n)]
++
++
++def _pseudo_remainder(a, b):
++    """Remainder of a divided by b, up to a positive constant factor."""
++    a, b = _trim(a), _trim(b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return a
++
++    steps = len(a) - len(b) + 1
++    r = a[:]
++    lead = b[0]
++    for i in range(steps):
++        pivot = r[i]
++        if lead != 1:
++            for k in range(i, len(r)):
++                r[k] *= lead
++        if pivot:
++            for j, bj in enumerate(b):
++                r[i + j] -= pivot * bj
++
++    remainder = _trim(r[steps:])
++    if lead < 0 and steps % 2:
++        # Undo the sign introduced by pseudo-division so that the result is
++        # a positive multiple of the true remainder.
++        remainder = [-c for c in remainder]
++    return remainder
++
++
++def _exact_div(a, b):
++    """Exact quotient of integer polynomials (b must divide a)."""
++    a, b = _trim(a), _trim(b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if not a:
++        return []
++    if len(a) < len(b):
++        raise ArithmeticError("polynomial is not exactly divisible")
++
++    q = [0] * (len(a) - len(b) + 1)
++    r = a[:]
++    lead = b[0]
++    for i in range(len(q)):
++        c, rem = divmod(r[i], lead)
++        if rem:
++            raise ArithmeticError("polynomial is not exactly divisible")
++        q[i] = c
++        if c:
++            for j, bj in enumerate(b):
++                r[i + j] -= c * bj
++    if any(r):
++        raise ArithmeticError("polynomial is not exactly divisible")
++    return _trim(q)
++
++
++def _gcd(a, b):
++    """Primitive polynomial gcd over the rationals."""
++    a, b = _primitive(a), _primitive(b)
++    if len(a) < len(b):
++        a, b = b, a
++    while b:
++        r = _pseudo_remainder(a, b)
++        a, b = b, _primitive(r)
++    if a and a[0] < 0:
++        a = [-c for c in a]
++    return a
++
++
++def _squarefree_part(p):
++    """p divided by gcd(p, p'), so that every root has multiplicity one."""
++    p = _primitive(p)
++    d = _derivative(p)
++    if not d:
++        return p
++    g = _gcd(p, d)
++    if not g:
++        return p
++    return _primitive(_exact_div(p, g))
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a squarefree polynomial, with integer coefficients."""
++    sequence = [_primitive(p), _primitive(_derivative(p))]
++    while sequence[-1]:
++        remainder = _pseudo_remainder(sequence[-2], sequence[-1])
++        if not remainder:
++            break
++        sequence.append(_primitive([-c for c in remainder]))
++    return sequence
++
++
++def _sign_at(p, x):
++    """Sign of p(x) for integer p and Fraction x, using exact integers."""
++    numerator, denominator = x.numerator, x.denominator
++    value = p[0]
++    power = 1
++    for c in p[1:]:
++        power *= denominator
++        value = value * numerator + c * power
++    return (value > 0) - (value < 0)
++
++
++def _variations(sequence, x):
++    """Number of sign changes in the Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    previous = 0
++    for p in sequence:
++        sign = _sign_at(p, x)
++        if sign == 0:
++            continue
++        if previous and sign != previous:
++            changes += 1
++        previous = sign
++    return changes
++
++
++def _refine(sequence, a, b, va, vb):
++    """Refine the single root in the half-open interval (a, b]."""
++    p = sequence[0]
++    tolerance = Fraction(1, 10**10)
++
++    while b - a > tolerance:
++        # Exact rational roots can land on the right endpoint; return them
++        # immediately rather than merely converging towards them.
++        if _sign_at(p, b) == 0:
++            return b
++        m = (a + b) / 2
++        vm = _variations(sequence, m)
++        if va > vm:          # the root is in (a, m]
++            b, vb = m, vm
++        else:                # the root is in (m, b]
++            a, va = m, vm
++
++    if _sign_at(p, b) == 0:
++        return b
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    p = _primitive([int(c) for c in coeffs])
++    if len(p) <= 1:
++        return []
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if hi < lo:
++        return []
++
++    p = _squarefree_part(p)
++    sequence = _sturm_sequence(p)
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if _sign_at(p, lo) == 0:
++        roots.append(lo)
++
++    # Sturm's theorem on a half-open interval: V(a) - V(b) counts the
++    # distinct roots in (a, b].  The left endpoint is handled explicitly
++    # above, and the right endpoint is included by the count.
++    va = _variations(sequence, lo)
++    vb = _variations(sequence, hi)
++    pending = [(lo, hi, va, vb, va - vb)]
++
++    while pending:
++        a, b, va, vb, count = pending.pop()
++        if count <= 0:
++            continue
++        if count == 1:
++            roots.append(_refine(sequence, a, b, va, vb))
++            continue
++
++        m = (a + b) / 2
++        vm = _variations(sequence, m)
++        left_count = va - vm
++        right_count = count - left_count
++        if right_count > 0:
++            pending.append((m, b, vm, vb, right_count))
++        if left_count > 0:
++            pending.append((a, m, va, vm, left_count))
++
++    roots.sort()
++    return [float(r) for r in roots]

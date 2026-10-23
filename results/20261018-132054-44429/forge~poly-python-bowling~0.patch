@@ -1,0 +1,93 @@
+diff --git a/bowling.py b/bowling.py
+index de2dbb0..f1db1d6 100644
+--- a/bowling.py
++++ b/bowling.py
+@@ -1,9 +1,85 @@
+ class BowlingGame:
++    """Keep track of the score of a single game of bowling."""
++
+     def __init__(self):
+-        pass
++        self._frames = []
+ 
+     def roll(self, pins):
+-        pass
++        if not isinstance(pins, int) or isinstance(pins, bool):
++            raise ValueError("pins must be an integer")
++        if self._game_over():
++            raise IndexError("cannot roll after the game has ended")
++        if pins < 0 or pins > 10:
++            raise ValueError("pins must be between 0 and 10")
++
++        if not self._frames or self._frame_complete(len(self._frames) - 1):
++            self._frames.append([])
++
++        frame_index = len(self._frames) - 1
++        frame = self._frames[frame_index]
++
++        if frame_index < 9:
++            if frame and frame[0] + pins > 10:
++                raise ValueError(
++                    "two rolls in a frame cannot score more than 10 points"
++                )
++            frame.append(pins)
++        else:
++            self._roll_tenth_frame(frame, pins)
+ 
+     def score(self):
+-        pass
++        if not self._game_over():
++            raise IndexError("cannot score an incomplete game")
++
++        rolls = [pins for frame in self._frames for pins in frame]
++        total = 0
++        index = 0
++        for _ in range(10):
++            if rolls[index] == 10:
++                total += 10 + rolls[index + 1] + rolls[index + 2]
++                index += 1
++            elif rolls[index] + rolls[index + 1] == 10:
++                total += 10 + rolls[index + 2]
++                index += 2
++            else:
++                total += rolls[index] + rolls[index + 1]
++                index += 2
++        return total
++
++    def _roll_tenth_frame(self, frame, pins):
++        if len(frame) == 0:
++            frame.append(pins)
++        elif len(frame) == 1:
++            if frame[0] != 10 and frame[0] + pins > 10:
++                raise ValueError(
++                    "two rolls in a frame cannot score more than 10 points"
++                )
++            frame.append(pins)
++        else:
++            first, second = frame
++            if first == 10:
++                if second != 10 and second + pins > 10:
++                    raise ValueError(
++                        "two rolls in a frame cannot score more than 10 points"
++                    )
++                frame.append(pins)
++            elif first + second == 10:
++                frame.append(pins)
++            else:
++                raise IndexError("cannot roll after the game has ended")
++
++    def _frame_complete(self, index):
++        frame = self._frames[index]
++        if index < 9:
++            return len(frame) == 2 or (len(frame) == 1 and frame[0] == 10)
++        if len(frame) >= 3:
++            return True
++        if len(frame) < 2:
++            return False
++        first, second = frame
++        if first == 10:
++            return False
++        return first + second != 10
++
++    def _game_over(self):
++        return len(self._frames) == 10 and self._frame_complete(9)

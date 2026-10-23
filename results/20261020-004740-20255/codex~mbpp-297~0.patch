@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index eddef7b..ecc177e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,10 @@
+ def flatten_list(list1):
+-    pass
++    flattened = []
++
++    for item in list1:
++        if isinstance(item, list):
++            flattened.extend(flatten_list(item))
++        else:
++            flattened.append(item)
++
++    return flattened

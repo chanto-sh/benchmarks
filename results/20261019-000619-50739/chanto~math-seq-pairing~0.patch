@@ -1,0 +1,112 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..eb71098 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,104 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The encoding works on bit strings.  Every non-negative integer corresponds
++bijectively to a finite bit string via the usual ``1`` sentinel:
++
++    0 -> ""  (and 1 -> "1", 2 -> "0", 3 -> "00", 4 -> "01", ...)
++
++Within a bit string, all elements except the last are written using Elias
++gamma codes.  Those codes are prefix-free, so a left-to-right parser can
++consume them unambiguously.  Whatever suffix remains is not a complete gamma
++code; the last list element is the rank of that suffix in the ordered set of
++all such incomplete suffixes.  This makes *every* bit string a valid list
++encoding.
++"""
++
++
++def _residual_count_before(length):
++    """Number of incomplete suffixes with fewer than ``length`` bits."""
++    half = length // 2
++    if length & 1:
++        return 3 * (1 << half) - 2
++    return (1 << (half + 1)) - 2
++
++
++def _residual_length(rank):
++    """Length of the residual bit string with the given rank."""
++    half = (rank + 2).bit_length() - 2
++    if rank < 3 * (1 << half) - 2:
++        return 2 * half
++    return 2 * half + 1
++
++
++def _residual_unrank(rank):
++    """The rank-th bit string having no complete Elias gamma prefix."""
++    length = _residual_length(rank)
++    within = rank - _residual_count_before(length)
++    if within == 0:
++        return "0" * length
++
++    width = within.bit_length() - 1
++    tail = within - (1 << width)
++    zeros = length - width - 1
++    tail_bits = bin(tail)[2:].zfill(width) if width else ""
++    return "0" * zeros + "1" + tail_bits
++
++
++def _residual_rank(bits):
++    """Inverse of :func:`_residual_unrank`."""
++    length = len(bits)
++    rank = _residual_count_before(length)
++    first_one = bits.find("1")
++    if first_one < 0:
++        return rank
++
++    width = length - first_one - 1
++    tail = int(bits[first_one + 1:], 2) if width else 0
++    return rank + (1 << width) + tail
++
++
++def _gamma(value):
++    """Elias gamma code of a positive integer."""
++    width = value.bit_length()
++    return "0" * (width - 1) + bin(value)[2:]
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    parts = [_gamma(value + 1) for value in lst[:-1]]
++    parts.append(_residual_unrank(lst[-1]))
++    bits = "".join(parts)
++
++    # Bijection from bit strings to positive integers, leaving 0 for [].
++    return int("1" + bits, 2)
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++
++    bits = bin(n)[3:]  # strip "0b1"
++    result = []
++    index = 0
++    length = len(bits)
++
++    while index < length:
++        first_one = bits.find("1", index)
++        if first_one < 0:
++            break
++
++        zeros = first_one - index
++        end = index + 2 * zeros + 1
++        if end > length:
++            break
++
++        value = int(bits[index:end], 2)
++        result.append(value - 1)
++        index = end
++
++    result.append(_residual_rank(bits[index:]))
++    return result

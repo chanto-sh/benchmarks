@@ -1,0 +1,140 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..b532b71 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,133 @@
++import re
++
++
+ class StackUnderflowError(Exception):
+-    pass
++    """Exception raised when the stack does not hold enough items."""
++
++
++_NUMBER_PATTERN = re.compile(r"^-?\d+$")
++
++
++def _is_number(token):
++    return _NUMBER_PATTERN.match(token) is not None
++
++
++def _require(stack, count):
++    if len(stack) < count:
++        raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _add(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left + right)
++
++
++def _subtract(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left - right)
++
++
++def _multiply(stack):
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left * right)
++
++
++def _divide(stack):
++    _require(stack, 2)
++    divisor = stack.pop()
++    dividend = stack.pop()
++    if divisor == 0:
++        raise ZeroDivisionError("divide by zero")
++    # Integer division truncating towards zero.
++    quotient = abs(dividend) // abs(divisor)
++    if (dividend < 0) != (divisor < 0):
++        quotient = -quotient
++    stack.append(quotient)
++
++
++def _dup(stack):
++    _require(stack, 1)
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    _require(stack, 1)
++    stack.pop()
++
++
++def _swap(stack):
++    _require(stack, 2)
++    stack[-1], stack[-2] = stack[-2], stack[-1]
++
++
++def _over(stack):
++    _require(stack, 2)
++    stack.append(stack[-2])
++
++
++_BUILTINS = {
++    "+": _add,
++    "-": _subtract,
++    "*": _multiply,
++    "/": _divide,
++    "dup": _dup,
++    "drop": _drop,
++    "swap": _swap,
++    "over": _over,
++}
++
++
++def _execute(token, stack, dictionary):
++    if _is_number(token):
++        stack.append(int(token))
++    elif token in dictionary:
++        for word in dictionary[token]:
++            _execute(word, stack, dictionary)
++    elif token in _BUILTINS:
++        _BUILTINS[token](stack)
++    else:
++        raise ValueError("undefined operation")
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    tokens = " ".join(input_data).split()
++    stack = []
++    dictionary = {}
++    index = 0
++
++    while index < len(tokens):
++        token = tokens[index].lower()
++
++        if token == ":":
++            index += 1
++            if index >= len(tokens):
++                raise ValueError("illegal operation")
++            name = tokens[index].lower()
++            if _is_number(name):
++                raise ValueError("illegal operation")
++            index += 1
++
++            body = []
++            while index < len(tokens) and tokens[index].lower() != ";":
++                word = tokens[index].lower()
++                # Bind user-defined words to their definition at definition
++                # time, so later redefinitions do not affect this word.
++                if word in dictionary:
++                    body.extend(dictionary[word])
++                else:
++                    body.append(word)
++                index += 1
++
++            dictionary[name] = body
++        else:
++            _execute(token, stack, dictionary)
++
++        index += 1
++
++    return stack

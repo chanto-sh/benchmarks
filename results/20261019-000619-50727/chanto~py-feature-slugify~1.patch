@@ -1,0 +1,96 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..49f9b00
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,56 @@
++"""Tests for text_utils."""
++
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyTests(unittest.TestCase):
++    def test_documented_examples(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++        self.assertEqual(slugify("!!!"), "")
++
++    def test_lowercases(self):
++        self.assertEqual(slugify("ABC"), "abc")
++
++    def test_accents_are_ascii_folded(self):
++        self.assertEqual(slugify("ñandú über"), "nandu-uber")
++        self.assertEqual(slugify("Ça va, garçon"), "ca-va-garcon")
++
++    def test_runs_of_separators_collapse(self):
++        self.assertEqual(slugify("one...two!!!three"), "one-two-three")
++
++    def test_leading_and_trailing_separators_removed(self):
++        self.assertEqual(slugify("-- Hello --"), "hello")
++
++    def test_no_letters_or_digits(self):
++        self.assertEqual(slugify(""), "")
++        self.assertEqual(slugify(" \t-__! "), "")
++        self.assertEqual(slugify("日本語"), "")
++
++    def test_non_ascii_between_words_becomes_hyphen(self):
++        self.assertEqual(slugify("a☕b"), "a-b")
++
++    def test_max_length_cuts_at_hyphen_boundary(self):
++        self.assertEqual(slugify("hello wonderful world", max_length=11), "hello")
++        self.assertEqual(slugify("hello-world", max_length=6), "hello")
++        self.assertEqual(slugify("hello-world", max_length=7), "hello")
++
++    def test_max_length_without_hyphen_boundary(self):
++        self.assertEqual(slugify("abcdef", max_length=3), "abc")
++
++    def test_max_length_longer_than_slug(self):
++        self.assertEqual(slugify("hi there", max_length=100), "hi-there")
++
++    def test_max_length_zero(self):
++        self.assertEqual(slugify("hello", max_length=0), "")
++
++    def test_never_ends_with_hyphen(self):
++        self.assertEqual(slugify("hello world", max_length=6), "hello")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..f95b81c 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,8 @@
+ """Text helpers."""
+ 
++import re
++import unicodedata
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +23,19 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    decomposed = unicodedata.normalize("NFKD", text)
++    without_marks = "".join(
++        char for char in decomposed if not unicodedata.combining(char)
++    )
++    slug = re.sub(r"[^a-z0-9]+", "-", without_marks.lower()).strip("-")
++
++    if max_length is not None and len(slug) > max_length:
++        if max_length <= 0:
++            return ""
++        slug = slug[:max_length]
++        boundary = slug.rfind("-")
++        if boundary > 0:
++            slug = slug[:boundary]
++        slug = slug.rstrip("-")
++
++    return slug

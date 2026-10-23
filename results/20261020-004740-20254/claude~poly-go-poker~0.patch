@@ -1,0 +1,214 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..a6294b2 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,208 @@
+ package poker
+ 
++import (
++	"fmt"
++	"sort"
++	"strings"
++)
++
++type card struct {
++	rank int
++	suit rune
++}
++
++var validSuits = map[rune]bool{
++	'♤': true,
++	'♡': true,
++	'♢': true,
++	'♧': true,
++}
++
++var rankValues = map[string]int{
++	"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8,
++	"9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14,
++}
++
++// handValue is the comparable strength of a hand: a category plus the
++// tie-breaking ranks in order of significance.
++type handValue struct {
++	category int
++	kickers  []int
++}
++
++const (
++	highCard = iota
++	onePair
++	twoPair
++	threeOfAKind
++	straight
++	flush
++	fullHouse
++	fourOfAKind
++	straightFlush
++)
++
++func parseCard(s string) (card, error) {
++	runes := []rune(s)
++	if len(runes) != 2 && len(runes) != 3 {
++		return card{}, fmt.Errorf("invalid card %q", s)
++	}
++	rank, ok := rankValues[string(runes[:len(runes)-1])]
++	if !ok {
++		return card{}, fmt.Errorf("invalid rank in card %q", s)
++	}
++	suit := runes[len(runes)-1]
++	if !validSuits[suit] {
++		return card{}, fmt.Errorf("invalid suit in card %q", s)
++	}
++	return card{rank: rank, suit: suit}, nil
++}
++
++func parseHand(hand string) ([5]card, error) {
++	var cards [5]card
++	parts := strings.Split(hand, " ")
++	if len(parts) != 5 {
++		return cards, fmt.Errorf("invalid hand %q: expected 5 cards, got %d", hand, len(parts))
++	}
++	for i, part := range parts {
++		c, err := parseCard(part)
++		if err != nil {
++			return cards, err
++		}
++		cards[i] = c
++	}
++	return cards, nil
++}
++
++func without(ranks []int, rank int) []int {
++	out := make([]int, 0, len(ranks))
++	for _, r := range ranks {
++		if r != rank {
++			out = append(out, r)
++		}
++	}
++	return out
++}
++
++// straightHigh reports the high card of a straight and whether the ranks
++// form one. An ace may play low for the wheel (A-2-3-4-5), in which case
++// the high card is the five.
++func straightHigh(ranksDesc []int) (int, bool) {
++	unique := make([]int, 0, 5)
++	for _, r := range ranksDesc {
++		if len(unique) == 0 || unique[len(unique)-1] != r {
++			unique = append(unique, r)
++		}
++	}
++	if len(unique) != 5 {
++		return 0, false
++	}
++	if unique[0]-unique[4] == 4 {
++		return unique[0], true
++	}
++	if unique[0] == 14 && unique[1] == 5 && unique[2] == 4 && unique[3] == 3 && unique[4] == 2 {
++		return 5, true
++	}
++	return 0, false
++}
++
++func evaluate(cards [5]card) handValue {
++	ranks := make([]int, len(cards))
++	isFlush := true
++	for i, c := range cards {
++		ranks[i] = c.rank
++		if c.suit != cards[0].suit {
++			isFlush = false
++		}
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(ranks)))
++
++	high, isStraight := straightHigh(ranks)
++
++	type group struct {
++		rank  int
++		count int
++	}
++	counts := map[int]int{}
++	for _, r := range ranks {
++		counts[r]++
++	}
++	groups := make([]group, 0, len(counts))
++	for r, n := range counts {
++		groups = append(groups, group{rank: r, count: n})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count != groups[j].count {
++			return groups[i].count > groups[j].count
++		}
++		return groups[i].rank > groups[j].rank
++	})
++
++	switch {
++	case isFlush && isStraight:
++		return handValue{straightFlush, []int{high}}
++	case groups[0].count >= 4:
++		return handValue{fourOfAKind, append([]int{groups[0].rank}, without(ranks, groups[0].rank)...)}
++	case groups[0].count == 3 && len(groups) > 1 && groups[1].count >= 2:
++		return handValue{fullHouse, []int{groups[0].rank, groups[1].rank}}
++	case isFlush:
++		return handValue{flush, ranks}
++	case isStraight:
++		return handValue{straight, []int{high}}
++	case groups[0].count == 3:
++		return handValue{threeOfAKind, append([]int{groups[0].rank}, without(ranks, groups[0].rank)...)}
++	case groups[0].count == 2 && len(groups) > 2 && groups[1].count == 2:
++		return handValue{twoPair, []int{groups[0].rank, groups[1].rank, groups[2].rank}}
++	case groups[0].count == 2:
++		return handValue{onePair, append([]int{groups[0].rank}, without(ranks, groups[0].rank)...)}
++	default:
++		return handValue{highCard, ranks}
++	}
++}
++
++// compare returns a positive number when v beats other, a negative number
++// when other beats v, and zero when they tie.
++func (v handValue) compare(other handValue) int {
++	if v.category != other.category {
++		return v.category - other.category
++	}
++	for i := 0; i < len(v.kickers) && i < len(other.kickers); i++ {
++		if v.kickers[i] != other.kickers[i] {
++			return v.kickers[i] - other.kickers[i]
++		}
++	}
++	return 0
++}
++
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	var (
++		best  []string
++		found bool
++		top   handValue
++	)
++
++	for _, hand := range hands {
++		cards, err := parseHand(hand)
++		if err != nil {
++			return nil, err
++		}
++		value := evaluate(cards)
++
++		switch {
++		case !found:
++			best = []string{hand}
++			top = value
++			found = true
++		case value.compare(top) > 0:
++			best = []string{hand}
++			top = value
++		case value.compare(top) == 0:
++			best = append(best, hand)
++		}
++	}
++
++	if best == nil {
++		best = []string{}
++	}
++	return best, nil
+ }

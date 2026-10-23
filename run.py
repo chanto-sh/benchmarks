@@ -49,8 +49,22 @@ CHECKOUT_NAMES = "|".join(sorted({"bench", "[^/]*benchmarks", re.sub(r"([.^$*+?(
 NPM_BIN = Path(os.environ.get("BENCH_NPM_BIN", Path.home() / ".local/share/chanto-bench/agents/node_modules/.bin"))
 # cline ships its launcher outside .bin, so name it directly.
 CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "bin" / "cline"))
-AGENT_INSTALLS = [NPM_BIN.parent.parent, Path.home() / ".local/share/uv/tools/aider-chat",
-                  Path.home() / ".local/share/uv/tools/openhands"]
+# Agents shipped as standalone binaries (opencode, goose), pinned and checksummed.
+BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", Path.home() / ".local/share/chanto-bench/bin"))
+# Python agents installed with `uv tool install`, each in its own environment.
+UV_TOOLS = Path.home() / ".local/share/uv/tools"
+AGENT_INSTALLS = [NPM_BIN.parent.parent, BIN_DIR, UV_TOOLS / "aider-chat", UV_TOOLS / "openhands"]
+
+
+def agent_exe(name):
+    """The benchmark's own pinned install of an agent: the npm prefix, the
+    binaries directory, or its uv tool environment. A copy on the user's PATH is
+    only the fallback, so a global upgrade can't change what a run measures."""
+    tool = {"aider": "aider-chat"}.get(name, name)
+    for p in (NPM_BIN / name, BIN_DIR / name, UV_TOOLS / tool / "bin" / name):
+        if p.exists():
+            return str(p)
+    return name
 # BENCH_CHANTO_BIN pins a frozen build for long runs (so rebuilding doesn't change it mid-run).
 CHANTO_BIN = Path(os.environ.get("BENCH_CHANTO_BIN", CHANTO_REPO / "target" / "release" / "chanto"))
 
@@ -146,25 +160,25 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
                                    "models": {model: {"name": model, "tools": True}}}},
             "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         }))
-        return ["opencode", "run", "--standalone", "--auto", "-m", f"bench/{model}", prompt], {
+        return [agent_exe("opencode"), "run", "--standalone", "--auto", "-m", f"bench/{model}", prompt], {
             "OPENCODE_CONFIG": str(cfg), "XDG_CONFIG_HOME": str(home("opencode") / "xdg"), "XDG_DATA_HOME": str(home("opencode") / "data")}
     if agent == "claude":
         env = {"ANTHROPIC_BASE_URL": API, "ANTHROPIC_AUTH_TOKEN": API_KEY, "ANTHROPIC_API_KEY": "", "ANTHROPIC_MODEL": model,
                "ANTHROPIC_DEFAULT_HAIKU_MODEL": model, "ANTHROPIC_DEFAULT_SONNET_MODEL": model, "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
                "CLAUDE_CODE_SUBAGENT_MODEL": model, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CONFIG_DIR": str(home("claude"))}
-        return ["claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
+        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
     if agent == "codex":
         (home("codex") / "config.toml").write_text(
             f'model_provider = "bench"\n[model_providers.bench]\nname = "bench"\nbase_url = "{v1}"\nenv_key = "BENCH_API_KEY"\nwire_api = "responses"\n')
-        return ["codex", "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {
+        return [agent_exe("codex"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {
             "CODEX_HOME": str(home("codex")), "BENCH_API_KEY": API_KEY}
     if agent == "aider":
         files = source_files(wd) if wd else []
-        return ["aider", "--model", f"openai/{model}", "--yes-always", "--no-auto-commits", "--no-check-update", "--analytics-disable",
+        return [agent_exe("aider"), "--model", f"openai/{model}", "--yes-always", "--no-auto-commits", "--no-check-update", "--analytics-disable",
                 "--no-show-model-warnings", "--no-pretty", "--no-stream", "--no-gitignore", "--message", prompt, *files], {
             "OPENAI_API_BASE": v1, "OPENAI_API_KEY": API_KEY, "AIDER_HOME": str(home("aider"))}
     if agent == "goose":
-        return ["goose", "run", "--no-session", "--quiet", "-t", prompt], {
+        return [agent_exe("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
             "GOOSE_PROVIDER": "openai", "GOOSE_MODEL": model, "OPENAI_HOST": API, "OPENAI_API_KEY": API_KEY, "GOOSE_MODE": "auto",
             "GOOSE_DISABLE_KEYRING": "1", "XDG_CONFIG_HOME": str(home("goose") / "xdg"), "XDG_DATA_HOME": str(home("goose") / "data"),
             "XDG_STATE_HOME": str(home("goose") / "state")}
@@ -258,7 +272,7 @@ model_id = "{model}"
         # --override-with-envs takes the model from LLM_* (LiteLLM naming, so
         # openai/<model> against the proxy). Its own HOME keeps ~/.openhands apart.
         h = home("openhands")
-        return ["openhands", "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
+        return [agent_exe("openhands"), "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
             "HOME": str(h), "LLM_MODEL": f"openai/{model}", "LLM_BASE_URL": v1, "LLM_API_KEY": API_KEY,
             "OPENHANDS_SUPPRESS_BANNER": "1"}
     raise SystemExit(f"agent {agent} has no hosted (--api) configuration")
@@ -291,7 +305,7 @@ def agent_cmd(agent, model, prompt, ctx, wd=None):
                                     "models": {model: {"name": model, "tools": True, "reasoning": True}}}},
             "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         }))
-        return ["opencode", "run", "--standalone", "--auto", "-m", f"ollama/{model}", prompt], {
+        return [agent_exe("opencode"), "run", "--standalone", "--auto", "-m", f"ollama/{model}", prompt], {
             "OPENCODE_CONFIG": str(cfg), "XDG_CONFIG_HOME": str(home("opencode") / "xdg"), "XDG_DATA_HOME": str(home("opencode") / "data")}
     if agent == "claude":
         env = {
@@ -306,21 +320,21 @@ def agent_cmd(agent, model, prompt, ctx, wd=None):
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CONFIG_DIR": str(home("claude")),
         }
-        return ["claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
+        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
     if agent == "codex":
         # Codex's local mode looks the model up by exact tag (and tries to pull it otherwise).
-        return ["codex", "exec", "--oss", "--local-provider", "ollama", "-m", model if ":" in model else f"{model}:latest",
+        return [agent_exe("codex"), "exec", "--oss", "--local-provider", "ollama", "-m", model if ":" in model else f"{model}:latest",
                 "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {"CODEX_HOME": str(home("codex"))}
     if agent == "aider":
         settings = home("aider") / "model-settings.yml"
         settings.write_text(f"- name: ollama_chat/{model}\n  extra_params:\n    num_ctx: {ctx}\n")
         files = source_files(wd) if wd else []
-        return ["aider", "--model", f"ollama_chat/{model}", "--model-settings-file", str(settings), "--yes-always",
+        return [agent_exe("aider"), "--model", f"ollama_chat/{model}", "--model-settings-file", str(settings), "--yes-always",
                 "--no-auto-commits", "--no-check-update", "--analytics-disable", "--no-show-model-warnings",
                 "--no-pretty", "--no-stream", "--no-gitignore", "--message", prompt, *files], {
             "OLLAMA_API_BASE": "http://127.0.0.1:11434", "AIDER_HOME": str(home("aider"))}
     if agent == "goose":
-        return ["goose", "run", "--no-session", "--quiet", "-t", prompt], {
+        return [agent_exe("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
             "GOOSE_PROVIDER": "ollama", "GOOSE_MODEL": model, "OLLAMA_HOST": "http://localhost:11434",
             "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1", "XDG_CONFIG_HOME": str(home("goose") / "xdg"),
             "XDG_DATA_HOME": str(home("goose") / "data"), "XDG_STATE_HOME": str(home("goose") / "state")}
@@ -859,13 +873,12 @@ def run_task(agent, task, model, ctx, timeout, rep):
 ARTIFACTS = None
 
 VERSION_CMDS = {
-    "claude": ["claude", "--version"], "codex": ["codex", "--version"], "opencode": ["opencode", "--version"],
-    "goose": ["goose", "--version"], "aider": ["aider", "--version"],
+    **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands")},
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],
     "forge": [str(NPM_BIN / "forge"), "--version"],
     "cline": [str(CLINE_BIN), "--version"],
-    "cn": [str(NPM_BIN / "cn"), "--version"], "openhands": ["openhands", "--version"],
+    "cn": [str(NPM_BIN / "cn"), "--version"],
 }
 
 

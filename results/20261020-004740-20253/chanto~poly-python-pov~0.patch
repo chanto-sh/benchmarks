@@ -1,0 +1,51 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..d60733e 100644
+--- a/pov.py
++++ b/pov.py
+@@ -19,7 +19,44 @@ class Tree:
+         return self.__dict__() == other.__dict__()
+ 
+     def from_pov(self, from_node):
+-        pass
++        path = self._path_to_node(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++
++        new_root = path[-1]
++        children = list(new_root.children)
++        if len(path) > 1:
++            children.append(self._reroot_path(path))
++        return Tree(new_root.label, children)
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        reoriented = self.from_pov(from_node)
++        path = reoriented._path_to_node(to_node)
++        if path is None:
++            raise ValueError("No path found")
++        return [node.label for node in path]
++
++    def _reroot_path(self, path):
++        """Build the former ancestors of the new root, as a chain hanging below it."""
++        node = Tree(
++            path[-2].label,
++            [child for child in path[-2].children if child is not path[-1]],
++        )
++        top = node
++        for index in range(len(path) - 3, -1, -1):
++            ancestor = Tree(
++                path[index].label,
++                [child for child in path[index].children if child is not path[index + 1]],
++            )
++            node.children.append(ancestor)
++            node = ancestor
++        return top
++
++    def _path_to_node(self, label):
++        if self.label == label:
++            return [self]
++        for child in self.children:
++            path = child._path_to_node(label)
++            if path is not None:
++                return [self] + path
++        return None

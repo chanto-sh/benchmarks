@@ -1,0 +1,99 @@
+diff --git a/connect.go b/connect.go
+index 8ce4a46..6b3de45 100644
+--- a/connect.go
++++ b/connect.go
+@@ -1,5 +1,93 @@
+ package connect
+ 
++import "errors"
++
++// neighbours lists the six adjacent cells in the offset coordinate system
++// used by the board representation (row r is shifted r positions right).
++var neighbours = [6][2]int{
++	{0, -1}, {0, 1},
++	{-1, 0}, {-1, 1},
++	{1, 0}, {1, -1},
++}
++
+ func ResultOf(lines []string) (string, error) {
+-	panic("Please implement the ResultOf function")
++	if len(lines) == 0 {
++		return "", nil
++	}
++
++	rows := len(lines)
++	cols := len(lines[0])
++	for _, line := range lines {
++		if len(line) != cols {
++			return "", errors.New("invalid board: rows have different lengths")
++		}
++		for i := 0; i < len(line); i++ {
++			switch line[i] {
++			case 'X', 'O', '.':
++			default:
++				return "", errors.New("invalid board: unknown cell")
++			}
++		}
++	}
++
++	xWins := connected(lines, 'X', func(r, c int) bool { return c == 0 }, func(r, c int) bool { return c == cols-1 })
++	oWins := connected(lines, 'O', func(r, c int) bool { return r == 0 }, func(r, c int) bool { return r == rows-1 })
++
++	switch {
++	case xWins && oWins:
++		return "", errors.New("invalid board: both players have won")
++	case xWins:
++		return "X", nil
++	case oWins:
++		return "O", nil
++	default:
++		return "", nil
++	}
++}
++
++// connected reports whether player has a path of stones joining any cell
++// satisfying start to any cell satisfying end.
++func connected(board []string, player byte, start, end func(r, c int) bool) bool {
++	rows := len(board)
++	cols := len(board[0])
++
++	visited := make([][]bool, rows)
++	for i := range visited {
++		visited[i] = make([]bool, cols)
++	}
++
++	type cell struct{ r, c int }
++	var queue []cell
++
++	for r := 0; r < rows; r++ {
++		for c := 0; c < cols; c++ {
++			if board[r][c] == player && start(r, c) {
++				visited[r][c] = true
++				queue = append(queue, cell{r, c})
++			}
++		}
++	}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		if end(cur.r, cur.c) {
++			return true
++		}
++
++		for _, d := range neighbours {
++			nr, nc := cur.r+d[0], cur.c+d[1]
++			if nr < 0 || nr >= rows || nc < 0 || nc >= cols {
++				continue
++			}
++			if visited[nr][nc] || board[nr][nc] != player {
++				continue
++			}
++			visited[nr][nc] = true
++			queue = append(queue, cell{nr, nc})
++		}
++	}
++
++	return false
+ }

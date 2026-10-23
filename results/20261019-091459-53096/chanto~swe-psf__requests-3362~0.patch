@@ -1,0 +1,16 @@
+diff --git a/requests/utils.py b/requests/utils.py
+index 8d17b6b..97fe4d0 100644
+--- a/requests/utils.py
++++ b/requests/utils.py
+@@ -355,6 +355,11 @@ def get_encoding_from_headers(headers):
+     if 'text' in content_type:
+         return 'ISO-8859-1'
+ 
++    if 'application/json' in content_type:
++        # Assume UTF-8 based on RFC 4627: https://tools.ietf.org/html/rfc4627
++        # since the charset was unset.
++        return 'utf-8'
++
+ 
+ def stream_decode_response_unicode(iterator, r):
+     """Stream decodes a iterator."""

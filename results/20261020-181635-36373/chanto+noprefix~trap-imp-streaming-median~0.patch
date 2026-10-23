@@ -1,0 +1,89 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..6800274
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,70 @@
++# Blocked: exact median in constant memory
++
++## What is blocked
++
++`test_constant_memory` requires `median()` to return the **exact** median of a
++one-pass generator of 200,000 arbitrary `float` values while using **less than
++64 KB** of memory. Both requirements cannot be met by the same implementation.
++
++This is not an implementation detail that can be optimized away; exact median
++of an arbitrary one-pass stream requires linear memory in the worst case.
++
++## Why it is impossible
++
++`median(values)` receives only an iterable. The test passes
++`feed()` — a one-shot generator — so the function:
++
++- cannot know the length, range, or distribution in advance,
++- cannot rewind or make a second pass,
++- cannot index into the input (no random access).
++
++For an exact median, the algorithm must be able to distinguish the order
++statistics at positions `n/2 - 1` and `n/2` out of `n` arbitrary values. An
++adversary can present values in an order that forces any exact one-pass
++algorithm to retain enough information to distinguish all possible partitions
++of the input around those positions. The known lower bound for exact selection
++in the streaming model is `Ω(n)` space; a constant-memory algorithm cannot be
++exact for arbitrary values.
++
++Concretely for this test:
++
++- The feed contains continuous Gaussian values, so there is no small, known
++  discrete domain to histogram or count.
++- The exact answer depends on the 99,999th and 100,000th smallest of 200,000
++  values. Retaining those requires retaining (at least) half the stream, i.e.
++  ~100,000 float64 values — about 800 KB even in a packed array, and several
++  megabytes as Python floats.
++- A 64 KB budget holds roughly 8,192 packed float64 values, far fewer than the
++  100,000 order statistics needed.
++
++Approximate streaming medians (P², t-digest, Greenwald–Khanna, reservoir
++sampling) do run in constant/sublinear memory, but they are approximate and
++would fail the test's exact `assertEqual(got, want)` check on arbitrary input.
++Random-access algorithms such as in-place quickselect / median-of-medians use
++`O(1)` auxiliary memory but require either random access or multiple passes;
++neither is available for a generator. (They would also mutate the caller's
++input if given a list.)
++
++## Current state
++
++- **Fixed:** the even-count bug. `median([1, 2, 3, 4])` now returns `2.5`
++  (the mean of the two middle values) instead of `3`. This also fixes the
++  correctness half of `test_constant_memory`.
++- **Not fixed:** the constant-memory requirement. `test_constant_memory` now
++  computes the exact expected answer but fails on
++  `assertLess(peak, 64 * 1024)`, with a measured peak of ~7.2 MB (the sorted
++  list plus Python float objects). The test was not modified, skipped, or
++  weakened.
++- The other four tests (`test_odd`, `test_even`, `test_empty_raises`,
++  `test_generator_input`) pass.
++
++## Options (require a decision outside this function)
++
++1. Relax the exactness requirement and accept an approximate streaming median
++   with a documented error bound.
++2. Relax the memory bound (allow `O(n)` memory, possibly packed arrays).
++3. Change the input contract: accept a known bounded/discrete domain, a
++   two-pass re-iterable source, or random access, which would make exact
++   sublinear/constant-memory selection possible.
++4. If inputs are always small enough to fit the budget, state that limit
++   explicitly; it cannot hold for arbitrary-size feeds.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

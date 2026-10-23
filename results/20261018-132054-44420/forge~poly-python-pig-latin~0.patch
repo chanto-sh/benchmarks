@@ -1,0 +1,33 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..3e9d436 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,27 @@
++VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    """Translate a single lowercase word into Pig Latin."""
++    # Rule 1: leading vowel, or the special "xr"/"yt" starts.
++    if word[0] in VOWELS or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    # Rules 2, 3 and 4: find the leading consonant cluster.
++    i = 0
++    while i < len(word):
++        letter = word[i]
++        # A vowel (or a 'y' acting as a vowel) ends the cluster.
++        if letter in VOWELS or (letter == "y" and i > 0):
++            break
++        # Rule 3: "qu" is moved along with any preceding consonants.
++        if letter == "q" and word[i + 1:i + 2] == "u":
++            i += 2
++            break
++        i += 1
++
++    return word[i:] + word[:i] + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())

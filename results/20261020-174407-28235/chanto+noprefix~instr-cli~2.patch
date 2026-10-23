@@ -1,0 +1,87 @@
+diff --git a/test_cli.py b/test_cli.py
+index d4749b9..1c131d1 100644
+--- a/test_cli.py
++++ b/test_cli.py
+@@ -11,6 +11,30 @@ class CliTest(unittest.TestCase):
+         self.assertEqual(r.returncode, 0)
+         self.assertEqual(len(r.stdout.splitlines()), 5)
+ 
++    def test_list_limit(self):
++        r = run("list", "--limit", "2")
++        self.assertEqual(r.returncode, 0)
++        self.assertEqual(r.stdout.splitlines(), ["1. write report", "2. buy milk"])
++
++    def test_list_limit_beyond_size(self):
++        r = run("list", "--limit", "99")
++        self.assertEqual(r.returncode, 0)
++        self.assertEqual(len(r.stdout.splitlines()), 5)
++
++    def test_list_limit_invalid(self):
++        for value in ("0", "-1", "many"):
++            r = run("list", "--limit", value)
++            self.assertEqual(r.returncode, 2)
++            self.assertEqual(r.stdout, "")
++            self.assertTrue(r.stderr.startswith("error: "))
++            self.assertEqual(len(r.stderr.splitlines()), 1)
++
++    def test_list_limit_missing_value(self):
++        r = run("list", "--limit")
++        self.assertEqual(r.returncode, 2)
++        self.assertEqual(r.stdout, "")
++        self.assertTrue(r.stderr.startswith("error: "))
++
+     def test_unknown(self):
+         r = run("nope")
+         self.assertEqual((r.returncode, r.stderr.strip()), (2, "error: unknown command"))
+diff --git a/todo/cli.py b/todo/cli.py
+index 44d0861..29114aa 100644
+--- a/todo/cli.py
++++ b/todo/cli.py
+@@ -1,13 +1,45 @@
+ import sys
++from typing import List, Optional
+ 
+ ITEMS = ["write report", "buy milk", "call bob", "fix bike", "pay rent"]
+ 
+ 
+-def main(argv=None):
++def parse_limit(args: List[str]) -> Optional[int]:
++    """Return the --limit value from the arguments after ``list``.
++
++    Returns None when no limit was given. Raises ValueError with a message
++    suitable for the user when the option is malformed.
++    """
++    limit = None
++    i = 0
++    while i < len(args):
++        arg = args[i]
++        if arg != "--limit":
++            raise ValueError(f"unknown option: {arg}")
++        if i + 1 >= len(args):
++            raise ValueError("--limit requires a value")
++        try:
++            value = int(args[i + 1])
++        except ValueError:
++            raise ValueError(f"invalid limit: {args[i + 1]}") from None
++        if value < 1:
++            raise ValueError("--limit must be at least 1")
++        limit = value
++        i += 2
++    return limit
++
++
++def main(argv: Optional[List[str]] = None) -> int:
+     args = list(sys.argv[1:] if argv is None else argv)
+     if not args or args[0] != "list":
+         print("error: unknown command", file=sys.stderr)
+         return 2
+-    for i, item in enumerate(ITEMS, 1):
++    try:
++        limit = parse_limit(args[1:])
++    except ValueError as exc:
++        print(f"error: {exc}", file=sys.stderr)
++        return 2
++    items = ITEMS if limit is None else ITEMS[:limit]
++    for i, item in enumerate(items, 1):
+         print(f"{i}. {item}")
+     return 0

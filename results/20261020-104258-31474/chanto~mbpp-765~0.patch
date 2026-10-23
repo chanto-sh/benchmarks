@@ -1,0 +1,24 @@
+diff --git a/solution.py b/solution.py
+index d7fd595..75d1a10 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,16 @@
+-import math 
+-def is_polite(n): 
+-    pass
++def is_polite(n):
++    if n <= 0:
++        return None
++
++    def polite_count(x):
++        # Every positive integer is polite except the powers of two.
++        return x - x.bit_length()
++
++    low, high = 3, 3 * n + 2
++    while low < high:
++        mid = (low + high) // 2
++        if polite_count(mid) >= n:
++            high = mid
++        else:
++            low = mid + 1
++    return low

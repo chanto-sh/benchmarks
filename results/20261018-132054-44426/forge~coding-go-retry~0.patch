@@ -1,0 +1,105 @@
+diff --git a/retry.go b/retry.go
+index f93e1fc..d87492e 100644
+--- a/retry.go
++++ b/retry.go
+@@ -3,6 +3,7 @@ package retry
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"time"
+ )
+ 
+@@ -25,9 +26,47 @@ func (p *permanent) Unwrap() error { return p.err }
+ // (fmt.Errorf("...: %w", retry.Permanent(err))) and is still recognized.
+ func Permanent(err error) error { return &permanent{err} }
+ 
++// maxDelay is the largest representable time.Duration, used in place of Max
++// when no cap was configured.
++const maxDelay = time.Duration(1<<63 - 1)
++
+ func defaultSleep(ctx context.Context, d time.Duration) error {
+-	time.Sleep(d)
+-	return nil
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	if d <= 0 {
++		return nil
++	}
++	t := time.NewTimer(d)
++	defer t.Stop()
++	select {
++	case <-ctx.Done():
++		return ctx.Err()
++	case <-t.C:
++		return nil
++	}
++}
++
++// delayBefore reports the delay that precedes call n+1: Base*2^(n-1), capped
++// at Max. n must be at least 1. The doubling saturates rather than overflowing.
++func delayBefore(base, max time.Duration, n int) time.Duration {
++	if base <= 0 {
++		return 0
++	}
++	if max <= 0 {
++		max = maxDelay
++	}
++	d := base
++	if d >= max {
++		return max
++	}
++	for i := 1; i < n; i++ {
++		if d > max/2 {
++			return max
++		}
++		d *= 2
++	}
++	return d
+ }
+ 
+ // Do calls fn until it returns nil, returns a permanent error, the attempts
+@@ -36,27 +75,34 @@ func defaultSleep(ctx context.Context, d time.Duration) error {
+ // called at all if ctx is already done), and otherwise the last error fn
+ // returned, exactly as fn returned it.
+ func Do(ctx context.Context, p Policy, fn func() error) error {
++	if cerr := ctx.Err(); cerr != nil {
++		return cerr
++	}
++	attempts := p.Attempts
++	if attempts < 1 {
++		attempts = 1
++	}
+ 	sleep := p.Sleep
+ 	if sleep == nil {
+ 		sleep = defaultSleep
+ 	}
+ 	var err error
+-	for n := 1; n <= p.Attempts; n++ {
++	for n := 1; n <= attempts; n++ {
++		if cerr := ctx.Err(); cerr != nil {
++			return cerr
++		}
+ 		err = fn()
+ 		if err == nil {
+ 			return nil
+ 		}
+-		if _, ok := err.(*permanent); ok {
++		var perm *permanent
++		if errors.As(err, &perm) {
+ 			return err
+ 		}
+-		if n == p.Attempts {
++		if n == attempts {
+ 			break
+ 		}
+-		d := p.Base << uint(n-1)
+-		if d > p.Max {
+-			d = p.Max
+-		}
+-		if serr := sleep(ctx, d); serr != nil {
++		if serr := sleep(ctx, delayBefore(p.Base, p.Max, n)); serr != nil {
+ 			return serr
+ 		}
+ 	}

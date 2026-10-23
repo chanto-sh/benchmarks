@@ -1,0 +1,23 @@
+diff --git a/solution.py b/solution.py
+index 451015d..bba928c 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,16 @@
+-def set_left_most_unset_bit(n): 
+-    pass
++def set_left_most_unset_bit(n):
++    # If every bit is set (and for n == 0), there is nothing to change.
++    if (n & (n + 1)) == 0:
++        return n
++
++    # Find the most significant unset bit below the leading set bit.
++    pos = 0
++    count = 0
++    temp = n
++    while temp:
++        if (temp & 1) == 0:
++            pos = count
++        count += 1
++        temp >>= 1
++
++    return n | (1 << pos)

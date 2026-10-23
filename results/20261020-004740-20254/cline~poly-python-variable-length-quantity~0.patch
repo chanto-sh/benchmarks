@@ -1,0 +1,36 @@
+diff --git a/variable_length_quantity.py b/variable_length_quantity.py
+index 41bdcdc..7a1f4bf 100644
+--- a/variable_length_quantity.py
++++ b/variable_length_quantity.py
+@@ -1,6 +1,29 @@
+ def encode(numbers):
+-    pass
++    """Encode a sequence of unsigned 32-bit integers as variable length quantities."""
++    result = []
++    for number in numbers:
++        chunk = [number & 0x7F]
++        number >>= 7
++        while number:
++            chunk.append((number & 0x7F) | 0x80)
++            number >>= 7
++        result.extend(reversed(chunk))
++    return result
+ 
+ 
+ def decode(bytes_):
+-    pass
++    """Decode a sequence of variable length quantity bytes into integers."""
++    result = []
++    value = 0
++    in_sequence = False
++    for byte in bytes_:
++        in_sequence = True
++        value = (value << 7) | (byte & 0x7F)
++        if byte & 0x80:
++            continue
++        result.append(value)
++        value = 0
++        in_sequence = False
++    if in_sequence:
++        raise ValueError("incomplete sequence")
++    return result

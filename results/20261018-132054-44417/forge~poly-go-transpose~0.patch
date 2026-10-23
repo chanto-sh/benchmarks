@@ -1,0 +1,55 @@
+diff --git a/transpose.go b/transpose.go
+index 0db7e6a..08d924a 100644
+--- a/transpose.go
++++ b/transpose.go
+@@ -1,5 +1,49 @@
+ package transpose
+ 
++// Transpose returns the transpose of the given rows of text: rows become
++// columns and columns become rows.
++//
++// Ragged input is handled by treating characters past the end of a short row
++// as blanks (padding on the left) while never padding the output on the right.
++// Consequently an output row only extends as far down as the last input row
++// that actually contains that column, which keeps genuine spaces that appear
++// in the bottom-most row of a column but drops spaces that are merely padding.
+ func Transpose(input []string) []string {
+-	panic("Please implement the Transpose function")
++	if len(input) == 0 {
++		return []string{}
++	}
++
++	rows := make([][]rune, len(input))
++	maxWidth := 0
++	for i, line := range input {
++		rows[i] = []rune(line)
++		if len(rows[i]) > maxWidth {
++			maxWidth = len(rows[i])
++		}
++	}
++
++	transposed := make([]string, 0, maxWidth)
++	for col := 0; col < maxWidth; col++ {
++		// The output row reaches down to the last input row that contains
++		// this column; every row above it is padded with a space.
++		height := 0
++		for i := len(rows) - 1; i >= 0; i-- {
++			if col < len(rows[i]) {
++				height = i + 1
++				break
++			}
++		}
++
++		line := make([]rune, height)
++		for i := 0; i < height; i++ {
++			if col < len(rows[i]) {
++				line[i] = rows[i][col]
++			} else {
++				line[i] = ' '
++			}
++		}
++		transposed = append(transposed, string(line))
++	}
++
++	return transposed
+ }

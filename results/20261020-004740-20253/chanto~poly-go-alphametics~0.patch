@@ -1,0 +1,203 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..e8d3b70 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,197 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++type columnLetter struct {
++	letter int
++	count  int
++}
++
++type solver struct {
++	addends [][]int
++	result  []int
++	leading [26]bool
++
++	// columns[c] lists the distinct letters (with multiplicities) of the
++	// addends in column c, counting from the right.
++	columns [][]columnLetter
++
++	digit [26]int
++	used  [10]bool
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, errors.New("puzzle must contain exactly one ==")
++	}
++
++	s := &solver{}
++	for i := range s.digit {
++		s.digit[i] = -1
++	}
++
++	left := parts[0]
++	for _, word := range strings.Split(left, "+") {
++		word = strings.TrimSpace(word)
++		if word == "" {
++			return nil, errors.New("empty addend")
++		}
++		letters, err := s.wordLetters(word)
++		if err != nil {
++			return nil, err
++		}
++		s.addends = append(s.addends, letters)
++	}
++
++	result := strings.TrimSpace(parts[1])
++	if result == "" {
++		return nil, errors.New("empty result")
++	}
++	letters, err := s.wordLetters(result)
++	if err != nil {
++		return nil, err
++	}
++	s.result = letters
++
++	maxAddendLen := 0
++	for _, addend := range s.addends {
++		if len(addend) > maxAddendLen {
++			maxAddendLen = len(addend)
++		}
++	}
++	if maxAddendLen == 0 {
++		return nil, errors.New("puzzle has no addends")
++	}
++
++	// Build the per-column letter multiplicities.
++	numColumns := maxAddendLen
++	if len(s.result) > numColumns {
++		numColumns = len(s.result)
++	}
++	s.columns = make([][]columnLetter, numColumns)
++	for c := 0; c < maxAddendLen; c++ {
++		var counts [26]int
++		for _, addend := range s.addends {
++			if c < len(addend) {
++				counts[addend[len(addend)-1-c]]++
++			}
++		}
++		for letter := 0; letter < 26; letter++ {
++			if counts[letter] > 0 {
++				s.columns[c] = append(s.columns[c], columnLetter{letter, counts[letter]})
++			}
++		}
++	}
++
++	if !s.solveColumn(0, 0, maxAddendLen) {
++		return nil, errors.New("no solution")
++	}
++
++	solution := make(map[string]int, len(s.digit))
++	for letter := 0; letter < 26; letter++ {
++		if s.digit[letter] >= 0 {
++			solution[string(rune('A'+letter))] = s.digit[letter]
++		}
++	}
++	return solution, nil
++}
++
++func (s *solver) wordLetters(word string) ([]int, error) {
++	letters := make([]int, len(word))
++	for i := 0; i < len(word); i++ {
++		letter := int(word[i] - 'A')
++		if letter < 0 || letter >= 26 {
++			return nil, errors.New("puzzle contains an invalid character")
++		}
++		letters[i] = letter
++	}
++	if len(letters) > 1 {
++		s.leading[letters[0]] = true
++	}
++	return letters, nil
++}
++
++func (s *solver) solveColumn(c, carry, maxAddendLen int) bool {
++	if c >= len(s.result) && c >= maxAddendLen {
++		return carry == 0
++	}
++
++	var column []columnLetter
++	if c < len(s.columns) {
++		column = s.columns[c]
++	}
++
++	var unassigned []columnLetter
++	assignedSum := carry
++	for _, cl := range column {
++		if s.digit[cl.letter] < 0 {
++			unassigned = append(unassigned, cl)
++		} else {
++			assignedSum += s.digit[cl.letter] * cl.count
++		}
++	}
++
++	if len(unassigned) == 0 {
++		return s.finishColumn(c, assignedSum, maxAddendLen)
++	}
++
++	return s.assignColumn(c, carry, maxAddendLen, unassigned, 0, assignedSum)
++}
++
++func (s *solver) assignColumn(c, carry, maxAddendLen int, unassigned []columnLetter, i, sum int) bool {
++	if i == len(unassigned) {
++		return s.finishColumn(c, sum, maxAddendLen)
++	}
++
++	cl := unassigned[i]
++	for d := 0; d < 10; d++ {
++		if s.used[d] || (d == 0 && s.leading[cl.letter]) {
++			continue
++		}
++		s.digit[cl.letter] = d
++		s.used[d] = true
++		if s.assignColumn(c, carry, maxAddendLen, unassigned, i+1, sum+d*cl.count) {
++			return true
++		}
++		s.used[d] = false
++		s.digit[cl.letter] = -1
++	}
++	return false
++}
++
++func (s *solver) finishColumn(c, sum, maxAddendLen int) bool {
++	if c >= len(s.result) {
++		// There is no result digit in this column, so the column sum must
++		// vanish entirely.
++		if sum != 0 {
++			return false
++		}
++		return s.solveColumn(c+1, 0, maxAddendLen)
++	}
++
++	letter := s.result[len(s.result)-1-c]
++	digit := s.digit[letter]
++	wanted := sum % 10
++	if digit >= 0 {
++		if digit != wanted {
++			return false
++		}
++		return s.solveColumn(c+1, sum/10, maxAddendLen)
++	}
++
++	if s.used[wanted] || (wanted == 0 && s.leading[letter]) {
++		return false
++	}
++	s.digit[letter] = wanted
++	s.used[wanted] = true
++	if s.solveColumn(c+1, sum/10, maxAddendLen) {
++		return true
++	}
++	s.used[wanted] = false
++	s.digit[letter] = -1
++	return false
+ }

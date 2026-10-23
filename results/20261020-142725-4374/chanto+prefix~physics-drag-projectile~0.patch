@@ -1,0 +1,211 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..e879fbf 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,204 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) Butcher tableau.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = _A[6] + (0.0,)
++_BSTAR = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++          -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++# Dense-output coefficients (the same ones used by SciPy's RK45).
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0,
++     8663915743.0 / 2820520608.0, -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0,
++     -68118460800.0 / 10900136933.0, 87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0,
++     14199869525.0 / 1410260304.0, -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0,
++     -318862633887.0 / 49829197408.0, 701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0,
++     2019193451.0 / 616988883.0, -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0,
++     -110615467.0 / 29380423.0, 69997945.0 / 29380423.0),
++)
++
++_RTOL = 1.0e-12
++_ATOL = 1.0e-13
++
++# Guard against a runaway integration caused by invalid input.
++_MAX_STEPS = 1_000_000
++
++
++def _deriv(y, vx, vy, k_over_m, g):
++    speed = math.hypot(vx, vy)
++    drag = k_over_m * speed
++    return (vx, vy, -drag * vx, -g - drag * vy)
++
++
++def _root(f, lo, hi, flo, fhi):
++    """Find a sign-change root, using 60 bisections for near machine precision."""
++    if flo == 0.0:
++        return lo
++    if fhi == 0.0:
++        return hi
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        fmid = f(mid)
++        if fmid == 0.0:
++            return mid
++        if (flo < 0.0) != (fmid < 0.0):
++            hi = mid
++            fhi = fmid
++        else:
++            lo = mid
++            flo = fmid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is a point mass launched from height ``h0`` with speed
++    ``v0`` at ``angle_deg`` above the horizontal.  Air resistance is
++    quadratic: ``F = -k |v| v``.  The trajectory is integrated with an
++    adaptive fifth-order Runge-Kutta method, and the apex and ground
++    crossing are located from its dense output.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    t = 0.0
++    x = 0.0
++    y = h0
++    apex = h0
++
++    # A first step small compared with both gravity and drag time scales.
++    accel_scale = g + (k / mass) * v0 * v0
++    dt = min(1.0e-2, max(1.0e-8, 0.01 * max(v0, 1.0) / accel_scale))
++
++    k_over_m = k / mass
++
++    for _ in range(_MAX_STEPS):
++        # Stage derivatives for the current step.
++        stages = []
++        for stage in range(7):
++            sy = y
++            svx = vx
++            svy = vy
++            if stage:
++                row = _A[stage]
++                sy += dt * sum(row[j] * stages[j][1] for j in range(stage))
++                svx += dt * sum(row[j] * stages[j][2] for j in range(stage))
++                svy += dt * sum(row[j] * stages[j][3] for j in range(stage))
++            stages.append(_deriv(sy, svx, svy, k_over_m, g))
++
++        # Fifth-order solution and embedded error estimate.
++        dx = sum(_B[j] * stages[j][0] for j in range(7))
++        dy = sum(_B[j] * stages[j][1] for j in range(7))
++        dvx = sum(_B[j] * stages[j][2] for j in range(7))
++        dvy = sum(_B[j] * stages[j][3] for j in range(7))
++
++        # Use component-wise local error estimates from the embedded pair.
++        new_x = x + dt * dx
++        new_y = y + dt * dy
++        new_vx = vx + dt * dvx
++        new_vy = vy + dt * dvy
++
++        err_sq = 0.0
++        for old, new, derr in (
++            (x, new_x, dx - sum(_BSTAR[j] * stages[j][0] for j in range(7))),
++            (y, new_y, dy - sum(_BSTAR[j] * stages[j][1] for j in range(7))),
++            (vx, new_vx,
++             dvx - sum(_BSTAR[j] * stages[j][2] for j in range(7))),
++            (vy, new_vy,
++             dvy - sum(_BSTAR[j] * stages[j][3] for j in range(7))),
++        ):
++            scale = _ATOL + _RTOL * max(abs(old), abs(new))
++            ratio = dt * derr / scale
++            err_sq += ratio * ratio
++        err = math.sqrt(err_sq / 4.0)
++
++        if not math.isfinite(err):
++            raise ValueError("non-finite trajectory")
++
++        if err <= 1.0:
++            # Dense output: y(t0 + h*u) = y0 + h * sum(P_i(u) * stage_i).
++            q_x = tuple(sum(stages[i][0] * _P[i][j] for i in range(7))
++                        for j in range(4))
++            q_y = tuple(sum(stages[i][1] * _P[i][j] for i in range(7))
++                        for j in range(4))
++            q_vy = tuple(sum(stages[i][3] * _P[i][j] for i in range(7))
++                         for j in range(4))
++
++            def dense(q, base, u):
++                return base + dt * u * (q[0] + u * (q[1] + u * (q[2] + u * q[3])))
++
++            # The apex is the first point where the vertical velocity changes
++            # from upward to downward.
++            u_apex = None
++            if vy > 0.0 and new_vy <= 0.0:
++                u_apex = _root(lambda u: dense(q_vy, vy, u), 0.0, 1.0,
++                               vy, new_vy)
++                apex = max(apex, dense(q_y, y, u_apex))
++
++            # Landing: the first downward crossing of y = 0.  When launching
++            # from the ground, y(0) = 0 is the launch point rather than a
++            # landing, so start the search at the apex of that first step.
++            if new_y <= 0.0 and new_vy < 0.0:
++                if t == 0.0 and y == 0.0:
++                    if u_apex is None:
++                        u_land = 0.0
++                    else:
++                        u_land = _root(
++                            lambda u: dense(q_y, y, u), u_apex, 1.0,
++                            dense(q_y, y, u_apex), new_y)
++                else:
++                    u_land = _root(lambda u: dense(q_y, y, u), 0.0, 1.0,
++                                   y, new_y)
++                return {
++                    "range": dense(q_x, x, u_land),
++                    "apex": apex,
++                    "time": t + dt * u_land,
++                }
++
++            t += dt
++            x = new_x
++            y = new_y
++            vx = new_vx
++            vy = new_vy
++
++            factor = 5.0 if err == 0.0 else min(
++                5.0, max(0.2, 0.9 * err ** -0.2))
++        else:
++            factor = max(0.1, 0.9 * err ** -0.2)
++
++        dt *= factor
++
++    raise RuntimeError("trajectory integration did not converge")

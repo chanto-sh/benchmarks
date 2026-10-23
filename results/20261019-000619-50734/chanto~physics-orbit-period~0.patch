@@ -1,0 +1,212 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..19b2ba4 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,82 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
++
++def _deriv(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _add_scaled(state, h, *terms):
++    """Return state + h * sum(coefficient * derivative)."""
++    out = list(state)
++    for coefficient, derivative in terms:
++        for i in range(4):
++            out[i] += h * coefficient * derivative[i]
++    return tuple(out)
++
++
++def _dopri_step(state, h, accel):
++    """One Dormand-Prince 5(4) step; returns the 5th-order state and error."""
++    k1 = _deriv(state, accel)
++    k2 = _deriv(_add_scaled(state, h, (1 / 5, k1)), accel)
++    k3 = _deriv(_add_scaled(state, h, (3 / 40, k1), (9 / 40, k2)), accel)
++    k4 = _deriv(
++        _add_scaled(state, h, (44 / 45, k1), (-56 / 15, k2), (32 / 9, k3)),
++        accel,
++    )
++    k5 = _deriv(
++        _add_scaled(
++            state,
++            h,
++            (19372 / 6561, k1),
++            (-25360 / 2187, k2),
++            (64448 / 6561, k3),
++            (-212 / 729, k4),
++        ),
++        accel,
++    )
++    k6 = _deriv(
++        _add_scaled(
++            state,
++            h,
++            (9017 / 3168, k1),
++            (-355 / 33, k2),
++            (46732 / 5247, k3),
++            (49 / 176, k4),
++            (-5103 / 18656, k5),
++        ),
++        accel,
++    )
++    y5 = _add_scaled(
++        state,
++        h,
++        (35 / 384, k1),
++        (500 / 1113, k3),
++        (125 / 192, k4),
++        (-2187 / 6784, k5),
++        (11 / 84, k6),
++    )
++    k7 = _deriv(y5, accel)
++    y4 = _add_scaled(
++        state,
++        h,
++        (5179 / 57600, k1),
++        (7571 / 16695, k3),
++        (393 / 640, k4),
++        (-92097 / 339200, k5),
++        (187 / 2100, k6),
++        (1 / 40, k7),
++    )
++    return y5, tuple(y5[i] - y4[i] for i in range(4))
++
++
++def _radial_velocity(state):
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +86,123 @@ def newtonian(gm):
+     return accel
+ 
+ 
++def _circular_period(state, accel):
++    """Return the orbital period if the initial state is circular, else None."""
++    x, y, vx, vy = state
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    if r == 0.0 or speed == 0.0:
++        return None
++
++    angular_momentum = x * vy - y * vx
++    v_tangential = abs(angular_momentum) / r
++    if v_tangential == 0.0:
++        return None
++
++    radial_speed = (x * vx + y * vy) / r
++    ax, ay = accel(x, y)
++    radial_acceleration = (x * ax + y * ay) / r
++    required = v_tangential * v_tangential / r + radial_acceleration
++    scale = v_tangential * v_tangential / r + abs(radial_acceleration)
++
++    if abs(radial_speed) <= 1e-11 * speed and abs(required) <= 1e-11 * scale:
++        return 2.0 * math.pi * r / v_tangential
++    return None
++
++
++def _max_step(state, accel):
++    """Cap a step so an orbit cannot jump over a periapsis unnoticed."""
++    x, y, vx, vy = state
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    acceleration = math.hypot(ax, ay)
++
++    caps = []
++    if speed > 0.0:
++        caps.append(0.2 * r / speed)
++    if acceleration > 0.0:
++        caps.append(0.2 * math.sqrt(r / acceleration))
++    return min(caps) if caps else math.inf
++
++
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    x, y = r0
++    vx, vy = v0
++    state = (float(x), float(y), float(vx), float(vy))
++
++    if math.hypot(x, y) == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    circular = _circular_period(state, accel)
++    if circular is not None:
++        return circular
++
++    rtol = 1e-12
++    atol = 1e-13
++
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    acceleration = math.hypot(ax, ay)
++    h = 1e-3
++    if speed > 0.0:
++        h = min(h, 0.01 * r / speed)
++    if acceleration > 0.0:
++        h = min(h, 0.01 * math.sqrt(r / acceleration))
++
++    t = 0.0
++    g0 = _radial_velocity(state)
++    first_periapsis = None
++
++    for _ in range(500_000):
++        h = min(h, _max_step(state, accel))
++        y1, error = _dopri_step(state, h, accel)
++
++        error_norm = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(state[i]), abs(y1[i]))
++            error_norm += (error[i] / scale) ** 2
++        error_norm = math.sqrt(error_norm / 4.0)
++
++        if error_norm > 1.0:
++            factor = max(0.1, 0.9 * error_norm ** -0.2)
++            h *= factor
++            continue
++
++        g1 = _radial_velocity(y1)
++        t1 = t + h
++
++        if g0 < 0.0 <= g1:
++            # Locate the periapsis within this accepted step by bisection.
++            lo, hi = 0.0, h
++            for _ in range(60):
++                mid = 0.5 * (lo + hi)
++                ymid, _ = _dopri_step(state, mid, accel)
++                if _radial_velocity(ymid) <= 0.0:
++                    lo = mid
++                else:
++                    hi = mid
++                if hi - lo <= 1e-14 * max(1.0, h):
++                    break
++
++            y_event, _ = _dopri_step(state, hi, accel)
++            t_event = t + hi
++            if first_periapsis is None:
++                first_periapsis = t_event
++            else:
++                return t_event - first_periapsis
++
++            t = t_event
++            state = y_event
++            g0 = _radial_velocity(state)
++            h *= 0.9
++            continue
++
++        t = t1
++        state = y1
++        g0 = g1
++        h *= min(5.0, 0.9 * error_norm ** -0.2) if error_norm > 0.0 else 5.0
++
++    raise RuntimeError("could not find two successive periapsis passages")

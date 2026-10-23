@@ -1,0 +1,117 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..f2be602 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,111 @@
+ package twobucket
+ 
++import "errors"
++
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, errors.New("impossible")
++	}
++
++	firstStarts, otherStarts := sizeBucketOne, sizeBucketTwo
++	if startBucket == "two" {
++		firstStarts, otherStarts = sizeBucketTwo, sizeBucketOne
++	}
++	if goalAmount%gcd(firstStarts, otherStarts) != 0 {
++		return "", 0, 0, errors.New("no solution")
++	}
++
++	type state struct {
++		one, two int
++		steps    int
++	}
++
++	start := state{}
++	if startBucket == "one" {
++		start.one = sizeBucketOne
++	} else {
++		start.two = sizeBucketTwo
++	}
++	start.steps = 1
++
++	queue := []state{start}
++	visited := map[[2]int]bool{{start.one, start.two}: true}
++
++	for len(queue) > 0 {
++		current := queue[0]
++		queue = queue[1:]
++
++		if current.one == goalAmount {
++			return "one", current.steps, current.two, nil
++		}
++		if current.two == goalAmount {
++			return "two", current.steps, current.one, nil
++		}
++
++		oneToTwo := min(current.one, sizeBucketTwo-current.two)
++		twoToOne := min(current.two, sizeBucketOne-current.one)
++		nextStates := []state{
++			{sizeBucketOne, current.two, current.steps + 1},
++			{current.one, sizeBucketTwo, current.steps + 1},
++			{0, current.two, current.steps + 1},
++			{current.one, 0, current.steps + 1},
++			{current.one - oneToTwo, current.two + oneToTwo, current.steps + 1},
++			{current.one + twoToOne, current.two - twoToOne, current.steps + 1},
++		}
++
++		for _, next := range nextStates {
++			if !validState(current.one, current.two, next.one, next.two, sizeBucketOne, sizeBucketTwo, startBucket) {
++				continue
++			}
++			key := [2]int{next.one, next.two}
++			if visited[key] {
++				continue
++			}
++			next.steps = current.steps + 1
++			visited[key] = true
++			queue = append(queue, next)
++		}
++	}
++
++	return "", 0, 0, errors.New("no solution")
++}
++
++func validState(oldOne, oldTwo, one, two, sizeOne, sizeTwo int, startBucket string) bool {
++	if one < 0 || one > sizeOne || two < 0 || two > sizeTwo {
++		return false
++	}
++	if one == oldOne && two == oldTwo {
++		return false
++	}
++	if startBucket == "one" {
++		return !(one == 0 && two == sizeTwo)
++	}
++	return !(two == 0 && one == sizeOne)
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
++func gcd(a, b int) int {
++	for b != 0 {
++		a, b = b, a%b
++	}
++	return a
+ }

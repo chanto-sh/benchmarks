@@ -1,0 +1,28 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..b07f54e 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,22 @@
++VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    if word[0] in VOWELS or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    index = 0
++    while index < len(word) and word[index] not in VOWELS:
++        if word[index] == "y" and index > 0:
++            break
++        index += 1
++
++    # Handle "qu": the "u" belongs to the moved cluster.
++    if index > 0 and word[index - 1] == "q" and index < len(word) and word[index] == "u":
++        index += 1
++
++    return word[index:] + word[:index] + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())

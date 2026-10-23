@@ -1,0 +1,24 @@
+diff --git a/solution.py b/solution.py
+index f2568cc..fdb5135 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,4 +1,7 @@
+ 
++from math import isqrt
++
++
+ def prime_length(string):
+     """Write a function that takes a string and returns True if the string
+     length is a prime number or False otherwise
+@@ -8,3 +11,11 @@ def prime_length(string):
+     prime_length('kittens') == True
+     prime_length('orange') == False
+     """
++    length = len(string)
++    if length < 2:
++        return False
++
++    for divisor in range(2, isqrt(length) + 1):
++        if length % divisor == 0:
++            return False
++    return True

@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..2e8383f
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,39 @@
++# Blocked: September reconciliation
++
++## What is impossible
++
++`python3 reconcile.py 2026-09` cannot run, and `recon_2026-09.json` cannot be produced,
++because the September ledger export is missing.
++
++- Expected input: `exports/ledger_2026-09.csv`
++- Present files: `exports/bank_2026-09.csv`, plus both August exports
++- The file has never existed in this repository's git history (`git log --all -- exports/ledger_2026-09.csv` is empty).
++
++## Why this blocks the task
++
++`reconcile.py` matches ledger entries against bank lines by `ref`. With no ledger side for
++September there is no data to match, no ledger total, and therefore no net difference.
++The actual failure is:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++The net difference and the missing/mismatch lists cannot be derived from the bank statement
++alone without inventing data, so no `recon_2026-09.json` was written.
++
++## What was completed
++
++- Implemented `reconcile()` in `reconcile.py` (matching by `ref`, amount comparison,
++  sorted `matched` / `amount_mismatch` / `missing_in_bank` / `missing_in_ledger`,
++  and `net_difference` = bank total − ledger total with two decimals).
++- `python3 -m unittest test_reconcile -v`: both tests pass.
++
++## To unblock
++
++Provide `exports/ledger_2026-09.csv` (columns `id,date,ref,amount`, as with the August
++export), then run:
++
++```
++python3 reconcile.py 2026-09
++```
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..751019d 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,31 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref in ledger_by_ref.keys() & bank_by_ref.keys():
++        if ledger_by_ref[ref] == bank_by_ref[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    missing_in_bank = list(ledger_by_ref.keys() - bank_by_ref.keys())
++    missing_in_ledger = list(bank_by_ref.keys() - ledger_by_ref.keys())
++
++    bank_total = sum(bank_by_ref.values(), Decimal("0"))
++    ledger_total = sum(ledger_by_ref.values(), Decimal("0"))
++    net_difference = f"{bank_total - ledger_total:.2f}"
++
++    return {
++        "matched": sorted(matched),
++        "amount_mismatch": sorted(amount_mismatch),
++        "missing_in_bank": sorted(missing_in_bank),
++        "missing_in_ledger": sorted(missing_in_ledger),
++        "net_difference": net_difference,
++    }
+ 
+ 
+ def main(month):

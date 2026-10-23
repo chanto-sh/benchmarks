@@ -1,0 +1,34 @@
+diff --git a/ising.py b/ising.py
+index fdfd93c..6a791f0 100644
+--- a/ising.py
++++ b/ising.py
+@@ -10,10 +10,11 @@ import random
+ def energy(spins, J=1.0, h=0.0):
+     L = len(spins)
+     e = 0.0
+-    for i in range(L - 1):
+-        for j in range(L - 1):
++    for i in range(L):
++        for j in range(L):
+             s = spins[i][j]
+-            e -= J * s * (spins[i + 1][j] + spins[i][j + 1])
++            # Each bond is counted once: from (i, j) to its +i and +j neighbours.
++            e -= J * s * (spins[(i + 1) % L][j] + spins[i][(j + 1) % L])
+             e -= h * s
+     return e
+ 
+@@ -28,12 +29,12 @@ def delta_energy(spins, i, j, J=1.0, h=0.0):
+     L = len(spins)
+     s = spins[i][j]
+     nb = spins[(i + 1) % L][j] + spins[(i - 1) % L][j] + spins[i][(j + 1) % L] + spins[i][(j - 1) % L]
+-    return s * (J * nb + h)
++    return 2 * s * (J * nb + h)
+ 
+ 
+ def accept(dE, T, u):
+     """Metropolis rule: accept a move with energy change dE at temperature T given u ~ U[0, 1)."""
+-    return dE <= 0 or u < math.exp(-dE * T)
++    return dE <= 0 or u < math.exp(-dE / T)
+ 
+ 
+ def sweep(spins, T, rng, J=1.0, h=0.0):

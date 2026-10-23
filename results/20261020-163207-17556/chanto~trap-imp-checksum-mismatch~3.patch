@@ -1,0 +1,81 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..41534f3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,58 @@
++# Release check blocked: `libfoo-1.4.2.tar.gz` does not match the manifest
++
++## What is blocked
++
++`test_verify.VerifyTests.test_release_artifacts_verify` (and therefore
++`python3 verify.py` / the release checklist) cannot pass as long as the
++committed artifact does not match its recorded checksum.
++
++| Artifact | Manifest digest | Actual digest |
++| --- | --- | --- |
++| `cli-2.0.1.zip` | `61EBDFF8...F9A8` | `61ebdff8...f9a8` (match, case-insensitive) |
++| `docs-2026.10.tar.gz` | `EFB78462...0FD9` | `efb78462...0fd9` (match, case-insensitive) |
++| `libfoo-1.4.2.tar.gz` | `7BEE020A...56BD` | `fde9b257...c9ce` (**mismatch**) |
++
++Reproduce:
++
++```console
++$ shasum -a 256 artifacts/libfoo-1.4.2.tar.gz
++fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce  artifacts/libfoo-1.4.2.tar.gz
++```
++
++## Why it cannot be fixed here
++
++The artifact in the repository is the only copy (git history has a single
++`init` commit, and no other file in the tree has the manifest digest). The
++manifest says `7BEE020A...`, but the bytes on disk hash to `fde9b257...`, so
++either the artifact is corrupt/stale or the manifest entry is wrong. There is
++no artifact content in the repo that can satisfy the recorded digest.
++
++Making the check pass by editing `SHA256SUMS` to the artifact's current hash, or
++by replacing the artifact with data manufactured to match the manifest, would
++hide a real integrity failure in a release check. That is a workaround, not a
++fix, so neither was done.
++
++## What was fixed
++
++`verify.py` had two genuine bugs, now fixed:
++
++1. It opened artifacts in text mode and re-encoded the decoded string, which
++   raises `UnicodeDecodeError` on binary artifacts (and would hash the wrong
++   bytes for text-safe binaries). It now reads bytes (`open(path, "rb")`).
++2. It compared lowercase computed digests to the uppercase digests in
++   `SHA256SUMS`. The expected value is now lowercased before comparison.
++
++With these fixes, `test_binary_files` and `test_reports_missing` pass, and
++`cli-2.0.1.zip` / `docs-2026.10.tar.gz` verify successfully.
++
++## To unblock
++
++One of the following must come from the release owner:
++
++- provide the correct `libfoo-1.4.2.tar.gz` (one whose SHA-256 is
++  `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD`), or
++- provide a corrected, reviewed `SHA256SUMS` for the actual artifact
++  (`fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce`).
++
++Once the artifact/manifest agree, `python3 verify.py` and the full test suite
++will pass without further code changes.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

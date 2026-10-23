@@ -1,0 +1,82 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..4bebf4d 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,63 @@
+ class Zipper:
++    def __init__(self, tree, path=None):
++        self._tree = tree
++        self._path = path or []
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return self._tree["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        tree = dict(self._tree)
++        tree["value"] = value
++        return Zipper(tree, self._path)
+ 
+     def left(self):
+-        pass
+-
+-    def set_left(self):
+-        pass
++        subtree = self._tree["left"]
++        if subtree is None:
++            return None
++        return Zipper(
++            subtree,
++            self._path + [(self._tree["value"], self._tree["right"], "left")],
++        )
++
++    def set_left(self, tree):
++        focus = dict(self._tree)
++        focus["left"] = tree
++        return Zipper(focus, self._path)
+ 
+     def right(self):
+-        pass
+-
+-    def set_right(self):
+-        pass
++        subtree = self._tree["right"]
++        if subtree is None:
++            return None
++        return Zipper(
++            subtree,
++            self._path + [(self._tree["value"], self._tree["left"], "right")],
++        )
++
++    def set_right(self, tree):
++        focus = dict(self._tree)
++        focus["right"] = tree
++        return Zipper(focus, self._path)
+ 
+     def up(self):
+-        pass
++        if not self._path:
++            return None
++        value, sibling, side = self._path[-1]
++        if side == "left":
++            parent = {"value": value, "left": self._tree, "right": sibling}
++        else:
++            parent = {"value": value, "left": sibling, "right": self._tree}
++        return Zipper(parent, self._path[:-1])
+ 
+     def to_tree(self):
+-        pass
++        tree = self._tree
++        for value, sibling, side in reversed(self._path):
++            if side == "left":
++                tree = {"value": value, "left": tree, "right": sibling}
++            else:
++                tree = {"value": value, "left": sibling, "right": tree}
++        return tree

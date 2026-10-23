@@ -1,0 +1,26 @@
+diff --git a/todo/cli.py b/todo/cli.py
+index 44d0861..c519695 100644
+--- a/todo/cli.py
++++ b/todo/cli.py
+@@ -8,6 +8,20 @@ def main(argv=None):
+     if not args or args[0] != "list":
+         print("error: unknown command", file=sys.stderr)
+         return 2
+-    for i, item in enumerate(ITEMS, 1):
++    limit = len(ITEMS)
++    rest = args[1:]
++    if rest:
++        if len(rest) != 2 or rest[0] != "--limit":
++            print("error: unknown option", file=sys.stderr)
++            return 2
++        try:
++            limit = int(rest[1])
++        except ValueError:
++            print("error: limit must be an integer", file=sys.stderr)
++            return 2
++        if limit < 1:
++            print("error: limit must be at least 1", file=sys.stderr)
++            return 2
++    for i, item in enumerate(ITEMS[:limit], 1):
+         print(f"{i}. {item}")
+     return 0

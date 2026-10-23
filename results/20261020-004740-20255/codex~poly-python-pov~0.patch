@@ -1,0 +1,61 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..b061863 100644
+--- a/pov.py
++++ b/pov.py
+@@ -19,7 +19,54 @@ class Tree:
+         return self.__dict__() == other.__dict__()
+ 
+     def from_pov(self, from_node):
+-        pass
++        adjacency = self._adjacency()
++        if from_node not in adjacency:
++            raise ValueError("Tree could not be reoriented")
++
++        def build_tree(label, parent=None):
++            children = [
++                build_tree(child, label)
++                for child in adjacency[label]
++                if child != parent
++            ]
++            return Tree(label, children)
++
++        return build_tree(from_node)
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        adjacency = self._adjacency()
++        if from_node not in adjacency:
++            raise ValueError("Tree could not be reoriented")
++
++        def find_path(node, visited):
++            if node == to_node:
++                return [node]
++
++            visited.add(node)
++            for neighbor in adjacency[node]:
++                if neighbor not in visited:
++                    path = find_path(neighbor, visited)
++                    if path is not None:
++                        return [node] + path
++            return None
++
++        path = find_path(from_node, set())
++        if path is None:
++            raise ValueError("No path found")
++        return path
++
++    def _adjacency(self):
++        child_labels = {}
++        nodes = [self]
++        while nodes:
++            node = nodes.pop()
++            child_labels[node.label] = [child.label for child in node.children]
++            nodes.extend(node.children)
++
++        adjacency = {
++            label: list(children) for label, children in child_labels.items()
++        }
++        for label, children in child_labels.items():
++            for child in children:
++                adjacency[child].append(label)
++        return adjacency

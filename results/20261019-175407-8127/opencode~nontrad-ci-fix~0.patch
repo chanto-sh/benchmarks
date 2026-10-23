@@ -1,0 +1,24 @@
+diff --git a/.ci/pipeline.yml b/.ci/pipeline.yml
+index 05eca23..bd89bf1 100644
+--- a/.ci/pipeline.yml
++++ b/.ci/pipeline.yml
+@@ -4,6 +4,7 @@
+ name: ci
+ env:
+   PYTHONDONTWRITEBYTECODE: "1"
++  APP_SETTINGS: ci
+ jobs:
+   test:
+     env:
+@@ -11,8 +12,8 @@ jobs:
+     steps:
+       - name: Lint
+         run: python3 tools/lint.py service/app
+-      - name: Unit tests
+-        working-directory: services
+-        run: python3 -m unittest discover -s tests -v
+       - name: Generate build info
+         run: python3 tools/gen_build_info.py service/app/_build_info.py
++      - name: Unit tests
++        working-directory: service
++        run: python3 -m unittest discover -s tests -v

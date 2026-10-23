@@ -1,0 +1,23 @@
+diff --git a/solution.py b/solution.py
+index 523a623..79c57a4 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,17 @@
+ def check_min_heap_helper(arr, i):
+-    pass
++    n = len(arr)
++
++    # No children to compare against: this subtree is a valid min heap.
++    if 2 * i + 1 >= n:
++        return True
++
++    # A min heap requires every parent to be <= each of its children.
++    left = 2 * i + 1
++    if arr[i] > arr[left]:
++        return False
++
++    right = 2 * i + 2
++    if right < n and arr[i] > arr[right]:
++        return False
++
++    return check_min_heap_helper(arr, left) and check_min_heap_helper(arr, right)

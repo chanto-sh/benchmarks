@@ -1,0 +1,69 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..1eff7ec 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,21 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _multinomial(total, counts):
++    """Number of distinct orderings of `total` items with given multiplicities.
++
++    Returns 0 when the multiplicities are impossible (negative, or not summing
++    to `total`).
++    """
++    ways = 1
++    remaining = total
++    for c in counts:
++        if c < 0 or c > remaining:
++            return 0
++        ways *= comb(remaining, c)
++        remaining -= c
++    return ways if remaining == 0 else 0
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +23,41 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    # Number of cards actually turned over: either the first green's position
++    # or m, capped by the size of the deck.
++    limit = min(m, n)
++    if limit <= 0:
++        return Fraction(0)
++
++    total = _multinomial(n, (r, b, g))
++    favourable = 0
++
++    # Case 1: the first green sits at position i (1-based) with i <= limit.
++    # The i-1 cards before it are all red/blue; count those with j >= k reds.
++    for i in range(1, limit + 1):
++        before = i - 1  # non-green cards seen before the green
++        for j in range(max(0, k), min(r, before) + 1):
++            blues_used = before - j
++            if blues_used > b:
++                continue
++            prefix = comb(before, j)  # arrange j reds + blues in prefix
++            suffix = _multinomial(n - i, (r - j, b - blues_used, g - 1))
++            favourable += prefix * suffix
++
++    # Case 2: no green among the first `limit` cards, so the deal ran out of
++    # allowed turns (all `limit` cards are red/blue).
++    for j in range(max(0, k), min(r, limit) + 1):
++        blues_used = limit - j
++        if blues_used > b:
++            continue
++        prefix = comb(limit, j)
++        suffix = _multinomial(n - limit, (r - j, b - blues_used, g))
++        favourable += prefix * suffix
++
++    return Fraction(favourable, total)

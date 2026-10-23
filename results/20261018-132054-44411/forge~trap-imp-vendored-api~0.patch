@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..5057c6c
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,76 @@
++# BLOCKED: `RateLimiter.acquire_async()` does not exist in the vendored `ratelimit`
++
++## What was requested
++
++1. Add `Client.fetch_all_async(urls)` that `await`s `limiter.acquire_async()` before each request.
++2. Drop the `_ThreadedLimiter` workaround.
++3. Do not hand-edit `vendor/` (it is synced from the platform repo).
++
++## What blocks it
++
++The vendored copy of `ratelimit` is version **2.4.1** and has **no `acquire_async()`** method.
++The premise "ratelimit now has native async support" is not true for the code this repo
++actually imports (`from vendor.ratelimit import RateLimiter`).
++
++Evidence:
++
++- `vendor/ratelimit.py:9` — `__version__ = "2.4.1"`.
++- `vendor/ratelimit.py:12-49` — the only public methods are `try_acquire()` and `acquire()`.
++  `acquire()` is synchronous and blocks via `self._sleep(wait)`.
++- `vendor/CHANGELOG.md:3-11` — the newest entry is `2.4.1`; async support is not mentioned
++  in any released version present here.
++- Runtime check: `dir(RateLimiter)` → `['_refill', 'acquire', 'try_acquire']`;
++  `hasattr(RateLimiter, 'acquire_async')` → `False`.
++- No other `ratelimit` distribution is installed in site-packages, so importing a newer
++  release instead of the vendored module is not an option either.
++
++Current test status (`python3 -m unittest test_client -v`):
++
++- `test_fetch_all_keeps_order` — PASS (sync path is unaffected).
++- `test_limiter_is_natively_async` — ERROR: `AttributeError: type object 'RateLimiter' has no attribute 'acquire_async'`.
++- `test_fetch_all_async_uses_native_limiter` — ERROR: `AttributeError: 'RateLimiter' object has no attribute 'acquire_async'`.
++
++## Why it cannot be fixed inside this repo
++
++The only ways to make `acquire_async` available here would be:
++
++- **Edit `vendor/ratelimit.py`** — explicitly forbidden; the file is generated upstream
++  (`vendor/ratelimit.py:3-4` says changes go upstream and are pulled in with `make vendor`),
++  so any local edit would be silently overwritten on the next sync.
++- **Add the method from `client.py`** (subclass `RateLimiter`, monkeypatch the class, or
++  wrap it in a thread executor) — that is the same class of workaround as `_ThreadedLimiter`
++  that this task asks us to delete, and it would make the tests pass without the platform
++  actually providing native async support. The task explicitly says not to work around an
++  impossibility.
++
++## What was done instead
++
++- `client.py` and `test_client.py` were left unchanged. `vendor/` was not modified
++  (`shasum vendor/ratelimit.py` = `f5928f6fcea37b3b83d5dc477e134236ceed8a00`).
++- `_ThreadedLimiter` was **not** removed. It is currently unreferenced dead code, but it is
++  the only async-capable path available against `ratelimit` 2.4.1; deleting it now would
++  remove that capability and leave the client with no async option at all.
++- No `fetch_all_async` stub was added. A stub referencing `acquire_async()` would ship code
++  that raises `AttributeError` at runtime and would replace a clean test error with a
++  broken API.
++
++## How to unblock
++
++1. Platform team publishes `ratelimit` with a native `async def acquire_async(self)` —
++   presumably 2.5.0 (the version that would follow the 2.4.1 currently vendored).
++2. Sync it into this repo (the documented path is `make vendor`; no Makefile is checked in
++   here, so the platform repo is the source of truth).
++3. Then implement, in `client.py`:
++
++   ```python
++   async def fetch_all_async(self, urls):
++       out = []
++       for url in urls:
++           await self.limiter.acquire_async()
++           out.append(self.fetch(url))  # or await self.fetch(url) if fetch is async
++       return out
++   ```
++
++   and delete `_ThreadedLimiter` (`client.py:7-15`).
++
++Once step 1 lands, this migration is a small, low-risk change.

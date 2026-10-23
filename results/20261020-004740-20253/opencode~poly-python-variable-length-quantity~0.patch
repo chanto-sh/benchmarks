@@ -1,0 +1,32 @@
+diff --git a/variable_length_quantity.py b/variable_length_quantity.py
+index 41bdcdc..1a7a05b 100644
+--- a/variable_length_quantity.py
++++ b/variable_length_quantity.py
+@@ -1,6 +1,25 @@
+ def encode(numbers):
+-    pass
++    result = []
++    for number in numbers:
++        chunk = [number & 0x7F]
++        number >>= 7
++        while number:
++            chunk.append((number & 0x7F) | 0x80)
++            number >>= 7
++        result.extend(reversed(chunk))
++    return result
+ 
+ 
+ def decode(bytes_):
+-    pass
++    result = []
++    value = 0
++    in_sequence = False
++    for byte in bytes_:
++        value = (value << 7) | (byte & 0x7F)
++        in_sequence = bool(byte & 0x80)
++        if not in_sequence:
++            result.append(value)
++            value = 0
++    if in_sequence:
++        raise ValueError("incomplete sequence")
++    return result

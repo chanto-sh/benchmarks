@@ -1,0 +1,45 @@
+diff --git a/game.py b/game.py
+index 768dec9..77ebafe 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,39 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    if not (1 <= k <= n):
++        raise ValueError("expected 1 <= k <= n")
++
++    # E[p] = 1 + (1/k) * sum_r E[next(p, r)] for transient squares p < n,
++    # with E[n] = 0. Build the linear system A * E = 1.
++    A = [[Fraction(0) for _ in range(n)] for _ in range(n)]
++    for p in range(n):
++        A[p][p] += 1
++        for roll in range(1, k + 1):
++            landed = p + roll
++            nxt = landed if landed <= n else 2 * n - landed
++            if nxt < n:
++                A[p][nxt] -= Fraction(1, k)
++
++    # Gauss-Jordan elimination with exact fractions.
++    aug = [row + [Fraction(1)] for row in A]
++    for col in range(n):
++        pivot = next((r for r in range(col, n) if aug[r][col] != 0), None)
++        if pivot is None:
++            raise ValueError("system is singular")
++        if pivot != col:
++            aug[col], aug[pivot] = aug[pivot], aug[col]
++
++        scale = aug[col][col]
++        for j in range(col, n + 1):
++            aug[col][j] /= scale
++
++        for r in range(n):
++            if r == col:
++                continue
++            factor = aug[r][col]
++            if factor != 0:
++                for j in range(col, n + 1):
++                    aug[r][j] -= factor * aug[col][j]
++
++    return aug[0][n]

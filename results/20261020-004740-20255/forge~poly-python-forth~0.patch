@@ -1,0 +1,161 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..97a3a1d 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,154 @@
++import re
++
++# A number is a sequence of digits, optionally preceded by a minus sign.
++_NUMBER = re.compile(r"-?\d+")
++
++
+ class StackUnderflowError(Exception):
+-    pass
++    """Exception raised when the stack does not hold enough items.
++
++    message: explanation of the error.
++    """
++
++    def __init__(self, message):
++        super().__init__(message)
++        self.message = message
++
++
++def _require(stack, count):
++    """Raise a StackUnderflowError unless the stack holds *count* items."""
++    if len(stack) < count:
++        raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _binary(stack, operation):
++    """Pop two values, apply *operation* and push the result."""
++    _require(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(operation(left, right))
++
++
++def _divide(left, right):
++    if right == 0:
++        raise ZeroDivisionError("divide by zero")
++    quotient = abs(left) // abs(right)
++    return quotient if (left >= 0) == (right >= 0) else -quotient
++
++
++def _add(stack):
++    _binary(stack, lambda left, right: left + right)
++
++
++def _subtract(stack):
++    _binary(stack, lambda left, right: left - right)
++
++
++def _multiply(stack):
++    _binary(stack, lambda left, right: left * right)
++
++
++def _slash(stack):
++    _binary(stack, _divide)
++
++
++def _dup(stack):
++    _require(stack, 1)
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    _require(stack, 1)
++    stack.pop()
++
++
++def _swap(stack):
++    _require(stack, 2)
++    stack[-2], stack[-1] = stack[-1], stack[-2]
++
++
++def _over(stack):
++    _require(stack, 2)
++    stack.append(stack[-2])
++
++
++_BUILTINS = {
++    "+": _add,
++    "-": _subtract,
++    "*": _multiply,
++    "/": _slash,
++    "dup": _dup,
++    "drop": _drop,
++    "swap": _swap,
++    "over": _over,
++}
++
++
++def _compile_token(token, definitions):
++    """Translate a single token into the instructions it stands for.
++
++    Words are looked up at definition time, so later redefinitions do not
++    change the behaviour of an already defined word.
++    """
++    if _NUMBER.fullmatch(token):
++        return [int(token)]
++
++    name = token.lower()
++    if name in definitions:
++        return list(definitions[name])
++    if name in _BUILTINS:
++        return [_BUILTINS[name]]
++
++    raise ValueError("undefined operation")
++
++
++def _execute(instructions, stack):
++    for instruction in instructions:
++        if isinstance(instruction, int):
++            stack.append(instruction)
++        else:
++            instruction(stack)
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    stack = []
++    definitions = {}
++    tokens = [token for line in input_data for token in line.split()]
++
++    index = 0
++    while index < len(tokens):
++        token = tokens[index]
++        name = token.lower()
++
++        if name == ":":
++            # Collect the definition up to the terminating semicolon.
++            index += 1
++            definition = []
++            while index < len(tokens) and tokens[index] != ";":
++                definition.append(tokens[index])
++                index += 1
++            if index >= len(tokens):
++                raise ValueError("undefined operation")
++            if not definition:
++                raise ValueError("illegal operation")
++
++            word, *body = definition
++            if _NUMBER.fullmatch(word):
++                raise ValueError("illegal operation")
++
++            instructions = []
++            for body_token in body:
++                instructions.extend(_compile_token(body_token, definitions))
++            definitions[word.lower()] = instructions
++        elif _NUMBER.fullmatch(token):
++            stack.append(int(token))
++        elif name in definitions:
++            _execute(definitions[name], stack)
++        elif name in _BUILTINS:
++            _BUILTINS[name](stack)
++        else:
++            raise ValueError("undefined operation")
++
++        index += 1
++
++    return stack

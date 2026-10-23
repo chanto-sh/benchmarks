@@ -1,0 +1,89 @@
+diff --git a/matrix.go b/matrix.go
+index 1d957d5..6b0dea6 100644
+--- a/matrix.go
++++ b/matrix.go
+@@ -1,20 +1,79 @@
+ package matrix
+ 
+-// Define the Matrix type here.
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
+ 
++// Matrix represents a matrix of integers, row-major.
++type Matrix [][]int
++
++var errInvalidMatrix = errors.New("invalid matrix")
++
++// New parses a string of whitespace-separated integers into a Matrix.
++// Rows are separated by newlines; every row must have the same number of
++// columns, and every field must be a valid integer.
+ func New(s string) (Matrix, error) {
+-	panic("Please implement the New function")
++	if s == "" {
++		return nil, errInvalidMatrix
++	}
++	lines := strings.Split(s, "\n")
++	m := make(Matrix, 0, len(lines))
++	for _, line := range lines {
++		fields := strings.Fields(line)
++		if len(fields) == 0 {
++			return nil, errInvalidMatrix
++		}
++		if len(m) > 0 && len(fields) != len(m[0]) {
++			return nil, errInvalidMatrix
++		}
++		row := make([]int, len(fields))
++		for i, f := range fields {
++			v, err := strconv.Atoi(f)
++			if err != nil {
++				return nil, errInvalidMatrix
++			}
++			row[i] = v
++		}
++		m = append(m, row)
++	}
++	if len(m) == 0 {
++		return nil, errInvalidMatrix
++	}
++	return m, nil
+ }
+ 
+ // Cols and Rows must return the results without affecting the matrix.
+ func (m Matrix) Cols() [][]int {
+-	panic("Please implement the Cols function")
++	if len(m) == 0 {
++		return nil
++	}
++	cols := make([][]int, len(m[0]))
++	for c := range cols {
++		col := make([]int, len(m))
++		for r := range m {
++			col[r] = m[r][c]
++		}
++		cols[c] = col
++	}
++	return cols
+ }
+ 
+ func (m Matrix) Rows() [][]int {
+-	panic("Please implement the Rows function")
++	rows := make([][]int, len(m))
++	for r := range m {
++		row := make([]int, len(m[r]))
++		copy(row, m[r])
++		rows[r] = row
++	}
++	return rows
+ }
+ 
+ func (m Matrix) Set(row, col, val int) bool {
+-	panic("Please implement the Set function")
++	if len(m) == 0 || row < 0 || row >= len(m) || col < 0 || col >= len(m[row]) {
++		return false
++	}
++	m[row][col] = val
++	return true
+ }

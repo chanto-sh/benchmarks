@@ -1,0 +1,61 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..716faae 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,55 @@
+ MOD = 1_000_000_007
+ 
++# State vector order: [a0, a1, a2, b0, b1, b2]
++# a_r: codes ending in A with r C's modulo 3
++# b_r: codes ending in B or C with r C's modulo 3
++_TRANSITION = (
++    (0, 0, 0, 1, 0, 0),
++    (0, 0, 0, 0, 1, 0),
++    (0, 0, 0, 0, 0, 1),
++    (1, 0, 1, 1, 0, 1),
++    (1, 1, 0, 1, 1, 0),
++    (0, 1, 1, 0, 1, 1),
++)
++
++
++def _mat_mul(left, right):
++    size = len(left)
++    result = [[0] * size for _ in range(size)]
++    for i in range(size):
++        for k in range(size):
++            if left[i][k]:
++                for j in range(size):
++                    result[i][j] = (
++                        result[i][j] + left[i][k] * right[k][j]
++                    ) % MOD
++    return result
++
++
++def _mat_pow(matrix, exponent):
++    size = len(matrix)
++    result = [[int(i == j) for j in range(size)] for i in range(size)]
++    while exponent:
++        if exponent & 1:
++            result = _mat_mul(result, matrix)
++        matrix = _mat_mul(matrix, matrix)
++        exponent >>= 1
++    return result
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("n must be non-negative")
++    if n == 0:
++        return 1
++
++    # Codes of length 1: A, B and C.
++    vector = [1, 0, 0, 1, 1, 0]
++
++    power = _mat_pow(_TRANSITION, n - 1)
++    final = [
++        sum(power[i][j] * vector[j] for j in range(6)) % MOD
++        for i in range(6)
++    ]
++    return (final[0] + final[3]) % MOD

@@ -1,0 +1,123 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..861fc5b 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,117 @@
+ package twobucket
+ 
++import "errors"
++
++type state struct {
++	one, two int
++	steps    int
++}
++
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, errors.New("impossible")
++	}
++	if goalAmount%gcd(sizeBucketOne, sizeBucketTwo) != 0 {
++		return "", 0, 0, errors.New("no solution")
++	}
++
++	var start state
++	if startBucket == "one" {
++		start = state{one: sizeBucketOne, steps: 1}
++	} else {
++		start = state{two: sizeBucketTwo, steps: 1}
++	}
++
++	visited := map[[2]int]bool{{start.one, start.two}: true}
++	queue := []state{start}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		if cur.one == goalAmount {
++			return "one", cur.steps, cur.two, nil
++		}
++		if cur.two == goalAmount {
++			return "two", cur.steps, cur.one, nil
++		}
++
++		for _, next := range transitions(cur, sizeBucketOne, sizeBucketTwo) {
++			// After an action, the starting bucket may not be empty while
++			// the other bucket is full.
++			if startBucket == "one" && next.one == 0 && next.two == sizeBucketTwo {
++				continue
++			}
++			if startBucket == "two" && next.two == 0 && next.one == sizeBucketOne {
++				continue
++			}
++			key := [2]int{next.one, next.two}
++			if visited[key] {
++				continue
++			}
++			visited[key] = true
++			queue = append(queue, state{one: next.one, two: next.two, steps: cur.steps + 1})
++		}
++	}
++
++	return "", 0, 0, errors.New("no solution")
++}
++
++type pair struct {
++	one, two int
++}
++
++func transitions(cur state, sizeOne, sizeTwo int) []pair {
++	result := make([]pair, 0, 6)
++
++	// Fill either bucket.
++	result = append(result, pair{sizeOne, cur.two})
++	result = append(result, pair{cur.one, sizeTwo})
++
++	// Empty either bucket.
++	result = append(result, pair{0, cur.two})
++	result = append(result, pair{cur.one, 0})
++
++	// Pour one into two.
++	pour := min(cur.one, sizeTwo-cur.two)
++	result = append(result, pair{cur.one - pour, cur.two + pour})
++
++	// Pour two into one.
++	pour = min(cur.two, sizeOne-cur.one)
++	result = append(result, pair{cur.one + pour, cur.two - pour})
++
++	// Drop no-op transitions to avoid counting useless steps.
++	valid := result[:0]
++	for _, p := range result {
++		if p.one != cur.one || p.two != cur.two {
++			valid = append(valid, p)
++		}
++	}
++	return valid
++}
++
++func gcd(a, b int) int {
++	for b != 0 {
++		a, b = b, a%b
++	}
++	return a
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
+ }

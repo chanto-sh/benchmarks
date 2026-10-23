@@ -1,0 +1,119 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..6d6bbd4 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,113 @@
+ package bookstore
+ 
++import (
++	"sort"
++	"strconv"
++	"strings"
++)
++
++const bookPrice = 800
++
++// discountPercent[k] is the discount applied to a group of k distinct books.
++var discountPercent = [...]int{0, 0, 5, 10, 20, 25}
++
++// Cost returns the total cost in cents of the given basket, applying the
++// largest possible discount. Book titles are identified by their integer
++// value; any labels are supported, not just 1..5.
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	countsByTitle := make(map[int]int)
++	for _, book := range books {
++		countsByTitle[book]++
++	}
++
++	counts := make([]int, 0, len(countsByTitle))
++	for _, n := range countsByTitle {
++		if n > 0 {
++			counts = append(counts, n)
++		}
++	}
++	counts = normalize(counts)
++
++	return cheapest(counts, make(map[string]int))
++}
++
++// cheapest computes the minimal cost of the multiset described by counts.
++// counts is kept sorted descending, without zero entries, so that equal
++// multisets share a single memo key.
++func cheapest(counts []int, memo map[string]int) int {
++	if len(counts) == 0 {
++		return 0
++	}
++
++	key := memoKey(counts)
++	if cost, ok := memo[key]; ok {
++		return cost
++	}
++
++	best := -1
++	maxGroup := len(counts)
++	if maxGroup > len(discountPercent)-1 {
++		maxGroup = len(discountPercent) - 1
++	}
++
++	for size := 1; size <= maxGroup; size++ {
++		groupCost := size * bookPrice * (100 - discountPercent[size]) / 100
++		for _, group := range combinations(len(counts), size) {
++			remaining := make([]int, len(counts))
++			copy(remaining, counts)
++			for _, i := range group {
++				remaining[i]--
++			}
++			total := groupCost + cheapest(normalize(remaining), memo)
++			if best < 0 || total < best {
++				best = total
++			}
++		}
++	}
++
++	memo[key] = best
++	return best
++}
++
++// normalize sorts counts descending and drops zero entries.
++func normalize(counts []int) []int {
++	result := make([]int, 0, len(counts))
++	for _, n := range counts {
++		if n > 0 {
++			result = append(result, n)
++		}
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(result)))
++	return result
++}
++
++func memoKey(counts []int) string {
++	var sb strings.Builder
++	for _, n := range counts {
++		sb.WriteString(strconv.Itoa(n))
++		sb.WriteByte(',')
++	}
++	return sb.String()
++}
++
++// combinations returns every subset of {0, ..., n-1} containing exactly k
++// elements, in lexicographic order.
++func combinations(n, k int) [][]int {
++	var result [][]int
++	current := make([]int, k)
++	var build func(start, depth int)
++	build = func(start, depth int) {
++		if depth == k {
++			combo := make([]int, k)
++			copy(combo, current)
++			result = append(result, combo)
++			return
++		}
++		for i := start; i < n-(k-depth)+1; i++ {
++			current[depth] = i
++			build(i+1, depth+1)
++		}
++	}
++	build(0, 0)
++	return result
+ }

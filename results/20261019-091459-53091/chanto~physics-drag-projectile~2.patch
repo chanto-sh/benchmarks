@@ -1,0 +1,237 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..e7fdd19 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,230 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_C = (0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0)
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = _A[6]
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _deriv(state, g, drag):
++    """Return (dx/dt, dy/dt, dvx/dt, dvy/dt)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    ax = -drag * speed * vx
++    ay = -g - drag * speed * vy
++    return (vx, vy, ax, ay)
++
++
++def _add_scaled(state, h, coeffs, ks):
++    return tuple(
++        state[i] + h * sum(c * k[i] for c, k in zip(coeffs, ks))
++        for i in range(4)
++    )
++
++
++def _rk45_step(state, h, g, drag):
++    """Take one Dormand-Prince step and return (new_state, error, k1, k7)."""
++    ks = []
++    k1 = _deriv(state, g, drag)
++    ks.append(k1)
++    for stage in range(1, 6):
++        y = _add_scaled(state, h, _A[stage], ks)
++        ks.append(_deriv(y, g, drag))
++
++    y5 = _add_scaled(state, h, _B5, ks)
++    k7 = _deriv(y5, g, drag)
++    ks.append(k7)
++
++    y4 = _add_scaled(state, h, _B4, ks)
++    error = tuple(y5[i] - y4[i] for i in range(4))
++    return y5, error, k1, k7
++
++
++def _hermite5(f0, d0, dd0, f1, d1, dd1, theta, h):
++    """Quintic Hermite interpolation of f and its time derivatives."""
++    t2 = theta * theta
++    t3 = t2 * theta
++    t4 = t3 * theta
++    t5 = t4 * theta
++
++    h00 = 1.0 - 10.0 * t3 + 15.0 * t4 - 6.0 * t5
++    h10 = theta - 6.0 * t3 + 8.0 * t4 - 3.0 * t5
++    h01 = 10.0 * t3 - 15.0 * t4 + 6.0 * t5
++    h11 = -4.0 * t3 + 7.0 * t4 - 3.0 * t5
++    h20 = 0.5 * t2 - 1.5 * t3 + 1.5 * t4 - 0.5 * t5
++    h21 = 0.5 * t3 - t4 + 0.5 * t5
++
++    return (h00 * f0 + h10 * h * d0 + h20 * h * h * dd0 +
++            h01 * f1 + h11 * h * d1 + h21 * h * h * dd1)
++
++
++def _hermite5_dtheta(f0, d0, dd0, f1, d1, dd1, theta, h):
++    """Derivative with respect to theta of the quintic Hermite interpolant."""
++    t2 = theta * theta
++    t3 = t2 * theta
++    t4 = t3 * theta
++
++    dh00 = -30.0 * t2 + 60.0 * t3 - 30.0 * t4
++    dh10 = 1.0 - 18.0 * t2 + 32.0 * t3 - 15.0 * t4
++    dh01 = 30.0 * t2 - 60.0 * t3 + 30.0 * t4
++    dh11 = -12.0 * t2 + 28.0 * t3 - 15.0 * t4
++    dh20 = theta - 4.5 * t2 + 6.0 * t3 - 2.5 * t4
++    dh21 = 1.5 * t2 - 4.0 * t3 + 2.5 * t4
++
++    return (dh00 * f0 + dh10 * h * d0 + dh20 * h * h * dd0 +
++            dh01 * f1 + dh11 * h * d1 + dh21 * h * h * dd1)
++
++
++def _bisect(func, low, high, iterations=80):
++    """Find a sign-changing root on [low, high]."""
++    f_low = func(low)
++    f_high = func(high)
++    if f_low == 0.0:
++        return low
++    if f_high == 0.0:
++        return high
++    if f_low * f_high > 0.0:
++        # The endpoints should bracket a root; fall back to the closest end.
++        return low if abs(f_low) <= abs(f_high) else high
++
++    for _ in range(iterations):
++        mid = 0.5 * (low + high)
++        f_mid = func(mid)
++        if f_mid == 0.0:
++            return mid
++        if f_low * f_mid < 0.0:
++            high = mid
++            f_high = f_mid
++        else:
++            low = mid
++            f_low = f_mid
++    return 0.5 * (low + high)
++
++
++def _vacuum_flight(vx0, vy0, g, h0):
++    """Closed-form trajectory when drag is zero."""
++    disc = math.sqrt(vy0 * vy0 + 2.0 * g * h0)
++    time = (vy0 + disc) / g
++    apex = h0 + (vy0 * vy0) / (2.0 * g) if vy0 > 0.0 else h0
++    return {"range": vx0 * time, "apex": apex, "time": time}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height *h0* with speed *v0* at
++    *angle_deg* above the horizontal.  Air resistance is quadratic,
++    F = -k |v| v, so the equations of motion are integrated numerically.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    angle = math.radians(angle_deg)
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++
++    if k == 0.0:
++        return _vacuum_flight(vx0, vy0, g, h0)
++
++    # If the projectile is already at ground level and not moving upward,
++    # it never "comes back down" to y = 0.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, h0, vx0, vy0)
++    t = 0.0
++
++    # Event values use a quintic Hermite interpolant built from the state
++    # and acceleration at both ends of each accepted step.
++    apex = h0
++    apex_found = vy0 <= 0.0
++
++    # A rough vacuum flight time gives a sensible first step.
++    time_scale = (vy0 + math.sqrt(vy0 * vy0 + 2.0 * g * h0)) / g
++    h = max(1.0e-9, 1.0e-3 * time_scale)
++
++    rtol = 1.0e-11
++    atol = 1.0e-12
++    max_steps = 2_000_000
++
++    for _ in range(max_steps):
++        new_state, error, k1, k7 = _rk45_step(state, h, g, drag)
++
++        # Local error norm, component by component.
++        err_norm = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(state[i]), abs(new_state[i]))
++            err_norm += (error[i] / scale) ** 2
++        err_norm = math.sqrt(err_norm / 4.0)
++
++        if err_norm > 1.0:
++            factor = max(0.2, 0.9 * err_norm ** -0.2)
++            h *= factor
++            continue
++
++        # Ground crossing.  The initial point itself (y == h0 == 0) was
++        # handled above, so a positive-to-nonpositive change is the event.
++        if state[1] > 0.0 and new_state[1] <= 0.0:
++            y0, vy0_step = state[1], state[3]
++            y1, vy1_step = new_state[1], new_state[3]
++            ay0, ay1 = k1[3], k7[3]
++
++            def height(theta):
++                return _hermite5(y0, vy0_step, ay0, y1, vy1_step, ay1,
++                                 theta, h)
++
++            theta = _bisect(height, 0.0, 1.0)
++            range_ = _hermite5(state[0], state[2], k1[2],
++                               new_state[0], new_state[2], k7[2],
++                               theta, h)
++            return {"range": range_, "apex": apex, "time": t + theta * h}
++
++        # First downward crossing of vy marks the apex.
++        if not apex_found and state[3] > 0.0 and new_state[3] <= 0.0:
++            y0, vy0_step = state[1], state[3]
++            y1, vy1_step = new_state[1], new_state[3]
++            ay0, ay1 = k1[3], k7[3]
++
++            def vertical_speed(theta):
++                return _hermite5_dtheta(
++                    y0, vy0_step, ay0, y1, vy1_step, ay1, theta, h
++                ) / h
++
++            theta = _bisect(vertical_speed, 0.0, 1.0)
++            apex = _hermite5(y0, vy0_step, ay0, y1, vy1_step, ay1,
++                             theta, h)
++            apex_found = True
++
++        # Accept the step.
++        t += h
++        state = new_state
++
++        # PI-free standard controller for a method of local order five.
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err_norm ** -0.2
++        factor = min(5.0, max(0.2, factor))
++        h *= factor
++
++    raise RuntimeError("flight integration did not reach the ground")

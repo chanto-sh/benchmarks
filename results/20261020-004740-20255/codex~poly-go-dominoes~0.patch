@@ -1,0 +1,75 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..282b571 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,68 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a domino with a value on each side.
++type Domino [2]int
+ 
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return nil, true
++	}
++
++	type edge struct {
++		to      int
++		domino  Domino
++		edgeIdx int
++	}
++
++	adj := make(map[int][]edge)
++	for i, d := range input {
++		a, b := d[0], d[1]
++		adj[a] = append(adj[a], edge{to: b, domino: Domino{a, b}, edgeIdx: i})
++		adj[b] = append(adj[b], edge{to: a, domino: Domino{b, a}, edgeIdx: i})
++	}
++	for _, edges := range adj {
++		if len(edges)%2 != 0 {
++			return nil, false
++		}
++	}
++
++	start := input[0][0]
++	used := make([]bool, len(input))
++	next := make(map[int]int)
++	vertices := []int{start}
++	trail := make([]Domino, 0, len(input))
++	circuit := make([]Domino, 0, len(input))
++	usedCount := 0
++
++	for len(vertices) > 0 {
++		v := vertices[len(vertices)-1]
++		for next[v] < len(adj[v]) && used[adj[v][next[v]].edgeIdx] {
++			next[v]++
++		}
++
++		if next[v] == len(adj[v]) {
++			vertices = vertices[:len(vertices)-1]
++			if len(trail) > 0 {
++				circuit = append(circuit, trail[len(trail)-1])
++				trail = trail[:len(trail)-1]
++			}
++			continue
++		}
++
++		e := adj[v][next[v]]
++		next[v]++
++		used[e.edgeIdx] = true
++		usedCount++
++		trail = append(trail, e.domino)
++		vertices = append(vertices, e.to)
++	}
++
++	if usedCount != len(input) {
++		return nil, false
++	}
++
++	for i, j := 0, len(circuit)-1; i < j; i, j = i+1, j-1 {
++		circuit[i], circuit[j] = circuit[j], circuit[i]
++	}
++	return circuit, true
+ }

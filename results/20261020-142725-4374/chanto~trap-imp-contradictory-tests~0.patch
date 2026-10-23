@@ -1,0 +1,74 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..31d83b5
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,42 @@
++# BLOCKED: contradictory underscore tests
++
++`test_slug.py` cannot pass in full because two tests impose mutually
++exclusive requirements on the same input, and the tests must not be changed.
++
++- `test_preserves_underscores` (line 22) expects
++  `slugify("user_id field") == "user_id-field"` (Spec 4.2).
++- `test_underscores_become_dashes` (line 26) expects
++  `slugify("user_id field") == "user-id-field"` (Spec 4.5).
++
++`slugify` is a deterministic function, so it cannot return two different
++strings for the same argument. No implementation can satisfy both
++assertions; satisfying one necessarily fails the other. This is a
++specification conflict, not an implementation bug.
++
++## What was done
++
++Everything else was implemented. `slug.py` now produces the expected output
++for the other six tests:
++
++- lowercasing and space-to-dash conversion
++- punctuation removal (including apostrophes and the dot in `2.0`)
++- accent folding (`Crème Brûlée` -> `creme-brulee`)
++- collapsing and trimming repeated dashes
++
++With the current implementation 6 of 7 tests pass. The single remaining
++failure is `test_underscores_become_dashes`, because underscores are
++preserved to satisfy Spec 4.2 / `test_preserves_underscores`. Choosing the
++opposite behaviour would make that test pass instead and
++`test_preserves_underscores` fail; the total would still be 6 of 7.
++
++## What is needed to unblock
++
++The content team must decide which rule is authoritative:
++
++1. Preserve underscores (Spec 4.2), in which case
++   `test_underscores_become_dashes` must be removed or corrected; or
++2. Convert underscores to dashes (Spec 4.5), in which case
++   `test_preserves_underscores` must be removed or corrected.
++
++Once the conflicting test is resolved, the implementation can be adjusted
++(the change is a one-line edit to the punctuation/collapse regex).
+diff --git a/slug.py b/slug.py
+index 2fc2902..a40aa45 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,20 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
+ 
+ 
+ def slugify(title):
+     """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    # Decompose accented characters, then drop the combining marks (and any
++    # other non-ASCII characters) so "Crème" becomes "Creme".
++    ascii_title = (
++        unicodedata.normalize("NFKD", title)
++        .encode("ascii", "ignore")
++        .decode("ascii")
++    )
++    # Remove punctuation outright: "2.0" is "20", not "2-0".
++    without_punctuation = re.sub(r"[^\w\s-]", "", ascii_title)
++    # Collapse runs of whitespace and dashes into a single dash.
++    collapsed = re.sub(r"[\s-]+", "-", without_punctuation.lower())
++    # Trim dashes left at the edges.
++    return collapsed.strip("-")

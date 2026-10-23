@@ -1,0 +1,55 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..9ae9709 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,47 @@
+-
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.board = [line.split() for line in board.splitlines() if line.strip()]
++
++    def _wins(self, player, vertical):
++        """Whether `player` connects top-to-bottom (vertical) or left-to-right."""
++        rows = len(self.board)
++        if rows == 0:
++            return False
++        cols = max(len(row) for row in self.board)
++
++        if vertical:
++            start = [(0, c) for c in range(len(self.board[0])) if self.board[0][c] == player]
++            is_end = lambda r, c: r == rows - 1
++        else:
++            start = [(r, 0) for r in range(rows) if self.board[r] and self.board[r][0] == player]
++            is_end = lambda r, c: c == cols - 1
++
++        seen = set()
++        stack = list(start)
++        while stack:
++            r, c = stack.pop()
++            if (r, c) in seen:
++                continue
++            if not (0 <= r < rows) or not (0 <= c < len(self.board[r])):
++                continue
++            if self.board[r][c] != player:
++                continue
++            seen.add((r, c))
++            if is_end(r, c):
++                return True
++            stack.extend([
++                (r, c - 1),
++                (r, c + 1),
++                (r - 1, c),
++                (r - 1, c + 1),
++                (r + 1, c - 1),
++                (r + 1, c),
++            ])
++        return False
+ 
+     def get_winner(self):
+-        pass
++        if self._wins("O", vertical=True):
++            return "O"
++        if self._wins("X", vertical=False):
++            return "X"
++        return ""

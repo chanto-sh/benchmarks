@@ -1,0 +1,87 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..d068e1c 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,81 @@
+ package bookstore
+ 
++import (
++	"sort"
++	"strconv"
++	"strings"
++)
++
++// groupPrices holds the price in cents for a set of n distinct books,
++// after applying the appropriate discount.
++var groupPrices = [...]int{0, 800, 1520, 2160, 2560, 3000}
++
++// Cost returns the total cost in cents of the given basket of books,
++// applying the grouping that yields the largest possible discount.
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	if len(books) == 0 {
++		return 0
++	}
++
++	counts := make(map[int]int)
++	for _, book := range books {
++		counts[book]++
++	}
++
++	state := make([]int, 0, len(counts))
++	for _, count := range counts {
++		state = append(state, count)
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(state)))
++
++	return cost(state, make(map[string]int))
++}
++
++// cost computes the cheapest price for a multiset of remaining book counts,
++// described by the number of copies left of each distinct title.
++func cost(state []int, memo map[string]int) int {
++	// Sort descending so that the titles with the most copies come first.
++	sort.Sort(sort.Reverse(sort.IntSlice(state)))
++	for len(state) > 0 && state[len(state)-1] == 0 {
++		state = state[:len(state)-1]
++	}
++	if len(state) == 0 {
++		return 0
++	}
++
++	key := stateKey(state)
++	if result, ok := memo[key]; ok {
++		return result
++	}
++
++	best := -1
++	maxGroup := len(state)
++	if maxGroup > 5 {
++		maxGroup = 5
++	}
++
++	for size := 1; size <= maxGroup; size++ {
++		next := make([]int, len(state))
++		copy(next, state)
++		for i := 0; i < size; i++ {
++			next[i]--
++		}
++
++		total := groupPrices[size] + cost(next, memo)
++		if best == -1 || total < best {
++			best = total
++		}
++	}
++
++	memo[key] = best
++	return best
++}
++
++func stateKey(state []int) string {
++	var b strings.Builder
++	for _, count := range state {
++		b.WriteString(strconv.Itoa(count))
++		b.WriteByte(',')
++	}
++	return b.String()
+ }

@@ -1,0 +1,38 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..25abe87
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,32 @@
++## Call sites
++
++- `app/admin/tools.py` — imports `query_raw` as `qr`; `purge_test_customers()` runs a `DELETE` against `customers` for `%@example.test` addresses.
++- `app/billing/invoices.py` — imports `from app import legacy_db`; `unpaid(customer_id)` selects unpaid invoices and tags each row with the configured `CURRENCY`.
++- `app/orders/service.py` — imports `query_raw` directly; `open_orders(customer_id)` selects open orders, and `cancel(order_id)` issues an `UPDATE` (the only write among the call sites).
++
++No other module under `app/` calls `legacy_db.query_raw`. `app/search/index.py` already uses `Session`, and `app/reports/export.py` goes through `query_raw_v2` in `app/db/fastpath.py`, which also delegates to `Session`. `docs/old_notes.md` is stale: it points at `app/inventory/stock.py`, which does not exist.
++
++Before migrating, note that `Session` (`app/db/session.py`) currently exposes only `fetch_all`, and that method raises `NotImplementedError`; there is no execute/commit API yet for `cancel()`. Also, `tests/test_orders.py` patches `app.orders.service.query_raw`, so that patch target has to move with the import.
++
++## Schema
++
++Current schema version: 14
++
++`app/db/schema.py` sets `SCHEMA_VERSION = 14`, matching the latest migration (`app/db/migrations/0014_add_refunds.py`). This migration does not need a new schema version: it replaces a driver/connection layer, and every call site issues existing `SELECT`, `UPDATE`, or `DELETE` statements against existing tables — there is no DDL or data backfill. The commented-out `SCHEMA_VERSION = 15` in `app/db/schema.py` is a separate follow-up (dropping legacy views once `legacy_db` is gone) and is not required for this switch.
++
++## Environment
++
++- `ORDERS_DB_URL` — required (`os.environ[...]`) in `app/settings.py`; the new session layer still needs it as the default for `Session.url`.
++- `ORDERS_DB_POOL` — read in `app/settings.py` with a default of `"5"`; the new session layer still needs it as the default for `Session.pool_size`.
++- `LEGACY_DB_TIMEOUT_S` — read only by `app/legacy_db.py` (default `"30"`) for the per-call connection timeout. The new session layer does not read it and `Session` has no timeout parameter, so its behavior is not carried over.
++- `BILLING_CURRENCY` — read by `app/billing/invoices.py` at import time (default `"EUR"`); unrelated to the session layer, and still needed by billing after the switch.
++
++Not read by application code at runtime: `ORDERS_DB_REPLICA` (commented out in `app/settings.py`), `DB_PASSWORD` (mentioned in `README.md`/`docs/old_notes.md` only), and `ORDERS_TEST_MODE` (tests only).
++
++## Rollback
++
++- This is a code-only change: no schema version change, no DDL, and no data migration. Rollback is reverting the migration commits and redeploying the previous release; the database stays at v14 and needs no down migration.
++- Land the work as separate commits per module (`app/admin/tools.py`, `app/billing/invoices.py`, `app/orders/service.py`) so one module can be reverted without unwinding the rest.
++- Do not delete `app/legacy_db.py` or remove `LEGACY_DB_TIMEOUT_S` in the same change. Keep both for at least one release after cutover so the previous release remains deployable as-is.
++- The only write path is `cancel()`'s `UPDATE`; it is semantically identical through either layer, so a rollback needs no data repair. Do not run old and new paths against the same rows concurrently — revert the deployment fully rather than mixing layers.
++- `ORDERS_DB_URL` and `ORDERS_DB_POOL` are shared by both layers, so no configuration rollback is required; rolling back does not change connection settings.

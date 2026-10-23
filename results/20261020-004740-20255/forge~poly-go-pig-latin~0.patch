@@ -1,0 +1,63 @@
+diff --git a/pig_latin.go b/pig_latin.go
+index 2836af2..27c5250 100644
+--- a/pig_latin.go
++++ b/pig_latin.go
+@@ -1,5 +1,57 @@
+ package piglatin
+ 
++import "strings"
++
++// isVowel reports whether b is one of the vowels a, e, i, o or u.
++func isVowel(b byte) bool {
++	switch b {
++	case 'a', 'e', 'i', 'o', 'u':
++		return true
++	}
++	return false
++}
++
++// translateWord applies the four pig latin rules to a single word.
++func translateWord(word string) string {
++	lower := strings.ToLower(word)
++	if lower == "" {
++		return ""
++	}
++
++	// Rule 1: starts with a vowel, or with "xr"/"yt".
++	if isVowel(lower[0]) || strings.HasPrefix(lower, "xr") || strings.HasPrefix(lower, "yt") {
++		return word + "ay"
++	}
++
++	// Walk the leading consonants.
++	for i := 0; i < len(lower); i++ {
++		if isVowel(lower[i]) {
++			// Rule 2: move the leading consonants to the end.
++			return word[i:] + word[:i] + "ay"
++		}
++
++		// Rule 4: a consonant cluster followed by "y" only moves the letters
++		// before the "y".
++		if lower[i] == 'y' && i > 0 {
++			return word[i:] + word[:i] + "ay"
++		}
++
++		// Rule 3: a consonant cluster (possibly empty) followed by "qu" moves
++		// the consonants and the "qu" together.
++		if lower[i] == 'q' && i+1 < len(lower) && lower[i+1] == 'u' {
++			return word[i+2:] + word[:i+2] + "ay"
++		}
++	}
++
++	// The whole word is consonants.
++	return word + "ay"
++}
++
++// Sentence translates each word of sentence into pig latin.
+ func Sentence(sentence string) string {
+-	panic("Please implement the Sentence function")
++	words := strings.Fields(sentence)
++	for i, word := range words {
++		words[i] = translateWord(word)
++	}
++	return strings.Join(words, " ")
+ }

@@ -1,0 +1,91 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..0903991 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,84 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++_fma = getattr(math, "fma", lambda a, b, c: a * b + c)
++
++
++def _k_minus_m_omega_sq(k, m, omega):
++    """k - m*omega**2, computed with error compensation near resonance."""
++    w2 = omega * omega
++    w2_err = _fma(omega, omega, -w2)
++
++    product = m * w2
++    product_err = _fma(m, w2, -product)
++
++    return math.fsum((k, -product, -product_err, -m * w2_err))
++
++
++def _discriminant(m, k, c):
++    """c**2 - 4*m*k, computed accurately when the system is near critical."""
++    c2 = c * c
++    c2_err = _fma(c, c, -c2)
++
++    mk = m * k
++    mk_err = _fma(m, k, -mk)
++
++    return math.fsum((c2, -4.0 * mk, c2_err, -4.0 * mk_err))
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    delta = _k_minus_m_omega_sq(k, m, omega)
++    denom = math.hypot(delta, c * omega)
++    return abs(F0) / denom
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    delta = _k_minus_m_omega_sq(k, m, omega)
++    damping = c * omega
++    scale = math.hypot(delta, damping)
++
++    # Particular solution x_p = a*cos(omega t) + b*sin(omega t).
++    a = (F0 / scale) * (delta / scale)
++    b = (F0 / scale) * (damping / scale)
++
++    # Initial conditions for the homogeneous (transient) part.
++    p = x0 - a
++    q = v0 - b * omega
++
++    alpha = c / (2.0 * m)
++    disc = _discriminant(m, k, c)
++
++    if disc < 0.0:
++        # Underdamped (includes the undamped case c = 0).
++        wd = math.sqrt(-disc) / (2.0 * m)
++        x = wd * t
++        eat = math.exp(-alpha * t)
++        sinc = 1.0 if x == 0.0 else math.sin(x) / x
++        scaled_s = eat * t * sinc
++        scaled_c = eat * math.cos(x) + alpha * scaled_s
++    elif disc > 0.0:
++        # Overdamped.
++        beta = math.sqrt(disc) / (2.0 * m)
++        x = beta * t
++        ep = math.exp((beta - alpha) * t)
++        em = math.exp(-(alpha + beta) * t)
++
++        if x < 1.0:
++            # Avoid cancellation in ep - em for small beta*t.
++            ratio = 1.0 if x == 0.0 else (math.expm1(x) - math.expm1(-x)) / (2.0 * x)
++            scaled_s = math.exp(-alpha * t) * t * ratio
++        else:
++            scaled_s = t * (ep - em) / (2.0 * x)
++
++        scaled_c = 0.5 * (ep + em) + alpha * scaled_s
++    else:
++        # Critically damped (also the limit of the other two branches).
++        eat = math.exp(-alpha * t)
++        scaled_s = eat * t
++        scaled_c = eat * (1.0 + alpha * t)
++
++    transient = scaled_c * p + scaled_s * q
++    return transient + a * math.cos(omega * t) + b * math.sin(omega * t)

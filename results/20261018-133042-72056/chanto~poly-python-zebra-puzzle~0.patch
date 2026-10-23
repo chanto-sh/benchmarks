@@ -1,0 +1,160 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..4fa8fda 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,153 @@
++"""Solution to the Zebra Puzzle, using constraint-based backtracking."""
++
++from itertools import product
++
++NATIONALITIES = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++COLORS = ("red", "green", "ivory", "yellow", "blue")
++DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++PETS = ("dog", "snails", "fox", "horse", "zebra")
++HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++
++ATTRIBUTES = ("nationality", "color", "drink", "pet", "hobby")
++VALUES = {
++    "nationality": NATIONALITIES,
++    "color": COLORS,
++    "drink": DRINKS,
++    "pet": PETS,
++    "hobby": HOBBIES,
++}
++
++# Pairs of (attribute, value) that identify the same resident.
++EQUIVALENCES = (
++    ("nationality", "Englishman", "color", "red"),
++    ("nationality", "Spaniard", "pet", "dog"),
++    ("color", "green", "drink", "coffee"),
++    ("nationality", "Ukrainian", "drink", "tea"),
++    ("pet", "snails", "hobby", "dancing"),
++    ("color", "yellow", "hobby", "painting"),
++    ("hobby", "football", "drink", "orange juice"),
++    ("nationality", "Japanese", "hobby", "chess"),
++)
++
++# Pairs of (attribute, value) whose residents must live next to each other.
++NEIGHBORS = (
++    ("hobby", "reading", "pet", "fox"),
++    ("hobby", "painting", "pet", "horse"),
++)
++
++_solution = None
++
++
++def _neighbor_possible(houses, remaining, house, last, attribute, value):
++    """Can some house adjacent to `house` have the given attribute value?
++
++    It can if an assigned neighbor already has it, or if the value is still
++    unused and one of the neighbors has not been assigned yet.
++    """
++    for position in (house - 1, house + 1):
++        if 0 <= position <= last and houses[position][attribute] == value:
++            return True
++    if value in remaining[attribute]:
++        for position in (house - 1, house + 1):
++            if 0 <= position < 5 and position > last:
++                return True
++    return False
++
++
++def _consistent(houses, remaining, last):
++    """Check every constraint that is decidable for houses 0..last."""
++    for house in range(last + 1):
++        fields = houses[house]
++
++        for attr_a, value_a, attr_b, value_b in EQUIVALENCES:
++            if (fields[attr_a] == value_a) != (fields[attr_b] == value_b):
++                return False
++
++        color = fields["color"]
++        if color == "ivory":
++            if house == 4:
++                return False
++            if house < last and houses[house + 1]["color"] != "green":
++                return False
++        elif color == "green":
++            if house == 0 or houses[house - 1]["color"] != "ivory":
++                return False
++
++        for attr_a, value_a, attr_b, value_b in NEIGHBORS:
++            if fields[attr_a] == value_a and not _neighbor_possible(
++                houses, remaining, house, last, attr_b, value_b
++            ):
++                return False
++            if fields[attr_b] == value_b and not _neighbor_possible(
++                houses, remaining, house, last, attr_a, value_a
++            ):
++                return False
++
++    return True
++
++
++def _search(houses, remaining, position):
++    if position == 5:
++        return True
++
++    if position == 0:
++        nationalities = ["Norwegian"]
++    else:
++        nationalities = [n for n in remaining["nationality"] if n != "Norwegian"]
++
++    if position == 1:
++        colors = ["blue"]
++    else:
++        colors = [c for c in remaining["color"] if c != "blue"]
++
++    if position == 2:
++        drinks = ["milk"]
++    else:
++        drinks = [d for d in remaining["drink"] if d != "milk"]
++
++    pets = list(remaining["pet"])
++    hobbies = list(remaining["hobby"])
++
++    for nationality, color, drink, pet, hobby in product(
++        nationalities, colors, drinks, pets, hobbies
++    ):
++        fields = {
++            "nationality": nationality,
++            "color": color,
++            "drink": drink,
++            "pet": pet,
++            "hobby": hobby,
++        }
++        houses[position] = fields
++        for attribute, value in fields.items():
++            remaining[attribute].remove(value)
++
++        if _consistent(houses, remaining, position) and _search(
++            houses, remaining, position + 1
++        ):
++            return True
++
++        for attribute, value in fields.items():
++            remaining[attribute].add(value)
++        houses[position] = {}
++
++    return False
++
++
++def _solve():
++    global _solution
++    if _solution is None:
++        houses = [{} for _ in range(5)]
++        remaining = {attribute: set(VALUES[attribute]) for attribute in ATTRIBUTES}
++        if not _search(houses, remaining, 0):
++            raise RuntimeError("The zebra puzzle has no solution")
++        _solution = houses
++    return _solution
++
++
+ def drinks_water():
+-    pass
++    return next(house["nationality"] for house in _solve() if house["drink"] == "water")
+ 
+ 
+ def owns_zebra():
+-    pass
++    return next(house["nationality"] for house in _solve() if house["pet"] == "zebra")

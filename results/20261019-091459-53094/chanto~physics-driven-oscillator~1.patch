@@ -1,0 +1,70 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..bcd3b26 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,63 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (A, phase) with x_ss(t) = A cos(omega t - phase)."""
++    z = k - m * omega * omega
++    w = c * omega
++    denom = math.hypot(z, w)
++    A = F0 / denom
++    phase = math.atan2(w, z)
++    return A, phase
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    A, _ = _steady_state(m, k, c, F0, omega)
++    return A
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, phi = _steady_state(m, k, c, F0, omega)
++    # Steady state: x_ss = A cos(omega t - phi), v_ss = -A omega sin(omega t - phi)
++    xss0 = A * math.cos(phi)
++    vss0 = A * omega * math.sin(phi)
++
++    # Homogeneous solution: m r^2 + c r + k = 0.
++    beta = c / (2.0 * m)          # damping ratio times natural frequency
++    w0sq = k / m
++    disc = beta * beta - w0sq     # real >= 0 means critically/overdamped
++    # c = 2 sqrt(m k) is meant to give critical damping, but roundoff can make
++    # the discriminant a tiny nonzero value; snap that band to zero.
++    scale = max(abs(beta * beta), abs(w0sq))
++    near_zero = 1e-12 * scale
++
++    if disc < -near_zero:
++        wd = math.sqrt(-disc)
++        e = math.exp(-beta * t)
++        cosw = math.cos(wd * t)
++        sinw = math.sin(wd * t)
++        # x_h = e^{-beta t} (C cos(wd t) + D sin(wd t))
++        C = x0 - xss0
++        D = (v0 - vss0 + beta * C) / wd
++        xh = e * (C * cosw + D * sinw)
++    elif disc <= near_zero:
++        e = math.exp(-beta * t)
++        C = x0 - xss0
++        D = v0 - vss0 + beta * C
++        xh = e * (C + D * t)
++    else:
++        r = math.sqrt(disc)
++        r1 = -beta + r
++        r2 = -beta - r
++        C = x0 - xss0
++        D = v0 - vss0
++        # x_h = P e^{r1 t} + Q e^{r2 t}, P + Q = C, r1 P + r2 Q = D
++        P = (D - r2 * C) / (r1 - r2)
++        Q = C - P
++        xh = P * math.exp(r1 * t) + Q * math.exp(r2 * t)
++
++    return xh + A * math.cos(omega * t - phi)

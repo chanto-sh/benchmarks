@@ -1,0 +1,122 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..0f9dadb 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,107 @@
+ """Frequency response of the detector model."""
+ import math
+ 
++_PI = math.pi
++_HALF_PI = _PI / 2.0
++_SQRT_HALF_PI = math.sqrt(_HALF_PI)
++_SQRT_TWO_OVER_PI = math.sqrt(2.0 / _PI)
++_TWO_SQRT_HALF_PI = 2.0 * _SQRT_HALF_PI
++
++
++def _gauss_legendre(n):
++    """Nodes and weights for n-point Gauss-Legendre quadrature on [-1, 1]."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(_PI * (i + 0.75) / (n + 0.5))
++        for _ in range(100):
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p3 = p2
++                p2 = p1
++                p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
++            derivative = n * (z * p1 - p2) / (z * z - 1.0)
++            z1 = z
++            z = z1 - p1 / derivative
++            if abs(z - z1) <= 1e-15:
++                break
++        nodes[i] = -z
++        nodes[n - 1 - i] = z
++        weight = 2.0 / ((1.0 - z * z) * derivative * derivative)
++        weights[i] = weight
++        weights[n - 1 - i] = weight
++    return nodes, weights
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(16)
++
++
++def _fresnel_c_series(x):
++    """C(x) for small x from its Taylor series."""
++    if x == 0.0:
++        return 0.0
++    x2 = x * x
++    term = x
++    total = term
++    n = 0
++    while True:
++        n += 1
++        term *= (
++            -(_HALF_PI * x2) ** 2
++            / ((2 * n - 1) * (2 * n))
++            * (4 * n - 3)
++            / (4 * n + 1)
++        )
++        total += term
++        if abs(term) <= 1e-17 * abs(total):
++            return total
++
++
++def _fresnel_c_quadrature(x):
++    """C(x) for larger x, integrating one half-oscillation at a time."""
++    total = 0.0
++    left = 0.0
++    k = 0
++    while True:
++        # Zeros of cos(pi*s^2/2) are at s^2 = pi/2 + k*pi.
++        right = math.sqrt(_HALF_PI + k * _PI)
++        done = right >= x
++        if done:
++            right = x
++
++        midpoint = 0.5 * (left + right)
++        half_width = 0.5 * (right - left)
++        subtotal = 0.0
++        for node, weight in zip(_GL_NODES, _GL_WEIGHTS):
++            s = midpoint + half_width * node
++            subtotal += weight * math.cos(_HALF_PI * s * s)
++        total += half_width * subtotal
++
++        if done:
++            return total
++        left = right
++        k += 1
++
++
++def _fresnel_c(x):
++    """Fresnel integral C(x) = integral of cos(pi*s^2/2) from 0 to x."""
++    if x <= 2.5:
++        return _fresnel_c_series(x)
++    return _fresnel_c_quadrature(x)
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u^2 removes the endpoint singularity:
++
++        integral = 2 * integral(cos(t*u^2), u=0..sqrt(b))
++                 = 2*sqrt(pi/(2*t)) * C(sqrt(2*t*b/pi)),
++
++    where C is the Fresnel cosine integral.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    x = math.sqrt(t) * math.sqrt(b) * _SQRT_TWO_OVER_PI
++    return _TWO_SQRT_HALF_PI / math.sqrt(t) * _fresnel_c(x)

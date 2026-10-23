@@ -1,0 +1,28 @@
+diff --git a/solution.py b/solution.py
+index 1fdcbff..018865d 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,22 @@
+ def max_subarray_product(arr):
+-    pass
++    """Return the maximum product of a non-empty contiguous subarray of arr.
++
++    Tracks the running maximum and minimum products ending at each position,
++    since a negative value can turn the smallest product into the largest.
++    Runs in O(n) time and O(1) space.
++    """
++    if not arr:
++        raise ValueError("arr must contain at least one element")
++
++    best = prev_max = prev_min = arr[0]
++
++    for value in arr[1:]:
++        if value < 0:
++            prev_max, prev_min = prev_min, prev_max
++
++        prev_max = max(value, prev_max * value)
++        prev_min = min(value, prev_min * value)
++
++        best = max(best, prev_max)
++
++    return best

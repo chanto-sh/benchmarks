@@ -1,0 +1,75 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..c3f0f88 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,69 @@
+ package scale
+ 
++var (
++	sharpChromatic = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
++	flatChromatic  = []string{"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
++
++	pitchClass = map[string]int{
++		"C": 0, "C#": 1, "Db": 1,
++		"D": 2, "D#": 3, "Eb": 3,
++		"E": 4,
++		"F": 5, "F#": 6, "Gb": 6,
++		"G": 7, "G#": 8, "Ab": 8,
++		"A": 9, "A#": 10, "Bb": 10,
++		"B": 11,
++	}
++
++	// Pitch classes whose scales are written with flats, split by mode.
++	flatMajorKeys = map[int]bool{5: true, 10: true, 3: true, 8: true, 1: true, 6: true}
++	flatMinorKeys = map[int]bool{2: true, 7: true, 0: true, 5: true, 10: true, 3: true}
++)
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	pc, minor := parseTonic(tonic)
++
++	chromatic := sharpChromatic
++	if (minor && flatMinorKeys[pc]) || (!minor && flatMajorKeys[pc]) {
++		chromatic = flatChromatic
++	}
++
++	if interval == "" {
++		notes := make([]string, 12)
++		for i := range notes {
++			notes[i] = chromatic[(pc+i)%12]
++		}
++		return notes
++	}
++
++	notes := make([]string, 1, len(interval)+1)
++	notes[0] = chromatic[pc]
++	pos := pc
++	for _, step := range interval {
++		switch step {
++		case 'm':
++			pos++
++		case 'M':
++			pos += 2
++		case 'A':
++			pos += 3
++		}
++		notes = append(notes, chromatic[pos%12])
++	}
++	return notes
++}
++
++// parseTonic returns the tonic's pitch class and whether it denotes a minor key.
++// A lowercase tonic letter means minor; an uppercase one means major.
++func parseTonic(tonic string) (int, bool) {
++	root := tonic[:1]
++	minor := root >= "a" && root <= "z"
++	if minor {
++		root = string(root[0] - 'a' + 'A')
++	}
++
++	note := root
++	if len(tonic) > 1 {
++		note += tonic[1:]
++	}
++	return pitchClass[note], minor
+ }

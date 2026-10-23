@@ -1,0 +1,95 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..d5970f2
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,59 @@
++# BLOCKED: `users.email` NOT NULL + case-insensitive UNIQUE
++
++The constraint change is implemented for a clean database, but it **cannot be
++applied to the production snapshot without changing or deleting customer rows**,
++which is out of scope for engineering (Support owns that data).
++
++## Required end state
++
++`users.email` must be non-NULL and unique ignoring case.
++
++## Why production blocks it
++
++`fixtures/prod_snapshot.sql` contains 40 rows, and three of them violate the
++new rules:
++
++| ids | emails | conflict |
++| --- | --- | --- |
++| 17 | `NULL` (Goran Okafor) | violates `NOT NULL`; a value must be supplied or the row removed |
++| 1, 23 | `ana.silva@example.com` | exact duplicate, violates `UNIQUE` |
++| 1, 4, 23 | `ana.silva@example.com`, `Ana.Silva@example.com` | all equal under `NOCASE`, violates case-insensitive `UNIQUE` |
++
++SQLite validates existing rows when a constraint is added:
++
++- `NOT NULL` cannot be added with `ALTER TABLE`; it requires a table rebuild,
++  and the copy into the new table rejects row 17.
++- A `UNIQUE` index (or table rebuild) rejects the colliding ids above.
++
++Resolving any of these requires either giving row 17 an email, rewriting the
++duplicate addresses, merging records, or deleting rows. All of those modify or
++delete customer rows, so the migration intentionally does neither.
++
++## What is done
++
++- `migrations/002_unique_email.sql` rebuilds `users` with
++  `email TEXT NOT NULL COLLATE NOCASE UNIQUE`, copying `id`, `email`, and `name`
++  unchanged. It runs in a transaction, so a validation failure rolls back and
++  leaves the original `users` table and all 40 rows untouched.
++- `test_constraint_on_fresh_db` passes: a fresh database rejects both a
++  case-insensitive duplicate and a NULL email.
++- `test_applies_to_prod_snapshot` fails at `db.apply` with
++  `sqlite3.IntegrityError: UNIQUE constraint failed: users_new.email`. This is
++  the expected block, not a data mutation.
++- Verified manually that after the failure and rollback the before/after rows
++  are identical (40 rows) and no partial `users_new` table remains.
++
++No conditional skip, trigger-based approximation, or schema-table manipulation
++was added: those would leave production unconstrained while appearing migrated.
++
++## Unblock
++
++Support needs to resolve the rows above (supply an email for id 17 and
++deduplicate ids 1/4/23 according to the account-merge policy). Once the snapshot
++satisfies the constraint, rerun:
++
++```sh
++python3 -m unittest -v test_migrations.py
++```
++
++Both tests should then pass without any change to the migration.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..e7d0aef 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,24 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL to an existing column, and a unique index cannot
++-- be created without validating the rows already present. Rebuild the table
++-- and copy every row across unchanged, so existing data is never rewritten.
++-- If any existing email is NULL or collides case-insensitively, the copy
++-- fails and the transaction is rolled back instead of altering customer data.
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL COLLATE NOCASE UNIQUE,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++    SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;

@@ -1,0 +1,81 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..192cd69 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,66 @@
+ import math
+ 
+ 
++# Ten-point Gauss-Legendre nodes and weights on [-1, 1].
++_GAUSS_NODES = (
++    -0.9739065285171717,
++    -0.8650633666889845,
++    -0.6794095682990244,
++    -0.4333953941292472,
++    -0.1488743389816312,
++    0.1488743389816312,
++    0.4333953941292472,
++    0.6794095682990244,
++    0.8650633666889845,
++    0.9739065285171717,
++)
++_GAUSS_WEIGHTS = (
++    0.0666713443086881,
++    0.1494513491505806,
++    0.2190863625159820,
++    0.2692667193099963,
++    0.2955242247147529,
++    0.2955242247147529,
++    0.2692667193099963,
++    0.2190863625159820,
++    0.1494513491505806,
++    0.0666713443086881,
++)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    The substitution x = u**2 removes the endpoint singularity:
++
++        integral = 2 * integral(cos(t*u**2), u, 0, sqrt(b)).
++
++    The transformed integrand is smooth.  Its phase is t*u**2, so the
++    quadrature intervals are chosen to keep the phase change per interval at
++    most pi/4; Gauss-Legendre quadrature is then extremely accurate even for
++    the largest allowed phase (t*b = 1000).
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0:
++        return 0.0
++    if t == 0:
++        return 2.0 * math.sqrt(b)
++    if t < 0:
++        t = -t
++
++    upper = math.sqrt(b)
++    # Number of equal-phase intervals.
++    n = max(1, int(math.ceil(t * b * 4.0 / math.pi)))
++
++    total = 0.0
++    sqrt_n = math.sqrt(n)
++    for i in range(n):
++        u0 = upper * math.sqrt(i) / sqrt_n
++        u1 = upper * math.sqrt(i + 1) / sqrt_n
++        half = 0.5 * (u1 - u0)
++        mid = 0.5 * (u1 + u0)
++        subtotal = 0.0
++        for node, weight in zip(_GAUSS_NODES, _GAUSS_WEIGHTS):
++            u = mid + half * node
++            subtotal += weight * math.cos(t * u * u)
++        total += half * subtotal
++    return 2.0 * total

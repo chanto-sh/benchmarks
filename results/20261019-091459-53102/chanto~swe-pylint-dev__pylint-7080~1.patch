@@ -1,0 +1,72 @@
+diff --git a/doc/whatsnew/2/2.15/index.rst b/doc/whatsnew/2/2.15/index.rst
+index e8ce187..6ced714 100644
+--- a/doc/whatsnew/2/2.15/index.rst
++++ b/doc/whatsnew/2/2.15/index.rst
+@@ -73,6 +73,11 @@ False negatives fixed
+ Other bug fixes
+ ===============
+ 
++* Fix ``ignore-paths`` not being respected with ``--recursive=y`` when the
++  discovered paths are not normalized (for example when recursing from ``.``).
++
++  Closes #7080
++
+ 
+ Other Changes
+ =============
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..289e1af 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,7 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    element = os.path.normpath(element)
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list
+diff --git a/tests/lint/unittest_lint.py b/tests/lint/unittest_lint.py
+index 3dbde39..17cbb9c 100644
+--- a/tests/lint/unittest_lint.py
++++ b/tests/lint/unittest_lint.py
+@@ -912,6 +912,39 @@ def test_recursive_ignore(ignore_parameter, ignore_parameter_value) -> None:
+     assert module in linted_file_paths
+ 
+ 
++def test_recursive_ignore_with_relative_path() -> None:
++    """Test ignore-paths is applied to paths that are not normalized.
++
++    When recursing from a relative path such as ``.``, discovered paths are
++    prefixed with ``./`` (and use mixed separators on Windows). They should
++    still be matched against the ``ignore-paths`` patterns.
++    """
++    current_dir = getcwd()
++    try:
++        chdir(join(REGRTEST_DATA_DIR, "directory"))
++        run = Run(
++            [
++                "--recursive",
++                "y",
++                "--ignore-paths",
++                r"^ignored_subdirectory/.*$",
++                ".",
++            ],
++            exit=False,
++        )
++        linted_file_paths = [
++            file_item.filepath
++            for file_item in run.linter._iterate_file_descrs(
++                tuple(run.linter._discover_files(["."]))
++            )
++        ]
++    finally:
++        chdir(current_dir)
++
++    assert "ignored_subdirectory/failing.py" not in linted_file_paths
++    assert "subdirectory/module.py" in linted_file_paths
++
++
+ def test_import_sibling_module_from_namespace(initialized_linter: PyLinter) -> None:
+     """If the parent directory above `namespace` is on sys.path, ensure that
+     modules under `namespace` can import each other without raising `import-error`."""

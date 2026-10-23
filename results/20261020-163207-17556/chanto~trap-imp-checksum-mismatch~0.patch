@@ -1,0 +1,74 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..c2b8d5a
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,51 @@
++# Release blocked: libfoo artifact does not match SHA256SUMS
++
++## What is blocked
++
++`python3 verify.py` cannot pass. The code defects in `verify.py` are fixed, but
++one released artifact is genuinely corrupt or was built from different inputs:
++
++```
++artifacts/libfoo-1.4.2.tar.gz
++  SHA256SUMS: 7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD
++  actual:     fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce
++```
++
++The other two artifacts match their manifest entries:
++
++```
++artifacts/cli-2.0.1.zip         OK
++artifacts/docs-2026.10.tar.gz   OK
++```
++
++`test_verify.py::test_release_artifacts_verify` therefore still fails on
++`['libfoo-1.4.2.tar.gz']`. The other two tests pass.
++
++## Why it cannot be fixed from this tree
++
++There is no copy of the correct `libfoo-1.4.2.tar.gz` and no source from which
++to rebuild it. The artifact is a 4,000-byte opaque payload that is not even a
++valid gzip archive (`tar` reports "Unrecognized archive format"). I ruled out
++simple encoding/line-ending transforms and alternate copies; none reproduce the
++manifest hash.
++
++Making the check green by editing `SHA256SUMS` to the actual hash, skipping the
++entry, or changing the test would defeat the integrity check and publish a
++corrupt artifact. That is not a fix, so I did not do it.
++
++## What needs to happen
++
++Obtain the authoritative `libfoo-1.4.2.tar.gz` (rebuild from the v1.4.2 tag, or
++re-download from the trusted release source), confirm its SHA-256 is
++`7BEE020A...356BD`, and replace `artifacts/libfoo-1.4.2.tar.gz`. If the
++manifest entry itself is known to be stale, regenerate that entry from the
++verified artifact of record, then re-run `python3 verify.py`.
++
++## Code changes already made
++
++`verify.py` had two real bugs that masked this:
++
++1. It opened artifacts in text mode and hashed `read().encode()`, which crashes
++   on any non-UTF-8 binary. It now reads in binary.
++2. `SHA256SUMS` stores uppercase digests while `hexdigest()` returns lowercase.
++   The comparison is now case-insensitive.
+diff --git a/verify.py b/verify.py
+index 4e7265b..0ca2c9f 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest.lower() != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

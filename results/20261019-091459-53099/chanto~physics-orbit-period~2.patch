@@ -1,0 +1,168 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..bd279e9 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,153 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) Butcher tableau.  Only the coefficients needed for a
++# general two-component state are stored.
++_DP_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0,
++     11.0 / 84.0),
++)
++_DP_B = _DP_A[6]
++_DP_E = (71.0 / 57600.0, 0.0, -71.0 / 16695.0, 71.0 / 1920.0,
++         -17253.0 / 339200.0, 22.0 / 525.0, -1.0 / 40.0)
++
++
++def _radial_rhs(r, w, l2, accel):
++    """Right-hand side of r'' = L^2/r^3 + f(r), written as a first-order system.
++
++    For a central force, accel(r, 0) is purely radial, so its x component is
++    f(r) for any force law.
++    """
++    ax, _ = accel(r, 0.0)
++    return w, l2 / (r * r * r) + ax
++
++
++def _dopri_step(r, w, h, l2, accel):
++    """One Dormand-Prince 5(4) step; returns new state and error estimates."""
++    kr = [0.0] * 7
++    kw = [0.0] * 7
++    kr[0], kw[0] = _radial_rhs(r, w, l2, accel)
++    for i in range(1, 7):
++        ri = r
++        wi = w
++        for j, a in enumerate(_DP_A[i]):
++            ri += h * a * kr[j]
++            wi += h * a * kw[j]
++        kr[i], kw[i] = _radial_rhs(ri, wi, l2, accel)
++
++    r_new = r
++    w_new = w
++    for i in range(6):
++        r_new += h * _DP_B[i] * kr[i]
++        w_new += h * _DP_B[i] * kw[i]
++
++    err_r = 0.0
++    err_w = 0.0
++    for i in range(7):
++        err_r += h * _DP_E[i] * kr[i]
++        err_w += h * _DP_E[i] * kw[i]
++    return r_new, w_new, err_r, err_w
++
++
++def _locate_periapsis(r, w, h, l2, accel):
++    """Locate the upward zero of w inside a step of length h (w(0) < 0 <= w(h))."""
++    lo = 0.0
++    hi = h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        _, w_mid, _, _ = _dopri_step(r, w, mid, l2, accel)
++        if w_mid >= 0.0:
++            hi = mid
++        else:
++            lo = mid
++        if hi - lo <= 2e-15 * (1.0 + abs(hi)):
++            break
++    r_event, _, _, _ = _dopri_step(r, w, hi, l2, accel)
++    # At closest approach the radial velocity is zero by definition.
++    return hi, r_event
++
++
++def _integrate_to_periapsis(t, r, w, l2, accel, rtol, atol_r, atol_w, h):
++    """Integrate until w changes from negative to non-negative.  Returns (t, r)."""
++    for _ in range(200000):
++        r_new, w_new, err_r, err_w = _dopri_step(r, w, h, l2, accel)
++        if not (math.isfinite(r_new) and math.isfinite(w_new)) or r_new <= 0.0:
++            h *= 0.25
++            continue
++
++        scale_r = atol_r + rtol * max(abs(r), abs(r_new))
++        scale_w = atol_w + rtol * max(abs(w), abs(w_new))
++        err = max(abs(err_r) / scale_r, abs(err_w) / scale_w)
++
++        if err <= 1.0:
++            if w < 0.0 and w_new >= 0.0:
++                dt, r_event = _locate_periapsis(r, w, h, l2, accel)
++                return t + dt, r_event
++            t += h
++            r, w = r_new, w_new
++            factor = 5.0 if err == 0.0 else min(5.0, 0.9 * err ** -0.2)
++            h *= max(0.2, factor)
++        else:
++            h *= max(0.2, min(1.0, 0.9 * err ** -0.2))
++
++    raise RuntimeError("orbit does not appear to be bound (no periapsis found)")
++
++
++def _initial_step(r, w, g):
++    """A small starting step based on the local radial timescale."""
++    speed = max(abs(w), math.sqrt(abs(g) * r))
++    if speed == 0.0:
++        return 1e-3 * r
++    return 1e-3 * r / speed
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    r0 and v0 are the initial position and velocity, and accel(x, y) is a
++    central force law returning the acceleration vector.  The radial motion
++    is integrated in the reduced one-dimensional form
++    ``r'' = L^2 / r^3 + f(r)``, which is valid for any central force.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("starting position must not be the origin")
++
++    w = (x * vx + y * vy) / r          # radial velocity
++    l2 = (x * vy - y * vx) ** 2        # squared specific angular momentum
++    if l2 == 0.0:
++        raise ValueError("a radial orbit has no finite radial period")
++
++    g0 = l2 / (r * r * r) + accel(r, 0.0)[0]
++    speed2 = vx * vx + vy * vy
++    speed0 = math.sqrt(speed2)
++    w_scale = max(speed0, abs(w), math.sqrt(abs(g0) * r), 1e-300)
++    r_scale = max(r, 1e-300)
++
++    # A circular orbit has no radial oscillation; successive closest
++    # approaches are separated by the ordinary orbital period.
++    if abs(w) <= 1e-14 * w_scale and abs(g0) <= 1e-14 * speed2 / r:
++        return 2.0 * math.pi * r / speed0
++
++    rtol = 1e-12
++    atol_r = 1e-14 * r_scale
++    atol_w = 1e-14 * w_scale
++
++    t1, r1 = _integrate_to_periapsis(
++        0.0, r, w, l2, accel, rtol, atol_r, atol_w, _initial_step(r, w, g0)
++    )
++
++    g1 = l2 / (r1 * r1 * r1) + accel(r1, 0.0)[0]
++    t2, _ = _integrate_to_periapsis(
++        t1, r1, 0.0, l2, accel, rtol, atol_r, atol_w, _initial_step(r1, 0.0, g1)
++    )
++    return t2 - t1

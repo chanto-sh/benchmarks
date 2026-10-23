@@ -1,0 +1,121 @@
+diff --git a/bowling.py b/bowling.py
+index de2dbb0..525bf1f 100644
+--- a/bowling.py
++++ b/bowling.py
+@@ -1,9 +1,112 @@
+ class BowlingGame:
++    MAX_FRAMES = 10
++    MAX_PINS = 10
++
+     def __init__(self):
+-        pass
++        self.rolls = []
+ 
+     def roll(self, pins):
+-        pass
++        """Record a single roll that knocked down `pins` pins."""
++        if not isinstance(pins, int) or isinstance(pins, bool):
++            raise TypeError("pins must be an integer")
++        if pins < 0:
++            raise ValueError("cannot knock down a negative number of pins")
++        if pins > self.MAX_PINS:
++            raise ValueError("cannot knock down more than 10 pins in a single roll")
++
++        frames = self._frames()
++
++        if len(frames) == self.MAX_FRAMES:
++            tenth = frames[-1]
++            if self._is_tenth_frame_complete(tenth):
++                raise IndexError("cannot roll, the game is over")
++            self._validate_tenth_frame_roll(tenth, pins)
++        elif frames and len(frames[-1]) == 1 and frames[-1][0] < self.MAX_PINS:
++            # Second roll of a frame: the two rolls together may not exceed 10 pins.
++            if frames[-1][0] + pins > self.MAX_PINS:
++                raise ValueError("cannot knock down more than 10 pins in a frame")
++
++        self.rolls.append(pins)
+ 
+     def score(self):
+-        pass
++        """Return the total score of a completed game."""
++        frames = self._frames()
++        if len(frames) < self.MAX_FRAMES or not self._is_tenth_frame_complete(
++            frames[-1]
++        ):
++            raise IndexError("cannot score an incomplete game")
++
++        rolls = self.rolls
++        index = 0
++        total = 0
++        for _ in range(self.MAX_FRAMES):
++            if rolls[index] == self.MAX_PINS:
++                # Strike: 10 plus the next two rolls.
++                total += 10 + rolls[index + 1] + rolls[index + 2]
++                index += 1
++            elif rolls[index] + rolls[index + 1] == self.MAX_PINS:
++                # Spare: 10 plus the next roll.
++                total += 10 + rolls[index + 2]
++                index += 2
++            else:
++                total += rolls[index] + rolls[index + 1]
++                index += 2
++        return total
++
++    def _frames(self):
++        """Split the rolls recorded so far into frames.
++
++        Each frame is a list of the pins knocked down in it. The tenth frame
++        holds every remaining roll, including its fill balls.
++        """
++        frames = []
++        index = 0
++        count = len(self.rolls)
++
++        while index < count and len(frames) < self.MAX_FRAMES:
++            if len(frames) == self.MAX_FRAMES - 1:
++                frames.append(self.rolls[index:])
++                break
++
++            first = self.rolls[index]
++            if first == self.MAX_PINS:
++                frames.append([first])
++                index += 1
++            elif index + 1 < count:
++                frames.append([first, self.rolls[index + 1]])
++                index += 2
++            else:
++                frames.append([first])
++                index += 1
++
++        return frames
++
++    def _is_tenth_frame_complete(self, frame):
++        """Return whether the tenth frame (with fill balls) is finished."""
++        if len(frame) >= 3:
++            return True
++        if len(frame) == 2:
++            # Two rolls only end the game when they are an open frame.
++            return frame[0] + frame[1] < self.MAX_PINS
++        return False
++
++    def _validate_tenth_frame_roll(self, frame, pins):
++        """Validate a roll belonging to a not yet completed tenth frame."""
++        if len(frame) == 1:
++            if frame[0] != self.MAX_PINS and frame[0] + pins > self.MAX_PINS:
++                raise ValueError("cannot knock down more than 10 pins in a frame")
++            return
++
++        # Two rolls are already recorded, so a third (fill ball) is allowed.
++        if frame[0] == self.MAX_PINS:
++            if frame[1] == self.MAX_PINS:
++                # Two strikes: the third ball is unconstrained.
++                return
++            if frame[1] + pins > self.MAX_PINS:
++                raise ValueError(
++                    "invalid fill balls: the two fill balls cannot total more than 10"
++                )
++            return
++
++        # The first two rolls were a spare, so its single fill ball is free.
++        return
+\ No newline at end of file

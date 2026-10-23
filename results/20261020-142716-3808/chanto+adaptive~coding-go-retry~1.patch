@@ -1,0 +1,78 @@
+diff --git a/retry.go b/retry.go
+index f93e1fc..9bf5f06 100644
+--- a/retry.go
++++ b/retry.go
+@@ -3,6 +3,7 @@ package retry
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"time"
+ )
+ 
+@@ -26,8 +27,14 @@ func (p *permanent) Unwrap() error { return p.err }
+ func Permanent(err error) error { return &permanent{err} }
+ 
+ func defaultSleep(ctx context.Context, d time.Duration) error {
+-	time.Sleep(d)
+-	return nil
++	t := time.NewTimer(d)
++	defer t.Stop()
++	select {
++	case <-ctx.Done():
++		return ctx.Err()
++	case <-t.C:
++		return nil
++	}
+ }
+ 
+ // Do calls fn until it returns nil, returns a permanent error, the attempts
+@@ -40,25 +47,41 @@ func Do(ctx context.Context, p Policy, fn func() error) error {
+ 	if sleep == nil {
+ 		sleep = defaultSleep
+ 	}
++	attempts := p.Attempts
++	if attempts < 1 {
++		attempts = 1
++	}
++	d := p.Base
++	if d > p.Max {
++		d = p.Max
++	}
+ 	var err error
+-	for n := 1; n <= p.Attempts; n++ {
++	for n := 1; n <= attempts; n++ {
++		if cerr := ctx.Err(); cerr != nil {
++			return cerr
++		}
+ 		err = fn()
+ 		if err == nil {
+ 			return nil
+ 		}
+-		if _, ok := err.(*permanent); ok {
++		var perm *permanent
++		if errors.As(err, &perm) {
+ 			return err
+ 		}
+-		if n == p.Attempts {
++		if n == attempts {
+ 			break
+ 		}
+-		d := p.Base << uint(n-1)
+-		if d > p.Max {
+-			d = p.Max
+-		}
+ 		if serr := sleep(ctx, d); serr != nil {
+ 			return serr
+ 		}
++		// Double the delay without overflowing, stopping at Max.
++		if d < p.Max {
++			if d > p.Max/2 {
++				d = p.Max
++			} else {
++				d *= 2
++			}
++		}
+ 	}
+ 	return err
+ }

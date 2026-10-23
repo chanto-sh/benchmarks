@@ -1,0 +1,57 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..3673bcf 100644
+--- a/pov.py
++++ b/pov.py
+@@ -18,8 +18,50 @@ class Tree:
+     def __eq__(self, other):
+         return self.__dict__() == other.__dict__()
+ 
++    def _find_path(self, target):
++        """Return the list of nodes from this node down to `target`, or None."""
++        if self.label == target:
++            return [self]
++        for child in self.children:
++            found = child._find_path(target)
++            if found is not None:
++                return [self] + found
++        return None
++
+     def from_pov(self, from_node):
+-        pass
++        path = self._find_path(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++
++        new_root = Tree(from_node, list(path[-1].children))
++        current = new_root
++        for index in range(len(path) - 1, 0, -1):
++            parent = path[index - 1]
++            child_on_path = path[index]
++            new_parent = Tree(
++                parent.label,
++                [child for child in parent.children if child is not child_on_path],
++            )
++            current.children.append(new_parent)
++            current = new_parent
++        return new_root
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        from_path = self._find_path(from_node)
++        if from_path is None:
++            raise ValueError("Tree could not be reoriented")
++        to_path = self._find_path(to_node)
++        if to_path is None:
++            raise ValueError("No path found")
++
++        from_labels = [node.label for node in from_path]
++        to_labels = [node.label for node in to_path]
++
++        common = 0
++        while (
++            common < min(len(from_labels), len(to_labels))
++            and from_labels[common] == to_labels[common]
++        ):
++            common += 1
++
++        return from_labels[common - 1:][::-1] + to_labels[common:]

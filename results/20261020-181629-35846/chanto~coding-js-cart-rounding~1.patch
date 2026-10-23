@@ -1,0 +1,140 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..4273bd4 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,15 +1,16 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+ const { fmt } = require("./format");
++const { toMicro, timesQty } = require("./money");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+ function checkout(cart) {
+-  let subtotal = 0;
+-  let discount = 0;
+-  let taxable = 0;
++  let subtotal = 0n;
++  let discount = 0n;
++  let taxable = 0n;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = timesQty(toMicro(item.price), item.qty);
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..f805b88 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,10 @@
+-// Per-line percentage discounts.
++const { parseDecimal, roundFractionToCents } = require("./money");
++
++// Per-line percentage discounts. `lineTotal` and the result are millionths of
++// a dollar; the discount is rounded to the cent (half up) on its own, per line.
+ function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++  const { n, d } = parseDecimal(pct);
++  return roundFractionToCents(lineTotal * n, 100n * d);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..73e0eda 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,12 @@
++const { toCents } = require("./money");
++
+ // Money as a plain "1234.50" string for receipts and the API.
++// `amount` is millionths of a dollar, rounded half up to the cent.
+ function fmt(amount) {
+-  return amount.toFixed(2);
++  const cents = toCents(amount);
++  const sign = cents < 0n ? "-" : "";
++  const abs = cents < 0n ? -cents : cents;
++  return `${sign}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
+ }
+ 
+ module.exports = { fmt };
+diff --git a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..7a29d0e
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,57 @@
++// Exact money helpers. Amounts are BigInt millionths of a dollar so nothing is
++// lost to binary floating point before the rounding steps in the README.
++const MICRO_PER_DOLLAR = 1000000n;
++const MICRO_PER_CENT = 10000n;
++
++// Parse a decimal string or number ("19.99", 8.25) into an exact fraction.
++function parseDecimal(value) {
++  const text = typeof value === "string" ? value.trim() : String(value);
++  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(text);
++  const whole = match ? match[2] : "";
++  const fraction = match && match[3] !== undefined ? match[3] : "";
++  if (!match || (whole === "" && fraction === "")) {
++    throw new TypeError(`not a decimal amount: ${value}`);
++  }
++  let digits = BigInt(`${whole}${fraction}` || "0");
++  if (match[1] === "-") digits = -digits;
++  const exponent = match[4] === undefined ? 0 : Number(match[4]);
++  const scale = exponent - fraction.length;
++  return scale >= 0
++    ? { n: digits * 10n ** BigInt(scale), d: 1n }
++    : { n: digits, d: 10n ** BigInt(-scale) };
++}
++
++function floorDiv(n, d) {
++  const q = n / d;
++  return n % d !== 0n && n < 0n ? q - 1n : q;
++}
++
++// Round n / d to the nearest integer, halves upward. d must be positive.
++function roundHalfUpDiv(n, d) {
++  return floorDiv(2n * n + d, 2n * d);
++}
++
++// A decimal amount in millionths of a dollar.
++function toMicro(value) {
++  const { n, d } = parseDecimal(value);
++  return roundHalfUpDiv(n * MICRO_PER_DOLLAR, d);
++}
++
++// An amount in millionths of a dollar multiplied by a quantity.
++function timesQty(micro, qty) {
++  const { n, d } = parseDecimal(qty);
++  return roundHalfUpDiv(micro * n, d);
++}
++
++// Round the fraction numerator / denominator (millionths of a dollar) to the
++// nearest cent, halves upward, still in millionths.
++function roundFractionToCents(numerator, denominator) {
++  return roundHalfUpDiv(numerator, denominator * MICRO_PER_CENT) * MICRO_PER_CENT;
++}
++
++// An amount in millionths of a dollar as a whole number of cents.
++function toCents(micro) {
++  return roundHalfUpDiv(micro, MICRO_PER_CENT);
++}
++
++module.exports = { parseDecimal, toMicro, timesQty, roundFractionToCents, toCents };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..94bc133 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,11 @@
++const { parseDecimal, roundFractionToCents } = require("./money");
++
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
++// `amount` and the result are millionths of a dollar; the tax is rounded to the
++// cent (half up) once for the whole cart.
+ function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++  const { n, d } = parseDecimal(rate);
++  return roundFractionToCents(amount * n, 100n * d);
+ }
+ 
+ module.exports = { taxFor };

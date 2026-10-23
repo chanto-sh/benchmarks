@@ -1,0 +1,82 @@
+diff --git a/beer_song.go b/beer_song.go
+index 7a26646..b4e9a39 100644
+--- a/beer_song.go
++++ b/beer_song.go
+@@ -1,13 +1,74 @@
+ package beer
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++const (
++	minBottles = 0
++	maxBottles = 99
++)
++
++// Song returns the entire lyrics to "99 Bottles of Beer on the Wall".
+ func Song() string {
+-	panic("Please implement the Song function")
++	verses, _ := Verses(maxBottles, minBottles)
++	return verses
+ }
+ 
++// Verses returns the verses from start down to stop, separated by blank lines.
+ func Verses(start, stop int) (string, error) {
+-	panic("Please implement the Verses function")
++	if start < minBottles || start > maxBottles {
++		return "", fmt.Errorf("invalid start verse: %d", start)
++	}
++	if stop < minBottles || stop > maxBottles {
++		return "", fmt.Errorf("invalid stop verse: %d", stop)
++	}
++	if start < stop {
++		return "", fmt.Errorf("start verse %d is less than stop verse %d", start, stop)
++	}
++
++	verses := make([]string, 0, start-stop+1)
++	for n := start; n >= stop; n-- {
++		v, err := Verse(n)
++		if err != nil {
++			return "", err
++		}
++		verses = append(verses, v)
++	}
++
++	return strings.Join(verses, "\n") + "\n", nil
+ }
+ 
++// Verse returns a single verse for n bottles of beer.
+ func Verse(n int) (string, error) {
+-	panic("Please implement the Verse function")
++	if n < minBottles || n > maxBottles {
++		return "", fmt.Errorf("invalid verse: %d", n)
++	}
++
++	if n == minBottles {
++		return "No more bottles of beer on the wall, no more bottles of beer.\n" +
++			"Go to the store and buy some more, 99 bottles of beer on the wall.\n", nil
++	}
++
++	subject := bottleCount(n)
++	if n == 1 {
++		return fmt.Sprintf("%s of beer on the wall, %s of beer.\n", subject, subject) +
++			fmt.Sprintf("Take it down and pass it around, %s of beer on the wall.\n", bottleCount(n-1)), nil
++	}
++
++	return fmt.Sprintf("%s of beer on the wall, %s of beer.\n", subject, subject) +
++		fmt.Sprintf("Take one down and pass it around, %s of beer on the wall.\n", bottleCount(n-1)), nil
++}
++
++// bottleCount renders a bottle count with the correct singular/plural noun.
++func bottleCount(n int) string {
++	switch n {
++	case 0:
++		return "no more bottles"
++	case 1:
++		return "1 bottle"
++	default:
++		return fmt.Sprintf("%d bottles", n)
++	}
+ }

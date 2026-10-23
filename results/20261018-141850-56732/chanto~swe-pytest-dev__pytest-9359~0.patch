@@ -1,0 +1,57 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..5239821
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1 @@
++Fixed the error message showing decorator lines as part of an unrelated statement when using ``assert`` on Python 3.9 and later.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..cba8e6c 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,7 +149,14 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
+-            values.append(x.lineno - 1)
++            start_lineno = x.lineno
++            # For decorated functions and classes the statement lineno points
++            # to the "def"/"class" line, while the statement starts at the
++            # first decorator (see #9359).
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                if x.decorator_list:
++                    start_lineno = min(start_lineno, x.decorator_list[0].lineno)
++            values.append(start_lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+                 if val:
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..544f014 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -207,6 +207,25 @@ class TestSourceParsing:
+         assert getstatement(2, source).lines == source.lines[2:3]
+         assert getstatement(3, source).lines == source.lines[3:4]
+ 
++    def test_getstatementrange_with_decorator(self) -> None:
++        source = Source(
++            """\
++            def test_right_statement(foo):
++                assert foo == (3 + 2) * (6 + 9)
++
++                @t
++                def inner():
++                    return 2
++
++                assert 2 == inner
++        """
++        )
++        assert str(source.getstatement(1)) == "    assert foo == (3 + 2) * (6 + 9)"
++        assert source.getstatement(4).lines == [
++            "    @t",
++            "    def inner():",
++        ]
++
+     def test_getstatementrange_out_of_bounds_py3(self) -> None:
+         source = Source("if xxx:\n   from .collections import something")
+         r = source.getstatementrange(1)

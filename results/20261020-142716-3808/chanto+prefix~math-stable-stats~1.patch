@@ -1,0 +1,47 @@
+diff --git a/stats.py b/stats.py
+index add4f59..b7760a4 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,36 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    try:
++        mean = math.fsum(xs) / n
++    except OverflowError:
++        # The total overflowed even though the mean itself is representable.
++        mean = math.fsum(x / n for x in xs)
++
++    # Work relative to the first value so that a large common offset cancels
++    # before it can swamp the spread, then use compensated summation.
++    offset = xs[0]
++    shifted = [x - offset for x in xs]
++    if all(math.isfinite(d) for d in shifted):
++        shifted_mean = math.fsum(d / n for d in shifted)
++        var = math.fsum((d - shifted_mean) * (d - shifted_mean)
++                        for d in shifted) / n
++    else:
++        # The offset shift overflowed; fall back to deviations from the mean.
++        var = math.fsum((x - mean) * (x - mean) for x in xs) / n
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    # Shift by the maximum to keep every exp() at or below 1.  The maximum
++    # itself contributes exp(0) == 1, so the sum passed to log() is >= 1.
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

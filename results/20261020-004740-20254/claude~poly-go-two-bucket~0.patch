@@ -1,0 +1,85 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..c14777d 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,79 @@
+ package twobucket
+ 
++import "errors"
++
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, errors.New("invalid first bucket size")
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, errors.New("invalid second bucket size")
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, errors.New("invalid goal amount")
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, errors.New("invalid start bucket name")
++	}
++
++	type state struct {
++		one, two int
++	}
++
++	// The state reached after an action may not have the starting bucket
++	// empty while the other bucket is full.
++	allowed := func(s state) bool {
++		if startBucket == "one" {
++			return !(s.one == 0 && s.two == sizeBucketTwo)
++		}
++		return !(s.two == 0 && s.one == sizeBucketOne)
++	}
++
++	start := state{0, 0}
++	visited := map[state]bool{start: true}
++	queue := []state{start}
++	moves := map[state]int{start: 0}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		if cur.one == goalAmount || cur.two == goalAmount {
++			if cur.one == goalAmount {
++				return "one", moves[cur], cur.two, nil
++			}
++			return "two", moves[cur], cur.one, nil
++		}
++
++		next := []state{
++			{sizeBucketOne, cur.two}, // fill bucket one
++			{cur.one, sizeBucketTwo}, // fill bucket two
++			{0, cur.two},             // empty bucket one
++			{cur.one, 0},             // empty bucket two
++		}
++		// pour one into two
++		poured := min(cur.one, sizeBucketTwo-cur.two)
++		next = append(next, state{cur.one - poured, cur.two + poured})
++		// pour two into one
++		poured = min(cur.two, sizeBucketOne-cur.one)
++		next = append(next, state{cur.one + poured, cur.two - poured})
++
++		for _, n := range next {
++			if visited[n] || !allowed(n) {
++				continue
++			}
++			visited[n] = true
++			moves[n] = moves[cur] + 1
++			queue = append(queue, n)
++		}
++	}
++
++	return "", 0, 0, errors.New("no solution")
++}
++
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
+ }

@@ -1,0 +1,233 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..51d9093 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,227 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++// Categories of attributes, each of which has five possible values.
++const (
++	nationality = iota
++	color
++	drink
++	pet
++	smoke
++	numCategories
++)
++
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++var nationalityNames = [5]string{
++	"Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese",
++}
++
++// attribute identifies one value within one category, e.g. "the Ukrainian"
++// or "the green house". Its assigned house is what the search decides.
++type attribute struct {
++	category int
++	value    int
++}
++
++type relation int
++
++const (
++	equal relation = iota
++	nextTo
++	rightOf // house(second) == house(first) + 1
++)
++
++type constraint struct {
++	first  attribute
++	second attribute
++	rel    relation
++}
++
++// The fifteen facts from the puzzle, expressed as relations between
++// attributes. "Norwegian lives in the first house" and "milk is drunk in
++// the middle house" are handled as fixed domains below.
++var constraints = []constraint{
++	{attribute{nationality, englishman}, attribute{color, red}, equal},
++	{attribute{nationality, spaniard}, attribute{pet, dog}, equal},
++	{attribute{drink, coffee}, attribute{color, green}, equal},
++	{attribute{nationality, ukrainian}, attribute{drink, tea}, equal},
++	{attribute{color, ivory}, attribute{color, green}, rightOf},
++	{attribute{smoke, oldGold}, attribute{pet, snails}, equal},
++	{attribute{smoke, kools}, attribute{color, yellow}, equal},
++	{attribute{nationality, norwegian}, attribute{color, blue}, nextTo},
++	{attribute{smoke, chesterfields}, attribute{pet, fox}, nextTo},
++	{attribute{smoke, kools}, attribute{pet, horse}, nextTo},
++	{attribute{smoke, luckyStrike}, attribute{drink, orangeJuice}, equal},
++	{attribute{nationality, japanese}, attribute{smoke, parliaments}, equal},
++}
++
++// searchOrder lists the attributes in an order that assigns related
++// attributes close together, so constraints prune the search early.
++var searchOrder = []attribute{
++	{nationality, norwegian},
++	{color, blue},
++	{drink, milk},
++	{nationality, englishman},
++	{color, red},
++	{color, green},
++	{color, ivory},
++	{drink, coffee},
++	{nationality, ukrainian},
++	{drink, tea},
++	{nationality, japanese},
++	{smoke, parliaments},
++	{smoke, kools},
++	{color, yellow},
++	{pet, horse},
++	{nationality, spaniard},
++	{pet, dog},
++	{smoke, oldGold},
++	{pet, snails},
++	{smoke, luckyStrike},
++	{drink, orangeJuice},
++	{smoke, chesterfields},
++	{pet, fox},
++	{drink, water},
++	{pet, zebra},
++}
++
++// houses maps each attribute to its house (0 is leftmost, 4 is rightmost).
++// A value of -1 means the attribute has not been assigned yet.
++type houses [numCategories][5]int
++
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	var h houses
++	for c := range h {
++		for v := range h[c] {
++			h[c][v] = -1
++		}
++	}
++
++	if !search(&h, 0) {
++		return Solution{}
++	}
++
++	waterHouse := h[drink][water]
++	zebraHouse := h[pet][zebra]
++	return Solution{
++		DrinksWater: nationalityNames[nationalityAt(&h, waterHouse)],
++		OwnsZebra:   nationalityNames[nationalityAt(&h, zebraHouse)],
++	}
++}
++
++func search(h *houses, index int) bool {
++	if index == len(searchOrder) {
++		return true
++	}
++
++	a := searchOrder[index]
++	for house := 0; house < 5; house++ {
++		if !fixedDomain(a, house) || categoryOccupied(h, a.category, house) {
++			continue
++		}
++
++		h[a.category][a.value] = house
++		if consistent(h) && search(h, index+1) {
++			return true
++		}
++		h[a.category][a.value] = -1
++	}
++	return false
++}
++
++// fixedDomain applies the two facts that pin a single attribute to a house.
++func fixedDomain(a attribute, house int) bool {
++	if a.category == nationality && a.value == norwegian {
++		return house == 0
++	}
++	if a.category == drink && a.value == milk {
++		return house == 2
++	}
++	return true
++}
++
++// categoryOccupied reports whether another value of the same category
++// already lives in the given house; within a category all houses differ.
++func categoryOccupied(h *houses, category, house int) bool {
++	for v := 0; v < 5; v++ {
++		if h[category][v] == house {
++			return true
++		}
++	}
++	return false
++}
++
++// consistent checks every constraint whose two attributes are both assigned.
++func consistent(h *houses) bool {
++	for _, c := range constraints {
++		x := h[c.first.category][c.first.value]
++		y := h[c.second.category][c.second.value]
++		if x < 0 || y < 0 {
++			continue
++		}
++		switch c.rel {
++		case equal:
++			if x != y {
++				return false
++			}
++		case nextTo:
++			if x-y != 1 && y-x != 1 {
++				return false
++			}
++		case rightOf:
++			if y != x+1 {
++				return false
++			}
++		}
++	}
++	return true
++}
++
++// nationalityAt returns the nationality living in the given house.
++func nationalityAt(h *houses, house int) int {
++	for n := 0; n < 5; n++ {
++		if h[nationality][n] == house {
++			return n
++		}
++	}
++	return -1
+ }

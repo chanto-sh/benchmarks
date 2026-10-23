@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index f91b0ed..81ad1bb 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,19 @@
+ def find_Rotations(s): 
+-    pass
++    n = len(s)
++    if n == 0:
++        return 0
++
++    # Longest proper prefix which is also a suffix.
++    lps = [0] * n
++    k = 0
++    for i in range(1, n):
++        while k and s[i] != s[k]:
++            k = lps[k - 1]
++        if s[i] == s[k]:
++            k += 1
++        lps[i] = k
++
++    period = n - lps[-1]
++    if n % period == 0:
++        return period
++    return n

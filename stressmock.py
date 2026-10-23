@@ -53,10 +53,12 @@ def pick(body):
 
 
 def pick_terminal(body):
-    """An agent's completion tool, if it has one (so the run can end cleanly)."""
+    """An agent's completion tool, if it has one (so the run can end cleanly).
+    Whole names or `_`-suffixes only: a substring match would take Claude Code's
+    ExitPlanMode for a finish tool and keep calling it forever."""
     for name, props, req in tools_of(body):
         nl = (name or "").lower()
-        if any(nl == t or nl.endswith("_" + t) or t in nl for t in TERMINAL):
+        if any(nl == t or nl.endswith("_" + t) for t in TERMINAL):
             return name, props, req, False
     return None
 
@@ -200,6 +202,12 @@ class H(http.server.BaseHTTPRequestHandler):
         raw = self.rfile.read(ln) if ln else b"{}"
         try: body = json.loads(raw)
         except Exception: body = {}
+        if "/count_tokens" in self.path:
+            # Anthropic's token-count call (Claude Code makes one before most
+            # requests): answer it, but it isn't a model turn, so neither count
+            # nor log it.
+            self._send(200, json.dumps({"input_tokens": max(1, ln // 4)}).encode(), "application/json")
+            return
         with LOCK:
             STATE["n"] += 1; n = STATE["n"]
         if LOGF:

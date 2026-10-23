@@ -1,0 +1,91 @@
+diff --git a/matrix.go b/matrix.go
+index 1d957d5..e090596 100644
+--- a/matrix.go
++++ b/matrix.go
+@@ -1,20 +1,81 @@
+ package matrix
+ 
+-// Define the Matrix type here.
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
+ 
++// Matrix is a two-dimensional grid of integers, indexed [row][col].
++type Matrix [][]int
++
++var (
++	errEmptyRow   = errors.New("matrix has an empty row")
++	errUnevenRows = errors.New("matrix rows have different lengths")
++	errNoRows     = errors.New("matrix has no rows")
++	errNotAnInt   = errors.New("matrix contains a non-integer value")
++)
++
++// New parses a string representation of a matrix. Rows are separated by
++// newlines and values within a row are separated by whitespace.
+ func New(s string) (Matrix, error) {
+-	panic("Please implement the New function")
++	lines := strings.Split(s, "\n")
++	m := make(Matrix, 0, len(lines))
++	width := -1
++	for _, line := range lines {
++		fields := strings.Fields(line)
++		if len(fields) == 0 {
++			return nil, errEmptyRow
++		}
++		if width < 0 {
++			width = len(fields)
++		} else if len(fields) != width {
++			return nil, errUnevenRows
++		}
++		row := make([]int, len(fields))
++		for i, f := range fields {
++			v, err := strconv.Atoi(f)
++			if err != nil {
++				return nil, errNotAnInt
++			}
++			row[i] = v
++		}
++		m = append(m, row)
++	}
++	if len(m) == 0 {
++		return nil, errNoRows
++	}
++	return m, nil
+ }
+ 
+ // Cols and Rows must return the results without affecting the matrix.
+ func (m Matrix) Cols() [][]int {
+-	panic("Please implement the Cols function")
++	if len(m) == 0 {
++		return [][]int{}
++	}
++	cols := make([][]int, len(m[0]))
++	for c := range cols {
++		cols[c] = make([]int, len(m))
++		for r := range m {
++			cols[c][r] = m[r][c]
++		}
++	}
++	return cols
+ }
+ 
+ func (m Matrix) Rows() [][]int {
+-	panic("Please implement the Rows function")
++	rows := make([][]int, len(m))
++	for r := range m {
++		rows[r] = make([]int, len(m[r]))
++		copy(rows[r], m[r])
++	}
++	return rows
+ }
+ 
+ func (m Matrix) Set(row, col, val int) bool {
+-	panic("Please implement the Set function")
++	if row < 0 || row >= len(m) || col < 0 || col >= len(m[row]) {
++		return false
++	}
++	m[row][col] = val
++	return true
+ }

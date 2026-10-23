@@ -1,0 +1,69 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..25c6aec 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,63 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    if goal > max(bucket_one, bucket_two):
++        raise ValueError("The goal is larger than both buckets.")
++
++    if bucket_one <= 0 or bucket_two <= 0:
++        raise ValueError("Bucket sizes must be positive.")
++    if goal <= 0:
++        raise ValueError("The goal must be positive.")
++
++    capacities = (bucket_one, bucket_two)
++    start_state = (
++        (bucket_one, 0) if start_bucket == "one" else (0, bucket_two)
++    )
++
++    def is_forbidden(state):
++        if start_bucket == "one":
++            return state[0] == 0 and state[1] == bucket_two
++        return state[1] == 0 and state[0] == bucket_one
++
++    def reached(state):
++        return state[0] == goal or state[1] == goal
++
++    queue = deque([(start_state, 1)])
++    visited = {start_state}
++
++    while queue:
++        state, actions = queue.popleft()
++
++        if reached(state):
++            if state[0] == goal:
++                return (actions, "one", state[1])
++            return (actions, "two", state[0])
++
++        a, b = state
++        candidates = [
++            (capacities[0], b),  # fill bucket one
++            (a, capacities[1]),  # fill bucket two
++            (0, b),              # empty bucket one
++            (a, 0),              # empty bucket two
++        ]
++
++        # Pour bucket one into bucket two.
++        amount = min(a, capacities[1] - b)
++        candidates.append((a - amount, b + amount))
++
++        # Pour bucket two into bucket one.
++        amount = min(b, capacities[0] - a)
++        candidates.append((a + amount, b - amount))
++
++        for next_state in candidates:
++            if next_state == state:
++                continue
++            if is_forbidden(next_state):
++                continue
++            if next_state in visited:
++                continue
++            visited.add(next_state)
++            queue.append((next_state, actions + 1))
++
++    raise ValueError("The goal cannot be reached with these buckets.")

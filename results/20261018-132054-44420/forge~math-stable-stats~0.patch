@@ -1,0 +1,228 @@
+diff --git a/stats.py b/stats.py
+index add4f59..a505dcb 100644
+--- a/stats.py
++++ b/stats.py
+@@ -1,21 +1,125 @@
+-"""Summary statistics for the sensor pipeline."""
++"""Summary statistics for the sensor pipeline.
++
++The routines here trade a little extra work for numerical stability: they are
++safe for any finite double-precision input, including batches whose values sit
++around a large offset (absolute pressures, epoch timestamps) and log-space
++quantities as extreme as +/-1e300.
++"""
+ import math
+ 
+ 
+ def mean_var(xs):
+-    """(mean, population variance) of a non-empty sequence of floats."""
++    """(mean, population variance) of a non-empty sequence of floats.
++
++    The mean is an exactly-rounded sum divided by n, which is the best a double
++    can represent.  The variance is accumulated about a *local* origin (the
++    first sample) rather than about the mean: subtracting a nearby value is
++    exact (Sterbenz), so the deviations keep their own scale even when the
++    spread is ~1e14 times smaller than the values (timestamps, absolute
++    pressures).  Those deviations are then re-centred once and squared under an
++    exactly-rounded sum, so the variance is non-negative and accurate to a few
++    ulp, instead of suffering the catastrophic cancellation of an
++    E[x^2] - E[x]^2 computation (which can even report a negative variance).
++
++    Inputs so extreme that the variance is not representable yield ``inf``
++    rather than an ``OverflowError``; a variance that underflows to zero is
++    returned as ``0.0``.
++    """
++    if not isinstance(xs, (list, tuple)):
++        xs = list(xs)
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires a non-empty sequence")
++
++    # Mean: the correctly rounded sum is already the most accurate estimate
++    # possible, so there is nothing to refine here.
++    try:
++        mean = math.fsum(xs) / n
++    except OverflowError:
++        # The total is out of range but the mean can still be finite, so sum
++        # after scaling.  Costs one rounding of relative error, not a crash.
++        mean = math.fsum(x / n for x in xs)
++
++    # Variance: use the first sample as a local origin so the deviations are
++    # computed exactly and stay at the scale of the spread, not of the offset.
++    origin, origin_sum = _shifted_sum(xs, xs[0], mean, n)
++    mean_shift = origin_sum / n
++
++    # Corrected two-pass: nudge the centre so the residuals sum to ~0, which
++    # removes the residual bias from the squared deviations.
++    try:
++        mean_shift += math.fsum((x - origin) - mean_shift for x in xs) / n
++    except OverflowError:
++        pass  # deviations overflowed; the variance is inf anyway (guarded below)
++
++    sq_devs = (d * d for d in ((x - origin) - mean_shift for x in xs))
++    try:
++        var = math.fsum(sq_devs) / n
++    except OverflowError:
++        var = math.inf
++
++    # Sum of squares cannot be negative, but normalise -0.0 to 0.0.
++    return mean, var + 0.0
++
++
++def _shifted_sum(xs, origin, mean, n):
++    """(origin, sum of (x - origin)) unless the shift overflows.
++
++    Shifting is only needed when the values sit on a large common offset, i.e.
++    when they have similar magnitudes -- exactly the case where x - origin is
++    finite.  If it does overflow the data is spread over the full dynamic
++    range, where summing the raw values is well conditioned instead.
++    """
++    try:
++        total = math.fsum(x - origin for x in xs)
++        if math.isfinite(total):
++            return origin, total
++    except OverflowError:
++        pass
++    try:
++        total = math.fsum(xs)
++        if math.isfinite(total):
++            return 0.0, total
++    except OverflowError:
++        pass
++    # Even the raw sum overflows; centre on the (finite) mean instead.
++    return mean, 0.0
+ 
+ 
+ def logsumexp(xs):
+-    """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    """log(sum(exp(x) for x in xs)) for a non-empty sequence.
++
++    Shifting by the maximum keeps every exponent argument in [-inf, 0], so no
++    intermediate term can overflow and the dominant term is exp(0) == 1.  The
++    shift itself is exact (it is one of the inputs), so the result keeps full
++    relative accuracy up to +/-1e300.
++    """
++    if not isinstance(xs, (list, tuple)):
++        xs = list(xs)
++    if not xs:
++        raise ValueError("logsumexp() requires a non-empty sequence")
++
++    m = max(xs)
++    if not math.isfinite(m):
++        # inf -> inf; all -inf -> -inf; nan propagates as nan.
++        return m
++
++    total = math.fsum(math.exp(x - m) for x in xs)  # in [1, n], no overflow
++    return m + math.log(total)
+ 
+ 
+ def softplus(x):
+-    """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    """log(1 + exp(x)).
++
++    The branch point at 0 keeps the exponent argument non-positive, so exp()
++    can never overflow, and log1p() preserves the full relative precision of
++    the small exp(x) term for very negative x (instead of collapsing to 0 as
++    log(1 + exp(x)) does once exp(x) < eps).  For large x the result is x plus
++    a negligible correction, so it is exact to the last bit of x.
++
++    Results below the smallest subnormal (~exp(-745)) underflow to 0.0; that is
++    what the true value rounds to in double precision.
++    """
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))
+diff --git a/test_stats.py b/test_stats.py
+index 65c8ab7..a1da529 100644
+--- a/test_stats.py
++++ b/test_stats.py
+@@ -1,9 +1,19 @@
+ import math
+ import unittest
++from fractions import Fraction
+ 
+ from stats import logsumexp, mean_var, softplus
+ 
+ 
++def assert_rel(test, got, expected, tol):
++    """Assert |got - expected| <= tol * |expected|."""
++    if expected == 0.0:
++        test.assertEqual(got, 0.0)
++    else:
++        test.assertLessEqual(abs(got - expected) / abs(expected), tol,
++                             f"{got!r} vs {expected!r}")
++
++
+ class TestStats(unittest.TestCase):
+     def test_variance_with_offset(self):
+         xs = [1e9 + d for d in (4.0, 7.0, 13.0, 16.0)]
+@@ -17,6 +27,63 @@ class TestStats(unittest.TestCase):
+     def test_softplus_large(self):
+         self.assertEqual(softplus(1000.0), 1000.0)
+ 
++    def test_variance_never_negative(self):
++        # E[x^2] - E[x]^2 cancels catastrophically (and goes negative) here.
++        for xs in ([1e9 + d for d in (4.0, 7.0, 13.0, 16.0)],
++                   [1e15 + d for d in (1.0, 2.0, 3.0, 4.0)],
++                   [1.7e9] * 1000,
++                   [2.5]):
++            _, v = mean_var(xs)
++            self.assertGreaterEqual(v, 0.0)
++
++    def test_variance_accuracy_against_exact(self):
++        # Offset 1e12 with a 1e-2 spread: the mean itself can only be resolved
++        # to ~1e-4 there, so the variance has to be centred on a local origin.
++        xs = [1e12 + d for d in (0.01, -0.02, 0.03, -0.04, 0.005)]
++        exact = [Fraction(x) for x in xs]
++        m_exact = sum(exact) / len(exact)
++        v_exact = sum((x - m_exact) ** 2 for x in exact) / len(exact)
++        m, v = mean_var(xs)
++        assert_rel(self, m, float(m_exact), 1e-15)
++        assert_rel(self, v, float(v_exact), 1e-12)
++
++    def test_variance_extreme_values_do_not_raise(self):
++        for xs in ([1e308, 1e308], [1e308, -1e308], [1e308] * 3, [5e-324] * 3):
++            m, v = mean_var(xs)
++            self.assertFalse(math.isnan(v))
++            self.assertGreaterEqual(v, 0.0)
++
++    def test_logsumexp_extremes(self):
++        for a in (1000.0, -1000.0, 1e300, -1e300):
++            assert_rel(self, logsumexp([a, a]), a + math.log(2), 1e-15)
++        self.assertEqual(logsumexp([1e300]), 1e300)
++        self.assertEqual(logsumexp([float("inf")]), float("inf"))
++        self.assertEqual(logsumexp([float("-inf")]), float("-inf"))
++
++    def test_logsumexp_accuracy_large_batch(self):
++        # logsumexp([a] * k) == a + log(k) exactly, for any a.
++        xs = [700.0] * 100_000
++        assert_rel(self, logsumexp(xs), 700.0 + math.log(100_000), 1e-15)
++        xs = [-700.0] * 100_000
++        assert_rel(self, logsumexp(xs), -700.0 + math.log(100_000), 1e-15)
++        self.assertEqual(logsumexp([0.0] * 100_000), math.log(100_000))
++
++    def test_softplus_very_negative(self):
++        # log(1 + exp(x)) returns exactly 0.0 for x < ~-37; the true value is
++        # still a perfectly good double down to about -745.
++        for x in (-37.0, -40.0, -100.0, -700.0):
++            assert_rel(self, softplus(x), math.exp(x), 1e-12)
++        self.assertEqual(softplus(-1000.0), 0.0)  # genuinely underflows
++
++    def test_softplus_accuracy(self):
++        assert_rel(self, softplus(0.0), math.log(2), 1e-15)
++        assert_rel(self, softplus(-1.0), math.log1p(math.exp(-1.0)), 1e-15)
++        # x + log1p(exp(-x)) for large x, where exp(x) would overflow.
++        assert_rel(self, softplus(1e300), 1e300, 1e-15)
++        self.assertTrue(math.isfinite(softplus(1e300)))
++        self.assertEqual(softplus(float("inf")), float("inf"))
++        self.assertEqual(softplus(float("-inf")), 0.0)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,111 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..120a1b5 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,15 +1,17 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
++const { toCents } = require("./money");
+ const { fmt } = require("./format");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
++// Everything is kept as integer cents so each rounding step is exact and the receipt adds up.
+ function checkout(cart) {
+-  let subtotal = 0;
+-  let discount = 0;
+-  let taxable = 0;
++  let subtotal = 0n;
++  let discount = 0n;
++  let taxable = 0n;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = toCents(item.price) * BigInt(item.qty);
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..dc76bfe 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,8 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++const { pctOfCents } = require("./money");
++
++// Per-line percentage discounts: `amountCents` x `pct`, rounded half up to the cent on its own.
++function discountFor(amountCents, pct) {
++  return pctOfCents(amountCents, pct);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..205cf87 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,9 @@
+-// Money as a plain "1234.50" string for receipts and the API.
+-function fmt(amount) {
+-  return amount.toFixed(2);
++// Money (integer cents) as a plain "1234.50" string for receipts and the API.
++function fmt(cents) {
++  const n = BigInt(cents);
++  const abs = n < 0n ? -n : n;
++  const sign = n < 0n ? "-" : "";
++  return `${sign}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
+ }
+ 
+ module.exports = { fmt };
+diff --git a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..da1d5af
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,30 @@
++// Money is handled as integer cents so the README's half-up rounding is exact.
++// BigInt keeps products (amount x percentage) exact for any cart.
++
++// Parse a decimal amount (e.g. "19.99") into whole cents, rounding half up.
++function toCents(amount) {
++  const match = /^(\d+)(?:\.(\d+))?$/.exec(String(amount).trim());
++  if (!match) throw new RangeError(`invalid money amount: ${amount}`);
++  const [, whole, frac = ""] = match;
++  const cents = BigInt(whole) * 100n + BigInt((frac + "00").slice(0, 2));
++  return frac.length > 2 && frac[2] >= "5" ? cents + 1n : cents;
++}
++
++// A percentage (e.g. 8.25) as an exact fraction: numerator / denominator.
++function pctFraction(pct) {
++  const match = /^(\d+)(?:\.(\d+))?$/.exec(String(pct).trim());
++  if (!match) throw new RangeError(`invalid percentage: ${pct}`);
++  const [, whole, frac = ""] = match;
++  return [BigInt(whole + frac), 10n ** BigInt(frac.length)];
++}
++
++// `pct` percent of `cents`, rounded half up to the cent.
++function pctOfCents(cents, pct) {
++  const [num, den] = pctFraction(pct);
++  const numerator = BigInt(cents) * num;
++  const denominator = den * 100n;
++  // round half up: floor((2n + d) / 2d)
++  return (2n * numerator + denominator) / (2n * denominator);
++}
++
++module.exports = { toCents, pctOfCents };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..25b3f54 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,9 @@
++const { pctOfCents } = require("./money");
++
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++// Rounded half up to the cent once for the whole cart.
++function taxFor(taxableCents, rate) {
++  return pctOfCents(taxableCents, rate);
+ }
+ 
+ module.exports = { taxFor };

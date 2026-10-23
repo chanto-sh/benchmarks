@@ -1,0 +1,13 @@
+diff --git a/solution.py b/solution.py
+index 73e15a0..ffc3610 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,7 @@
+ def divisible_by_digits(startnum, endnum):
+-    pass
++    result = []
++    for num in range(startnum, endnum + 1):
++        digits = [int(d) for d in str(num)]
++        if all(d != 0 and num % d == 0 for d in digits):
++            result.append(num)
++    return result

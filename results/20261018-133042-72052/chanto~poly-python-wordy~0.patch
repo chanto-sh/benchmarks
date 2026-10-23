@@ -1,0 +1,60 @@
+diff --git a/wordy.py b/wordy.py
+index 6fdad1f..1db4faa 100644
+--- a/wordy.py
++++ b/wordy.py
+@@ -1,2 +1,54 @@
++OPERATION_WORDS = {"plus", "minus", "multiplied", "divided", "by"}
++
++
++def _is_number(token):
++    try:
++        int(token)
++    except ValueError:
++        return False
++    return True
++
++
+ def answer(question):
+-    pass
++    if not (question.startswith("What is") and question.endswith("?")):
++        raise ValueError("unknown operation")
++
++    tokens = question[len("What is"):-1].split()
++
++    # Any token that is neither a number nor a known operation word means the
++    # question is not a math question at all.
++    if any(not _is_number(token) and token not in OPERATION_WORDS for token in tokens):
++        raise ValueError("unknown operation")
++
++    if not tokens or not _is_number(tokens[0]):
++        raise ValueError("syntax error")
++
++    result = int(tokens[0])
++    index = 1
++    while index < len(tokens):
++        operation = tokens[index]
++
++        if operation in ("multiplied", "divided"):
++            if tokens[index + 1:index + 2] != ["by"]:
++                raise ValueError("syntax error")
++            index += 2
++        elif operation in ("plus", "minus"):
++            index += 1
++        else:
++            raise ValueError("syntax error")
++
++        if index >= len(tokens) or not _is_number(tokens[index]):
++            raise ValueError("syntax error")
++        operand = int(tokens[index])
++        index += 1
++
++        if operation == "plus":
++            result += operand
++        elif operation == "minus":
++            result -= operand
++        elif operation == "multiplied":
++            result *= operand
++        else:
++            result = int(result / operand)
++
++    return result

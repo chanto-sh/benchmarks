@@ -1,0 +1,46 @@
+diff --git a/affine_cipher.py b/affine_cipher.py
+index 2d41e04..1c0b7f6 100644
+--- a/affine_cipher.py
++++ b/affine_cipher.py
+@@ -1,6 +1,39 @@
++from math import gcd
++
++_ALPHABET_SIZE = 26
++
++
++def _check_coprime(a):
++    if gcd(a, _ALPHABET_SIZE) != 1:
++        raise ValueError("a and m must be coprime.")
++
++
++def _modular_inverse(a):
++    return next(x for x in range(_ALPHABET_SIZE) if (a * x) % _ALPHABET_SIZE == 1)
++
++
+ def encode(plain_text, a, b):
+-    pass
++    _check_coprime(a)
++    encoded = []
++    for char in plain_text.lower():
++        if char.isdigit():
++            encoded.append(char)
++        elif char.isalpha():
++            index = ord(char) - ord("a")
++            encoded.append(chr((a * index + b) % _ALPHABET_SIZE + ord("a")))
++        # other characters are ignored
++    encoded = "".join(encoded)
++    return " ".join(encoded[i : i + 5] for i in range(0, len(encoded), 5))
+ 
+ 
+ def decode(ciphered_text, a, b):
+-    pass
++    _check_coprime(a)
++    inverse = _modular_inverse(a)
++    decoded = []
++    for char in ciphered_text.lower():
++        if char.isdigit():
++            decoded.append(char)
++        elif char.isalpha():
++            index = ord(char) - ord("a")
++            decoded.append(chr(inverse * (index - b) % _ALPHABET_SIZE + ord("a")))
++    return "".join(decoded)

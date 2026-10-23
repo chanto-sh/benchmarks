@@ -1,0 +1,63 @@
+diff --git a/stats.py b/stats.py
+index add4f59..a7ca1b9 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,52 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    origin = xs[0]
++    offsets = [x - origin for x in xs]
++
++    if not all(math.isfinite(d) for d in offsets):
++        # Values of opposite signs near the float limit can make x - origin
++        # overflow.  The mean is still finite, but the variance is not.
++        scale = max(abs(x) for x in xs)
++        mean = scale * (math.fsum(x / scale for x in xs) / n)
++        return mean, math.inf
++
++    try:
++        mean_offset = math.fsum(offsets) / n
++    except OverflowError:
++        scale = max(abs(d) for d in offsets)
++        mean_offset = scale * (math.fsum(d / scale for d in offsets) / n)
++    mean = origin + mean_offset
++
++    try:
++        var = math.fsum((d - mean_offset) * (d - mean_offset)
++                        for d in offsets) / n
++    except OverflowError:
++        # The variance can still be finite when the sum of squared
++        # deviations overflows, so scale before summing.
++        scale = max(abs(d) for d in offsets)
++        mean_offset /= scale
++        var_norm = math.fsum((d / scale - mean_offset) *
++                             (d / scale - mean_offset)
++                             for d in offsets) / n
++        std = scale * math.sqrt(var_norm)
++        var = std * std
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    xs = list(xs)
++    m = max(xs)
++    if m == math.inf:
++        return math.inf
++    if m == -math.inf:
++        return -math.inf
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

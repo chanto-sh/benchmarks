@@ -1,0 +1,55 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..4e85ef0 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,49 @@
+ package bottlesong
+ 
++import "fmt"
++
++var numberWords = []string{
++	"no", "one", "two", "three", "four", "five",
++	"six", "seven", "eight", "nine", "ten",
++}
++
++// title capitalizes the first letter of the given word.
++func title(word string) string {
++	if word == "" {
++		return word
++	}
++	return string(word[0]-'a'+'A') + word[1:]
++}
++
++// bottlesPhrase returns the phrase describing the given number of bottles,
++// e.g. "Ten green bottles" or "one green bottle".
++func bottlesPhrase(n int) string {
++	word := numberWords[n]
++	if n == 1 {
++		return word + " green bottle"
++	}
++	return word + " green bottles"
++}
++
++// verse returns the four lines of the verse starting with n bottles.
++func verse(n int) []string {
++	current := title(bottlesPhrase(n))
++	remaining := bottlesPhrase(n - 1)
++	return []string{
++		fmt.Sprintf("%s hanging on the wall,", current),
++		fmt.Sprintf("%s hanging on the wall,", current),
++		"And if one green bottle should accidentally fall,",
++		fmt.Sprintf("There'll be %s hanging on the wall.", remaining),
++	}
++}
++
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	lyrics := []string{}
++	for i := 0; i < takeDown; i++ {
++		if i > 0 {
++			lyrics = append(lyrics, "")
++		}
++		lyrics = append(lyrics, verse(startBottles-i)...)
++	}
++	return lyrics
+ }

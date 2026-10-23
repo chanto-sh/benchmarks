@@ -1,0 +1,38 @@
+diff --git a/report.py b/report.py
+new file mode 100644
+index 0000000..a71a5ed
+--- /dev/null
++++ b/report.py
+@@ -0,0 +1,32 @@
++import csv
++
++
++def to_number(value):
++    if value is None:
++        return None
++    value = value.strip()
++    if not value:
++        return None
++    try:
++        return float(value)
++    except ValueError:
++        return None
++
++
++def main():
++    totals = {}
++    with open("sales.csv", newline="") as f:
++        for row in csv.DictReader(f):
++            quantity = to_number(row.get("quantity"))
++            unit_price = to_number(row.get("unit_price"))
++            if quantity is None or unit_price is None:
++                continue
++            region = (row.get("region") or "").strip()
++            totals[region] = totals.get(region, 0.0) + quantity * unit_price
++
++    for region, revenue in sorted(totals.items(), key=lambda item: (-item[1], item[0])):
++        print(f"{region}: {revenue:.2f}")
++
++
++if __name__ == "__main__":
++    main()

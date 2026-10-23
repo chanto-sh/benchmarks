@@ -1,0 +1,45 @@
+diff --git a/book_store.py b/book_store.py
+index 8a84288..678673d 100644
+--- a/book_store.py
++++ b/book_store.py
+@@ -1,2 +1,39 @@
++from functools import lru_cache
++
++# Price in cents for a group of n distinct books, after the discount.
++PRICES = [0, 800, 1520, 2160, 2560, 3000]
++
++
+ def total(basket):
+-    pass
++    counts = [0] * 5
++    for book in basket:
++        counts[book - 1] += 1
++
++    @lru_cache(maxsize=None)
++    def best(counts):
++        if not any(counts):
++            return 0
++
++        # The group charged next must contain the first book that still has
++        # copies left; enumerate every possible set of companions for it.
++        first = next(i for i, n in enumerate(counts) if n)
++        others = [i for i, n in enumerate(counts) if n and i != first]
++
++        best_price = None
++        for mask in range(1 << len(others)):
++            group = [first]
++            for bit, i in enumerate(others):
++                if mask & (1 << bit):
++                    group.append(i)
++
++            remaining = list(counts)
++            for i in group:
++                remaining[i] -= 1
++            price = PRICES[len(group)] + best(tuple(remaining))
++
++            if best_price is None or price < best_price:
++                best_price = price
++
++        return best_price
++
++    return best(tuple(counts))

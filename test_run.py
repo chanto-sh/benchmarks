@@ -429,6 +429,19 @@ class RunnerTests(unittest.TestCase):
                     self.assertIn("chanto", data["meta"]["agent_versions"])
                     self.assertIn("tiny", data["meta"]["tasks"])
 
+    def test_agents_resolve_to_the_benchmarks_own_installs(self):
+        # A pinned copy in the benchmark's prefix wins over whatever is on PATH;
+        # with none, the bare name (PATH) is the fallback.
+        with tempfile.TemporaryDirectory() as d:
+            npm, bins, uv = Path(d) / "npm", Path(d) / "bin", Path(d) / "uv"
+            (npm).mkdir(); (bins).mkdir(); (uv / "aider-chat" / "bin").mkdir(parents=True)
+            (npm / "claude").touch(); (bins / "goose").touch(); (uv / "aider-chat" / "bin" / "aider").touch()
+            with patch.object(run, "NPM_BIN", npm), patch.object(run, "BIN_DIR", bins), patch.object(run, "UV_TOOLS", uv):
+                self.assertEqual(run.agent_exe("claude"), str(npm / "claude"))
+                self.assertEqual(run.agent_exe("goose"), str(bins / "goose"))
+                self.assertEqual(run.agent_exe("aider"), str(uv / "aider-chat" / "bin" / "aider"))
+                self.assertEqual(run.agent_exe("opencode"), "opencode")
+
     def test_continue_and_openhands_run_headless_against_the_proxy(self):
         wd = self.root / "wd"
         with patch.object(run, "API", "http://localhost:4000"):
@@ -442,7 +455,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(env["CONTINUE_CLI_ENABLE_TELEMETRY"], "0")
 
             cmd, env = run.agent_cmd("openhands", "m", "do it", 8192, wd)
-            self.assertEqual(cmd[:3], ["openhands", "--headless", "--override-with-envs"])
+            self.assertEqual(cmd[:3], [run.agent_exe("openhands"), "--headless", "--override-with-envs"])
             self.assertEqual(cmd[-2:], ["-t", "do it"])
             self.assertEqual((env["LLM_MODEL"], env["LLM_BASE_URL"], env["HOME"]),
                              ("openai/m", "http://localhost:4000/v1", str(run.home("openhands"))))
@@ -458,6 +471,15 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(args, {"command": "cat f3.txt", "security_risk": "LOW"})
         args = stressmock.args_for({"mode": {"type": "string", "enum": ["view", "create"]}}, ["mode"], 1, False)
         self.assertEqual(args, {"mode": "view"})
+
+    def test_overhead_mock_ends_runs_only_through_real_finish_tools(self):
+        import stressmock
+        tool = lambda name: {"name": name, "input_schema": {"type": "object", "properties": {}}}
+        # Claude Code's ExitPlanMode isn't a finish tool; calling it every turn
+        # once the budget is spent kept Claude Code running forever.
+        self.assertIsNone(stressmock.pick_terminal({"tools": [tool("Read"), tool("ExitPlanMode"), tool("TaskStop")]}))
+        self.assertEqual(stressmock.pick_terminal({"tools": [tool("Read"), tool("submit_and_exit")]})[0], "submit_and_exit")
+        self.assertEqual(stressmock.pick_terminal({"tools": [tool("Exit")]})[0], "Exit")
 
     def test_optimization_variants_set_flags_and_keep_the_baseline(self):
         wd = self.root / "wd"

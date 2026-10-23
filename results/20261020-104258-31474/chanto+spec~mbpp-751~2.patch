@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index 523a623..06a1158 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,19 @@
+ def check_min_heap_helper(arr, i):
+-    pass
++    left = 2 * i + 1
++    right = 2 * i + 2
++
++    if left >= len(arr):
++        return True
++    if arr[i] > arr[left]:
++        return False
++    if right < len(arr) and arr[i] > arr[right]:
++        return False
++
++    return (
++        check_min_heap_helper(arr, left)
++        and check_min_heap_helper(arr, right)
++    )
++
++
++def check_min_heap(arr):
++    return check_min_heap_helper(arr, 0)

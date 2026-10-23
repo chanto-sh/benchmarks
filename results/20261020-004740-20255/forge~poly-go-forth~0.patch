@@ -1,0 +1,213 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..855c7fa 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,207 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// instruction is a single compiled step of a program or word definition.
++// User-defined words are stored as flat instruction slices: references to
++// previously known words are expanded when the definition is compiled, so
++// later redefinitions do not affect existing words.
++type instruction struct {
++	isNumber bool
++	number   int
++	word     string
++}
++
++var (
++	errEmptyStack   = errors.New("empty stack")
++	errOneValue     = errors.New("only one value on the stack")
++	errDivideByZero = errors.New("divide by zero")
++	errIllegal      = errors.New("illegal operation")
++	errUndefined    = errors.New("undefined operation")
++)
++
++// isNumber reports whether tok is a sequence of digits, optionally prefixed
++// with a minus sign.
++func isNumber(tok string) bool {
++	s := strings.TrimPrefix(tok, "-")
++	if s == "" {
++		return false
++	}
++	for i := 0; i < len(s); i++ {
++		if s[i] < '0' || s[i] > '9' {
++			return false
++		}
++	}
++	return true
++}
++
++// isBuiltin reports whether name is one of the built-in words.
++func isBuiltin(name string) bool {
++	switch name {
++	case "+", "-", "*", "/", "dup", "drop", "swap", "over":
++		return true
++	}
++	return false
++}
++
++// popTwo removes and returns the top two stack values, in stack order.
++func popTwo(stack *[]int) (int, int, error) {
++	s := *stack
++	switch len(s) {
++	case 0:
++		return 0, 0, errEmptyStack
++	case 1:
++		return 0, 0, errOneValue
++	}
++	a, b := s[len(s)-2], s[len(s)-1]
++	*stack = s[:len(s)-2]
++	return a, b, nil
++}
++
++// runBuiltin executes a built-in word.
++func runBuiltin(name string, stack *[]int) error {
++	s := *stack
++	switch name {
++	case "+", "-", "*", "/":
++		a, b, err := popTwo(stack)
++		if err != nil {
++			return err
++		}
++		switch name {
++		case "+":
++			*stack = append(*stack, a+b)
++		case "-":
++			*stack = append(*stack, a-b)
++		case "*":
++			*stack = append(*stack, a*b)
++		case "/":
++			if b == 0 {
++				return errDivideByZero
++			}
++			*stack = append(*stack, a/b)
++		}
++	case "dup":
++		if len(s) == 0 {
++			return errEmptyStack
++		}
++		*stack = append(s, s[len(s)-1])
++	case "drop":
++		if len(s) == 0 {
++			return errEmptyStack
++		}
++		*stack = s[:len(s)-1]
++	case "swap":
++		a, b, err := popTwo(stack)
++		if err != nil {
++			return err
++		}
++		*stack = append(*stack, b, a)
++	case "over":
++		a, b, err := popTwo(stack)
++		if err != nil {
++			return err
++		}
++		*stack = append(*stack, a, b, a)
++	}
++	return nil
++}
++
++// compile resolves tok against the dictionary, appending the resulting
++// instructions to body. Words are case-insensitive; word names are stored
++// and looked up in lower case.
++func compile(tok string, dict map[string][]instruction, body []instruction) ([]instruction, error) {
++	name := strings.ToLower(tok)
++	if isNumber(name) {
++		n, err := strconv.Atoi(name)
++		if err != nil {
++			return nil, errIllegal
++		}
++		return append(body, instruction{isNumber: true, number: n}), nil
++	}
++	// User definitions take precedence over built-in words, so that words
++	// like "swap" can be redefined.
++	if def, ok := dict[name]; ok {
++		// Expand the definition in place so that it keeps the semantics it
++		// had at this point in time, even if the word is later redefined.
++		return append(body, def...), nil
++	}
++	if isBuiltin(name) {
++		return append(body, instruction{word: name}), nil
++	}
++	return nil, errUndefined
++}
++
++// Forth evaluates the given program and returns the resulting stack.
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	stack := []int{}
++	dict := map[string][]instruction{}
++
++	const (
++		normal = iota
++		needName
++		defining
++	)
++	state := normal
++	var defName string
++	var body []instruction
++
++	for _, line := range input {
++		for _, tok := range strings.Fields(line) {
++			if state == needName {
++				if tok == ":" || tok == ";" || isNumber(tok) {
++					return nil, errIllegal
++				}
++				defName = strings.ToLower(tok)
++				body = nil
++				state = defining
++				continue
++			}
++			if state == defining {
++				switch tok {
++				case ";":
++					dict[defName] = body
++					defName = ""
++					body = nil
++					state = normal
++				case ":":
++					return nil, errIllegal
++				default:
++					var err error
++					body, err = compile(tok, dict, body)
++					if err != nil {
++						return nil, err
++					}
++				}
++				continue
++			}
++
++			switch tok {
++			case ":":
++				state = needName
++			case ";":
++				return nil, errIllegal
++			default:
++				program, err := compile(tok, dict, nil)
++				if err != nil {
++					return nil, err
++				}
++				for _, in := range program {
++					if in.isNumber {
++						stack = append(stack, in.number)
++					} else if err := runBuiltin(in.word, &stack); err != nil {
++						return nil, err
++					}
++				}
++			}
++		}
++	}
++
++	if state != normal {
++		return nil, errIllegal
++	}
++	return stack, nil
+ }

@@ -1,0 +1,218 @@
+diff --git a/test_roman.py b/test_roman.py
+new file mode 100644
+index 0000000..56b7833
+--- /dev/null
++++ b/test_roman.py
+@@ -0,0 +1,212 @@
++import unittest
++
++from roman import to_roman
++
++
++class TestToRomanNormalValues(unittest.TestCase):
++    """Conversions for ordinary values, including multi-symbol combinations."""
++
++    def test_single_symbols(self):
++        cases = {
++            1: "I",
++            5: "V",
++            10: "X",
++            50: "L",
++            100: "C",
++            500: "D",
++            1000: "M",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_repeated_symbols(self):
++        cases = {
++            2: "II",
++            3: "III",
++            6: "VI",
++            7: "VII",
++            8: "VIII",
++            20: "XX",
++            30: "XXX",
++            200: "CC",
++            300: "CCC",
++            2000: "MM",
++            3000: "MMM",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_additive_combinations(self):
++        cases = {
++            11: "XI",
++            13: "XIII",
++            15: "XV",
++            18: "XVIII",
++            21: "XXI",
++            25: "XXV",
++            37: "XXXVII",
++            60: "LX",
++            75: "LXXV",
++            110: "CX",
++            123: "CXXIII",
++            250: "CCL",
++            600: "DC",
++            666: "DCLXVI",
++            1100: "MC",
++            1500: "MD",
++            2018: "MMXVIII",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_complex_values(self):
++        cases = {
++            1666: "MDCLXVI",
++            1888: "MDCCCLXXXVIII",
++            2024: "MMXXIV",
++            2468: "MMCDLXVIII",
++            3888: "MMMDCCCLXXXVIII",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanSubtractiveForms(unittest.TestCase):
++    """All six subtractive pairs, alone and in combination."""
++
++    def test_individual_subtractive_forms(self):
++        cases = {
++            4: "IV",
++            9: "IX",
++            40: "XL",
++            90: "XC",
++            400: "CD",
++            900: "CM",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++    def test_compound_subtractive_forms(self):
++        cases = {
++            14: "XIV",
++            19: "XIX",
++            24: "XXIV",
++            29: "XXIX",
++            34: "XXXIV",
++            39: "XXXIX",
++            44: "XLIV",
++            49: "XLIX",
++            54: "LIV",
++            59: "LIX",
++            69: "LXIX",
++            89: "LXXXIX",
++            94: "XCIV",
++            99: "XCIX",
++            104: "CIV",
++            109: "CIX",
++            140: "CXL",
++            190: "CXC",
++            294: "CCXCIV",
++            399: "CCCXCIX",
++            404: "CDIV",
++            409: "CDIX",
++            444: "CDXLIV",
++            449: "CDXLIX",
++            490: "CDXC",
++            499: "CDXCIX",
++            900: "CM",
++            904: "CMIV",
++            909: "CMIX",
++            940: "CMXL",
++            944: "CMXLIV",
++            949: "CMXLIX",
++            990: "CMXC",
++            994: "CMXCIV",
++            999: "CMXCIX",
++        }
++        for value, expected in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(to_roman(value), expected)
++
++
++class TestToRomanBoundaries(unittest.TestCase):
++    """Smallest and largest legal inputs, and values adjacent to them."""
++
++    def test_lower_boundary(self):
++        self.assertEqual(to_roman(1), "I")
++
++    def test_lower_boundary_adjacent(self):
++        self.assertEqual(to_roman(2), "II")
++        self.assertEqual(to_roman(3), "III")
++
++    def test_upper_boundary(self):
++        self.assertEqual(to_roman(3999), "MMMCMXCIX")
++
++    def test_upper_boundary_adjacent(self):
++        self.assertEqual(to_roman(3998), "MMMCMXCVIII")
++        self.assertEqual(to_roman(3997), "MMMCMXCVII")
++
++    def test_every_value_in_range_produces_valid_numeral(self):
++        allowed = set("IVXLCDM")
++        for value in range(1, 4000):
++            with self.subTest(value=value):
++                numeral = to_roman(value)
++                self.assertTrue(numeral)
++                self.assertTrue(set(numeral) <= allowed)
++
++
++class TestToRomanInvalidInputs(unittest.TestCase):
++    """Inputs outside [1, 3999] or of the wrong type raise ValueError."""
++
++    def test_zero(self):
++        with self.assertRaises(ValueError):
++            to_roman(0)
++
++    def test_negative_values(self):
++        for value in (-1, -2, -3999, -4000, -100):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_above_upper_boundary(self):
++        for value in (4000, 4001, 10000, 10**9):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_floats(self):
++        for value in (0.0, 1.0, 1.5, 3999.0, 4000.5, -1.5):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_strings(self):
++        for value in ("", "1", "3999", "IV", "abc"):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_none(self):
++        with self.assertRaises(ValueError):
++            to_roman(None)
++
++    def test_booleans(self):
++        for value in (True, False):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++    def test_other_types(self):
++        for value in ([], [1], (1,), {1}, {"n": 1}, 1 + 2j, object()):
++            with self.subTest(value=value):
++                with self.assertRaises(ValueError):
++                    to_roman(value)
++
++
++if __name__ == "__main__":
++    unittest.main()

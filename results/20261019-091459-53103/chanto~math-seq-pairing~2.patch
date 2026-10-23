@@ -1,0 +1,120 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..c769d6b 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,113 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++# Fibonacci numbers, extended on demand.
++_FIB = [0, 1]
++
++
++def _fib(i):
++    while len(_FIB) <= i:
++        _FIB.append(_FIB[-1] + _FIB[-2])
++    return _FIB[i]
++
++
++# P is the set of bit strings that do not contain "11".
++# P strings of length n are counted by F(n + 2), so the number of P strings
++# shorter than n is F(n + 3) - 2.
++def _p_base(n):
++    return _fib(n + 3) - 2
++
++
++def _p_rank_len(s):
++    """Lexicographic rank of a P string among P strings of the same length."""
++    rank = 0
++    n = len(s)
++    for i, ch in enumerate(s):
++        if ch == "1":
++            # Count the same prefix followed by "0" instead of "1".
++            rank += _fib(n - i + 1)
++    return rank
++
++
++def _p_unrank_len(n, rank):
++    """The rank-th P string of length n in lexicographic order."""
++    out = []
++    prev_one = False
++    for i in range(n):
++        remaining = n - i - 1
++        zero_count = _fib(remaining + 2)
++        if prev_one:
++            out.append("0")
++            prev_one = False
++        elif rank < zero_count:
++            out.append("0")
++            prev_one = False
++        else:
++            rank -= zero_count
++            out.append("1")
++            prev_one = True
++    return "".join(out)
++
++
++def _p_unrank(n):
++    """The n-th P string in shortlex order (length first, then lexicographic)."""
++    length = 0
++    while _p_base(length + 1) <= n:
++        length += 1
++    return _p_unrank_len(length, n - _p_base(length))
++
++
++def _p_rank(s):
++    return _p_base(len(s)) + _p_rank_len(s)
++
++
++# C is the set of minimal strings not in P.  These are exactly the strings
++# w + "11" where w is in P and w is empty or ends in "0".  C strings of
++# length n are counted by F(n - 1), so C strings shorter than n number
++# F(n) - 1 (for n >= 2).
++def _c_base(n):
++    return _fib(n) - 1 if n >= 2 else 0
++
++
++def _c_unrank(n):
++    """The n-th C string in shortlex order."""
++    length = 2
++    while _c_base(length + 1) <= n:
++        length += 1
++    offset = n - _c_base(length)
++    if length == 2:
++        return "11"
++    # Dropping the final "0" of w gives a bijection with P strings of
++    # length length - 3, and this bijection preserves lexicographic order.
++    return _p_unrank_len(length - 3, offset) + "011"
++
++
++def _c_rank_prefix(w):
++    """Rank the C string w + "11" from its prefix w."""
++    if not w:
++        return 0
++    return _c_base(len(w) + 2) + _p_rank_len(w[:-1])
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++    bits = [_c_unrank(v) for v in lst[:-1]]
++    bits.append(_p_unrank(lst[-1]))
++    # The leading "1" is the sentinel that makes every key positive.
++    return int("1" + "".join(bits), 2)
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++    rest = bin(n)[3:]  # drop "0b" and the leading sentinel "1"
++    result = []
++    while True:
++        cut = rest.find("11")
++        if cut < 0:
++            result.append(_p_rank(rest))
++            return result
++        result.append(_c_rank_prefix(rest[:cut]))
++        rest = rest[cut + 2:]

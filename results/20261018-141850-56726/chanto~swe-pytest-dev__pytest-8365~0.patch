@@ -1,0 +1,67 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..fba2d87
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,4 @@
++The ``tmpdir``, ``tmpdir_factory`` and ``tmp_path_factory`` fixtures now sanitize
++the user name when creating the base temporary directory, because it may contain
++characters which are not valid in directory names (for example when using a
++domain account on Windows).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..3683fa7 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -111,7 +111,7 @@ class TempPathFactory:
+         else:
+             from_env = os.environ.get("PYTEST_DEBUG_TEMPROOT")
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+-            user = get_user() or "unknown"
++            user = _sanitize_user(get_user() or "unknown")
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+@@ -148,13 +148,18 @@ class TempdirFactory:
+         return py.path.local(self._tmppath_factory.getbasetemp().resolve())
+ 
+ 
++def _sanitize_user(user: str) -> str:
++    """Replace characters not allowed in a directory name by underscores."""
++    return re.sub(r"[\W]", "_", user)
++
++
+ def get_user() -> Optional[str]:
+     """Return the current user name, or None if getuser() does not work
+     in the current environment (see #1010)."""
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        return _sanitize_user(getpass.getuser())
+     except (ImportError, KeyError):
+         return None
+ 
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..5e91e85 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -246,6 +246,19 @@ def test_get_user(monkeypatch):
+     assert get_user() is None
+ 
+ 
++def test_get_user_sanitizes_invalid_directory_characters(monkeypatch):
++    monkeypatch.setattr("getpass.getuser", lambda: "contoso\\john_doe")
++    assert get_user() == "contoso_john_doe"
++
++
++def test_basetemp_sanitizes_invalid_directory_characters(monkeypatch, tmp_path):
++    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path))
++    monkeypatch.setattr("_pytest.tmpdir.get_user", lambda: "contoso\\john_doe")
++    factory = TempPathFactory(None, lambda *args: None, _ispytest=True)
++    basetemp = factory.getbasetemp()
++    assert basetemp.parent.name == "pytest-of-contoso_john_doe"
++
++
+ class TestNumberedDir:
+     PREFIX = "fun-"
+ 

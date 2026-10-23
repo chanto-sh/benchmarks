@@ -1,0 +1,18 @@
+diff --git a/solution.py b/solution.py
+index fd835d2..a6ce48f 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,4 +1,3 @@
+-
+ def minSubArraySum(nums):
+     """
+     Given an array of integers nums, find the minimum sum of any non-empty sub-array
+@@ -7,3 +6,8 @@ def minSubArraySum(nums):
+     minSubArraySum([2, 3, 4, 1, 2, 4]) == 1
+     minSubArraySum([-1, -2, -3]) == -6
+     """
++    best = current = nums[0]
++    for x in nums[1:]:
++        current = min(x, current + x)
++        best = min(best, current)
++    return best

@@ -1,0 +1,53 @@
+diff --git a/variable_length_quantity.go b/variable_length_quantity.go
+index 2ddd432..e486fa9 100644
+--- a/variable_length_quantity.go
++++ b/variable_length_quantity.go
+@@ -1,9 +1,46 @@
+ package variablelengthquantity
+ 
++import "errors"
++
++// EncodeVarint encodes a slice of 32-bit unsigned integers using
++// variable-length quantity encoding.
+ func EncodeVarint(input []uint32) []byte {
+-	panic("Please implement the EncodeVarint function")
++	output := make([]byte, 0, len(input))
++	for _, value := range input {
++		var encoded [5]byte
++		i := len(encoded) - 1
++
++		encoded[i] = byte(value & 0x7f)
++		value >>= 7
++		for value != 0 {
++			i--
++			encoded[i] = byte(value&0x7f) | 0x80
++			value >>= 7
++		}
++
++		output = append(output, encoded[i:]...)
++	}
++	return output
+ }
+ 
++// DecodeVarint decodes a slice of variable-length quantity encoded bytes.
++// It returns an error if the input ends in the middle of a value.
+ func DecodeVarint(input []byte) ([]uint32, error) {
+-	panic("Please implement the DecodeVarint function")
++	output := make([]uint32, 0, len(input))
++
++	var value uint32
++	var inProgress bool
++	for _, b := range input {
++		value = value<<7 | uint32(b&0x7f)
++		inProgress = b&0x80 != 0
++		if !inProgress {
++			output = append(output, value)
++			value = 0
++		}
++	}
++
++	if inProgress {
++		return nil, errors.New("incomplete variable-length quantity sequence")
++	}
++	return output, nil
+ }

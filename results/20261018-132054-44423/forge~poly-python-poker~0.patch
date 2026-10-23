@@ -1,0 +1,114 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..b5add9d 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,108 @@
++"""Pick the best hand(s) from a list of poker hands."""
++
++from collections import Counter
++
++RANK_VALUES = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++# Hand categories, higher is better.
++HIGH_CARD = 0
++ONE_PAIR = 1
++TWO_PAIR = 2
++THREE_OF_A_KIND = 3
++STRAIGHT = 4
++FLUSH = 5
++FULL_HOUSE = 6
++FOUR_OF_A_KIND = 7
++STRAIGHT_FLUSH = 8
++
++
++def _parse(hand):
++    """Split a hand string into (rank_values, suits)."""
++    ranks = []
++    suits = []
++    for card in hand.split():
++        ranks.append(RANK_VALUES[card[:-1]])
++        suits.append(card[-1])
++    return ranks, suits
++
++
++def _straight_high(ranks):
++    """Return the high card of a straight, or None if not a straight."""
++    unique = sorted(set(ranks))
++    if len(unique) != 5:
++        return None
++    if unique == [2, 3, 4, 5, 14]:
++        # Ace plays low: A 2 3 4 5 is a five-high straight.
++        return 5
++    if unique[-1] - unique[0] == 4:
++        return unique[-1]
++    return None
++
++
++def _score(hand):
++    """Return a sortable tuple representing the strength of a hand."""
++    ranks, suits = _parse(hand)
++    flush = len(set(suits)) == 1
++    straight_high = _straight_high(ranks)
++
++    counts = Counter(ranks)
++    # Sort by count first, then by rank, both descending.
++    groups = sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)
++
++    if flush and straight_high is not None:
++        return (STRAIGHT_FLUSH, straight_high)
++
++    if groups[0][1] == 4:
++        quad = groups[0][0]
++        kicker = groups[1][0]
++        return (FOUR_OF_A_KIND, quad, kicker)
++
++    if groups[0][1] == 3 and groups[1][1] == 2:
++        return (FULL_HOUSE, groups[0][0], groups[1][0])
++
++    if flush:
++        return (FLUSH,) + tuple(sorted(ranks, reverse=True))
++
++    if straight_high is not None:
++        return (STRAIGHT, straight_high)
++
++    if groups[0][1] == 3:
++        trip = groups[0][0]
++        kickers = sorted((r for r in ranks if r != trip), reverse=True)
++        return (THREE_OF_A_KIND, trip) + tuple(kickers)
++
++    if groups[0][1] == 2 and groups[1][1] == 2:
++        high_pair = max(groups[0][0], groups[1][0])
++        low_pair = min(groups[0][0], groups[1][0])
++        kicker = groups[2][0]
++        return (TWO_PAIR, high_pair, low_pair, kicker)
++
++    if groups[0][1] == 2:
++        pair = groups[0][0]
++        kickers = sorted((r for r in ranks if r != pair), reverse=True)
++        return (ONE_PAIR, pair) + tuple(kickers)
++
++    return (HIGH_CARD,) + tuple(sorted(ranks, reverse=True))
++
++
+ def best_hands(hands):
+-    pass
++    """Return the hand(s) with the highest poker ranking."""
++    if not hands:
++        return []
++    scored = [(_score(hand), hand) for hand in hands]
++    best = max(score for score, _ in scored)
++    return [hand for score, hand in scored if score == best]

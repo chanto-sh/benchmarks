@@ -1,0 +1,111 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..04e3afe 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,103 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The key is a natural number whose binary representation (with the leading
++``1`` removed) is an arbitrary bit string.  Bit strings are decoded as lists
++by splitting on the separator ``11``.  Before splitting, every element except
++the last is coded by a string with no ``11`` that does not end in ``1``; the
++last element may be coded by any string with no ``11``.  This makes the split
++unambiguous and keeps codes logarithmic in the element values.
++"""
++
++_SEP = "11"
++
++
++def _int_to_bits(n):
++    """Bijection from non-negative ints to all finite bit strings."""
++    return bin(n + 1)[2:][1:]
++
++
++def _bits_to_int(bits):
++    """Inverse of _int_to_bits."""
++    return (1 << len(bits)) + (int(bits, 2) if bits else 0) - 1
++
++
++def _encode_last(n):
++    """Bijection from non-negative ints to strings with no '11'."""
++    if n == 0:
++        return ""
++    parts = []
++    while n >= 2:
++        q, r = divmod(n - 2, 2)
++        parts.append("0" if r == 0 else "10")
++        n = q
++    if n == 1:
++        parts.append("1")
++    return "".join(parts)
++
++
++def _decode_last(s):
++    """Inverse of _encode_last (s must have no '11')."""
++    prefixes = []
++    i = 0
++    length = len(s)
++    while True:
++        if i == length:
++            value = 0
++            break
++        if i == length - 1 and s[i] == "1":
++            value = 1
++            break
++        if s[i] == "0":
++            prefixes.append(0)
++            i += 1
++        elif s.startswith("10", i):
++            prefixes.append(1)
++            i += 2
++        else:
++            raise ValueError("invalid element code")
++
++    for prefix in reversed(prefixes):
++        value = 2 + 2 * value + prefix
++    return value
++
++
++def _encode_nonlast(n):
++    """Code for a non-final element; never ends in '1'."""
++    if n == 0:
++        return ""
++    return _encode_last(n - 1) + "0"
++
++
++def _decode_nonlast(s):
++    """Inverse of _encode_nonlast."""
++    if not s:
++        return 0
++    if not s.endswith("0"):
++        raise ValueError("invalid non-final element code")
++    return 1 + _decode_last(s[:-1])
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    parts = [_encode_nonlast(n) for n in lst[:-1]]
++    parts.append(_encode_last(lst[-1]))
++    bits = _SEP.join(parts)
++    return _bits_to_int(bits) + 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("keys are non-negative")
++    if n == 0:
++        return []
++
++    bits = _int_to_bits(n - 1)
++    chunks = bits.split(_SEP)
++
++    result = [_decode_nonlast(chunk) for chunk in chunks[:-1]]
++    result.append(_decode_last(chunks[-1]))
++    return result

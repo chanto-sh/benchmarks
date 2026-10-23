@@ -1,0 +1,77 @@
+diff --git a/stats.py b/stats.py
+index add4f59..ae25fc2 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,27 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    # Shift by the first reading before summing.  Subtracting a nearby
++    # offset is exact for readings clustered around it, and it keeps a
++    # large common offset from swamping the small spread in the squares.
++    base = xs[0] if n else 0.0
++    mean = base + math.fsum(x - base for x in xs) / n
++    var = math.fsum((x - mean) ** 2 for x in xs) / n
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == math.inf:
++        return math.inf
++    if m == -math.inf:
++        return -math.inf
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # For x <= 0 use log1p(exp(x)) so tiny results keep full precision;
++    # for x > 0 use x + log1p(exp(-x)) so exp(x) never overflows.
++    return max(x, 0.0) + math.log1p(math.exp(-abs(x)))
+diff --git a/test_stats.py b/test_stats.py
+index 65c8ab7..02af52a 100644
+--- a/test_stats.py
++++ b/test_stats.py
+@@ -17,6 +17,34 @@ class TestStats(unittest.TestCase):
+     def test_softplus_large(self):
+         self.assertEqual(softplus(1000.0), 1000.0)
+ 
++    def test_variance_constant_batch(self):
++        m, v = mean_var([1e9 + 4.0] * 10)
++        self.assertEqual(v, 0.0)
++        self.assertGreaterEqual(v, 0.0)
++
++    def test_variance_large_batch_with_offset(self):
++        xs = [1e9 + d for d in (4.0, 7.0, 13.0, 16.0)] * 25000
++        m, v = mean_var(xs)
++        self.assertAlmostEqual(m, 1e9 + 10.0, delta=1e-6)
++        self.assertAlmostEqual(v, 22.5, delta=22.5 * 1e-6)
++
++    def test_logsumexp_extreme(self):
++        self.assertEqual(logsumexp([1e300, 1e300]), 1e300)
++        self.assertAlmostEqual(logsumexp([-1e300, 0.0]), 0.0, delta=1e-12)
++        expected = 1000.0 + math.log(2.0)
++        self.assertAlmostEqual(logsumexp([1000.0, 1000.0]), expected,
++                               delta=expected * 1e-12)
++
++    def test_softplus_very_negative(self):
++        for x in (-40.0, -100.0, -700.0):
++            self.assertAlmostEqual(softplus(x), math.exp(x),
++                                   delta=math.exp(x) * 1e-12)
++        self.assertEqual(softplus(-1000.0), 0.0)
++
++    def test_softplus_extreme(self):
++        self.assertEqual(softplus(1e300), 1e300)
++        self.assertEqual(softplus(-1e300), 0.0)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

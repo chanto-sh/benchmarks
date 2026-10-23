@@ -1,0 +1,26 @@
+diff --git a/transpose.py b/transpose.py
+index 24b60af..b331b36 100644
+--- a/transpose.py
++++ b/transpose.py
+@@ -1,2 +1,20 @@
+ def transpose(text):
+-    pass
++    if not text:
++        return ""
++
++    rows = text.splitlines()
++    if not rows:
++        return ""
++
++    width = max(len(row) for row in rows)
++    output = []
++
++    for column in range(width):
++        chars = [row[column] if column < len(row) else None for row in rows]
++        # Lines are padded on the left, but never on the right: drop the
++        # missing characters at the end of the column (not genuine spaces).
++        while chars and chars[-1] is None:
++            chars.pop()
++        output.append("".join(" " if char is None else char for char in chars))
++
++    return "\n".join(output)

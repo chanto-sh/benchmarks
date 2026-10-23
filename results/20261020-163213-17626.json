@@ -1,0 +1,566 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-20T16:32:13-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--repeat",
+      "5",
+      "--agents",
+      "chanto,chanto+adaptive",
+      "--seed",
+      "3032",
+      "--tasks",
+      "physics-driven-oscillator"
+    ],
+    "bench_commit": "56672d3195e5181da82624812abb35c368dcc729",
+    "bench_dirty": true,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-56672d3-cacheab",
+      "sha256": "690ac41aad8a1c12b94193f1c4118ed7e116f6c3e738d79027064d370dd073ef"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.12",
+      "chanto+adaptive": "chanto 0.1.12"
+    },
+    "chanto_optimize": {
+      "chanto": [],
+      "chanto+adaptive": [
+        "adaptive_effort"
+      ]
+    },
+    "chanto_effort": null,
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": null,
+    "seed": 3032,
+    "repeat": 5,
+    "tasks": {
+      "physics-driven-oscillator": "9840fd22c6d3294295b741c4453a828f36f6a6def10a13776141267126556b4c"
+    },
+    "offline_profile_sha256": "9d7a76cb9d35e0d766b53e13095093af10c3445fe4bab2fc8f1f6b0399733cdd"
+  },
+  "results": [
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-driven-oscillator",
+      "rep": 0,
+      "passed": true,
+      "seconds": 165.6,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 633372,
+        "out": 27716,
+        "cached": 616704
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 22,
+        "input": 633372,
+        "output": 27716,
+        "cached": 616704
+      },
+      "meter_label": "chanto+adaptive~physics-driven-oscillator~0~0b02f98d",
+      "started_at": "2026-10-20T16:32:18-0700",
+      "ended_at": "2026-10-20T16:35:05-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~0.out",
+          "sha256": "9b24ec5381cf39ee446b1041d6803e2472c601fe33bb756cb56fbd5523dccd91"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~0.patch",
+          "sha256": "c43546f6acc93a575617db973736b46d809bef7e843390adade44a22e66809c7"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~0.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~0.session0.json",
+          "sha256": "f6cedf6caf32adba9d208d5959ab4a39b5cc9a8ebd2c490fb417bff07565346e"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-driven-oscillator",
+      "rep": 0,
+      "passed": false,
+      "seconds": 167.1,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\ndriven above resonance: amplitude -0.19899255947140623, expected 0.1989925594714063\n",
+      "tokens": {
+        "in": 597824,
+        "out": 31257,
+        "cached": 583808
+      },
+      "tampered": [],
+      "false_done": true,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 19,
+        "input": 597824,
+        "output": 31257,
+        "cached": 583808
+      },
+      "meter_label": "chanto~physics-driven-oscillator~0~0db289c8",
+      "started_at": "2026-10-20T16:35:06-0700",
+      "ended_at": "2026-10-20T16:37:54-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~0.out",
+          "sha256": "1070bea22b31423a1411cf74b3fd85054e8fe4d0289317e6816243abe1c8b40c"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~0.patch",
+          "sha256": "951facf7e0575aa9f6ba350bb132bcce2546ed252655b99a3b3c788451934fca"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~0.check.txt",
+          "sha256": "381e804d01c049ade84986befdaa97aa2df6d14f4ed34f9738916649404ccdd6"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~0.session0.json",
+          "sha256": "03e256c2ee29dc165ad983b5d8f2af494c712393d129e8730e192e198c553121"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-driven-oscillator",
+      "rep": 1,
+      "passed": true,
+      "seconds": 210.7,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 962868,
+        "out": 41566,
+        "cached": 944256
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 25,
+        "input": 962868,
+        "output": 41566,
+        "cached": 944256
+      },
+      "meter_label": "chanto+adaptive~physics-driven-oscillator~1~d26aaeb8",
+      "started_at": "2026-10-20T16:37:56-0700",
+      "ended_at": "2026-10-20T16:41:28-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~1.out",
+          "sha256": "7425b750fab2a2a284572d944bef4538e6c6d79b98a63e4e91500801721e4024"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~1.patch",
+          "sha256": "14196e34a48ae8e61685d518eed56906b790e9c29cf0422f356b074b38b16ed3"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~1.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~1.session0.json",
+          "sha256": "20ad5c292700b6445e4443850d3b48779d59a0103d15d9b8b58fde6bcf9c16f1"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-driven-oscillator",
+      "rep": 1,
+      "passed": false,
+      "seconds": 332.9,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\ndriven above resonance: amplitude -0.19899255947140623, expected 0.1989925594714063\n",
+      "tokens": {
+        "in": 1629523,
+        "out": 47405,
+        "cached": 1607552
+      },
+      "tampered": [],
+      "false_done": true,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 35,
+        "input": 1629523,
+        "output": 47405,
+        "cached": 1607552
+      },
+      "meter_label": "chanto~physics-driven-oscillator~1~09ebe6da",
+      "started_at": "2026-10-20T16:41:29-0700",
+      "ended_at": "2026-10-20T16:47:04-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~1.out",
+          "sha256": "7044fcc97afaf3bdc6d0a73349b2ddd6e257e97e1d8ab34e52e4a87266407bfb"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~1.patch",
+          "sha256": "4c334806be12de62734ced02ca861cfa804587473d30215550ab61c8c7e5b5a6"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~1.check.txt",
+          "sha256": "381e804d01c049ade84986befdaa97aa2df6d14f4ed34f9738916649404ccdd6"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~1.session0.json",
+          "sha256": "16c502b7b296576f6369d5d82e8afa4628b2127f4d286adb1d5b07d4a16e3599"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-driven-oscillator",
+      "rep": 2,
+      "passed": true,
+      "seconds": 166.5,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 731688,
+        "out": 30228,
+        "cached": 706304
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 23,
+        "input": 731688,
+        "output": 30228,
+        "cached": 706304
+      },
+      "meter_label": "chanto~physics-driven-oscillator~2~26692936",
+      "started_at": "2026-10-20T16:47:05-0700",
+      "ended_at": "2026-10-20T16:49:53-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~2.out",
+          "sha256": "d4aa30fd340f2f4d055252cf669a71fd725e4814d79f5e35c372816b18c3103e"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~2.patch",
+          "sha256": "26c515877df0a35a55491a89ad1a2146b31d4c8145c24733b3624771e55c36b1"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~2.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~2.session0.json",
+          "sha256": "2d54fbc797615a1bd2a373398847a159f4047a3013964b473e835d9695d6a439"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-driven-oscillator",
+      "rep": 2,
+      "passed": true,
+      "seconds": 159.7,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 537756,
+        "out": 31474,
+        "cached": 523904
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 19,
+        "input": 537756,
+        "output": 31474,
+        "cached": 523904
+      },
+      "meter_label": "chanto+adaptive~physics-driven-oscillator~2~0f748d64",
+      "started_at": "2026-10-20T16:49:55-0700",
+      "ended_at": "2026-10-20T16:52:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~2.out",
+          "sha256": "81dd598dbe8c0ea94ac26d4382ea5f80da3cc27ba989fb67fe32b2a26473b129"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~2.patch",
+          "sha256": "50b8f8911845f56d645460bf79b92db370d8822aa8659733b57db70c523957cf"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~2.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~2.session0.json",
+          "sha256": "d2596524ca07de64bfd7e9c79acd9c872af105dee84307a172329ad6fdcfc2ba"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-driven-oscillator",
+      "rep": 3,
+      "passed": true,
+      "seconds": 211.0,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 1082023,
+        "out": 41336,
+        "cached": 1064064
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 28,
+        "input": 1082023,
+        "output": 41336,
+        "cached": 1064064
+      },
+      "meter_label": "chanto+adaptive~physics-driven-oscillator~3~90947bce",
+      "started_at": "2026-10-20T16:52:37-0700",
+      "ended_at": "2026-10-20T16:56:09-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~3.out",
+          "sha256": "130b6e38d09e4aff567dbb9b2ba19b2bc63f375464a97077752e42853a0a9075"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~3.patch",
+          "sha256": "66d0e16a99a036898a1edfe9b866a70ab2d5218a1795c55648ac1426675e44e6"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~3.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~3.session0.json",
+          "sha256": "349f3343927ca4ec06a0227110c3b00c8460c2296886c2e0dcdd9866e2224455"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-driven-oscillator",
+      "rep": 3,
+      "passed": true,
+      "seconds": 235.6,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 781320,
+        "out": 42286,
+        "cached": 766080
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 21,
+        "input": 781320,
+        "output": 42286,
+        "cached": 766080
+      },
+      "meter_label": "chanto~physics-driven-oscillator~3~0872a5a9",
+      "started_at": "2026-10-20T16:56:11-0700",
+      "ended_at": "2026-10-20T17:00:08-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~3.out",
+          "sha256": "a86469b364be38e1dba8d51a6cabbf56c06b02a024120f8fb2e24e7dc986e551"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~3.patch",
+          "sha256": "ed646e396b4d6007d98279e59a1760c6be94d6ee58d528d005571f0f7dbb109b"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~3.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~3.session0.json",
+          "sha256": "b3572f5f825d8eefb4e82098fb9ea829b5dc813f402a9cef662b280a371c80d9"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-driven-oscillator",
+      "rep": 4,
+      "passed": false,
+      "seconds": 140.9,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\ndriven above resonance: amplitude -0.19899255947140623, expected 0.1989925594714063\n",
+      "tokens": {
+        "in": 468027,
+        "out": 26397,
+        "cached": 456448
+      },
+      "tampered": [],
+      "false_done": true,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 18,
+        "input": 468027,
+        "output": 26397,
+        "cached": 456448
+      },
+      "meter_label": "chanto~physics-driven-oscillator~4~8ec652f4",
+      "started_at": "2026-10-20T17:00:10-0700",
+      "ended_at": "2026-10-20T17:02:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~4.out",
+          "sha256": "93ccc9efba1072447a176f8c4e7873c373f61f15e1b4aadbb1ca3cd361ecf3e0"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~4.patch",
+          "sha256": "ebf44e09e9c3e3f96c5cd7a32050d8635d561a2c50e374d0a19504cde0bd0a36"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~4.check.txt",
+          "sha256": "381e804d01c049ade84986befdaa97aa2df6d14f4ed34f9738916649404ccdd6"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto~physics-driven-oscillator~4.session0.json",
+          "sha256": "c0de387e0d069a455f8b7f55dcc6587d32f288614ebf583ef119629ff8871c43"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-driven-oscillator",
+      "rep": 4,
+      "passed": true,
+      "seconds": 127.1,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 425491,
+        "out": 22734,
+        "cached": 413056
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 19,
+        "input": 425491,
+        "output": 22734,
+        "cached": 413056
+      },
+      "meter_label": "chanto+adaptive~physics-driven-oscillator~4~1fb78eb6",
+      "started_at": "2026-10-20T17:02:33-0700",
+      "ended_at": "2026-10-20T17:04:41-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~4.out",
+          "sha256": "3c63fb5f9555cc18400271c141262c05a8a15926cd1559bf4f25c6a9d2a07589"
+        },
+        "patch": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~4.patch",
+          "sha256": "d699a2dcd3b38c20f4a1e3a7daf2a545654b7691c261df019477b99cd2a473fb"
+        },
+        "check": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~4.check.txt",
+          "sha256": "72dbd4aa31209a09c08f7714179efdc5f8980d513d2409d144d7141257042ad7"
+        },
+        "session0": {
+          "file": "20261020-163213-17626/chanto+adaptive~physics-driven-oscillator~4.session0.json",
+          "sha256": "c4c65362bb390f81c7142157e27da64a7d3873c9ce45d00fcd1ee37fede0fece"
+        }
+      }
+    }
+  ]
+}

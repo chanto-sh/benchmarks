@@ -1,0 +1,89 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..7222127 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,82 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(u):
++    """sin(u) / u, with its limit 1 at u = 0."""
++    if abs(u) < 1e-4:
++        u2 = u * u
++        return 1.0 + u2 * (-1.0 / 6.0 + u2 * (1.0 / 120.0 - u2 / 5040.0))
++    return math.sin(u) / u
++
++
++def _expm1_over_x(x):
++    """exp(x) - 1 over x, with its limit 1 at x = 0."""
++    if abs(x) < 1e-4:
++        return 1.0 + x * (0.5 + x * (1.0 / 6.0 + x / 24.0))
++    return math.expm1(x) / x
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Coefficients P, Q of the particular solution P cos(omega t) + Q sin(omega t)."""
++    if F0 == 0.0:
++        return 0.0, 0.0
++    stiffness = k - m * omega * omega
++    damping = c * omega
++    magnitude = math.hypot(stiffness, damping)
++    if magnitude == 0.0:
++        raise ValueError("undamped driving exactly at resonance has no steady state")
++    return (
++        F0 * (stiffness / magnitude) / magnitude,
++        F0 * (damping / magnitude) / magnitude,
++    )
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    if F0 == 0.0:
++        return 0.0
++    magnitude = math.hypot(k - m * omega * omega, c * omega)
++    if magnitude == 0.0:
++        raise ValueError("undamped driving exactly at resonance has no finite amplitude")
++    return abs(F0) / magnitude
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    P, Q = _steady_state_coefficients(m, k, c, F0, omega)
++
++    # Initial conditions for the homogeneous (transient) part.
++    xh0 = x0 - P
++    vh0 = v0 - Q * omega
++
++    alpha = c / (2.0 * m)
++    frequency_sq = k / m
++    delta = frequency_sq - alpha * alpha
++
++    if delta > 0.0:
++        # Underdamped (including c = 0): roots -alpha +/- i*beta.
++        beta = math.sqrt(delta)
++        xh = math.exp(-alpha * t) * (
++            xh0 * math.cos(beta * t) + (vh0 + alpha * xh0) * t * _sinc(beta * t)
++        )
++    else:
++        # Critically or overdamped: roots -alpha +/- lambda.
++        lam = math.sqrt(-delta)
++        e1 = math.exp((-alpha + lam) * t)
++        e2 = math.exp((-alpha - lam) * t)
++        cosh_part = 0.5 * (e1 + e2)
++
++        u = 2.0 * lam * t
++        if u < 1.0:
++            sinh_over_lambda = t * e2 * _expm1_over_x(u)
++        else:
++            sinh_over_lambda = (e1 - e2) / (2.0 * lam)
++
++        xh = xh0 * cosh_part + (vh0 + alpha * xh0) * sinh_over_lambda
++
++    return xh + P * math.cos(omega * t) + Q * math.sin(omega * t)

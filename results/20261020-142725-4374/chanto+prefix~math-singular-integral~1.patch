@@ -1,0 +1,69 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..78a85b9 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,54 @@
+ """Frequency response of the detector model."""
+ import math
+ 
++# Nodes and weights for 8-point Gauss-Legendre quadrature on [-1, 1].
++_GL_X = (
++    -0.9602898564975363,
++    -0.7966664774136267,
++    -0.5255324099163290,
++    -0.1834346424956498,
++    0.1834346424956498,
++    0.5255324099163290,
++    0.7966664774136267,
++    0.9602898564975363,
++)
++_GL_W = (
++    0.1012285362903763,
++    0.2223810344533745,
++    0.3137066458778873,
++    0.3626837833783620,
++    0.3626837833783620,
++    0.3137066458778873,
++    0.2223810344533745,
++    0.1012285362903763,
++)
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the singularity at zero:
++
++        integral = 2 * integral_0^sqrt(b) cos(t*u**2) du.
++
++    The transformed integrand is smooth. It is evaluated with composite
++    Gauss-Legendre quadrature on panels spanning about one radian of phase,
++    which keeps the oscillations well resolved for large t.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    u_max = math.sqrt(b)
++    panels = max(1, math.ceil(abs(t) * u_max * u_max))
++    contributions = []
++    for i in range(panels):
++        u0 = math.sqrt(b * i / panels)
++        u1 = math.sqrt(b * (i + 1) / panels)
++        center = 0.5 * (u0 + u1)
++        half_width = 0.5 * (u1 - u0)
++        value = math.fsum(
++            weight * math.cos(t * (center + half_width * node) ** 2)
++            for node, weight in zip(_GL_X, _GL_W)
++        )
++        contributions.append(half_width * value)
++    return 2.0 * math.fsum(contributions)

@@ -1,0 +1,52 @@
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..cdb1cf5 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,14 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # getuser() likely returned illegal characters for the
++                # platform, such as a domain-qualified Windows username
++                # (e.g. ``contoso\\john_doe``), so fall back to "unknown".
++                rootdir = temproot.joinpath("pytest-of-unknown")
++                rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..b746d21 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -200,6 +200,27 @@ def test_tmpdir_fallback_tox_env(pytester: Pytester, monkeypatch) -> None:
+     reprec.assertoutcome(passed=1)
+ 
+ 
++def test_tmpdir_fallback_invalid_user(pytester: Pytester, monkeypatch) -> None:
++    """Test that tmpdir works even if the user name returned by getpass.getuser()
++    contains characters which are illegal for directory names (#8365).
++
++    A path separator is used here as it is illegal on every platform, which
++    also mimics the domain-qualified user names (``DOMAIN\\user``) returned by
++    getpass.getuser() on Windows when connected through SSH.
++    """
++    monkeypatch.setattr("getpass.getuser", lambda: "foo/bar")
++    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(pytester.path))
++    pytester.makepyfile(
++        """
++        def test_some(tmpdir):
++            assert tmpdir.isdir()
++    """
++    )
++    reprec = pytester.inline_run()
++    reprec.assertoutcome(passed=1)
++    assert pytester.path.joinpath("pytest-of-unknown").exists()
++
++
+ @pytest.fixture
+ def break_getuser(monkeypatch):
+     monkeypatch.setattr("os.getuid", lambda: -1)

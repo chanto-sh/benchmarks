@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index d361de5..260a051 100644
+--- a/solution.py
++++ b/solution.py
+@@ -17,3 +17,10 @@ def make_palindrome(string: str) -> str:
+     >>> make_palindrome('cata')
+     'catac'
+     """
++    if not string:
++        return string
++
++    for index in range(len(string)):
++        suffix = string[index:]
++        if is_palindrome(suffix):
++            return string + string[:index][::-1]

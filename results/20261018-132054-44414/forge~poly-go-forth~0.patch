@@ -1,0 +1,248 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..41deea3 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,242 @@
++// Package forth implements a tiny evaluator for a subset of the Forth
++// stack-based programming language.
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// Errors reported by the evaluator.
++var (
++	errEmptyStack      = errors.New("empty stack")
++	errOneValueOnStack = errors.New("only one value on the stack")
++	errDivideByZero    = errors.New("divide by zero")
++	errIllegal         = errors.New("illegal operation")
++	errUndefined       = errors.New("undefined operation")
++)
++
++// stack is the data stack used by the evaluator.
++type stack struct {
++	values []int
++}
++
++func newStack() *stack {
++	return &stack{values: []int{}}
++}
++
++func (s *stack) push(v int) {
++	s.values = append(s.values, v)
++}
++
++func (s *stack) pop() int {
++	v := s.values[len(s.values)-1]
++	s.values = s.values[:len(s.values)-1]
++	return v
++}
++
++// word is either a built-in operation (builtin != nil) or a user-defined
++// word. body holds the raw tokens of a definition and env is a snapshot of
++// the definitions visible at the moment the word was defined.
++//
++// Taking a snapshot gives the early-binding semantics Forth requires: a word
++// always refers to the definitions that existed when it was compiled, so
++// redefining a word never changes the behaviour of words defined earlier.
++type word struct {
++	builtin func(s *stack) error
++	body    []string
++	env     map[string]*word
++}
++
++// Forth evaluates the given lines of Forth source and returns the resulting
++// stack.
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	env := builtinEnv()
++	st := newStack()
++
++	tokens := strings.Fields(strings.Join(input, " "))
++
++	for i := 0; i < len(tokens); i++ {
++		tok := tokens[i]
++
++		if tok == ":" {
++			// Find the terminating ";".
++			end := -1
++			for j := i + 1; j < len(tokens); j++ {
++				if tokens[j] == ";" {
++					end = j
++					break
++				}
++			}
++			if end < 0 || end == i+1 {
++				// Missing ";" or missing word name.
++				return nil, errIllegal
++			}
++
++			name := tokens[i+1]
++			if _, isNum := parseNumber(name); isNum {
++				return nil, errIllegal
++			}
++
++			body := make([]string, end-i-2)
++			copy(body, tokens[i+2:end])
++
++			env[strings.ToLower(name)] = &word{
++				body: body,
++				env:  copyEnv(env),
++			}
++
++			i = end
++			continue
++		}
++
++		if err := execute(tok, env, st); err != nil {
++			return nil, err
++		}
++	}
++
++	return st.values, nil
++}
++
++// execute runs a single token against the given environment.
++func execute(tok string, env map[string]*word, st *stack) error {
++	if n, ok := parseNumber(tok); ok {
++		st.push(n)
++		return nil
++	}
++
++	w, ok := env[strings.ToLower(tok)]
++	if !ok {
++		return errUndefined
++	}
++	if w.builtin != nil {
++		return w.builtin(st)
++	}
++
++	for _, t := range w.body {
++		if err := execute(t, w.env, st); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++// parseNumber reports whether tok is a number: an optional leading minus
++// sign followed by one or more ASCII digits.
++func parseNumber(tok string) (int, bool) {
++	digits := tok
++	if strings.HasPrefix(digits, "-") {
++		digits = digits[1:]
++	}
++	if digits == "" {
++		return 0, false
++	}
++	for i := 0; i < len(digits); i++ {
++		if digits[i] < '0' || digits[i] > '9' {
++			return 0, false
++		}
++	}
++	n, err := strconv.Atoi(tok)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++// copyEnv returns a shallow copy of the given definitions map.
++func copyEnv(env map[string]*word) map[string]*word {
++	cp := make(map[string]*word, len(env))
++	for k, v := range env {
++		cp[k] = v
++	}
++	return cp
++}
++
++// builtinEnv returns a fresh environment pre-populated with the built-in
++// words.
++func builtinEnv() map[string]*word {
++	env := make(map[string]*word, len(builtins))
++	for name, w := range builtins {
++		env[name] = w
++	}
++	return env
++}
++
++// needsTwo returns an error unless the stack holds at least two values.
++func needsTwo(s *stack) error {
++	switch len(s.values) {
++	case 0:
++		return errEmptyStack
++	case 1:
++		return errOneValueOnStack
++	}
++	return nil
++}
++
++var builtins = map[string]*word{
++	"+": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		b, a := s.pop(), s.pop()
++		s.push(a + b)
++		return nil
++	}},
++	"-": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		b, a := s.pop(), s.pop()
++		s.push(a - b)
++		return nil
++	}},
++	"*": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		b, a := s.pop(), s.pop()
++		s.push(a * b)
++		return nil
++	}},
++	"/": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		b, a := s.pop(), s.pop()
++		if b == 0 {
++			return errDivideByZero
++		}
++		s.push(a / b)
++		return nil
++	}},
++	"dup": {builtin: func(s *stack) error {
++		if len(s.values) == 0 {
++			return errEmptyStack
++		}
++		s.push(s.values[len(s.values)-1])
++		return nil
++	}},
++	"drop": {builtin: func(s *stack) error {
++		if len(s.values) == 0 {
++			return errEmptyStack
++		}
++		s.pop()
++		return nil
++	}},
++	"swap": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		n := len(s.values)
++		s.values[n-1], s.values[n-2] = s.values[n-2], s.values[n-1]
++		return nil
++	}},
++	"over": {builtin: func(s *stack) error {
++		if err := needsTwo(s); err != nil {
++			return err
++		}
++		s.push(s.values[len(s.values)-2])
++		return nil
++	}},
+ }

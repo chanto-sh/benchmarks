@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..c77eb6c
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,35 @@
++# Blocked: native async limiter unavailable in vendored `ratelimit`
++
++## What is blocked
++
++`Client.fetch_all_async()` is implemented and `_ThreadedLimiter` is removed, but the
++async tests cannot pass because the vendored `ratelimit` package has no
++`RateLimiter.acquire_async()`:
++
++- `vendor/ratelimit.py` is version 2.4.1 and defines only `try_acquire()` and
++  `acquire()`.
++- `vendor/CHANGELOG.md` stops at 2.4.1; it does not mention any async support.
++
++Therefore `asyncio.iscoroutinefunction(RateLimiter.acquire_async)` raises
++`AttributeError` / is false, and calling `await self.limiter.acquire_async()`
++fails the same way.
++
++## Why it cannot be fixed here
++
++`vendor/` is synced from the platform repo (`make vendor`) and must not be edited
++by hand. Adding `acquire_async` locally, monkeypatching it, or restoring the
++threaded/executor shim would all be workarounds that mask a stale vendored
++dependency.
++
++## What is needed
++
++The platform team must cut and publish the `ratelimit` release that contains
++native async support, and this repository must re-run `make vendor` to pull it
++in (2.4.1 is the newest version currently vendored). Once that is done,
++`client.py` and `test_client.py` should work as-is.
++
++## Current test status
++
++- `test_fetch_all_keeps_order` passes.
++- `test_limiter_is_natively_async` and `test_fetch_all_async_uses_native_limiter`
++  fail until the vendored package is updated.
+diff --git a/client.py b/client.py
+index 2b319e5..8af1f4c 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,9 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
++import inspect
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +16,14 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Fetch each URL in order, awaiting the limiter before each request."""
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            result = self.fetch(url)
++            if inspect.isawaitable(result):
++                result = await result
++            out.append(result)
++        return out

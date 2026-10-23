@@ -1,0 +1,113 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..60a1227 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -25,5 +25,107 @@ class SgfTree:
+         return not self == other
+ 
+ 
++_WHITESPACE = " \t\n\r\f\v"
++
++
++def _skip_whitespace(input_string, index):
++    while index < len(input_string) and input_string[index] in _WHITESPACE:
++        index += 1
++    return index
++
++
++def _parse_value(input_string, index):
++    # input_string[index] is the opening "["
++    index += 1
++    characters = []
++    while index < len(input_string):
++        character = input_string[index]
++        if character == "\\":
++            if index + 1 >= len(input_string):
++                raise ValueError("tree missing")
++            escaped = input_string[index + 1]
++            if escaped == "\n":
++                # A newline immediately after a backslash is removed.
++                pass
++            elif escaped in _WHITESPACE:
++                # Any other escaped whitespace becomes a space.
++                characters.append(" ")
++            else:
++                characters.append(escaped)
++            index += 2
++        elif character == "]":
++            return "".join(characters), index + 1
++        elif character == "\n":
++            characters.append("\n")
++            index += 1
++        elif character in _WHITESPACE:
++            characters.append(" ")
++            index += 1
++        else:
++            characters.append(character)
++            index += 1
++    raise ValueError("tree missing")
++
++
++def _parse_node(input_string, index):
++    # input_string[index] is the ";"
++    index += 1
++    properties = {}
++    index = _skip_whitespace(input_string, index)
++    while index < len(input_string) and input_string[index].isalpha():
++        start = index
++        while index < len(input_string) and input_string[index].isalpha():
++            index += 1
++        key = input_string[start:index]
++        if not key.isupper():
++            raise ValueError("property must be in uppercase")
++        index = _skip_whitespace(input_string, index)
++        if index >= len(input_string) or input_string[index] != "[":
++            raise ValueError("properties without delimiter")
++        values = []
++        while index < len(input_string) and input_string[index] == "[":
++            value, index = _parse_value(input_string, index)
++            values.append(value)
++            index = _skip_whitespace(input_string, index)
++        properties[key] = values
++    return SgfTree(properties=properties), index
++
++
++def _parse_tree(input_string, index):
++    index = _skip_whitespace(input_string, index)
++    if index >= len(input_string) or input_string[index] != "(":
++        raise ValueError("tree missing")
++    index += 1
++    index = _skip_whitespace(input_string, index)
++    if index < len(input_string) and input_string[index] == ")":
++        raise ValueError("tree with no nodes")
++    if index >= len(input_string) or input_string[index] != ";":
++        raise ValueError("tree missing")
++
++    root, index = _parse_node(input_string, index)
++    current = root
++    index = _skip_whitespace(input_string, index)
++
++    # Consecutive nodes form a linear chain.
++    while index < len(input_string) and input_string[index] == ";":
++        node, index = _parse_node(input_string, index)
++        current.children.append(node)
++        current = node
++        index = _skip_whitespace(input_string, index)
++
++    # Variations are children of the last node in the chain.
++    while index < len(input_string) and input_string[index] == "(":
++        child, index = _parse_tree(input_string, index)
++        current.children.append(child)
++        index = _skip_whitespace(input_string, index)
++
++    if index >= len(input_string) or input_string[index] != ")":
++        raise ValueError("tree missing")
++    return root, index + 1
++
++
+ def parse(input_string):
+-    pass
++    if not input_string:
++        raise ValueError("tree missing")
++    tree, _ = _parse_tree(input_string, 0)
++    return tree

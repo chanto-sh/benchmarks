@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index 6f90615..d8f800f 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,8 @@
+ def digit_distance_nums(n1, n2):
+-    pass
++    digits1 = str(abs(n1))
++    digits2 = str(abs(n2))
++    width = max(len(digits1), len(digits2))
++    return sum(
++        abs(int(a) - int(b))
++        for a, b in zip(digits1.zfill(width), digits2.zfill(width))
++    )

@@ -1,0 +1,81 @@
+diff --git a/bowling.py b/bowling.py
+index de2dbb0..29fe04f 100644
+--- a/bowling.py
++++ b/bowling.py
+@@ -1,9 +1,73 @@
+ class BowlingGame:
+     def __init__(self):
+-        pass
++        self._frames = []
+ 
+     def roll(self, pins):
+-        pass
++        if self._is_complete():
++            raise ValueError("cannot roll after the game is complete")
++
++        if not isinstance(pins, int) or isinstance(pins, bool):
++            raise TypeError("pins must be an integer")
++        if pins < 0 or pins > 10:
++            raise ValueError("pins must be between 0 and 10")
++
++        if len(self._frames) < 10:
++            if not self._frames or self._frame_is_complete(self._frames[-1]):
++                self._frames.append([])
++
++            frame = self._frames[-1]
++            if frame and frame[0] + pins > 10:
++                raise ValueError("a frame cannot score more than 10 points")
++            frame.append(pins)
++            return
++
++        frame = self._frames[-1]
++        if len(frame) == 1:
++            if frame[0] != 10 and frame[0] + pins > 10:
++                raise ValueError("a frame cannot score more than 10 points")
++        elif len(frame) == 2:
++            if frame[0] == 10:
++                if frame[1] != 10 and frame[1] + pins > 10:
++                    raise ValueError("bonus rolls cannot score more than 10 points")
++            elif frame[0] + frame[1] != 10:
++                raise ValueError("cannot roll after an open tenth frame")
++
++        frame.append(pins)
+ 
+     def score(self):
+-        pass
++        if not self._is_complete():
++            raise ValueError("cannot score an incomplete game")
++
++        total = 0
++        for frame_number, frame in enumerate(self._frames, start=1):
++            if frame_number == 10:
++                total += sum(frame)
++                continue
++
++            total += sum(frame)
++            if frame[0] == 10:
++                bonus_rolls = []
++                for following_frame in self._frames[frame_number:]:
++                    bonus_rolls.extend(following_frame)
++                    if len(bonus_rolls) >= 2:
++                        break
++                total += sum(bonus_rolls[:2])
++            elif sum(frame) == 10:
++                total += self._frames[frame_number][0]
++
++        return total
++
++    @staticmethod
++    def _frame_is_complete(frame):
++        return frame[0] == 10 or len(frame) == 2
++
++    def _is_complete(self):
++        if len(self._frames) < 10:
++            return False
++
++        tenth_frame = self._frames[-1]
++        if len(tenth_frame) == 3:
++            return True
++        if len(tenth_frame) == 2:
++            return tenth_frame[0] != 10 and sum(tenth_frame) != 10
++        return False

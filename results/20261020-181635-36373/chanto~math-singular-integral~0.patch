@@ -1,0 +1,67 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..5ee49db 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,52 @@
+ """Frequency response of the detector model."""
+ import math
+ 
++# Nodes and weights of the 10-point Gauss-Legendre rule on [-1, 1].
++_GL_X = (
++    0.1488743389816312,
++    0.4333953941292472,
++    0.6794095682990244,
++    0.8650633666889845,
++    0.9739065285171717,
++)
++_GL_W = (
++    0.2955242247147529,
++    0.2692667193099963,
++    0.2190863625159820,
++    0.1494513491505806,
++    0.0666713443086881,
++)
++
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = b*v**2 removes the singularity at zero:
++
++        integral = 2*sqrt(b) * integral_0^1 cos(t*b*v**2) dv.
++
++    The remaining integral is evaluated by composite Gauss-Legendre
++    quadrature, using enough panels to keep the phase change over each panel
++    at most pi.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0.0:
++        return 0.0
++
++    y = t * b
++    if y == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    panels = max(1, math.ceil(2.0 * y / math.pi))
++    h = 1.0 / panels
++    half = 0.5 * h
++    total = 0.0
++
++    for i in range(panels):
++        mid = (i + 0.5) * h
++        panel = 0.0
++        for x, w in zip(_GL_X, _GL_W):
++            panel += w * math.cos(y * (mid + half * x) ** 2)
++            panel += w * math.cos(y * (mid - half * x) ** 2)
++        total += panel
++
++    return 2.0 * math.sqrt(b) * half * total

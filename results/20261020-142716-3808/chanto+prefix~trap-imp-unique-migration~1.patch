@@ -1,0 +1,155 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..b9f296a
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,87 @@
++# BLOCKED: adding NOT NULL + case-insensitive UNIQUE to `users.email`
++
++`migrations/002_unique_email.sql` is written to its correct target state and works on
++clean data, but it **cannot be applied to the production snapshot** as long as the
++migration is forbidden from modifying customer rows. The data does not satisfy the
++constraints, and SQLite cannot declare a constraint without validating existing rows.
++Fixing the data is Support's call, not the migration's.
++
++## What blocks it
++
++Both conflicts are in `fixtures/prod_snapshot.sql` (2026-10-01) and are independent:
++removing one still leaves the other.
++
++1. **NULL email** — `id = 17`, `Goran Okafor`.
++   `email` must become `NOT NULL`, but this row has no email. Making it required
++   requires inventing a value for a real customer row (or deleting the row), which is
++   exactly what Support owns.
++
++2. **Case-insensitive duplicates** — `ana.silva@example.com` appears three times:
++
++   | id | email                   | name        |
++   |----|-------------------------|-------------|
++   | 1  | `ana.silva@example.com` | Ana Silva   |
++   | 4  | `Ana.Silva@example.com` | Dev Silva   |
++   | 23 | `ana.silva@example.com` | Ana Silva   |
++
++   A unique index (`lower(email)` or `email COLLATE NOCASE`) cannot be built while
++   these coexist. Resolving them means deleting or rewriting rows.
++
++Verified directly against the snapshot:
++
++```
++CREATE UNIQUE INDEX ... ON users (lower(email))          -> UNIQUE constraint failed
++CREATE UNIQUE INDEX ... ON users (email COLLATE NOCASE)  -> UNIQUE constraint failed
++```
++
++## Why there is no workaround in the migration
++
++Enforcing this only for future inserts (triggers, or a partial unique index that skips
++the colliding rows) would make the tests green while the production table keeps
++violating the invariant — a constraint that lies about the data. SQLite also has no
++`ALTER TABLE ... ALTER COLUMN`, so `NOT NULL` requires the full rebuild that this
++migration already performs, and that rebuild fails on the rows above.
++
++## What the migration does now
++
++`migrations/002_unique_email.sql`:
++
++- Pre-checks for NULL emails and case-insensitive duplicate groups and aborts with a
++  named, readable error instead of failing obscurely mid-rebuild. Nothing is written
++  before the checks pass.
++- Otherwise rebuilds `users` with `email TEXT NOT NULL` and adds
++  `UNIQUE INDEX users_email_unique ON users (lower(email))`, copying every row
++  unchanged (`id`, `email`, `name` are preserved).
++
++Confirmed: when the migration aborts, the table is untouched — all 40 snapshot rows
++are identical and `users` keeps its original nullable shape (no partial rebuild).
++On clean data the rebuild preserves rows and rejects both `NULL` and
++`ANA@example.com` vs `Ana@Example.com`.
++
++## Test status (run with `python3 -m unittest -v`)
++
++- `test_constraint_on_fresh_db` — **passes**. `NOT NULL` and the case-insensitive
++  unique index both raise `IntegrityError` as required.
++- `test_applies_to_prod_snapshot` — **fails**, intentionally:
++  `CHECK constraint failed: users.email has NULL values - Support must backfill them
++  first`. This is the blocker, not a defect in the migration. With `id = 17`
++  backfilled in a throwaway copy, it then fails on the duplicate check
++  (`users.email has case-insensitive duplicates - Support must resolve them first`).
++
++So a green run is not achievable in this repository, and the suite is expected to end
++with `Ran 2 tests` / `FAILED (errors=1)`. Any implementation that turns
++`test_applies_to_prod_snapshot` green today either edits the snapshot's rows or
++enforces the rule only for new inserts (see above) — neither is acceptable. Treat that
++one error as this blocker, not as a regression.
++
++## To unblock
++
++Support needs to, in the production data:
++
++1. Backfill or otherwise settle `users.email` for `id = 17` (or disable that account —
++   whatever their policy is; the row cannot stay NULL).
++2. Decide which of `id` 1, 4 and 23 survives, and what the other two become
++   (corrected addresses, merged, or removed).
++
++After that, `002_unique_email.sql` applies as written with no further changes, and the
++constraint will hold for every row rather than only for new inserts.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..c46889d 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,56 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL to an existing column, so the table is rebuilt.
++-- Every row is copied through unchanged; this migration never rewrites,
++-- merges or deletes customer data.
++--
++-- Applying this to the 2026-10-01 production snapshot fails by design, because
++-- that data does not satisfy the new constraints yet. See BLOCKED.md: Support
++-- must backfill the NULL email on id 17 and resolve the duplicate
++-- ana.silva@example.com rows (ids 1, 4, 23) before this can ship.
++
++BEGIN;
++
++-- Fail fast, and with a readable reason, rather than half-way through the
++-- rebuild with a bare constraint error.
++CREATE TEMP TABLE email_null_precheck (
++    null_emails INTEGER NOT NULL
++        CONSTRAINT "users.email has NULL values - Support must backfill them first"
++        CHECK (null_emails = 0)
++);
++INSERT INTO email_null_precheck
++SELECT count(*) FROM users WHERE email IS NULL;
++
++CREATE TEMP TABLE email_case_precheck (
++    duplicate_groups INTEGER NOT NULL
++        CONSTRAINT "users.email has case-insensitive duplicates - Support must resolve them first"
++        CHECK (duplicate_groups = 0)
++);
++INSERT INTO email_case_precheck
++SELECT count(*) FROM (
++    SELECT lower(email)
++    FROM users
++    WHERE email IS NOT NULL
++    GROUP BY lower(email)
++    HAVING count(*) > 1
++);
++
++DROP TABLE email_null_precheck;
++DROP TABLE email_case_precheck;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_unique ON users (lower(email));
++
++COMMIT;

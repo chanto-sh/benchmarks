@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index 451015d..6ca9242 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,9 @@
+ def set_left_most_unset_bit(n): 
+-    pass
++    if n == 0:
++        return 0
++    # Check bits below the most significant set bit, from left to right.
++    for i in range(n.bit_length() - 2, -1, -1):
++        if not (n & (1 << i)):
++            return n | (1 << i)
++    # All bits are already set.
++    return n

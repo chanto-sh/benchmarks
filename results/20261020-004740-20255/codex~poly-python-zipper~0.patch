@@ -1,0 +1,74 @@
+diff --git a/zipper.py b/zipper.py
+index c4bf1dd..303d6c9 100644
+--- a/zipper.py
++++ b/zipper.py
+@@ -1,28 +1,57 @@
+ class Zipper:
++    def __init__(self, focus, parents=()):
++        self._focus = focus
++        self._parents = parents
++
+     @staticmethod
+     def from_tree(tree):
+-        pass
++        return Zipper(tree)
+ 
+     def value(self):
+-        pass
++        return self._focus["value"]
+ 
+-    def set_value(self):
+-        pass
++    def set_value(self, value):
++        focus = dict(self._focus)
++        focus["value"] = value
++        return Zipper(focus, self._parents)
+ 
+     def left(self):
+-        pass
++        if self._focus is None or self._focus["left"] is None:
++            return None
++
++        return Zipper(self._focus["left"], self._parents + ((self._focus, "left"),))
+ 
+-    def set_left(self):
+-        pass
++    def set_left(self, left):
++        focus = dict(self._focus)
++        focus["left"] = left
++        return Zipper(focus, self._parents)
+ 
+     def right(self):
+-        pass
++        if self._focus is None or self._focus["right"] is None:
++            return None
++
++        return Zipper(self._focus["right"], self._parents + ((self._focus, "right"),))
+ 
+-    def set_right(self):
+-        pass
++    def set_right(self, right):
++        focus = dict(self._focus)
++        focus["right"] = right
++        return Zipper(focus, self._parents)
+ 
+     def up(self):
+-        pass
++        if not self._parents:
++            return None
++
++        parent, side = self._parents[-1]
++        focus = dict(parent)
++        focus[side] = self._focus
++        return Zipper(focus, self._parents[:-1])
+ 
+     def to_tree(self):
+-        pass
++        tree = self._focus
++
++        for parent, side in reversed(self._parents):
++            updated_parent = dict(parent)
++            updated_parent[side] = tree
++            tree = updated_parent
++
++        return tree

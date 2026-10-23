@@ -1,0 +1,62 @@
+diff --git a/beer_song.go b/beer_song.go
+index 7a26646..b579f03 100644
+--- a/beer_song.go
++++ b/beer_song.go
+@@ -1,13 +1,54 @@
+ package beer
+ 
++import (
++	"fmt"
++	"strings"
++)
++
+ func Song() string {
+-	panic("Please implement the Song function")
++	song, _ := Verses(99, 0)
++	return song
+ }
+ 
+ func Verses(start, stop int) (string, error) {
+-	panic("Please implement the Verses function")
++	if start < stop || start > 99 || stop < 0 {
++		return "", fmt.Errorf("invalid verse range: %d to %d", start, stop)
++	}
++
++	verses := make([]string, 0, start-stop+1)
++	for n := start; n >= stop; n-- {
++		verse, err := Verse(n)
++		if err != nil {
++			return "", err
++		}
++		verses = append(verses, verse)
++	}
++
++	return strings.Join(verses, "\n") + "\n", nil
+ }
+ 
+ func Verse(n int) (string, error) {
+-	panic("Please implement the Verse function")
++	if n < 0 || n > 99 {
++		return "", fmt.Errorf("invalid verse: %d", n)
++	}
++
++	switch n {
++	case 0:
++		return "No more bottles of beer on the wall, no more bottles of beer.\n" +
++			"Go to the store and buy some more, 99 bottles of beer on the wall.\n", nil
++	case 1:
++		return "1 bottle of beer on the wall, 1 bottle of beer.\n" +
++			"Take it down and pass it around, no more bottles of beer on the wall.\n", nil
++	}
++
++	return fmt.Sprintf("%d bottles of beer on the wall, %d bottles of beer.\n"+
++		"Take one down and pass it around, %d %s of beer on the wall.\n",
++		n, n, n-1, bottles(n-1)), nil
++}
++
++func bottles(n int) string {
++	if n == 1 {
++		return "bottle"
++	}
++	return "bottles"
+ }

@@ -1,0 +1,232 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..d4f4ce1 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,217 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince (RK45) Butcher tableau.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_BHAT = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++         -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++# Coefficients for the quartic dense output of the RK45 step.  The
++# interpolant is y(t0 + theta*h) = y0 + h * sum_i K_i * P_i(theta).
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0, 8663915743.0 / 2820520608.0,
++     -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0, -68118460800.0 / 10900136933.0,
++     87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0, 14199869525.0 / 1410260304.0,
++     -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0, -318862633887.0 / 49829197408.0,
++     701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0, 2019193451.0 / 616988883.0,
++     -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0, -110615467.0 / 29380423.0,
++     69997945.0 / 29380423.0),
++)
++
++
++def _rhs(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return (vx, vy, ax, ay)
++
++
++def _step(state, h, accel):
++    """One Dormand-Prince step, returning the new state, error and stages."""
++    k = [_rhs(state, accel)]
++    for s in range(1, 7):
++        row = _A[s]
++        trial = tuple(
++            state[i] + h * sum(row[j] * k[j][i] for j in range(s))
++            for i in range(4)
++        )
++        k.append(_rhs(trial, accel))
++
++    new = tuple(
++        state[i] + h * sum(_B[j] * k[j][i] for j in range(7))
++        for i in range(4)
++    )
++    error = tuple(
++        h * sum((_B[j] - _BHAT[j]) * k[j][i] for j in range(7))
++        for i in range(4)
++    )
++    return new, error, k
++
++
++def _dense_state(state, h, k, theta):
++    """Evaluate the RK45 dense output at t0 + theta*h."""
++    powers = (theta, theta * theta, theta ** 3, theta ** 4)
++    return tuple(
++        state[i] + h * sum(
++            k[j][i] * sum(_P[j][m] * powers[m] for m in range(4))
++            for j in range(7)
++        )
++        for i in range(4)
++    )
++
++
++def _radial_velocity_dot_position(state):
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
++
++def _event_fraction(state, h, k):
++    """Locate a negative-to-positive radial-velocity crossing in a step."""
++    def g(theta):
++        s = _dense_state(state, h, k, theta)
++        return s[0] * s[2] + s[1] * s[3]
++
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if g(mid) <= 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _radial_acceleration(r, ux, uy, accel):
++    ax, ay = accel(r * ux, r * uy)
++    return ax * ux + ay * uy
++
++
++def _radial_acceleration_derivative(r, ux, uy, accel):
++    delta = max(1e-5 * abs(r), 1e-300)
++    fm2 = _radial_acceleration(r - 2.0 * delta, ux, uy, accel)
++    fm1 = _radial_acceleration(r - delta, ux, uy, accel)
++    fp1 = _radial_acceleration(r + delta, ux, uy, accel)
++    fp2 = _radial_acceleration(r + 2.0 * delta, ux, uy, accel)
++    return (-fp2 + 8.0 * fp1 - 8.0 * fm1 + fm2) / (12.0 * delta)
++
++
++def _near_circular_period(r, vr, radial_accel, h_ang, ux, uy, accel):
++    """Epicyclic period when the radial excursion is below integration noise."""
++    derivative = _radial_acceleration_derivative(r, ux, uy, accel)
++    h2 = h_ang * h_ang
++    kappa_sq = -derivative + 3.0 * h2 / (r ** 4)
++    if kappa_sq <= 0.0:
++        return None
++
++    # Linearised radial excursion about the circular orbit with this
++    # angular momentum.
++    offset = -(radial_accel + h2 / (r ** 3)) / kappa_sq
++    amplitude = math.hypot(offset, vr / math.sqrt(kappa_sq))
++    if amplitude > 1e-8 * r:
++        return None
++    return 2.0 * math.pi / math.sqrt(kappa_sq)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``r0`` and ``v0`` are the initial position and velocity, and
++    ``accel(x, y)`` returns the acceleration at a point.  The force is
++    assumed to be central, but its radial dependence is arbitrary.
++    """
++    x, y = float(r0[0]), float(r0[1])
++    vx, vy = float(v0[0]), float(v0[1])
++
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    ax0, ay0 = accel(x, y)
++    accel_mag = math.hypot(ax0, ay0)
++
++    # Exactly circular or extremely close to it: periapsis events are not
++    # resolvable, and the linearised radial period is the correct limit.
++    h_ang = x * vy - y * vx
++    if h_ang != 0.0:
++        ux, uy = x / r, y / r
++        vr0 = (x * vx + y * vy) / r
++        ar0 = (x * ax0 + y * ay0) / r
++        period = _near_circular_period(r, vr0, ar0, h_ang, ux, uy, accel)
++        if period is not None:
++            return period
++
++    # Characteristic time and tolerances, scaled to the problem.
++    if speed > 0.0:
++        t_char = r / speed
++    else:
++        t_char = 1.0
++    if accel_mag > 0.0:
++        t_char = min(t_char, math.sqrt(r / accel_mag))
++    h = 1e-3 * t_char
++
++    pos_atol = 1e-14 * max(r, 1e-14)
++    vel_scale = max(speed, math.sqrt(accel_mag * r), 1e-14)
++    atol = (pos_atol, pos_atol, 1e-14 * vel_scale, 1e-14 * vel_scale)
++    rtol = 1e-13
++
++    state = (x, y, vx, vy)
++    t = 0.0
++    events = []
++    g_prev = _radial_velocity_dot_position(state)
++    max_steps = 200000
++
++    for _ in range(max_steps):
++        step_size = h
++        while True:
++            new_state, error, k = _step(state, step_size, accel)
++            err_norm = math.sqrt(sum(
++                (error[i] / (atol[i] + rtol * max(abs(state[i]),
++                                                abs(new_state[i])))) ** 2
++                for i in range(4)
++            ) / 4.0)
++            if err_norm <= 1.0:
++                break
++            factor = max(0.2, 0.9 * err_norm ** -0.2)
++            step_size *= factor
++            if abs(step_size) < 1e-16 * max(1.0, abs(t)):
++                raise RuntimeError("integration step size underflow")
++
++        old_state = state
++        state = new_state
++        t += step_size
++        g_new = _radial_velocity_dot_position(state)
++
++        # r decreases then increases: a closest approach (periapsis).
++        if g_prev <= 0.0 < g_new:
++            theta = _event_fraction(old_state, step_size, k)
++            event_time = t - step_size + theta * step_size
++            events.append(event_time)
++            if len(events) == 2:
++                return events[1] - events[0]
++
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, max(0.2, 0.9 * err_norm ** -0.2))
++        h = step_size * factor
++        g_prev = g_new
++
++    raise RuntimeError("could not find two successive closest approaches")

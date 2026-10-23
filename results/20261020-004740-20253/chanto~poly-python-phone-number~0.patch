@@ -1,0 +1,49 @@
+diff --git a/phone_number.py b/phone_number.py
+index ff5b904..3b38e1d 100644
+--- a/phone_number.py
++++ b/phone_number.py
+@@ -1,3 +1,43 @@
++import re
++
++
+ class PhoneNumber:
+     def __init__(self, number):
+-        pass
++        if re.search(r"[A-Za-z]", number):
++            raise ValueError("letters not permitted")
++
++        if re.search(r"[^0-9\s().+-]", number):
++            raise ValueError("punctuations not permitted")
++
++        digits = re.sub(r"[^0-9]", "", number)
++
++        if len(digits) < 10:
++            raise ValueError("must not be fewer than 10 digits")
++        if len(digits) > 11:
++            raise ValueError("must not be greater than 11 digits")
++
++        if len(digits) == 11:
++            if digits[0] != "1":
++                raise ValueError("11 digits must start with 1")
++            digits = digits[1:]
++
++        area_code = digits[:3]
++        exchange_code = digits[3:6]
++
++        if area_code[0] == "0":
++            raise ValueError("area code cannot start with zero")
++        if area_code[0] == "1":
++            raise ValueError("area code cannot start with one")
++        if exchange_code[0] == "0":
++            raise ValueError("exchange code cannot start with zero")
++        if exchange_code[0] == "1":
++            raise ValueError("exchange code cannot start with one")
++
++        self.number = digits
++
++    @property
++    def area_code(self):
++        return self.number[:3]
++
++    def pretty(self):
++        return f"({self.area_code})-{self.number[3:6]}-{self.number[6:]}"

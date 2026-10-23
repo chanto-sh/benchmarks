@@ -1,0 +1,21 @@
+diff --git a/game.py b/game.py
+index 768dec9..f577d2c 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,15 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # On the last k squares the equations are symmetric enough that every
++    # expectation is exactly k: E[n-k] .. E[n-1] = k (and E[n] = 0).
++    e = [Fraction(k) for _ in range(n)]
++    e.append(Fraction(0))
++
++    # For i < n-k no roll can overshoot n, so E[i] = 1 + avg(E[i+1..i+k]).
++    window = Fraction(k * k)  # sum of E[n-k..n-1]
++    for i in range(n - k - 1, -1, -1):
++        e[i] = 1 + window / k
++        window += e[i] - e[i + k]
++
++    return e[0]

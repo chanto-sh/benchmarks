@@ -1,0 +1,213 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..ffe34f7 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,207 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B5 = _A[6]
++_B4 = (5179 / 57600, 0.0, 7571 / 16695, 393 / 640,
++       -92097 / 339200, 187 / 2100, 1 / 40)
++
++
++def _linear_combination(y, h, terms):
++    """Return y + h * sum(coef * k for coef, k in terms)."""
++    terms = list(terms)
++    return [
++        y[i] + h * sum(coef * k[i] for coef, k in terms)
++        for i in range(4)
++    ]
++
++
++def _rk45_step(y, h, deriv):
++    """One Dormand-Prince step, plus its error estimate and endpoint slopes."""
++    k = [deriv(y)]
++    for stage in range(1, 7):
++        terms = [(_A[stage][j], k[j]) for j in range(stage)]
++        k.append(deriv(_linear_combination(y, h, terms)))
++
++    y5 = _linear_combination(y, h, zip(_B5, k))
++    k6 = deriv(y5)
++    y4 = _linear_combination(y, h, zip(_B4, k + [k6]))
++    err = [y5[i] - y4[i] for i in range(4)]
++    # k[0] is the slope at the start and k6 at the end of the step.
++    return y5, err, k[0], k6
++
++
++def _hermite5_coeffs(p0, p1, dp0, dp1, ddp0, ddp1, h):
++    """Power-basis coefficients of the quintic Hermite interpolant on [0, h]."""
++    m0 = h * dp0
++    m1 = h * dp1
++    q0 = h * h * ddp0
++    q1 = h * h * ddp1
++    return (
++        p0,
++        m0,
++        0.5 * q0,
++        -10.0 * p0 - 6.0 * m0 + 10.0 * p1 - 4.0 * m1 - 1.5 * q0 + 0.5 * q1,
++        15.0 * p0 + 8.0 * m0 - 15.0 * p1 + 7.0 * m1 + 1.5 * q0 - q1,
++        -6.0 * p0 - 3.0 * m0 + 6.0 * p1 - 3.0 * m1 - 0.5 * q0 + 0.5 * q1,
++    )
++
++
++def _poly(c, s):
++    return ((((c[5] * s + c[4]) * s + c[3]) * s + c[2]) * s + c[1]) * s + c[0]
++
++
++def _poly_deriv(c, s):
++    return (((5.0 * c[5] * s + 4.0 * c[4]) * s + 3.0 * c[3]) * s
++            + 2.0 * c[2]) * s + c[1]
++
++
++def _find_root(c, derivative=False):
++    """Find the root in [0, 1] of a polynomial (or its derivative)."""
++    f = _poly_deriv if derivative else _poly
++    lo, hi = 0.0, 1.0
++    f_hi = f(c, hi)
++    if f_hi == 0.0:
++        return hi
++
++    # The event functions used here have the expected sign change.
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        if f(c, mid) > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _event_state(y, y1, f0, f1, h, event):
++    """Locate an event in an accepted step and interpolate the state there."""
++    cx = _hermite5_coeffs(y[0], y1[0], f0[0], f1[0], f0[2], f1[2], h)
++    cy = _hermite5_coeffs(y[1], y1[1], f0[1], f1[1], f0[3], f1[3], h)
++
++    if event == "apex":
++        s = _find_root(cy, derivative=True)
++    else:
++        s = _find_root(cy)
++
++    x = _poly(cx, s)
++    height = _poly(cy, s)
++    vx = _poly_deriv(cx, s) / h
++    vy = _poly_deriv(cy, s) / h
++
++    if event == "ground":
++        height = 0.0
++    else:
++        vy = 0.0
++    return [x, height, vx, vy], s * h
++
++
++def _initial_step(y, g, c):
++    vx, vy = y[2], y[3]
++    speed = math.hypot(vx, vy)
++    ax = -c * speed * vx
++    ay = -g - c * speed * vy
++    accel = math.hypot(ax, ay)
++    if accel > 0.0:
++        h = 0.01 * max(speed, 1e-6) / accel
++    else:
++        h = 1e-3
++    return min(max(h, 1e-8), 0.1)
++
++
++def _integrate_to_event(y, t, event, deriv, g, c):
++    """Integrate until y (ground) or vy (apex) reaches zero."""
++    rtol = 1e-10
++    atol = 1e-12
++    h = _initial_step(y, g, c)
++
++    while True:
++        y1, err, f0, f1 = _rk45_step(y, h, deriv)
++
++        scale = [atol + rtol * max(abs(y[i]), abs(y1[i])) for i in range(4)]
++        err_norm = math.sqrt(sum((err[i] / scale[i]) ** 2 for i in range(4)) / 4.0)
++
++        crossed = (y1[3] <= 0.0) if event == "apex" else (y1[1] <= 0.0)
++        if err_norm <= 1.0 and crossed:
++            event_state, dt = _event_state(y, y1, f0, f1, h, event)
++            return event_state, t + dt
++
++        if err_norm <= 1.0:
++            y = y1
++            t += h
++
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err_norm ** -0.2
++        factor = min(5.0, max(0.1, factor))
++        h *= factor
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    vx0 = v0 * math.cos(theta)
++    if abs(vx0) < 1e-15 * max(1.0, abs(v0)):
++        vx0 = 0.0
++    vy0 = v0 * math.sin(theta)
++
++    if k == 0.0:
++        disc = vy0 * vy0 + 2.0 * g * h0
++        root = math.sqrt(disc)
++        t_ground = (vy0 + root) / g
++        apex = h0 + (vy0 * vy0 / (2.0 * g) if vy0 > 0.0 else 0.0)
++        return {"range": vx0 * t_ground, "apex": apex, "time": t_ground}
++
++    # A projectile starting at ground level without upward motion has already
++    # reached the end of its flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    c = k / mass
++
++    def deriv(s):
++        vx, vy = s[2], s[3]
++        speed = math.hypot(vx, vy)
++        return (
++            vx,
++            vy,
++            -c * speed * vx,
++            -g - c * speed * vy,
++        )
++
++    state = [0.0, h0, vx0, vy0]
++    t = 0.0
++
++    if vy0 > 0.0:
++        state, t_apex = _integrate_to_event(state, t, "apex", deriv, g, c)
++        apex = state[1]
++    else:
++        t_apex = 0.0
++        apex = h0
++
++    state, t_ground = _integrate_to_event(state, t_apex, "ground", deriv, g, c)
++
++    return {"range": state[0], "apex": apex, "time": t_ground}

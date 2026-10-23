@@ -1,0 +1,71 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..4bf3a19 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,64 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a domino stone with two numbered halves.
++type Domino [2]int
+ 
++// MakeChain attempts to arrange the given dominoes into a legal chain.
++// A chain is legal when adjacent halves match and the two outer halves match.
+ func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++	if len(input) == 0 {
++		return []Domino{}, true
++	}
++
++	used := make([]bool, len(input))
++	chain := make([]Domino, 0, len(input))
++
++	var search func(end int) bool
++	search = func(end int) bool {
++		if len(chain) == len(input) {
++			return chain[0][0] == chain[len(chain)-1][1]
++		}
++
++		for i, d := range input {
++			if used[i] {
++				continue
++			}
++
++			var next Domino
++			switch {
++			case d[0] == end:
++				next = d
++			case d[1] == end:
++				next = Domino{d[1], d[0]}
++			default:
++				continue
++			}
++
++			used[i] = true
++			chain = append(chain, next)
++			if search(next[1]) {
++				return true
++			}
++			chain = chain[:len(chain)-1]
++			used[i] = false
++		}
++
++		return false
++	}
++
++	// The chain may start with either orientation of any domino.
++	for i, d := range input {
++		orientations := [2]Domino{d, {d[1], d[0]}}
++		for _, first := range orientations {
++			used[i] = true
++			chain = append(chain, first)
++			if search(first[1]) {
++				return chain, true
++			}
++			chain = chain[:len(chain)-1]
++			used[i] = false
++		}
++	}
++
++	return nil, false
+ }

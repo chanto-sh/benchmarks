@@ -1,0 +1,13 @@
+diff --git a/solution.py b/solution.py
+index df33a95..f5ac1c7 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,6 @@
+-def validate(n): 
+-    pass
++def validate(n):
++    counts = {}
++    for ch in str(abs(n)):
++        d = int(ch)
++        counts[d] = counts.get(d, 0) + 1
++    return all(count <= digit for digit, count in counts.items())

@@ -1,0 +1,154 @@
+diff --git a/react.go b/react.go
+index fabc3c0..90eba53 100644
+--- a/react.go
++++ b/react.go
+@@ -3,34 +3,141 @@ package react
+ // Define reactor, cell and canceler types here.
+ // These types will implement the Reactor, Cell and Canceler interfaces, respectively.
+ 
++// reactor keeps every cell it creates in creation order. Because cells can
++// only depend on cells that already exist, this order is also a topological
++// order: recomputing cells in it guarantees that a cell is never recomputed
++// before all of its dependencies are up to date.
++type reactor struct {
++	cells []*cell
++}
++
++type cellCallback struct {
++	id int
++	fn func(int)
++}
++
++type cell struct {
++	reactor *reactor
++	value   int
++	deps    []*cell
++	compute func() int
++	changed bool
++
++	callbacks    []cellCallback
++	nextCallback int
++}
++
++type canceler struct {
++	cell *cell
++	id   int
++}
++
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	c.cell.removeCallback(c.id)
++}
++
++func (c *cell) removeCallback(id int) {
++	for i := range c.callbacks {
++		if c.callbacks[i].id == id {
++			c.callbacks = append(c.callbacks[:i], c.callbacks[i+1:]...)
++			return
++		}
++	}
++}
++
++func (c *cell) fireCallbacks() {
++	// Snapshot so callbacks that add or remove callbacks are safe.
++	callbacks := make([]cellCallback, len(c.callbacks))
++	copy(callbacks, c.callbacks)
++	for _, cb := range callbacks {
++		cb.fn(c.value)
++	}
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	if value == c.value {
++		return
++	}
++
++	r := c.reactor
++	for _, cell := range r.cells {
++		cell.changed = false
++	}
++	c.value = value
++	c.changed = true
++
++	// Recompute every affected cell once, in creation order, so the whole
++	// graph reaches a stable state before any callback runs.
++	var changedCells []*cell
++	for _, cell := range r.cells {
++		if cell.compute == nil {
++			continue
++		}
++		depChanged := false
++		for _, dep := range cell.deps {
++			if dep.changed {
++				depChanged = true
++				break
++			}
++		}
++		if !depChanged {
++			continue
++		}
++		newValue := cell.compute()
++		if newValue != cell.value {
++			cell.value = newValue
++			cell.changed = true
++			changedCells = append(changedCells, cell)
++		}
++	}
++
++	for _, cell := range changedCells {
++		cell.fireCallbacks()
++	}
+ }
+ 
+ func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++	id := c.nextCallback
++	c.nextCallback++
++	c.callbacks = append(c.callbacks, cellCallback{id: id, fn: callback})
++	return &canceler{cell: c, id: id}
+ }
+ 
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	c := &cell{reactor: r, value: initial}
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	d := dep.(*cell)
++	c := &cell{
++		reactor: r,
++		deps:    []*cell{d},
++		compute: func() int { return compute(d.value) },
++	}
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	d1 := dep1.(*cell)
++	d2 := dep2.(*cell)
++	c := &cell{
++		reactor: r,
++		deps:    []*cell{d1, d2},
++		compute: func() int { return compute(d1.value, d2.value) },
++	}
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
+ }

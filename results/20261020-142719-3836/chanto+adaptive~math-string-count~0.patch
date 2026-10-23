@@ -1,0 +1,70 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..7c8c693 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,64 @@
+ MOD = 1_000_000_007
+ 
++# State: last letter is A? (0/1), number of C's modulo 3 (0/1/2).
++# Index = last_is_a * 3 + c_count.
++_STATES = 6
++
++
++def _mat_mul(a, b):
++    """Multiply two square matrices modulo MOD."""
++    size = len(a)
++    result = [[0] * size for _ in range(size)]
++    for i in range(size):
++        row_a = a[i]
++        row_r = result[i]
++        for k in range(size):
++            if row_a[k]:
++                factor = row_a[k]
++                row_b = b[k]
++                for j in range(size):
++                    row_r[j] = (row_r[j] + factor * row_b[j]) % MOD
++    return result
++
++
++def _mat_pow(matrix, exponent):
++    """Raise a square matrix to a power modulo MOD."""
++    size = len(matrix)
++    result = [[int(i == j) for j in range(size)] for i in range(size)]
++    while exponent:
++        if exponent & 1:
++            result = _mat_mul(result, matrix)
++        exponent >>= 1
++        if exponent:
++            matrix = _mat_mul(matrix, matrix)
++    return result
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    # Transition matrix: a row-vector of state counts is multiplied by it.
++    transition = [[0] * _STATES for _ in range(_STATES)]
++    for last_a in (0, 1):
++        for c_count in range(3):
++            state = last_a * 3 + c_count
++            # Append B (last letter is no longer A).
++            transition[state][c_count] += 1
++            # Append C.
++            transition[state][(c_count + 1) % 3] += 1
++            # Append A, allowed only when the previous letter was not A.
++            if not last_a:
++                transition[state][3 + c_count] += 1
++
++    powered = _mat_pow(transition, n)
++
++    # Start in the empty state: no previous A, zero C's.
++    counts = [0] * _STATES
++    counts[0] = 1
++    final = [0] * _STATES
++    for i in range(_STATES):
++        if counts[i]:
++            for j in range(_STATES):
++                final[j] = (final[j] + counts[i] * powered[i][j]) % MOD
++
++    # Accept states: any last letter, C count divisible by 3.
++    return (final[0] + final[3]) % MOD

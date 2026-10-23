@@ -1,0 +1,89 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..e0ee4b7
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,66 @@
++# Release check blocked: `libfoo-1.4.2.tar.gz` checksum mismatch
++
++## Status
++
++`python3 verify.py` now runs correctly, but the release cannot pass honestly:
++one artifact does not match its recorded checksum.
++
++```
++$ python3 verify.py
++checksum mismatch: libfoo-1.4.2.tar.gz
++```
++
++## Evidence
++
++`SHA256SUMS` records:
++
++```
++7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD  libfoo-1.4.2.tar.gz
++```
++
++The file in `artifacts/` actually hashes to:
++
++```
++fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce
++```
++
++The other two artifacts match their manifest entries. The mismatch is therefore
++specific to `libfoo-1.4.2.tar.gz`, not a bug in the verifier, and cannot be
++derived from the repository: there is no earlier committed version, backup, or
++other copy of the expected content to restore from.
++
++## Why this is blocked rather than worked around
++
++The manifest is the record of what the release is supposed to contain. Editing
++`SHA256SUMS` to match the current bytes would make the check pass while
++publishing an artifact whose integrity is unverified — exactly what this check
++exists to prevent. Replacing the artifact is not possible without the original
++known-good bytes.
++
++## What was fixed
++
++`verify.py` had two independent bugs that prevented it from checking binary
++artifacts at all:
++
++1. It opened artifacts in text mode (`open(path)`), so binary data either raised
++   `UnicodeDecodeError` or was re-encoded before hashing. It now reads with
++   `"rb"`.
++2. It compared the lowercase `hexdigest()` against the uppercase digests in
++   `SHA256SUMS`. The comparison is now case-insensitive.
++
++Both are covered by `test_verify.py`; `test_binary_files` and
++`test_reports_missing` pass. `test_release_artifacts_verify` fails only because
++of the genuine `libfoo` mismatch above.
++
++## To unblock
++
++Obtain either:
++
++- the known-good `libfoo-1.4.2.tar.gz` whose SHA-256 is
++  `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD`, or
++- an authoritative manifest for the artifact actually intended for release,
++  confirmed by the release owner through a channel independent of this
++  repository.
++
++Then re-run `python3 verify.py` and the test suite. No change to `verify.py` or
++the tests is needed.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

@@ -1,0 +1,214 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..70a22b9 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,199 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51, _A52 = 19372.0 / 6561.0, -25360.0 / 2187.0
++_A53, _A54 = 64448.0 / 6561.0, -212.0 / 729.0
++_A61, _A62, _A63 = 9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0
++_A64, _A65 = 49.0 / 176.0, -5103.0 / 18656.0
++_A71, _A73, _A74 = 35.0 / 384.0, 500.0 / 1113.0, 125.0 / 192.0
++_A75, _A76 = -2187.0 / 6784.0, 11.0 / 84.0
++
++# Error coefficients (fifth-order minus fourth-order weights).
++_E1, _E3, _E4 = 71.0 / 57600.0, -71.0 / 16695.0, 71.0 / 1920.0
++_E5, _E6, _E7 = -17253.0 / 339200.0, 22.0 / 525.0, -1.0 / 40.0
++
++_RTOL = 1e-12
++_ATOL = 1e-14
++
++
++def _radial_acceleration(r, accel):
++    """Radial component of a central acceleration at radius r."""
++    return accel(r, 0.0)[0]
++
++
++def _dopri_step(r, vr, h, h2, accel):
++    """One Dormand-Prince step of the radial equation.
++
++    The state is (r, dr/dt).  Returns the fifth-order end state and the
++    components of the local error estimate.
++    """
++    k1r = vr
++    k1v = h2 / (r * r * r) + _radial_acceleration(r, accel)
++
++    r2 = r + h * _A21 * k1r
++    v2 = vr + h * _A21 * k1v
++    k2r = v2
++    k2v = h2 / (r2 * r2 * r2) + _radial_acceleration(r2, accel)
++
++    r3 = r + h * (_A31 * k1r + _A32 * k2r)
++    v3 = vr + h * (_A31 * k1v + _A32 * k2v)
++    k3r = v3
++    k3v = h2 / (r3 * r3 * r3) + _radial_acceleration(r3, accel)
++
++    r4 = r + h * (_A41 * k1r + _A42 * k2r + _A43 * k3r)
++    v4 = vr + h * (_A41 * k1v + _A42 * k2v + _A43 * k3v)
++    k4r = v4
++    k4v = h2 / (r4 * r4 * r4) + _radial_acceleration(r4, accel)
++
++    r5 = r + h * (_A51 * k1r + _A52 * k2r + _A53 * k3r + _A54 * k4r)
++    v5 = vr + h * (_A51 * k1v + _A52 * k2v + _A53 * k3v + _A54 * k4v)
++    k5r = v5
++    k5v = h2 / (r5 * r5 * r5) + _radial_acceleration(r5, accel)
++
++    r6 = r + h * (_A61 * k1r + _A62 * k2r + _A63 * k3r +
++                  _A64 * k4r + _A65 * k5r)
++    v6 = vr + h * (_A61 * k1v + _A62 * k2v + _A63 * k3v +
++                   _A64 * k4v + _A65 * k5v)
++    k6r = v6
++    k6v = h2 / (r6 * r6 * r6) + _radial_acceleration(r6, accel)
++
++    r7 = r + h * (_A71 * k1r + _A73 * k3r + _A74 * k4r +
++                  _A75 * k5r + _A76 * k6r)
++    v7 = vr + h * (_A71 * k1v + _A73 * k3v + _A74 * k4v +
++                   _A75 * k5v + _A76 * k6v)
++    k7r = v7
++    k7v = h2 / (r7 * r7 * r7) + _radial_acceleration(r7, accel)
++
++    r_new = r7
++    vr_new = v7
++
++    err_r = h * (_E1 * k1r + _E3 * k3r + _E4 * k4r +
++                 _E5 * k5r + _E6 * k6r + _E7 * k7r)
++    err_v = h * (_E1 * k1v + _E3 * k3v + _E4 * k4v +
++                 _E5 * k5v + _E6 * k6v + _E7 * k7v)
++    return r_new, vr_new, err_r, err_v
++
++
++def _timescale(r, vr, h2, ar):
++    """A local time scale for the radial motion."""
++    speed = abs(vr) + math.sqrt(h2) / r
++    accel_scale = math.sqrt(abs(ar) * r)
++    denominator = speed + accel_scale
++    if denominator == 0.0:
++        return math.inf
++    return r / denominator
++
++
++def _event_time(r, vr, h, h2, accel):
++    """Locate the next zero of dr/dt inside a step, by bisection."""
++    lo = 0.0
++    hi = h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        _, vr_mid, _, _ = _dopri_step(r, vr, mid, h2, accel)
++        if vr < 0.0:
++            # Finding a periapsis: false negative is to the left.
++            if vr_mid <= 0.0:
++                lo = mid
++            else:
++                hi = mid
++        else:
++            # (Used for an apoapsis if this helper is ever called that way.)
++            if vr_mid >= 0.0:
++                lo = mid
++            else:
++                hi = mid
++    tau = 0.5 * (lo + hi)
++    r_event, _, _, _ = _dopri_step(r, vr, tau, h2, accel)
++    return tau, r_event
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    r0 and v0 are the initial position and velocity.  ``accel(x, y)`` gives
++    the central acceleration and may describe any radial force law, not just
++    Newtonian gravity.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if not math.isfinite(r) or r == 0.0:
++        raise ValueError("initial position must be nonzero and finite")
++
++    # Specific angular momentum is conserved for any central force.  Writing
++    # the radial motion with h fixed removes the angular coordinate and gives
++    #     r'' = h^2 / r^3 + a_r(r).
++    h = x * vy - y * vx
++    h2 = h * h
++    vr = (x * vx + y * vy) / r
++
++    ar = _radial_acceleration(r, accel)
++    radial_balance = h2 / (r * r * r) + ar
++    accel_scale = abs(ar) + h2 / (r * r * r)
++    if (abs(vr) <= 1e-13 * (abs(h) / r + 1.0) and
++            abs(radial_balance) <= 1e-12 * (accel_scale + 1.0)):
++        # A circular orbit: every point is equally close to the origin.
++        if h != 0.0:
++            return 2.0 * math.pi * r * r / abs(h)
++        raise ValueError("cannot determine a radial period")
++
++    timescale = _timescale(r, vr, h2, ar)
++    if not math.isfinite(timescale):
++        raise ValueError("cannot determine a radial period")
++    step = 0.05 * timescale
++
++    t = 0.0
++    periapses = []
++    max_steps = 1000000
++
++    for _ in range(max_steps):
++        ar = _radial_acceleration(r, accel)
++        cap = 0.2 * _timescale(r, vr, h2, ar)
++        if step > cap:
++            step = cap
++
++        r_new, vr_new, err_r, err_v = _dopri_step(r, vr, step, h2, accel)
++
++        scale_r = _ATOL + _RTOL * max(abs(r), abs(r_new))
++        scale_v = _ATOL + _RTOL * max(abs(vr), abs(vr_new))
++        error = math.sqrt(0.5 * ((err_r / scale_r) ** 2 +
++                                 (err_v / scale_v) ** 2))
++
++        if error > 1.0:
++            factor = max(0.1, 0.9 * error ** -0.2)
++            step *= factor
++            continue
++
++        if vr < 0.0 and vr_new >= 0.0:
++            # A periapsis lies in this step.
++            tau, r_event = _event_time(r, vr, step, h2, accel)
++            t += tau
++            r = r_event
++            vr = 0.0
++            periapses.append(t)
++            if len(periapses) == 2:
++                return periapses[1] - periapses[0]
++
++            ar = _radial_acceleration(r, accel)
++            timescale = _timescale(r, vr, h2, ar)
++            step = min(step, 0.05 * timescale)
++            if step <= 0.0 or not math.isfinite(step):
++                step = 0.05 * (r / (math.sqrt(h2) / r)) if h2 else 0.0
++        else:
++            t += step
++            r, vr = r_new, vr_new
++
++            if error == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * error ** -0.2
++            step *= min(5.0, max(0.2, factor))
++
++    raise RuntimeError("no second closest approach found")

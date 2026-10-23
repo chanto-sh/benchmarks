@@ -1,0 +1,53 @@
+diff --git a/crypto_square.go b/crypto_square.go
+index 5da31f8..51be2fe 100644
+--- a/crypto_square.go
++++ b/crypto_square.go
+@@ -1,5 +1,47 @@
+ package cryptosquare
+ 
++import (
++	"strings"
++	"unicode"
++)
++
++// Encode normalizes pt (removing spaces and punctuation, lower-casing) and
++// returns the square-code cipher text, laid out in c chunks of r characters
++// separated by single spaces, with short chunks padded by a trailing space.
+ func Encode(pt string) string {
+-	panic("Please implement the Encode function")
++	var norm []rune
++	for _, r := range strings.ToLower(pt) {
++		if unicode.IsLetter(r) || unicode.IsDigit(r) {
++			norm = append(norm, r)
++		}
++	}
++
++	n := len(norm)
++	if n == 0 {
++		return ""
++	}
++
++	// Smallest c with c >= r and c-r <= 1 such that r*c >= n.
++	c := 1
++	for c*c < n {
++		c++
++	}
++	r := (n + c - 1) / c
++
++	chunks := make([]string, c)
++	for col := 0; col < c; col++ {
++		var sb strings.Builder
++		sb.Grow(r)
++		for row := 0; row < r; row++ {
++			i := row*c + col
++			if i < n {
++				sb.WriteRune(norm[i])
++			} else {
++				sb.WriteByte(' ')
++			}
++		}
++		chunks[col] = sb.String()
++	}
++
++	return strings.Join(chunks, " ")
+ }

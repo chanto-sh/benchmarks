@@ -1,0 +1,64 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..454c7c6 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,49 @@
+ import math
+ 
+ 
++# 8-point Gauss-Legendre nodes and weights on [-1, 1].
++_NODES = (
++    -0.9602898564975363,
++    -0.7966664774136267,
++    -0.5255324099163290,
++    -0.1834346424956498,
++    0.1834346424956498,
++    0.5255324099163290,
++    0.7966664774136267,
++    0.9602898564975363,
++)
++_WEIGHTS = (
++    0.1012285362903763,
++    0.2223810344533745,
++    0.3137066458778873,
++    0.3626837833783620,
++    0.3626837833783620,
++    0.3137066458778873,
++    0.2223810344533745,
++    0.1012285362903763,
++)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = s^2 removes the endpoint singularity:
++    the integral becomes 2 * integral of cos(t*s^2) from 0 to sqrt(b).
++    The smooth integrand is then integrated with composite Gauss-Legendre
++    quadrature, using enough panels to resolve its oscillations.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0:
++        return 2.0 * math.sqrt(b)
++
++    r = math.sqrt(b)
++    panels = max(1, math.ceil(t * b))
++    h = r / panels
++    half = 0.5 * h
++
++    terms = []
++    for i in range(panels):
++        center = (i + 0.5) * h
++        for node, weight in zip(_NODES, _WEIGHTS):
++            s = center + half * node
++            terms.append(weight * math.cos(t * s * s))
++    return h * math.fsum(terms)

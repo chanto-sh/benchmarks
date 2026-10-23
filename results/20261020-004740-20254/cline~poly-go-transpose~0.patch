@@ -1,0 +1,53 @@
+diff --git a/transpose.go b/transpose.go
+index 0db7e6a..401a103 100644
+--- a/transpose.go
++++ b/transpose.go
+@@ -1,5 +1,47 @@
+ package transpose
+ 
++// Transpose returns the transpose of the given input text.
++//
++// Rows of different lengths are padded on the left with spaces, and no
++// padding is added on the right: trailing spaces that come from missing
++// characters are omitted, while spaces that are actual characters of the
++// input are preserved.
+ func Transpose(input []string) []string {
+-	panic("Please implement the Transpose function")
++	if len(input) == 0 {
++		return []string{}
++	}
++
++	rows := make([][]rune, len(input))
++	maxLen := 0
++	for i, line := range input {
++		rows[i] = []rune(line)
++		if len(rows[i]) > maxLen {
++			maxLen = len(rows[i])
++		}
++	}
++
++	result := make([]string, 0, maxLen)
++	for col := 0; col < maxLen; col++ {
++		// Only rows up to the last one that actually contains this column
++		// contribute to the output row; anything below it would be padding
++		// on the right, which is dropped.
++		last := 0
++		for i := range rows {
++			if col < len(rows[i]) {
++				last = i
++			}
++		}
++
++		out := make([]rune, last+1)
++		for i := 0; i <= last; i++ {
++			if col < len(rows[i]) {
++				out[i] = rows[i][col]
++			} else {
++				out[i] = ' '
++			}
++		}
++		result = append(result, string(out))
++	}
++
++	return result
+ }

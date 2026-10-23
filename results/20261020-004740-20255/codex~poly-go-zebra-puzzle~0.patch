@@ -1,0 +1,218 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..8b3632e 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,212 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++const houseCount = 5
++
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++	nationalityCount
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++	colorCount
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++	drinkCount
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++	smokeCount
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++	petCount
++)
++
++const (
++	nationality = iota
++	color
++	drink
++	smoke
++	pet
++	categoryCount
++)
++
++type relation int
++
++const (
++	sameHouse relation = iota
++	nextTo
++	immediatelyRight
++	fixedHouse
++)
++
++type constraint struct {
++	relation  relation
++	categoryA int
++	valueA    int
++	categoryB int
++	valueB    int
++	house     int
++}
++
++var puzzleConstraints = [...]constraint{
++	{relation: sameHouse, categoryA: nationality, valueA: englishman, categoryB: color, valueB: red},
++	{relation: sameHouse, categoryA: nationality, valueA: spaniard, categoryB: pet, valueB: dog},
++	{relation: sameHouse, categoryA: color, valueA: green, categoryB: drink, valueB: coffee},
++	{relation: sameHouse, categoryA: nationality, valueA: ukrainian, categoryB: drink, valueB: tea},
++	{relation: immediatelyRight, categoryA: color, valueA: green, categoryB: color, valueB: ivory},
++	{relation: sameHouse, categoryA: smoke, valueA: oldGold, categoryB: pet, valueB: snails},
++	{relation: sameHouse, categoryA: smoke, valueA: kools, categoryB: color, valueB: yellow},
++	{relation: fixedHouse, categoryA: drink, valueA: milk, house: 2},
++	{relation: fixedHouse, categoryA: nationality, valueA: norwegian, house: 0},
++	{relation: nextTo, categoryA: smoke, valueA: chesterfields, categoryB: pet, valueB: fox},
++	{relation: nextTo, categoryA: smoke, valueA: kools, categoryB: pet, valueB: horse},
++	{relation: sameHouse, categoryA: smoke, valueA: luckyStrike, categoryB: drink, valueB: orangeJuice},
++	{relation: sameHouse, categoryA: nationality, valueA: japanese, categoryB: smoke, valueB: parliaments},
++	{relation: nextTo, categoryA: nationality, valueA: norwegian, categoryB: color, valueB: blue},
++}
++
++var (
++	allHousePermutations = generatePermutations(houseCount)
++	categoryOrder        = [...]int{nationality, color, drink, smoke, pet}
++)
++
++func generatePermutations(size int) [][]int {
++	permutation := make([]int, size)
++	used := make([]bool, size)
++	var permutations [][]int
++
++	var generate func(int)
++	generate = func(index int) {
++		if index == size {
++			permutations = append(permutations, append([]int(nil), permutation...))
++			return
++		}
++
++		for value := 0; value < size; value++ {
++			if used[value] {
++				continue
++			}
++			used[value] = true
++			permutation[index] = value
++			generate(index + 1)
++			used[value] = false
++		}
++	}
++
++	generate(0)
++	return permutations
++}
++
++func constraintsHold(assigned *[categoryCount]bool, positions *[categoryCount][houseCount]int) bool {
++	for _, rule := range puzzleConstraints {
++		if !assigned[rule.categoryA] {
++			continue
++		}
++		if rule.relation != fixedHouse && !assigned[rule.categoryB] {
++			continue
++		}
++
++		positionA := positions[rule.categoryA][rule.valueA]
++		switch rule.relation {
++		case sameHouse:
++			if positionA != positions[rule.categoryB][rule.valueB] {
++				return false
++			}
++		case nextTo:
++			difference := positionA - positions[rule.categoryB][rule.valueB]
++			if difference != 1 && difference != -1 {
++				return false
++			}
++		case immediatelyRight:
++			if positionA != positions[rule.categoryB][rule.valueB]+1 {
++				return false
++			}
++		case fixedHouse:
++			if positionA != rule.house {
++				return false
++			}
++		}
++	}
++	return true
++}
++
++func search(depth int, assigned *[categoryCount]bool, positions *[categoryCount][houseCount]int, solution *[categoryCount][houseCount]int) bool {
++	if depth == len(categoryOrder) {
++		*solution = *positions
++		return true
++	}
++
++	category := categoryOrder[depth]
++	for _, permutation := range allHousePermutations {
++		for house, value := range permutation {
++			positions[category][value] = house
++		}
++		assigned[category] = true
++		if constraintsHold(assigned, positions) &&
++			search(depth+1, assigned, positions, solution) {
++			return true
++		}
++		assigned[category] = false
++	}
++
++	return false
++}
++
++var nationalityNames = [...]string{
++	englishman: "Englishman",
++	spaniard:   "Spaniard",
++	ukrainian:  "Ukrainian",
++	norwegian:  "Norwegian",
++	japanese:   "Japanese",
++}
++
++func residentAt(position int, positions *[categoryCount][houseCount]int) string {
++	for person := 0; person < nationalityCount; person++ {
++		if positions[nationality][person] == position {
++			return nationalityNames[person]
++		}
++	}
++	return ""
++}
++
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	var assigned [categoryCount]bool
++	var positions [categoryCount][houseCount]int
++	var solution [categoryCount][houseCount]int
++
++	if !search(0, &assigned, &positions, &solution) {
++		return Solution{}
++	}
++
++	return Solution{
++		DrinksWater: residentAt(solution[drink][water], &solution),
++		OwnsZebra:   residentAt(solution[pet][zebra], &solution),
++	}
+ }

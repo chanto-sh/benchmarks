@@ -1,0 +1,17 @@
+diff --git a/solution.py b/solution.py
+index d3be4f5..6e32a44 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,10 @@
+-def jacobsthal_num(n): 
+-    pass
++def jacobsthal_num(n):
++    """Return the nth Jacobsthal number (the sequence starts at index 0)."""
++    if n < 0:
++        raise ValueError("n must be a non-negative integer")
++
++    previous, current = 0, 1
++    for _ in range(n):
++        previous, current = current, current + 2 * previous
++
++    return previous

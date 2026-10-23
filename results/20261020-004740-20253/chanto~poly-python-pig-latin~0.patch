@@ -1,0 +1,32 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..2d0f134 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,26 @@
++VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    if word[0] in VOWELS or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    # Find the first vowel; treat "y" as a vowel only after a consonant cluster.
++    split = 0
++    while split < len(word) and word[split] not in VOWELS:
++        split += 1
++
++    if split == len(word):
++        # No vowel: split at the first "y" if there is one, otherwise move all.
++        y_index = word.find("y")
++        if y_index > 0:
++            split = y_index
++    elif split > 0 and word[split] == "u" and word[split - 1] == "q":
++        # Rule 3: a leading "qu" moves together with any preceding consonants.
++        split += 1
++
++    return word[split:] + word[:split] + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())

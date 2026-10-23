@@ -1,0 +1,130 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..eac89d6 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,123 @@
++"""Solution to the Zebra Puzzle using backtracking constraint search."""
++
++HOUSES = 5
++
++COLORS = ("red", "green", "ivory", "yellow", "blue")
++NATIONALS = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++PETS = ("dog", "snails", "fox", "horse", "zebra")
++DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++
++CATEGORIES = (NATIONALS, COLORS, DRINKS, PETS, HOBBIES)
++
++# Attributes whose house is known in advance (0-based house indices).
++FIXED_POSITIONS = {"Norwegian": 0, "milk": 2}
++
++
++def _same(*keys):
++    """All the given attributes belong to the same house."""
++    return frozenset(keys), lambda p: len({p[k] for k in keys}) == 1
++
++
++def _next_to(a, b):
++    """Attribute ``a`` lives in a house next to the house of ``b``."""
++    return frozenset((a, b)), lambda p: abs(p[a] - p[b]) == 1
++
++
++def _immediately_right_of(a, b):
++    """Attribute ``a`` lives immediately to the right of ``b``."""
++    return frozenset((a, b)), lambda p: p[a] == p[b] + 1
++
++
++CONSTRAINTS = [
++    _same("Englishman", "red"),
++    _same("Spaniard", "dog"),
++    _same("green", "coffee"),
++    _same("Ukrainian", "tea"),
++    _immediately_right_of("green", "ivory"),
++    _same("snails", "dancing"),
++    _same("yellow", "painting"),
++    _next_to("reading", "fox"),
++    _next_to("painting", "horse"),
++    _same("football", "orange juice"),
++    _same("Japanese", "chess"),
++    _next_to("Norwegian", "blue"),
++]
++
++
++def _is_consistent(assignment):
++    """Check every constraint whose attributes have all been placed yet."""
++    for keys, check in CONSTRAINTS:
++        if keys <= assignment.keys() and not check(assignment):
++            return False
++    return True
++
++
++def _search(variables, index, assignment, used):
++    """Depth-first search placing one attribute at a time."""
++    if index == len(variables):
++        return True
++
++    category, value = variables[index]
++    candidates = (
++        (FIXED_POSITIONS[value],) if value in FIXED_POSITIONS else range(HOUSES)
++    )
++    for house in candidates:
++        if house in used[category]:
++            continue
++        assignment[value] = house
++        if _is_consistent(assignment):
++            used[category].add(house)
++            if _search(variables, index + 1, assignment, used):
++                return True
++            used[category].discard(house)
++        del assignment[value]
++    return False
++
++
++def _solve():
++    """Return the unique solution as a mapping of attribute -> house index."""
++    known = {value for category in CATEGORIES for value in category}
++    referenced = set(FIXED_POSITIONS).union(*(keys for keys, _ in CONSTRAINTS))
++    unknown = referenced - known
++    if unknown:
++        raise ValueError(f"unknown attributes in constraints: {sorted(unknown)}")
++
++    # Placing the fixed attributes first prunes the search tree earliest.
++    variables = sorted(
++        ((category, value) for category in CATEGORIES for value in category),
++        key=lambda item: item[1] not in FIXED_POSITIONS,
++    )
++    assignment = {}
++    used = {category: set() for category in CATEGORIES}
++    if not _search(variables, 0, assignment, used):
++        raise ValueError("the puzzle has no solution")
++    return assignment
++
++
++_SOLUTION = None
++
++
++def _solution():
++    global _SOLUTION
++    if _SOLUTION is None:
++        _SOLUTION = _solve()
++    return _SOLUTION
++
++
++def _resident_of(attribute):
++    """Return the nationality of the resident owning ``attribute``."""
++    solution = _solution()
++    house = solution[attribute]
++    for national in NATIONALS:
++        if solution[national] == house:
++            return national
++    raise ValueError(f"no resident found for {attribute!r}")
++
++
+ def drinks_water():
+-    pass
++    return _resident_of("water")
+ 
+ 
+ def owns_zebra():
+-    pass
++    return _resident_of("zebra")

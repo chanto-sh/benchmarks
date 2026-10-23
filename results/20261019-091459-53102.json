@@ -1,0 +1,641 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-19T09:14:59-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "bench/meter.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--offline",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "4",
+      "--repeat",
+      "3",
+      "--seed",
+      "8007",
+      "--agents",
+      "chanto",
+      "--tasks",
+      "math-poly-roots,poly-go-forth,swe-pylint-dev__pylint-7080,swe-pytest-dev__pytest-7432"
+    ],
+    "bench_commit": "ab8acf0553d072b942f97a3e09f9b54b7bafd396",
+    "bench_dirty": true,
+    "chanto_bin": {
+      "path": "~/IdeaProjects/chanto/target/release/chanto",
+      "sha256": "0694fb7a2a058405baa46ead2dcc3ad544c86ae9b17363d0c9e935c761964b2f"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.10"
+    },
+    "chanto_optimize": {
+      "chanto": []
+    },
+    "chanto_effort": null,
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 8007,
+    "repeat": 3,
+    "tasks": {
+      "math-poly-roots": "ec68fdaf5f728f39c5fb243df02d50144a7c492583d466fc46a1a239c8851cfb",
+      "poly-go-forth": "6797fc93530646eedf1ff9df95c712fe2449d617235aa51de5fd2c4c64b8a72c",
+      "swe-pylint-dev__pylint-7080": "4140df3bcf45f5dc399c5fd8c4c3fed489ded8741177e25fd8ee5ce5ac6e4986",
+      "swe-pytest-dev__pytest-7432": "19a9b04794a213a280fa1a781fe4d25ca8a23372571512debf59543b1e8d0b75"
+    },
+    "offline_profile_sha256": "adc79f363bf59d4072cc65eebac947d4c2429b3cbcb9546463ecaf0723a3a194"
+  },
+  "results": [
+    {
+      "agent": "chanto",
+      "task": "poly-go-forth",
+      "rep": 0,
+      "passed": true,
+      "seconds": 30.8,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tforth\t(cached)\n",
+      "tokens": {
+        "in": 75537,
+        "out": 5548
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 6,
+        "input": 75537,
+        "output": 5548,
+        "cached": 63232
+      },
+      "meter_label": "chanto~poly-go-forth~0~eec6f14a",
+      "started_at": "2026-10-19T09:15:06-0700",
+      "ended_at": "2026-10-19T09:15:38-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~0.out",
+          "sha256": "15108cd7a16080faca7f943601096ada7e4c028c08b847e7f6559d2f44849e52"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~0.patch",
+          "sha256": "4f412c3b929821a2a9be46269eb663553a7b9fef35f89d9df5204aa2eeb14a58"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~0.check.txt",
+          "sha256": "309c039084e705cc3fe34d0547c49affb3b7c7db85f764dd26dd98745312f88a"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~0.session0.json",
+          "sha256": "c2b7905f77a1196367cd5b1d3ab361c862a00f3fd1cfcd233066ad4f7f11ada4"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": false,
+      "seconds": 919.2,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "xpected output status 0, got 20. Below pylint output: \nE         ************* Module failing\nE         ignored_subdirectory/failing.py:1:0: C0114: Missing module docstring (missing-module-docstring)\nE         ignored_subdirectory/failing.py:1:0: W0611: Unused import re (unused-import)\nE         \nE         -----------------------------------\nE         Your code has been rated at 0.00/10\nE         \nE         \nE       assert 20 == 0\n\ntests/test_self.py:146: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_self.py::TestRunTC::test_ignore_path_recursive_current_dir\n1 failed, 120 passed in 32.35s\n",
+      "tokens": {
+        "in": 7085038,
+        "out": 52433
+      },
+      "tampered": [
+        "tests/lint/unittest_lint.py"
+      ],
+      "false_done": true,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 109,
+        "input": 7085038,
+        "output": 52433,
+        "cached": 6795776
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7080~0~b300b0cc",
+      "started_at": "2026-10-19T09:16:03-0700",
+      "ended_at": "2026-10-19T09:31:23-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "1bc55f43ffff5627589d51fe754f5f1e6259190250128570fcf2f7d8808f7f6c"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "753ff824ac19d4a109b8d01ea6c5491bb9f8fa834754fafba5e4861d9730b28e"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "52b545c0cf8e90572c6a80139a69b48ccc0d149ce0330eca6f3798fa1c7e7537"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~0.session0.json",
+          "sha256": "cf2e45e4904b87f77ea3b08b011ca6fb4901f5d187b4fa403cbfca4b67b36cc0"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "math-poly-roots",
+      "rep": 0,
+      "passed": true,
+      "seconds": 180.5,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.003s\n\nOK\n----------------------------------------------------------------------\nRan 6 tests in 0.006s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 294544,
+        "out": 34377
+      },
+      "tampered": [
+        "test_roots.py"
+      ],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 14,
+        "input": 294544,
+        "output": 34377,
+        "cached": 271744
+      },
+      "meter_label": "chanto~math-poly-roots~0~f9d65738",
+      "started_at": "2026-10-19T09:32:05-0700",
+      "ended_at": "2026-10-19T09:35:07-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~0.out",
+          "sha256": "49224853c95d5be5b913acc54f64f125a619cd2456286ad916e535b0976b12a9"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~0.patch",
+          "sha256": "b52f9f69faf8ea1e32767f73e900fa7c485e4512b276524726e9312d987b9748"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~0.check.txt",
+          "sha256": "726ec690ef9f0808b87eff63bbba45ee0aa7c6d305cf5fb281f8db4f79332b5a"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~0.session0.json",
+          "sha256": "11b0011e50d0bc18c7827c94bea386ec8c026cc4c05984ae85aed34661432470"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 89.5,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                          [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 2.22s\n",
+      "tokens": {
+        "in": 501714,
+        "out": 9161
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 27,
+        "input": 501714,
+        "output": 9161,
+        "cached": 469888
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7432~0~1dc66c07",
+      "started_at": "2026-10-19T09:35:26-0700",
+      "ended_at": "2026-10-19T09:37:01-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "935ffd619a09ec90bebdb649f0d146a8764042ba598e41ce96f0cc8d718aca14"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "17d692a97321512b6e8cc2200d6c230396a47a5eccb3d826142836e6b7d45026"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "87f6c4e65535334eeeb2cdc373fe7db282c59ecb380dcb9e66b39ff8aab8bd2a"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~0.session0.json",
+          "sha256": "fcfcace848a97c49f34fb40a49da147069f17f6e9d9ad67ebc553f81366b0e95"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-forth",
+      "rep": 1,
+      "passed": true,
+      "seconds": 21.7,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tforth\t(cached)\n",
+      "tokens": {
+        "in": 54495,
+        "out": 3253
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 5,
+        "input": 54495,
+        "output": 3253,
+        "cached": 43776
+      },
+      "meter_label": "chanto~poly-go-forth~1~a98008d1",
+      "started_at": "2026-10-19T09:37:10-0700",
+      "ended_at": "2026-10-19T09:37:33-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~1.out",
+          "sha256": "7dbed4026e4e8b086db5790ff1e2053ce2cbb8d27833d5d8d0221bd718b2cf37"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~1.patch",
+          "sha256": "35b1ef21405ba852ed6ee3f7101cf6265674601fcf0fa3684257ed5a42949410"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~1.check.txt",
+          "sha256": "309c039084e705cc3fe34d0547c49affb3b7c7db85f764dd26dd98745312f88a"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~1.session0.json",
+          "sha256": "f1cbe319d2c060d1635d120e47440c670e0ee63cde45d143d5b45a4a4073e21e"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "math-poly-roots",
+      "rep": 1,
+      "passed": true,
+      "seconds": 117.9,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\n----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 383169,
+        "out": 21332
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 16,
+        "input": 383169,
+        "output": 21332,
+        "cached": 372480
+      },
+      "meter_label": "chanto~math-poly-roots~1~482aaf3a",
+      "started_at": "2026-10-19T09:37:34-0700",
+      "ended_at": "2026-10-19T09:39:34-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~1.out",
+          "sha256": "6139f8e743d855d2862392f0b965137cf925dfd70b646bc81089b13d28837a13"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~1.patch",
+          "sha256": "997e13b0c9b9e86b46e6a3da536f430e455b6117a68b238a87983d071049bb15"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~1.check.txt",
+          "sha256": "91ba6db4ca29c75a454c37d25ea244a3dfbd2f39db0f665e4170c03c2e186b65"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~1.session0.json",
+          "sha256": "fa3791b22ffc8f486b98d833e14a93bc32d48ceb0f67b977db8c31c133fcb9a4"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 1,
+      "passed": true,
+      "seconds": 343.6,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pylint-dev__pylint-7080-1/.swe-results.xml -\n121 passed in 22.40s\n",
+      "tokens": {
+        "in": 2464684,
+        "out": 25572
+      },
+      "tampered": [
+        "tests/lint/unittest_lint.py"
+      ],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 65,
+        "input": 2464684,
+        "output": 25572,
+        "cached": 2380416
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7080~1~acd1382b",
+      "started_at": "2026-10-19T09:40:00-0700",
+      "ended_at": "2026-10-19T09:45:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~1.out",
+          "sha256": "e829174fb8ee892dacb7e64dade1a12b743ee8b1626781e299be9f45461cac97"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~1.patch",
+          "sha256": "c64367ddf5ceb6ee3b32e247b80b1f5158715df09678dd6bcb7d146079f25bc7"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~1.check.txt",
+          "sha256": "57e8311345a6d7808807b98cb868cd4c63130ea4bd20039b91a082aac5282cf4"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~1.session0.json",
+          "sha256": "98ad3588174a323a63128f08bfe472b4a875cfd624eb32c9442900dbb9ddb6a1"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 1,
+      "passed": true,
+      "seconds": 30.6,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                          [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-1/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-1/.swe-results.xml -\n79 passed, 1 warning in 2.20s\n",
+      "tokens": {
+        "in": 131217,
+        "out": 3455
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 10,
+        "input": 131217,
+        "output": 3455,
+        "cached": 117376
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7432~1~fbad9dc9",
+      "started_at": "2026-10-19T09:46:28-0700",
+      "ended_at": "2026-10-19T09:47:01-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~1.out",
+          "sha256": "8a7a570da980c08430d740b00d9637b6f9d7b0e144161f58f09f2c7400956d05"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~1.patch",
+          "sha256": "6e3379720c1c45dd707631b08ee058193799e83a290885cff9ee0fc3c7e5fcd0"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~1.check.txt",
+          "sha256": "823aedd816752003ab52cb18b17aee8cf29daf73fe4807f6ec2f195ee1aee321"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~1.session0.json",
+          "sha256": "12758fd80ced5dc1d0a95f4468a86e5ef0afe24547e3be837d9bf5e5455e0fd7"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-forth",
+      "rep": 2,
+      "passed": true,
+      "seconds": 22.5,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tforth\t0.166s\n",
+      "tokens": {
+        "in": 44677,
+        "out": 3996
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 44677,
+        "output": 3996,
+        "cached": 25856
+      },
+      "meter_label": "chanto~poly-go-forth~2~1d193bee",
+      "started_at": "2026-10-19T09:47:06-0700",
+      "ended_at": "2026-10-19T09:47:30-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~2.out",
+          "sha256": "362f32b33eca16c2ab980e5d3b9d66400f474f4556ee31fc40229634a09b273d"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~2.patch",
+          "sha256": "38cceb6feb4447760856559d0a6d00b6cca1ab3e710de04fd2ccd3ed0b67f78b"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~2.check.txt",
+          "sha256": "258f457adc717ebe064e0a9c1112d9ed606fc96a31330f41c792b04f7972bae9"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~poly-go-forth~2.session0.json",
+          "sha256": "23eb95a53dfdcd11a8f6ccd9f2ec158f7753f52e41a3f80eb0d4836f5e1194ea"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 2,
+      "passed": true,
+      "seconds": 341.7,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pylint-dev__pylint-7080-2/.swe-results.xml -\n121 passed in 21.30s\n",
+      "tokens": {
+        "in": 2662134,
+        "out": 24756
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 64,
+        "input": 2662134,
+        "output": 24756,
+        "cached": 2548224
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7080~2~c5b2f237",
+      "started_at": "2026-10-19T09:47:53-0700",
+      "ended_at": "2026-10-19T09:53:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~2.out",
+          "sha256": "d24efb64deb65c909d7d2ec6b4a25b37185c2083ae2846ca69e3a5fc9a0b4e51"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~2.patch",
+          "sha256": "af64a7633ca49e237bd628e5b97ff91f57d05a82cbc975f3db5f2006c17e64ae"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~2.check.txt",
+          "sha256": "d0ea1d1dc0459f42514589e4619fa5d5d2adc5b920b586e1f5c7b5582d5b4d2e"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pylint-dev__pylint-7080~2.session0.json",
+          "sha256": "978ddf927ce51adfd993002cc1ec655af30afd4af7acb670547e94e466aaeec0"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "math-poly-roots",
+      "rep": 2,
+      "passed": true,
+      "seconds": 151.8,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 3 tests in 0.003s\n\nOK\n----------------------------------------------------------------------\nRan 6 tests in 0.004s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 540248,
+        "out": 24735
+      },
+      "tampered": [
+        "test_roots.py"
+      ],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 21,
+        "input": 540248,
+        "output": 24735,
+        "cached": 526336
+      },
+      "meter_label": "chanto~math-poly-roots~2~0e4bab62",
+      "started_at": "2026-10-19T09:54:03-0700",
+      "ended_at": "2026-10-19T09:56:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~2.out",
+          "sha256": "e81d405321edf4d9607f28365a1aff5e5e0405d75492ca4014cebabac67812ea"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~2.patch",
+          "sha256": "7ab274850374a40cdc3c4ea9bd6e8c87959a972adf06176c2f35b28be8d9d725"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~2.check.txt",
+          "sha256": "836d4ee3bc9a941b1993e0d9e2e01fdcc29fca7c116bcb5333c4d9b81f749b13"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~math-poly-roots~2.session0.json",
+          "sha256": "fca1eb723649456159ed43c17b9ecec634cf5b68cc529d1d8cae7895285bb62e"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 2,
+      "passed": true,
+      "seconds": 72.6,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                          [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-2/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-v8007/chanto/swe-pytest-dev__pytest-7432-2/.swe-results.xml -\n79 passed, 1 warning in 2.01s\n",
+      "tokens": {
+        "in": 466908,
+        "out": 8002
+      },
+      "tampered": [],
+      "false_done": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 26,
+        "input": 466908,
+        "output": 8002,
+        "cached": 435200
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7432~2~b36b7c48",
+      "started_at": "2026-10-19T09:56:52-0700",
+      "ended_at": "2026-10-19T09:58:06-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~2.out",
+          "sha256": "5b0f9607e25d292b466e673a4d67c48645abbab72ee6f77824f702a1109ec480"
+        },
+        "patch": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~2.patch",
+          "sha256": "50363896d0c8e320c7f60df5520b732d3cdd10222b7c42706ec50180cdc18203"
+        },
+        "check": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~2.check.txt",
+          "sha256": "fae094cb4d85ecf0a2d0e88e1304112d05e7e1383736f5548561c30d8749b6ba"
+        },
+        "session0": {
+          "file": "20261019-091459-53102/chanto~swe-pytest-dev__pytest-7432~2.session0.json",
+          "sha256": "c39dc45714c123926a4c4df02cf2291d722c81aec70f011fccfe63b9d0ff6f57"
+        }
+      }
+    }
+  ]
+}

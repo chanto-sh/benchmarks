@@ -1,0 +1,70 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..7db70bf 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,7 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    element = os.path.normpath(element)
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list
+@@ -140,9 +141,12 @@ def expand_modules(
+             ):
+                 if filepath == subfilepath:
+                     continue
+-                if _is_in_ignore_list_re(
+-                    os.path.basename(subfilepath), ignore_list_re
+-                ) or _is_in_ignore_list_re(subfilepath, ignore_list_paths_re):
++                if _is_ignored_file(
++                    subfilepath,
++                    ignore_list,
++                    ignore_list_re,
++                    ignore_list_paths_re,
++                ):
+                     continue
+ 
+                 modpath = _modpath_from_file(
+diff --git a/tests/lint/unittest_expand_modules.py b/tests/lint/unittest_expand_modules.py
+index 15f72d0..6e7f0c6 100644
+--- a/tests/lint/unittest_expand_modules.py
++++ b/tests/lint/unittest_expand_modules.py
+@@ -10,7 +10,11 @@ from pathlib import Path
+ import pytest
+ 
+ from pylint.checkers import BaseChecker
+-from pylint.lint.expand_modules import _is_in_ignore_list_re, expand_modules
++from pylint.lint.expand_modules import (
++    _is_ignored_file,
++    _is_in_ignore_list_re,
++    expand_modules,
++)
+ from pylint.testutils import CheckerTestCase, set_config
+ from pylint.typing import MessageDefinitionTuple
+ 
+@@ -26,6 +30,24 @@ def test__is_in_ignore_list_re_match() -> None:
+     assert _is_in_ignore_list_re("src/tests/whatever.xml", patterns)
+ 
+ 
++@pytest.mark.parametrize(
++    "filepath",
++    [
++        "./tests/lint/unittest_expand_modules.py",
++        "tests/lint/./unittest_expand_modules.py",
++        "tests/lint/../lint/unittest_expand_modules.py",
++    ],
++)
++def test__is_ignored_file_normalizes_path(filepath: str) -> None:
++    """Paths are normalized before being matched against ignore-paths.
++
++    This makes patterns anchored at the start of a path work with paths such as
++    ``./tests/...`` or paths containing mixed separators.
++    """
++    ignore_paths = [re.compile("^tests/lint/.*")]
++    assert _is_ignored_file(filepath, [], [], ignore_paths)
++
++
+ TEST_DIRECTORY = Path(__file__).parent.parent
+ INIT_PATH = str(TEST_DIRECTORY / "lint/__init__.py")
+ EXPAND_MODULES = str(TEST_DIRECTORY / "lint/unittest_expand_modules.py")

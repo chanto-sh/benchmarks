@@ -1,0 +1,87 @@
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..48df455 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -254,15 +254,38 @@ def _compare_eq_iterable(left, right, verbose=0):
+ 
+ 
+ def _compare_eq_sequence(left, right, verbose=0):
++    comparing_bytes = isinstance(left, bytes) and isinstance(right, bytes)
+     explanation = []
+     len_left = len(left)
+     len_right = len(right)
+     for i in range(min(len_left, len_right)):
+         if left[i] != right[i]:
++            if comparing_bytes:
++                # when comparing bytes, we want to see their ascii representation
++                # instead of their numeric values (#5260)
++                # using a slice gives us the ascii representation:
++                # >>> s = b'foo'
++                # >>> s[0]
++                # 102
++                # >>> s[0:1]
++                # b'f'
++                left_value = left[i : i + 1]
++                right_value = right[i : i + 1]
++            else:
++                left_value = left[i]
++                right_value = right[i]
++
+             explanation += [
+-                "At index {} diff: {!r} != {!r}".format(i, left[i], right[i])
++                "At index {} diff: {!r} != {!r}".format(i, left_value, right_value)
+             ]
+             break
++
++    if comparing_bytes:
++        # when comparing bytes, it doesn't help to show the "sides contain one or more
++        # items" longer explanation, so skip it
++
++        return explanation
++
+     len_diff = len_left - len_right
+ 
+     if len_diff:
+diff --git a/testing/test_assertion.py b/testing/test_assertion.py
+index 0fcfd9f..4040756 100644
+--- a/testing/test_assertion.py
++++ b/testing/test_assertion.py
+@@ -331,6 +331,38 @@ class TestAssert_reprcompare:
+         assert "- spam" in diff
+         assert "+ eggs" in diff
+ 
++    def test_bytes_diff_normal(self):
++        """Check special handling for bytes diff (#5260)"""
++        diff = callequal(b"spam", b"eggs")
++
++        assert diff == [
++            "b'spam' == b'eggs'",
++            "At index 0 diff: b's' != b'e'",
++            "Use -v to get the full diff",
++        ]
++
++    def test_bytes_diff_verbose(self):
++        """Check special handling for bytes diff (#5260)"""
++        diff = callequal(b"spam", b"eggs", verbose=1)
++        assert diff == [
++            "b'spam' == b'eggs'",
++            "At index 0 diff: b's' != b'e'",
++            "Full diff:",
++            "- b'spam'",
++            "+ b'eggs'",
++        ]
++
++    def test_bytes_diff_empty(self):
++        """Do not report numeric byte values for differing lengths (#5260)."""
++        diff = callequal(b"", b"42", verbose=1)
++        assert diff == [
++            "b'' == b'42'",
++            "Full diff:",
++            "- b''",
++            "+ b'42'",
++            "?   ++",
++        ]
++
+     def test_list(self):
+         expl = callequal([0, 1], [0, 2])
+         assert len(expl) > 1

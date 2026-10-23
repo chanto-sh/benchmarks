@@ -31,8 +31,7 @@ The consolidated results are in `RESULTS.md`. Raw output per benchmark:
 just the files for one run so unrelated runs do not mix.
 
 ```sh
-python3 extra/efficiency.py results/20261018-150904-*.json \
-    results/20261018-1721*.json
+python3 extra/efficiency.py results/20261018-090419-*.json
 ```
 
 `cli_overhead.py` uses an empty `CHANTO_HOME` so a user's plugins and MCP
@@ -40,8 +39,7 @@ servers do not count as startup cost.
 
 ## Not measured here
 
-- **Retrieval quality**: `SemanticSearch` needs an embedding endpoint, and this
-  machine's Ollama has no models; `RepoMap` is an orientation aid rather than a
+- **Retrieval quality**: `SemanticSearch` needs an embedding endpoint, and the benchmark machine had no local embedding model; `RepoMap` is an orientation aid rather than a
   query-driven search, so a hit-rate comparison against `rg` would not be fair.
 - **Parallel fan-out**: a credible measurement needs an idle machine and a
   model that reliably issues independent tool calls; run `chanto team` against

@@ -1,0 +1,14 @@
+diff --git a/app/utils/merge.py b/app/utils/merge.py
+index f548f97..6a8f563 100644
+--- a/app/utils/merge.py
++++ b/app/utils/merge.py
+@@ -2,5 +2,8 @@ def merge(base, override):
+     """Merge `override` into a copy of `base`. Nested dicts are merged recursively."""
+     out = dict(base)
+     for key, value in override.items():
+-        out[key] = value
++        if isinstance(out.get(key), dict) and isinstance(value, dict):
++            out[key] = merge(out[key], value)
++        else:
++            out[key] = value
+     return out

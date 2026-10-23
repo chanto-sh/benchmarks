@@ -1,0 +1,33 @@
+diff --git a/solution.py b/solution.py
+index d2c9afd..1c8aa23 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,26 @@
+-def list_split(S, step):
+-    pass
++def list_split(S, n=None, step=None):
++    """Split the sequence ``S`` into consecutive chunks of length ``n``.
++
++    The final chunk holds any leftover elements and may be shorter than
++    ``n``.  The input sequence is not modified.  The chunk size may be
++    given positionally or through either keyword, ``n`` or ``step``.
++
++    >>> list_split([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3)
++    [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
++    """
++    if n is None:
++        n = step
++    elif step is not None:
++        raise TypeError("give the chunk size as 'n' or 'step', not both")
++
++    if n is None:
++        raise TypeError("missing required argument: the chunk size")
++    if isinstance(n, bool) or not isinstance(n, int):
++        raise TypeError("chunk size must be an integer")
++    if n <= 0:
++        raise ValueError("chunk size must be a positive integer")
++
++    if not hasattr(S, "__getitem__") or not hasattr(S, "__len__"):
++        S = list(S)
++
++    return [list(S[i:i + n]) for i in range(0, len(S), n)]

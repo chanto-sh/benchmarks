@@ -1,0 +1,21 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..618ad89 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,15 @@
+ def find_kth(arr1, arr2, k):
+-    pass
++    """Return the k-th smallest element (1-indexed) of two sorted arrays."""
++    if k < 1 or k > len(arr1) + len(arr2):
++        return None
++
++    i = j = 0
++    for _ in range(k - 1):
++        if i < len(arr1) and (j >= len(arr2) or arr1[i] <= arr2[j]):
++            i += 1
++        else:
++            j += 1
++
++    if i < len(arr1) and (j >= len(arr2) or arr1[i] <= arr2[j]):
++        return arr1[i]
++    return arr2[j]

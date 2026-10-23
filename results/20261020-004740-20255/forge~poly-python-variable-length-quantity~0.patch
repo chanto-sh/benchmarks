@@ -1,0 +1,45 @@
+diff --git a/variable_length_quantity.py b/variable_length_quantity.py
+index 41bdcdc..29b765a 100644
+--- a/variable_length_quantity.py
++++ b/variable_length_quantity.py
+@@ -1,6 +1,38 @@
+ def encode(numbers):
+-    pass
++    """Encode a sequence of integers using variable length quantity encoding."""
++    encoded = []
++    for number in numbers:
++        if not 0 <= number <= 0xFFFFFFFF:
++            raise ValueError("number out of range")
++
++        chunk = [number & 0x7F]
++        number >>= 7
++        while number:
++            chunk.append((number & 0x7F) | 0x80)
++            number >>= 7
++        encoded.extend(reversed(chunk))
++
++    return encoded
+ 
+ 
+ def decode(bytes_):
+-    pass
++    """Decode a sequence of VLQ bytes into integers."""
++    decoded = []
++    value = 0
++    incomplete = False
++
++    for byte in bytes_:
++        if not 0 <= byte <= 0xFF:
++            raise ValueError("byte out of range")
++
++        value = (value << 7) | (byte & 0x7F)
++        incomplete = bool(byte & 0x80)
++
++        if not incomplete:
++            decoded.append(value)
++            value = 0
++
++    if incomplete:
++        raise ValueError("incomplete sequence")
++
++    return decoded

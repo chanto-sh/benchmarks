@@ -1,0 +1,179 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..f3cb160 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,172 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++def _rhs(state, c, g):
++    """Derivative of (x, y, vx, vy) for drag acceleration -c |v| v."""
++    _, _, vx, vy = state
++    q = c * math.hypot(vx, vy)
++    return vx, vy, -q * vx, -g - q * vy
++
++
++def _advance(state, h, coeffs, stages):
++    return tuple(
++        state[i] + h * sum(a * stage[i] for a, stage in zip(coeffs, stages))
++        for i in range(4)
++    )
++
++
++def _dp_step(state, h, c, g):
++    """One Dormand-Prince 5(4) step, returning (5th-order state, error)."""
++    k1 = _rhs(state, c, g)
++    k2 = _rhs(_advance(state, h, (1 / 5,), (k1,)), c, g)
++    k3 = _rhs(_advance(state, h, (3 / 40, 9 / 40), (k1, k2)), c, g)
++    k4 = _rhs(
++        _advance(state, h, (44 / 45, -56 / 15, 32 / 9), (k1, k2, k3)), c, g
++    )
++    k5 = _rhs(
++        _advance(
++            state,
++            h,
++            (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++            (k1, k2, k3, k4),
++        ),
++        c,
++        g,
++    )
++    k6 = _rhs(
++        _advance(
++            state,
++            h,
++            (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++            (k1, k2, k3, k4, k5),
++        ),
++        c,
++        g,
++    )
++
++    y5 = _advance(
++        state,
++        h,
++        (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++        (k1, k2, k3, k4, k5, k6),
++    )
++    k7 = _rhs(y5, c, g)
++    y4 = _advance(
++        state,
++        h,
++        (
++            5179 / 57600,
++            0.0,
++            7571 / 16695,
++            393 / 640,
++            -92097 / 339200,
++            187 / 2100,
++            1 / 40,
++        ),
++        (k1, k2, k3, k4, k5, k6, k7),
++    )
++    return y5, tuple(y5[i] - y4[i] for i in range(4))
++
++
++def _find_vertical_root(state, h, c, g, component):
++    """Locate the first zero of y (component 1) or vy (component 3) in a step."""
++    lo, hi = 0.0, h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        if _dp_step(state, mid, c, g)[0][component] > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return hi, _dp_step(state, hi, c, g)[0]
++
++
++def _vacuum(v0, angle, h0, g):
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++    time = (vy0 + math.sqrt(vy0 * vy0 + 2.0 * g * h0)) / g
++    range_ = vx0 * time
++    apex = h0 + (vy0 * vy0 / (2.0 * g) if vy0 > 0.0 else 0.0)
++    return {"range": range_, "apex": apex, "time": time}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is a point mass launched at speed ``v0`` and elevation
++    ``angle_deg`` from height ``h0``.  Quadratic drag is ``F = -k |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++
++    angle = math.radians(angle_deg)
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++
++    # Already on the ground and not moving upward: no flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    if k == 0.0:
++        return _vacuum(v0, angle, h0, g)
++
++    c = k / mass
++    state = (0.0, h0, vx0, vy0)
++    t = 0.0
++    apex = h0
++
++    # Start with a modest step; the adaptive controller will grow it quickly.
++    speed0 = math.hypot(vx0, vy0)
++    accel0 = g + c * speed0 * speed0
++    h = min(0.01, 0.01 * max(speed0 / accel0, 1e-6))
++
++    rtol = 1e-12
++    atol = 1e-12
++
++    while True:
++        y5, err = _dp_step(state, h, c, g)
++
++        scaled_err = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(state[i]), abs(y5[i]))
++            scaled_err += (err[i] / scale) ** 2
++        err_norm = math.sqrt(scaled_err / 4.0)
++
++        if err_norm <= 1.0:
++            # An apex can occur inside this step, including one that also
++            # reaches the ground, so handle it before accepting the step.
++            if state[3] > 0.0 and y5[3] <= 0.0:
++                _, apex_state = _find_vertical_root(state, h, c, g, 3)
++                apex = max(apex, apex_state[1])
++
++            if y5[1] <= 0.0:
++                tau, impact = _find_vertical_root(state, h, c, g, 1)
++                t += tau
++                state = impact
++                break
++
++            t += h
++            state = y5
++            if state[1] > apex:
++                apex = state[1]
++
++            if err_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = min(5.0, max(0.2, 0.9 * err_norm ** -0.2))
++            h *= factor
++        else:
++            h *= max(0.1, 0.9 * err_norm ** -0.2)
++
++    return {"range": state[0], "apex": apex, "time": t}

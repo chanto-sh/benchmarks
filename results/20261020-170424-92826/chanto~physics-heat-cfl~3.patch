@@ -1,0 +1,32 @@
+diff --git a/heat.py b/heat.py
+index d670542..817fa36 100644
+--- a/heat.py
++++ b/heat.py
+@@ -8,11 +8,23 @@ def solve(u0, alpha, length, t_end):
+         (both ends included; the end values are held fixed).
+     """
+     nx = len(u0)
+-    dx = length / (nx - 1)
+-    dt = 1e-3
+-    steps = int(t_end / dt)
+     u = list(u0)
++    if nx < 2 or alpha == 0 or t_end <= 0:
++        return u
++    if alpha < 0:
++        raise ValueError("alpha must be non-negative")
++    if length <= 0:
++        raise ValueError("length must be positive")
++
++    dx = length / (nx - 1)
++    # Explicit FTCS is stable for alpha*dt/dx**2 <= 0.5.  Use a margin
++    # below that limit, and split t_end into equal steps so the final
++    # state is exactly at t_end.
++    dt_max = 0.4 * dx * dx / alpha
++    steps = int(t_end / dt_max) + 1
++    dt = t_end / steps
++    r = alpha * dt / (dx * dx)
++
+     for _ in range(steps):
+-        r = alpha * dt / (dx * dx)
+         u = [u[0]] + [u[i] + r * (u[i - 1] - 2 * u[i] + u[i + 1]) for i in range(1, nx - 1)] + [u[-1]]
+     return u

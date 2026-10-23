@@ -1,0 +1,65 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..0cc6079
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1,2 @@
++The JUnit XML report now includes the ``hostname`` and ``timestamp`` attributes on the
++``testsuite`` element.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..bcb6016 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -11,8 +11,10 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..6d050f1 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -1,4 +1,6 @@
+ import os
++import socket
++from datetime import datetime
+ from xml.dom import minidom
+ 
+ import py
+@@ -1118,6 +1120,21 @@ def test_root_testsuites_tag(testdir):
+     assert suite_node.tag == "testsuite"
+ 
+ 
++def test_hostname_and_timestamp(testdir):
++    testdir.makepyfile(
++        """
++        def test_x():
++            pass
++    """
++    )
++    _, dom = runandparse(testdir)
++    root = dom.get_unique_child
++    suite_node = root.get_unique_child
++    assert suite_node["hostname"] == socket.gethostname()
++    timestamp = datetime.strptime(suite_node["timestamp"], "%Y-%m-%dT%H:%M:%S.%f")
++    assert timestamp is not None
++
++
+ def test_runs_twice(testdir):
+     f = testdir.makepyfile(
+         """

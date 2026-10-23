@@ -1,0 +1,77 @@
+diff --git a/dominoes.go b/dominoes.go
+index 2030e87..59896b2 100644
+--- a/dominoes.go
++++ b/dominoes.go
+@@ -1,7 +1,69 @@
+ package dominoes
+ 
+-// Define the Domino type here.
++// Domino represents a single domino stone with two sides.
++type Domino [2]int
+ 
+-func MakeChain(input []Domino) ([]Domino, bool) {
+-	panic("Please implement the MakeChain function")
++// MakeChain attempts to arrange input into a legal domino chain, where
++// adjacent halves match and the two outer halves match each other.
++// It returns the chain and true when such an arrangement exists.
++func MakeChain(input []Domino) (chain []Domino, ok bool) {
++	if len(input) == 0 {
++		return nil, true
++	}
++
++	used := make([]bool, len(input))
++	chain = make([]Domino, len(input))
++
++	for i, d := range input {
++		orientations := [2]Domino{d, {d[1], d[0]}}
++		for _, o := range orientations {
++			used[i] = true
++			chain[0] = o
++			if search(input, used, chain, 1, o[1]) {
++				return chain, true
++			}
++			used[i] = false
++			if d[0] == d[1] {
++				// Both orientations are identical; no need to retry.
++				break
++			}
++		}
++	}
++
++	return nil, false
++}
++
++// search tries to extend chain (already holding depth dominoes and ending in
++// the value end) until every domino from input has been used, verifying that
++// the chain closes on itself at the end.
++func search(input []Domino, used []bool, chain []Domino, depth, end int) bool {
++	if depth == len(input) {
++		return chain[0][0] == end
++	}
++
++	for i, d := range input {
++		if used[i] {
++			continue
++		}
++
++		if d[0] == end {
++			used[i] = true
++			chain[depth] = d
++			if search(input, used, chain, depth+1, d[1]) {
++				return true
++			}
++			used[i] = false
++		}
++
++		if d[1] == end && d[0] != d[1] {
++			used[i] = true
++			chain[depth] = Domino{d[1], d[0]}
++			if search(input, used, chain, depth+1, d[0]) {
++				return true
++			}
++			used[i] = false
++		}
++	}
++
++	return false
+ }

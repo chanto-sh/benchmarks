@@ -1,0 +1,85 @@
+diff --git a/poker.py b/poker.py
+index 49824d3..4c0d79a 100644
+--- a/poker.py
++++ b/poker.py
+@@ -1,2 +1,79 @@
++RANKS = {
++    "2": 2,
++    "3": 3,
++    "4": 4,
++    "5": 5,
++    "6": 6,
++    "7": 7,
++    "8": 8,
++    "9": 9,
++    "10": 10,
++    "J": 11,
++    "Q": 12,
++    "K": 13,
++    "A": 14,
++}
++
++
++def _parse(hand):
++    """Split a hand into a list of (rank value, suit) tuples."""
++    cards = []
++    for card in hand.split():
++        cards.append((RANKS[card[:-1]], card[-1]))
++    return cards
++
++
++def _straight_high(ranks):
++    """Return the high card of a straight, or None if the ranks are not consecutive."""
++    distinct = sorted(set(ranks))
++    if len(distinct) != 5:
++        return None
++    if distinct == [2, 3, 4, 5, 14]:
++        # Ace-low straight: A 2 3 4 5
++        return 5
++    if distinct[-1] - distinct[0] == 4:
++        return distinct[-1]
++    return None
++
++
++def _score(hand):
++    """Build a comparable tuple describing the strength of a hand."""
++    cards = _parse(hand)
++    ranks = [rank for rank, _ in cards]
++    suits = {suit for _, suit in cards}
++    flush = len(suits) == 1
++
++    counts = {}
++    for rank in ranks:
++        counts[rank] = counts.get(rank, 0) + 1
++
++    # Sort ranks by (count, rank) descending so groups come first, high to low.
++    grouped = sorted(counts, key=lambda rank: (counts[rank], rank), reverse=True)
++    shape = sorted(counts.values(), reverse=True)
++
++    straight_high = _straight_high(ranks)
++
++    if straight_high is not None and flush:
++        return (8, straight_high)
++    if shape == [4, 1]:
++        return (7, grouped[0], grouped[1])
++    if shape == [3, 2]:
++        return (6, grouped[0], grouped[1])
++    if flush:
++        return (5, tuple(sorted(ranks, reverse=True)))
++    if straight_high is not None:
++        return (4, straight_high)
++    if shape == [3, 1, 1]:
++        return (3, grouped[0], tuple(sorted(grouped[1:], reverse=True)))
++    if shape == [2, 2, 1]:
++        pairs = sorted(grouped[:2], reverse=True)
++        return (2, pairs[0], pairs[1], grouped[2])
++    if shape == [2, 1, 1, 1]:
++        return (1, grouped[0], tuple(sorted(grouped[1:], reverse=True)))
++    return (0, tuple(sorted(ranks, reverse=True)))
++
++
+ def best_hands(hands):
+-    pass
++    scored = [(_score(hand), hand) for hand in hands]
++    best = max(score for score, _ in scored)
++    return [hand for score, hand in scored if score == best]

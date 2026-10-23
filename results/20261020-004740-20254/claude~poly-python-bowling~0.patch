@@ -1,0 +1,112 @@
+diff --git a/bowling.py b/bowling.py
+index de2dbb0..e6ced15 100644
+--- a/bowling.py
++++ b/bowling.py
+@@ -1,9 +1,104 @@
+ class BowlingGame:
++    """Keep track of the score of a ten-pin bowling game."""
++
++    MAX_PINS = 10
++    TOTAL_FRAMES = 10
++
+     def __init__(self):
+-        pass
++        # Fully completed frames, each stored as the list of its rolls.
++        self._frames = []
++        # Rolls of the frame currently being played (empty between frames).
++        self._current_frame = []
+ 
+     def roll(self, pins):
+-        pass
++        if not 0 <= pins <= self.MAX_PINS:
++            raise ValueError("a roll must knock down between 0 and 10 pins")
++
++        if len(self._frames) == self.TOTAL_FRAMES:
++            raise ValueError("cannot roll: the game is already complete")
++
++        if len(self._frames) < self.TOTAL_FRAMES - 1:
++            self._roll_in_regular_frame(pins)
++        else:
++            self._roll_in_final_frame(pins)
+ 
+     def score(self):
+-        pass
++        if len(self._frames) != self.TOTAL_FRAMES:
++            raise ValueError("cannot score an incomplete game")
++
++        # Flattening the frames gives access to the bonus rolls that follow a
++        # strike or a spare, including the fill balls of the tenth frame.
++        rolls = [pins for frame in self._frames for pins in frame]
++
++        total = 0
++        position = 0
++        for index, frame in enumerate(self._frames):
++            if index == self.TOTAL_FRAMES - 1:
++                # The tenth frame is worth the pins knocked down, fill balls
++                # included.
++                total += sum(frame)
++            elif frame[0] == self.MAX_PINS:
++                total += self.MAX_PINS + rolls[position + 1] + rolls[position + 2]
++            elif sum(frame) == self.MAX_PINS:
++                total += self.MAX_PINS + rolls[position + 2]
++            else:
++                total += sum(frame)
++            position += len(frame)
++
++        return total
++
++    def _roll_in_regular_frame(self, pins):
++        if self._current_frame and sum(self._current_frame) + pins > self.MAX_PINS:
++            raise ValueError(
++                "the two rolls in a frame cannot knock down more than 10 pins"
++            )
++
++        self._current_frame.append(pins)
++
++        # A strike ends the frame after one roll, an open frame or spare after
++        # two.
++        if pins == self.MAX_PINS or len(self._current_frame) == 2:
++            self._complete_frame()
++
++    def _roll_in_final_frame(self, pins):
++        frame = self._current_frame
++
++        if not frame:
++            frame.append(pins)
++            return
++
++        if len(frame) == 1:
++            first = frame[0]
++            if first == self.MAX_PINS:
++                # First fill ball after a strike; a second one always follows.
++                frame.append(pins)
++                return
++
++            if first + pins > self.MAX_PINS:
++                raise ValueError(
++                    "the two rolls in a frame cannot knock down more than 10 pins"
++                )
++            frame.append(pins)
++
++            # A spare earns one fill ball; an open frame ends the game.
++            if first + pins < self.MAX_PINS:
++                self._complete_frame()
++            return
++
++        # Two rolls already made in the tenth frame: the first was a strike
++        # (followed by one fill ball) or a spare (about to receive its single
++        # fill ball).
++        first, second = frame
++        if first == self.MAX_PINS and second != self.MAX_PINS:
++            if second + pins > self.MAX_PINS:
++                raise ValueError(
++                    "the two bonus rolls after a strike cannot knock down "
++                    "more than 10 pins unless one of them is a strike"
++                )
++
++        frame.append(pins)
++        self._complete_frame()
++
++    def _complete_frame(self):
++        self._frames.append(self._current_frame)
++        self._current_frame = []

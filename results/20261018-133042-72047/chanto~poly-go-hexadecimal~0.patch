@@ -1,0 +1,64 @@
+diff --git a/hexadecimal.go b/hexadecimal.go
+index 5e12c2b..865b560 100644
+--- a/hexadecimal.go
++++ b/hexadecimal.go
+@@ -1,5 +1,57 @@
+ package hexadecimal
+ 
+-func ParseHex(in string, out int64, errCase string) {
+-	panic("Please implement the ParseHex function")
++import (
++	"fmt"
++	"strings"
++)
++
++const maxInt64 = int64(^uint64(0) >> 1)
++
++// ParseHex converts a hexadecimal string to its decimal (int64) value.
++// It returns a syntax error for invalid characters or an empty string, and a
++// range error when the value does not fit in an int64.
++func ParseHex(in string) (int64, error) {
++	if in == "" {
++		return 0, fmt.Errorf("syntax error: empty string")
++	}
++
++	var result int64
++	for _, c := range in {
++		var digit int64
++		switch {
++		case c >= '0' && c <= '9':
++			digit = int64(c - '0')
++		case c >= 'a' && c <= 'f':
++			digit = int64(c-'a') + 10
++		case c >= 'A' && c <= 'F':
++			digit = int64(c-'A') + 10
++		default:
++			return 0, fmt.Errorf("syntax error: invalid character %q", c)
++		}
++
++		if result > (maxInt64-digit)/16 {
++			return 0, fmt.Errorf("range error: value out of range for int64")
++		}
++		result = result*16 + digit
++	}
++
++	return result, nil
++}
++
++// HandleErrors calls ParseHex on each input and reports the error case as
++// "none", "syntax", or "range".
++func HandleErrors(inputs []string) []string {
++	results := make([]string, len(inputs))
++	for i, in := range inputs {
++		_, err := ParseHex(in)
++		switch {
++		case err == nil:
++			results[i] = "none"
++		case strings.Contains(strings.ToLower(err.Error()), "range"):
++			results[i] = "range"
++		default:
++			results[i] = "syntax"
++		}
++	}
++	return results
+ }

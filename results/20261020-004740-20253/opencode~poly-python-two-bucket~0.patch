@@ -1,0 +1,90 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..2005f8a 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,84 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    """Measure exactly ``goal`` liters using two buckets.
++
++    Returns a tuple of (number of actions, bucket containing the goal,
++    amount of liquid in the other bucket). Raises ValueError when the goal
++    cannot be reached.
++    """
++    if start_bucket not in ("one", "two"):
++        raise ValueError(
++            "start_bucket must be either 'one' or 'two', "
++            f"got {start_bucket!r}"
++        )
++
++    capacities = (bucket_one, bucket_two)
++    start_index = 0 if start_bucket == "one" else 1
++    other_index = 1 - start_index
++
++    # State after the mandatory first action: the starting bucket is full.
++    start_state = [0, 0]
++    start_state[start_index] = capacities[start_index]
++    start_state = tuple(start_state)
++
++    def is_forbidden(state):
++        # The starting bucket empty and the other bucket full is not allowed.
++        return (
++            state[start_index] == 0
++            and state[other_index] == capacities[other_index]
++        )
++
++    def find_goal(state, actions):
++        one, two = state
++        if one == goal:
++            return (actions, "one", two)
++        if two == goal:
++            return (actions, "two", one)
++        return None
++
++    result = find_goal(start_state, 1)
++    if result is not None:
++        return result
++
++    queue = deque([(start_state, 1)])
++    visited = {start_state}
++
++    while queue:
++        state, actions = queue.popleft()
++
++        for action in range(3):
++            for index in (0, 1):
++                new_state = list(state)
++                capacity = capacities[index]
++
++                if action == 0:  # Fill.
++                    new_state[index] = capacity
++                elif action == 1:  # Empty.
++                    new_state[index] = 0
++                else:  # Pour one bucket into the other.
++                    other = 1 - index
++                    amount = min(new_state[index], capacities[other] - new_state[other])
++                    if amount == 0:
++                        continue
++                    new_state[index] -= amount
++                    new_state[other] += amount
++
++                new_state = tuple(new_state)
++                if new_state == state or new_state in visited:
++                    continue
++                if is_forbidden(new_state):
++                    continue
++
++                visited.add(new_state)
++                next_actions = actions + 1
++                result = find_goal(new_state, next_actions)
++                if result is not None:
++                    return result
++                queue.append((new_state, next_actions))
++
++    raise ValueError(
++        f"Cannot measure exactly {goal} liters using buckets of size "
++        f"{bucket_one} and {bucket_two} starting with bucket {start_bucket}."
++    )

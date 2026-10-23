@@ -1,0 +1,60 @@
+diff --git a/grep.py b/grep.py
+index 3c8a8e1..8e47087 100644
+--- a/grep.py
++++ b/grep.py
+@@ -1,2 +1,54 @@
+ def grep(pattern, flags, files):
+-    pass
++    """Search `files` for lines matching `pattern`, emulating a simple grep.
++
++    `flags` is a whitespace separated string of the supported flags
++    (-n, -l, -i, -v, -x). Returns the matching lines joined with newlines,
++    each one terminated by a newline, or an empty string if nothing matched.
++    """
++    flag_set = set(flags.split())
++    multiple_files = len(files) > 1
++    output = []
++
++    for filename in files:
++        file_matches = []
++
++        with open(filename) as f:
++            for number, line in enumerate(f, start=1):
++                line = line.rstrip("\n")
++
++                candidate = line
++                target = pattern
++                if "-i" in flag_set:
++                    candidate = candidate.lower()
++                    target = target.lower()
++
++                if "-x" in flag_set:
++                    found = candidate == target
++                else:
++                    found = target in candidate
++                if "-v" in flag_set:
++                    found = not found
++
++                if not found:
++                    continue
++
++                if "-l" in flag_set:
++                    file_matches.append(None)
++                    break
++
++                prefix = ""
++                if multiple_files:
++                    prefix += filename + ":"
++                if "-n" in flag_set:
++                    prefix += str(number) + ":"
++                file_matches.append(prefix + line)
++
++        if "-l" in flag_set:
++            if file_matches:
++                output.append(filename)
++        else:
++            output.extend(file_matches)
++
++    if not output:
++        return ""
++    return "".join(line + "\n" for line in output)

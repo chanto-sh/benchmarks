@@ -1,0 +1,42 @@
+diff --git a/error_handling.go b/error_handling.go
+index ac66fe0..ef8cc1c 100644
+--- a/error_handling.go
++++ b/error_handling.go
+@@ -1,5 +1,35 @@
+ package erratum
+ 
+-func Use(opener ResourceOpener, input string) error {
+-	panic("Please implement the Use function")
++func Use(opener ResourceOpener, input string) (err error) {
++	var resource Resource
++	for {
++		resource, err = opener()
++		if err == nil {
++			break
++		}
++		if _, ok := err.(TransientError); !ok {
++			return err
++		}
++	}
++
++	defer resource.Close()
++	defer func() {
++		recovered := recover()
++		if recovered == nil {
++			return
++		}
++
++		switch recoveredErr := recovered.(type) {
++		case FrobError:
++			resource.Defrob(recoveredErr.defrobTag)
++			err = recoveredErr
++		case error:
++			err = recoveredErr
++		default:
++			panic(recovered)
++		}
++	}()
++
++	resource.Frob(input)
++	return nil
+ }

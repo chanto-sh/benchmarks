@@ -1,0 +1,146 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..9fe34a4 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,140 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"sort"
++	"strings"
++)
++
++// Solve attempts to solve an alphametics puzzle, returning the digit
++// substitution for every letter used in the puzzle.
++//
++// The puzzle must contain exactly one "==" separating the addends (joined by
++// "+") from the sum. It returns an error when the puzzle is malformed or has
++// no solution.
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	// Each word contributes a linear combination of its letters. Giving a
++	// letter the digit d adds d * weight[letter] to the total, so a valid
++	// substitution is one where the weighted sum over all letters is zero.
++	weight := make(map[rune]int64)
++	leading := make(map[rune]bool)
++	var letters []rune
++
++	addWord := func(word string, sign int64) {
++		runes := []rune(word)
++		place := int64(1)
++		for i := len(runes) - 1; i >= 0; i-- {
++			r := runes[i]
++			if _, seen := weight[r]; !seen {
++				letters = append(letters, r)
++				weight[r] = 0
++			}
++			weight[r] += sign * place
++			place *= 10
++		}
++		// The leading digit of a multi-digit number may not be zero.
++		if len(runes) > 1 {
++			leading[runes[0]] = true
++		}
++	}
++
++	addSide := func(side string, sign int64) error {
++		for _, word := range strings.Split(side, "+") {
++			word = strings.TrimSpace(word)
++			if word == "" {
++				return errors.New("invalid puzzle: empty term")
++			}
++			for _, r := range word {
++				if r < 'A' || r > 'Z' {
++					return errors.New("invalid puzzle: expected upper-case letters only")
++				}
++			}
++			addWord(word, sign)
++		}
++		return nil
++	}
++
++	sides := strings.Split(puzzle, "==")
++	if len(sides) != 2 {
++		return nil, errors.New("invalid puzzle: expected exactly one '=='")
++	}
++	if err := addSide(sides[0], 1); err != nil {
++		return nil, err
++	}
++	if err := addSide(sides[1], -1); err != nil {
++		return nil, err
++	}
++
++	if len(letters) == 0 {
++		return nil, errors.New("invalid puzzle: no letters found")
++	}
++	if len(letters) > 10 {
++		return nil, errors.New("invalid puzzle: more than ten distinct letters")
++	}
++
++	// Search the largest weights first: they constrain the total the most and
++	// therefore make the pruning bounds bite early.
++	order := make([]rune, len(letters))
++	copy(order, letters)
++	sort.SliceStable(order, func(i, j int) bool {
++		return abs64(weight[order[i]]) > abs64(weight[order[j]])
++	})
++
++	// remaining[i] is the largest absolute contribution that the letters in
++	// order[i:] can still make to the total.
++	n := len(order)
++	remaining := make([]int64, n+1)
++	for i := n - 1; i >= 0; i-- {
++		remaining[i] = remaining[i+1] + 9*abs64(weight[order[i]])
++	}
++
++	digits := make([]int, n)
++	var used [10]bool
++
++	var search func(i int, sum int64) bool
++	search = func(i int, sum int64) bool {
++		if i == n {
++			return sum == 0
++		}
++		letter := order[i]
++		w := weight[letter]
++		for d := 0; d <= 9; d++ {
++			if used[d] {
++				continue
++			}
++			if d == 0 && leading[letter] {
++				continue
++			}
++			next := sum + w*int64(d)
++			// Even using the largest remaining digits, the total cannot
++			// return to zero from here, so this branch is dead.
++			if abs64(next) > remaining[i+1] {
++				continue
++			}
++			used[d] = true
++			digits[i] = d
++			if search(i+1, next) {
++				return true
++			}
++			used[d] = false
++		}
++		return false
++	}
++
++	if !search(0, 0) {
++		return nil, errors.New("no solution")
++	}
++
++	solution := make(map[string]int, n)
++	for i, letter := range order {
++		solution[string(letter)] = digits[i]
++	}
++	return solution, nil
++}
++
++func abs64(x int64) int64 {
++	if x < 0 {
++		return -x
++	}
++	return x
+ }

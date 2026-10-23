@@ -1,0 +1,69 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..5b54298 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,61 @@
+ class Scale:
++    """Generate chromatic and interval-based scales from a tonic."""
++
++    # The 12 chromatic pitches, spelled with sharps or flats respectively.
++    _SHARP_NOTES = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
++    _FLAT_NOTES = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"]
++
++    # Tonics whose scales are conventionally written with sharps.
++    _SHARP_MAJOR = {"C", "G", "D", "A", "E", "B", "F#"}
++    _SHARP_MINOR = {"a", "e", "b", "f#", "c#", "d#"}
++
++    # Intervals, expressed as the number of chromatic steps to advance.
++    _STEP_SIZES = {"m": 1, "M": 2, "A": 3}
++
+     def __init__(self, tonic):
+-        pass
++        # Accept both unicode accidentals and their ASCII equivalents.
++        normalized = tonic.strip().replace("♯", "#").replace("♭", "b")
++        # Output notes are uppercase except for the flat "b" marker.
++        self.tonic = normalized[0].upper() + normalized[1:]
++
++        # A lowercase tonic denotes a minor key, uppercase a major key. The
++        # natural keys (C major and a minor) ascend with sharps, per convention.
++        if normalized[0].isupper():
++            self._use_sharps = normalized in self._SHARP_MAJOR
++        else:
++            self._use_sharps = normalized in self._SHARP_MINOR
++
++    def _notes(self):
++        """Return the chromatic pitches spelled for this scale's key."""
++        return list(self._SHARP_NOTES if self._use_sharps else self._FLAT_NOTES)
++
++    def _start_index(self, notes):
++        """Find the tonic's position in the chromatic sequence."""
++        if self.tonic in notes:
++            return notes.index(self.tonic)
++        # Fall back to the enharmonic spelling, which occupies the same
++        # pitch position in either sequence.
++        alternates = self._FLAT_NOTES if self._use_sharps else self._SHARP_NOTES
++        if self.tonic in alternates:
++            return alternates.index(self.tonic)
++        raise ValueError(f"Unknown tonic: {self.tonic!r}")
+ 
+     def chromatic(self):
+-        pass
++        """Return the 12-note chromatic scale beginning with the tonic."""
++        notes = self._notes()
++        start = self._start_index(notes)
++        return notes[start:] + notes[:start]
+ 
+     def interval(self, intervals):
+-        pass
++        """Build a scale of N+1 notes from N interval characters.
++
++        Each character is a half step ("m"), whole step ("M"), or augmented
++        second ("A").
++        """
++        notes = self._notes()
++        index = self._start_index(notes)
++        scale = [self.tonic]
++        for interval in intervals:
++            index = (index + self._STEP_SIZES[interval]) % 12
++            scale.append(notes[index])
++        return scale

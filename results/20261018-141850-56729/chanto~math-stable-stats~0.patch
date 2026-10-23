@@ -1,0 +1,46 @@
+diff --git a/stats.py b/stats.py
+index add4f59..d993e44 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,35 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0, 0.0
++
++    # Scale by a power of two so sums and squared deviations cannot
++    # overflow.  Scaling by a power of two is exact.
++    _, exponent = math.frexp(scale)
++    shift = exponent - 1
++    factor = 2.0 ** shift
++
++    first = math.ldexp(xs[0], -shift)
++    mean_offset = math.fsum(math.ldexp(x, -shift) - first for x in xs) / n
++    mean_scaled = first + mean_offset
++    var_scaled = math.fsum(
++        (math.ldexp(x, -shift) - first - mean_offset) ** 2 for x in xs
++    ) / n
++
++    return mean_scaled * factor, (var_scaled * factor) * factor
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    largest = max(xs)
++    total = math.fsum(math.exp(x - largest) for x in xs)
++    return largest + math.log(total)
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

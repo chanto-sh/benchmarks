@@ -1,0 +1,108 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..f734b0b 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -26,4 +26,102 @@ class SgfTree:
+ 
+ 
+ def parse(input_string):
+-    pass
++    if not input_string or input_string[0] != "(":
++        raise ValueError("tree missing")
++
++    class Parser:
++        def __init__(self, source):
++            self.source = source
++            self.position = 0
++
++        def current(self):
++            if self.position >= len(self.source):
++                return ""
++            return self.source[self.position]
++
++        def parse_tree(self):
++            if self.current() != "(":
++                raise ValueError("tree missing")
++            self.position += 1
++
++            if self.current() == ")":
++                raise ValueError("tree with no nodes")
++            if self.current() != ";":
++                raise ValueError("tree missing")
++
++            root = self.parse_node()
++            last_node = root
++            while self.current() == ";":
++                child = self.parse_node()
++                last_node.children.append(child)
++                last_node = child
++
++            while self.current() == "(":
++                last_node.children.append(self.parse_tree())
++
++            if self.current() != ")":
++                raise ValueError("tree missing")
++            self.position += 1
++            return root
++
++        def parse_node(self):
++            self.position += 1
++            properties = {}
++
++            while self.current() and self.current() not in ";()":
++                name_start = self.position
++                while self.current().isalpha():
++                    self.position += 1
++                name = self.source[name_start : self.position]
++
++                if not name:
++                    raise ValueError("properties without delimiter")
++                if name != name.upper():
++                    raise ValueError("property must be in uppercase")
++                if self.current() != "[":
++                    raise ValueError("properties without delimiter")
++
++                values = []
++                while self.current() == "[":
++                    values.append(self.parse_property_value())
++                properties[name] = values
++
++            return SgfTree(properties=properties)
++
++        def parse_property_value(self):
++            self.position += 1
++            value = []
++
++            while self.current():
++                character = self.current()
++
++                if character == "]":
++                    self.position += 1
++                    return "".join(value)
++
++                if character == "\\":
++                    self.position += 1
++                    escaped = self.current()
++                    if not escaped:
++                        break
++                    self.position += 1
++                    if escaped == "\n":
++                        continue
++                    value.append(" " if escaped.isspace() else escaped)
++                    continue
++
++                self.position += 1
++                if character == "\n":
++                    value.append(character)
++                elif character.isspace():
++                    value.append(" ")
++                else:
++                    value.append(character)
++
++            raise ValueError("properties without delimiter")
++
++    parser = Parser(input_string)
++    tree = parser.parse_tree()
++    if parser.position != len(input_string):
++        raise ValueError("tree missing")
++    return tree

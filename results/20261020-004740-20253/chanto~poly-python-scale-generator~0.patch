@@ -1,0 +1,44 @@
+diff --git a/scale_generator.py b/scale_generator.py
+index eddc130..4bb9e75 100644
+--- a/scale_generator.py
++++ b/scale_generator.py
+@@ -1,9 +1,36 @@
+ class Scale:
++    _SHARP_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
++    _FLAT_NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
++
++    _SHARP_MAJOR = {"C", "G", "D", "A", "E", "B", "F#"}
++    _SHARP_MINOR = {"A", "E", "B", "F#", "C#", "G#", "D#"}
++    _FLAT_MAJOR = {"F", "BB", "EB", "AB", "DB", "GB"}
++    _FLAT_MINOR = {"D", "G", "C", "F", "BB", "EB"}
++
++    _INTERVAL_STEPS = {"m": 1, "M": 2, "A": 3}
++
+     def __init__(self, tonic):
+-        pass
++        tonic = tonic.strip()
++        letter, accidental = tonic[0], tonic[1:]
++        self._minor = letter.islower()
++        self._tonic = letter.upper() + accidental
++
++        key = self._tonic.upper()
++        if (self._minor and key in self._SHARP_MINOR) or (
++            not self._minor and key in self._SHARP_MAJOR
++        ):
++            self._notes = self._SHARP_NOTES
++        else:
++            self._notes = self._FLAT_NOTES
+ 
+     def chromatic(self):
+-        pass
++        start = self._notes.index(self._tonic)
++        return self._notes[start:] + self._notes[:start]
+ 
+     def interval(self, intervals):
+-        pass
++        index = self._notes.index(self._tonic)
++        result = [self._tonic]
++        for interval in intervals:
++            index = (index + self._INTERVAL_STEPS[interval]) % len(self._notes)
++            result.append(self._notes[index])
++        return result

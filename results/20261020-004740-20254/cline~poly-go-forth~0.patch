@@ -1,0 +1,198 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..5b626d1 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,192 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// stack is the data stack used by the evaluator.
++type stack []int
++
++// word is an executable Forth word operating on the stack.
++type word func(*stack) error
++
++var (
++	errEmptyStack   = errors.New("empty stack")
++	errOneValue     = errors.New("only one value on the stack")
++	errDivideByZero = errors.New("divide by zero")
++	errIllegalOp    = errors.New("illegal operation")
++	errUndefinedOp  = errors.New("undefined operation")
++)
++
++// require checks that the stack holds at least n values.
++func require(s *stack, n int) error {
++	if len(*s) >= n {
++		return nil
++	}
++	if len(*s) == 0 {
++		return errEmptyStack
++	}
++	return errOneValue
++}
++
++func push(s *stack, v int) {
++	*s = append(*s, v)
++}
++
++func pop(s *stack) int {
++	v := (*s)[len(*s)-1]
++	*s = (*s)[:len(*s)-1]
++	return v
++}
++
++func binary(s *stack, op func(a, b int) (int, error)) error {
++	if err := require(s, 2); err != nil {
++		return err
++	}
++	b := pop(s)
++	a := pop(s)
++	res, err := op(a, b)
++	if err != nil {
++		return err
++	}
++	push(s, res)
++	return nil
++}
++
++// builtinWords returns the dictionary of primitive words.
++func builtinWords() map[string]word {
++	return map[string]word{
++		"+": func(s *stack) error {
++			return binary(s, func(a, b int) (int, error) { return a + b, nil })
++		},
++		"-": func(s *stack) error {
++			return binary(s, func(a, b int) (int, error) { return a - b, nil })
++		},
++		"*": func(s *stack) error {
++			return binary(s, func(a, b int) (int, error) { return a * b, nil })
++		},
++		"/": func(s *stack) error {
++			return binary(s, func(a, b int) (int, error) {
++				if b == 0 {
++					return 0, errDivideByZero
++				}
++				return a / b, nil
++			})
++		},
++		"DUP": func(s *stack) error {
++			if err := require(s, 1); err != nil {
++				return err
++			}
++			push(s, (*s)[len(*s)-1])
++			return nil
++		},
++		"DROP": func(s *stack) error {
++			if err := require(s, 1); err != nil {
++				return err
++			}
++			pop(s)
++			return nil
++		},
++		"SWAP": func(s *stack) error {
++			if err := require(s, 2); err != nil {
++				return err
++			}
++			n := len(*s)
++			(*s)[n-2], (*s)[n-1] = (*s)[n-1], (*s)[n-2]
++			return nil
++		},
++		"OVER": func(s *stack) error {
++			if err := require(s, 2); err != nil {
++				return err
++			}
++			push(s, (*s)[len(*s)-2])
++			return nil
++		},
++	}
++}
++
++func isNumber(token string) bool {
++	_, err := strconv.Atoi(token)
++	return err == nil
++}
++
++// Forth evaluates the given lines of Forth source and returns the final stack.
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	s := make(stack, 0)
++	dict := builtinWords()
++
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	for i := 0; i < len(tokens); i++ {
++		token := tokens[i]
++
++		if token == ":" {
++			// A definition starts with a name and ends with ';'.
++			if i+1 >= len(tokens) {
++				return nil, errIllegalOp
++			}
++			name := strings.ToUpper(tokens[i+1])
++			if isNumber(name) {
++				return nil, errIllegalOp
++			}
++
++			var body []word
++			closed := false
++			for i += 2; i < len(tokens); i++ {
++				t := tokens[i]
++				if t == ";" {
++					closed = true
++					break
++				}
++				if n, err := strconv.Atoi(t); err == nil {
++					n := n
++					body = append(body, func(s *stack) error {
++						push(s, n)
++						return nil
++					})
++					continue
++				}
++				w, ok := dict[strings.ToUpper(t)]
++				if !ok {
++					return nil, errUndefinedOp
++				}
++				// Resolve the word now so later redefinitions do not affect
++				// this definition (and so a word may refer to its former self).
++				body = append(body, w)
++			}
++			if !closed {
++				return nil, errIllegalOp
++			}
++			compiled := body
++			dict[name] = func(s *stack) error {
++				for _, w := range compiled {
++					if err := w(s); err != nil {
++						return err
++					}
++				}
++				return nil
++			}
++			continue
++		}
++
++		if n, err := strconv.Atoi(token); err == nil {
++			push(&s, n)
++			continue
++		}
++
++		w, ok := dict[strings.ToUpper(token)]
++		if !ok {
++			return nil, errUndefinedOp
++		}
++		if err := w(&s); err != nil {
++			return nil, err
++		}
++	}
++
++	return []int(s), nil
+ }

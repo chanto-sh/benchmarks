@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index 17751c2..9a7690e 100644
+--- a/solution.py
++++ b/solution.py
+@@ -9,3 +9,11 @@ def split_words(txt):
+     split_words("Hello,world!") ➞ ["Hello", "world!"]
+     split_words("abcdef") == 3 
+     '''
++    if any(char.isspace() for char in txt):
++        return txt.split()
++    if ',' in txt:
++        return txt.split(',')
++    return sum(
++        1 for char in txt
++        if 'a' <= char <= 'z' and (ord(char) - ord('a')) % 2 == 1
++    )

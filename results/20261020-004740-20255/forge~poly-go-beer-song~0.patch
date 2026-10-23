@@ -1,0 +1,86 @@
+diff --git a/beer_song.go b/beer_song.go
+index 7a26646..732a131 100644
+--- a/beer_song.go
++++ b/beer_song.go
+@@ -1,13 +1,76 @@
+ package beer
+ 
+-func Song() string {
+-	panic("Please implement the Song function")
++import (
++	"fmt"
++	"strings"
++)
++
++// bottleCount renders a bottle count for use in the lyrics, handling the
++// zero and singular cases.
++func bottleCount(n int) string {
++	switch n {
++	case 0:
++		return "no more bottles"
++	case 1:
++		return "1 bottle"
++	default:
++		return fmt.Sprintf("%d bottles", n)
++	}
++}
++
++// Verse returns a single verse of the song for the given number of bottles.
++// Numbers outside the range 0-99 produce an error.
++func Verse(n int) (string, error) {
++	if n < 0 || n > 99 {
++		return "", fmt.Errorf("invalid verse: %d", n)
++	}
++
++	if n == 0 {
++		return "No more bottles of beer on the wall, no more bottles of beer.\n" +
++			"Go to the store and buy some more, 99 bottles of beer on the wall.\n", nil
++	}
++
++	action := "Take one down and pass it around"
++	if n == 1 {
++		action = "Take it down and pass it around"
++	}
++
++	return fmt.Sprintf("%s of beer on the wall, %s of beer.\n%s, %s of beer on the wall.\n",
++		bottleCount(n), bottleCount(n), action, bottleCount(n-1)), nil
+ }
+ 
++// Verses returns the verses from start down to stop (inclusive). Each verse is
++// followed by a blank line, including the final one.
+ func Verses(start, stop int) (string, error) {
+-	panic("Please implement the Verses function")
++	if start < 0 || start > 99 {
++		return "", fmt.Errorf("invalid start verse: %d", start)
++	}
++	if stop < 0 || stop > 99 {
++		return "", fmt.Errorf("invalid stop verse: %d", stop)
++	}
++	if start < stop {
++		return "", fmt.Errorf("start verse %d is before stop verse %d", start, stop)
++	}
++
++	var sb strings.Builder
++	for n := start; n >= stop; n-- {
++		v, err := Verse(n)
++		if err != nil {
++			return "", err
++		}
++		sb.WriteString(v)
++		sb.WriteString("\n")
++	}
++
++	return sb.String(), nil
+ }
+ 
+-func Verse(n int) (string, error) {
+-	panic("Please implement the Verse function")
++// Song returns the complete lyrics of the song.
++func Song() string {
++	s, err := Verses(99, 0)
++	if err != nil {
++		// Unreachable: 99 and 0 are always valid bounds.
++		panic(err)
++	}
++	return s
+ }

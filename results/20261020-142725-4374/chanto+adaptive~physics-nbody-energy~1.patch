@@ -1,0 +1,106 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..365e4a3 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,54 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses the fourth-order symplectic PEFRL scheme (Omelyan, Mryglod and Folk).
++    Being symplectic, its energy error stays bounded over long integrations
++    instead of accumulating, and the pairwise forces conserve total momentum.
++    """
++    pos = [[p[0], p[1]] for p in positions]
++    vel = [[v[0], v[1]] for v in velocities]
++    n = len(masses)
++    if n == 0:
++        return pos, vel
++
++    # PEFRL coefficients.
++    xi = 0.1786178958448091
++    lam = -0.2123418310626054
++    chi = -0.06626458266981849
++    kick_a = 0.5 * (1.0 - 2.0 * lam)
++    drift_mid = 1.0 - 2.0 * (xi + chi)
++
++    def drift(fraction):
++        h = fraction * dt
++        for i in range(n):
++            pos[i][0] += h * vel[i][0]
++            pos[i][1] += h * vel[i][1]
++
++    def kick(fraction, acc):
++        h = fraction * dt
++        for i in range(n):
++            vel[i][0] += h * acc[i][0]
++            vel[i][1] += h * acc[i][1]
++
++    for _ in range(steps):
++        drift(xi)
++        acc = accelerations(masses, pos, G)
++        kick(kick_a, acc)
++
++        drift(chi)
++        acc = accelerations(masses, pos, G)
++        kick(lam, acc)
++
++        drift(drift_mid)
++        acc = accelerations(masses, pos, G)
++        kick(lam, acc)
++
++        drift(chi)
++        acc = accelerations(masses, pos, G)
++        kick(kick_a, acc)
++
++        drift(xi)
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..7811163 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -17,6 +17,40 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_momentum_and_inputs_unchanged(self):
++        m = [2.0, 1.0, 0.5]
++        pos = [[-2.0, 0.5], [1.5, -1.0], [3.0, 2.0]]
++        vel = [[0.1, -0.2], [-0.3, 0.15], [0.05, 0.4]]
++        pos0 = [list(xy) for xy in pos]
++        vel0 = [list(xy) for xy in vel]
++
++        p, q = simulate(m, pos, vel, 0.001, 2000)
++
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        for axis in range(2):
++            before = sum(mi * vi[axis] for mi, vi in zip(m, vel))
++            after = sum(mi * vi[axis] for mi, vi in zip(m, q))
++            self.assertAlmostEqual(after, before, places=12)
++
++    def test_eccentric_binary_energy(self):
++        # Unequal masses, eccentric orbit: non-circular and long-running.
++        m1, m2 = 3.0, 1.0
++        total = m1 + m2
++        semi_major, eccentricity = 1.0, 0.7
++        periastron = semi_major * (1.0 - eccentricity)
++        v_rel = math.sqrt(total * (2.0 / periastron - 1.0 / semi_major))
++        r1 = m2 / total * periastron
++        r2 = m1 / total * periastron
++        mu = m1 * m2 / total
++        m = [m1, m2]
++        pos = [[-r1, 0.0], [r2, 0.0]]
++        vel = [[0.0, -mu / m1 * v_rel], [0.0, mu / m2 * v_rel]]
++
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.01, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

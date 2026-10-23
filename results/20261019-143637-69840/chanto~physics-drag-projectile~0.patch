@@ -1,0 +1,214 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..61b841a 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,207 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B = (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0)
++_E = (
++    71 / 57600,
++    0.0,
++    -71 / 16695,
++    71 / 1920,
++    -17253 / 339200,
++    22 / 525,
++    -1 / 40,
++)
++# Coefficients of the quartic dense output polynomial (in powers x, x^2,
++# x^3, x^4, where x is the fraction of the step).
++_P = (
++    (1.0, -8048581381 / 2820520608, 8663915743 / 2820520608,
++     -12715105075 / 11282082432),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200 / 32700410799, -68118460800 / 10900136933,
++     87487479700 / 32700410799),
++    (0.0, -1754552775 / 470086768, 14199869525 / 1410260304,
++     -10690763975 / 1880347072),
++    (0.0, 127303824393 / 49829197408, -318862633887 / 49829197408,
++     701980252875 / 199316789632),
++    (0.0, -282668133 / 205662961, 2019193451 / 616988883,
++     -1453857185 / 822651844),
++    (0.0, 40617522 / 29380423, -110615467 / 29380423,
++     69997945 / 29380423),
++)
++
++
++def _flight_special(vx0, vy0, g, h0):
++    """Closed-form result for the cases that have one."""
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    if vy0 == 0.0:
++        apex = h0
++    else:
++        apex = h0 + vy0 * vy0 / (2.0 * g)
++
++    if h0 == 0.0:
++        t = 2.0 * vy0 / g
++    else:
++        t = (vy0 + math.sqrt(vy0 * vy0 + 2.0 * g * h0)) / g
++
++    return {"range": vx0 * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg``.  Air resistance is quadratic,
++    ``F = -k |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if v0 < 0.0 or h0 < 0.0 or k < 0.0:
++        raise ValueError("v0, h0 and k must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++
++    angle = math.radians(angle_deg)
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++
++    # No drag: use the exact vacuum solution.
++    if k == 0.0:
++        return _flight_special(vx0, vy0, g, h0)
++
++    # Falling from rest at ground level: there is no flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    c = k / mass
++
++    def deriv(x, y, vx, vy):
++        speed = math.hypot(vx, vy)
++        return vx, vy, -c * speed * vx, -g - c * speed * vy
++
++    # A rough vacuum flight time is enough to choose a starting step.
++    disc = vy0 * vy0 + 2.0 * g * h0
++    t_guess = (vy0 + math.sqrt(disc)) / g
++    if t_guess <= 0.0:
++        t_guess = math.sqrt(2.0 * h0 / g)
++    h = t_guess * 1.0e-4
++    if c * v0 > 0.0:
++        h = min(h, 1.0e-2 / (c * v0))
++
++    t = 0.0
++    x, y, vx, vy = 0.0, h0, vx0, vy0
++    apex = h0 if vy0 <= 0.0 else None
++    left_ground = h0 > 0.0
++
++    rtol = 1.0e-12
++    atol = 1.0e-13
++    max_steps = 1_000_000
++
++    for _ in range(max_steps):
++        if h <= 0.0:
++            h = 1.0e-12
++
++        # Seven-stage Dormand-Prince step.
++        stages = []
++        for i in range(7):
++            sx, sy, svx, svy = x, y, vx, vy
++            ai = _A[i]
++            for j, aij in enumerate(ai):
++                kj = stages[j]
++                sx += h * aij * kj[0]
++                sy += h * aij * kj[1]
++                svx += h * aij * kj[2]
++                svy += h * aij * kj[3]
++            stages.append(deriv(sx, sy, svx, svy))
++
++        nx = x + h * sum(b * s[0] for b, s in zip(_B, stages))
++        ny = y + h * sum(b * s[1] for b, s in zip(_B, stages))
++        nvx = vx + h * sum(b * s[2] for b, s in zip(_B, stages))
++        nvy = vy + h * sum(b * s[3] for b, s in zip(_B, stages))
++
++        # Error estimate (difference between the fifth- and fourth-order
++        # solutions), measured relative to the state magnitudes.
++        err = 0.0
++        for j, new in enumerate((nx, ny, nvx, nvy)):
++            old = (x, y, vx, vy)[j]
++            e = h * sum(
++                ei * s[j] for ei, s in zip(_E, stages)
++            )
++            scale = atol + rtol * max(abs(old), abs(new))
++            err += (e / scale) ** 2
++        err = math.sqrt(err / 4.0)
++
++        if err <= 1.0:
++            # The first step of a launch from ground level must get us
++            # clearly above the ground, otherwise y=0 would be mistaken
++            # for the landing event.
++            if not left_ground and ny <= 0.0:
++                h *= 0.1
++                continue
++
++            t_old = t
++            old_state = (x, y, vx, vy)
++            t += h
++
++            # Dense output: Q[j][m] multiplies x**(m+1).
++            q = tuple(
++                tuple(
++                    sum(stages[i][j] * _P[i][m] for i in range(7))
++                    for m in range(4)
++                )
++                for j in range(4)
++            )
++
++            def dense(theta, component):
++                qj = q[component]
++                return old_state[component] + h * theta * (
++                    qj[0] + theta * (qj[1] + theta * (qj[2] + theta * qj[3]))
++                )
++
++            if apex is None and nvy <= 0.0:
++                lo, hi = 0.0, 1.0
++                for _ in range(80):
++                    mid = 0.5 * (lo + hi)
++                    if dense(mid, 3) > 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                apex = max(h0, dense(0.5 * (lo + hi), 1))
++
++            if left_ground and ny <= 0.0:
++                lo, hi = 0.0, 1.0
++                for _ in range(80):
++                    mid = 0.5 * (lo + hi)
++                    if dense(mid, 1) > 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                theta = 0.5 * (lo + hi)
++                return {
++                    "range": dense(theta, 0),
++                    "apex": apex if apex is not None else h0,
++                    "time": t_old + theta * h,
++                }
++
++            x, y, vx, vy = nx, ny, nvx, nvy
++            left_ground = True
++            factor = 0.9 * err ** -0.2 if err > 0.0 else 5.0
++            h *= min(5.0, max(0.2, factor))
++        else:
++            factor = 0.9 * err ** -0.2
++            h *= min(5.0, max(0.2, factor))
++
++    raise RuntimeError("projectile integration did not converge")

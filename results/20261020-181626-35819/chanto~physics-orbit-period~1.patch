@@ -1,0 +1,248 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..9f57ca0 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,233 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _hermite_root(t, h, g0, g1, dg0, dg1):
++    """Locate a root of the cubic Hermite interpolant of g on [t, t+h]."""
++    # Slopes are with respect to the normalized step variable.
++    m0 = dg0 * h
++    m1 = dg1 * h
++    lo = 0.0
++    hi = 1.0
++    for _ in range(60):
++        s = 0.5 * (lo + hi)
++        s2 = s * s
++        s3 = s2 * s
++        value = ((2.0 * s3 - 3.0 * s2 + 1.0) * g0
++                 + (s3 - 2.0 * s2 + s) * m0
++                 + (-2.0 * s3 + 3.0 * s2) * g1
++                 + (s3 - s2) * m1)
++        if value < 0.0:
++            lo = s
++        else:
++            hi = s
++    return t + 0.5 * (lo + hi) * h
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The orbit is integrated directly from the supplied equations of motion,
++    so ``accel`` may describe any central force law.  Closest approaches are
++    the minima of the distance from the origin, detected as inward-to-outward
++    zero crossings of r . v.
++    """
++    x = float(r0[0])
++    y = float(r0[1])
++    vx = float(v0[0])
++    vy = float(v0[1])
++
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    if r == 0.0:
++        raise ValueError("the starting position must not be the origin")
++
++    angular_momentum = x * vy - y * vx
++    if abs(angular_momentum) <= 1e-14 * r * max(speed, 1e-300):
++        raise ValueError("radial period requires nonzero angular momentum")
++
++    ax, ay = accel(x, y)
++    values = (x, y, vx, vy, ax, ay)
++    if not all(math.isfinite(value) for value in values):
++        raise ValueError("non-finite initial state or acceleration")
++
++    # A circular orbit has no radial turning points.  Its period is the time
++    # to sweep one full revolution at the constant angular rate L / r^2.
++    radial_velocity = x * vx + y * vy
++    radial_acceleration = vx * vx + vy * vy + x * ax + y * ay
++    if (abs(radial_velocity) <= 1e-12 * r * speed
++            and abs(radial_acceleration) <= 1e-12 * speed * speed):
++        return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    # Scale atol to the initial state so the method also works when the orbit
++    # is not of order one.
++    rtol = 1e-11
++    atol_pos = 1e-13 * max(r, 1e-300)
++    atol_vel = 1e-13 * max(speed, 1e-300)
++
++    def derivative(x, y, vx, vy):
++        ax, ay = accel(x, y)
++        return vx, vy, ax, ay
++
++    f0 = (vx, vy, ax, ay)
++    g0 = radial_velocity
++    dg0 = radial_acceleration
++    phi0 = math.atan2(y, x)
++
++    # Start with a step that resolves the local dynamical time.
++    accel_mag = math.hypot(ax, ay)
++    h = 0.1 * r / speed if speed else 0.1 * math.sqrt(r / accel_mag)
++    if accel_mag:
++        h = min(h, 0.1 * math.sqrt(r / accel_mag))
++    h = max(h, 1e-14 * max(r / speed if speed else 1.0, 1.0))
++
++    t = 0.0
++    events = []
++    swept = 0.0
++    max_radial_fraction = abs(g0) / (r * speed) if speed else 0.0
++    max_steps = 200000
++    steps = 0
++
++    while len(events) < 2 and steps < max_steps:
++        # Keep a single step from crossing a large fraction of a revolution;
++        # this also makes the angle unwrapping below unambiguous.
++        h_try = h
++        if angular_momentum:
++            h_try = min(h_try, 0.25 * r * r / abs(angular_momentum))
++
++        # Dormand-Prince stages.
++        k1 = f0
++        k2 = derivative(x + h_try * _A[1][0] * k1[0],
++                        y + h_try * _A[1][0] * k1[1],
++                        vx + h_try * _A[1][0] * k1[2],
++                        vy + h_try * _A[1][0] * k1[3])
++        k3 = derivative(x + h_try * (_A[2][0] * k1[0] + _A[2][1] * k2[0]),
++                        y + h_try * (_A[2][0] * k1[1] + _A[2][1] * k2[1]),
++                        vx + h_try * (_A[2][0] * k1[2] + _A[2][1] * k2[2]),
++                        vy + h_try * (_A[2][0] * k1[3] + _A[2][1] * k2[3]))
++        k4 = derivative(
++            x + h_try * (_A[3][0] * k1[0] + _A[3][1] * k2[0]
++                         + _A[3][2] * k3[0]),
++            y + h_try * (_A[3][0] * k1[1] + _A[3][1] * k2[1]
++                         + _A[3][2] * k3[1]),
++            vx + h_try * (_A[3][0] * k1[2] + _A[3][1] * k2[2]
++                          + _A[3][2] * k3[2]),
++            vy + h_try * (_A[3][0] * k1[3] + _A[3][1] * k2[3]
++                          + _A[3][2] * k3[3]))
++        k5 = derivative(
++            x + h_try * (_A[4][0] * k1[0] + _A[4][1] * k2[0]
++                         + _A[4][2] * k3[0] + _A[4][3] * k4[0]),
++            y + h_try * (_A[4][0] * k1[1] + _A[4][1] * k2[1]
++                         + _A[4][2] * k3[1] + _A[4][3] * k4[1]),
++            vx + h_try * (_A[4][0] * k1[2] + _A[4][1] * k2[2]
++                          + _A[4][2] * k3[2] + _A[4][3] * k4[2]),
++            vy + h_try * (_A[4][0] * k1[3] + _A[4][1] * k2[3]
++                          + _A[4][2] * k3[3] + _A[4][3] * k4[3]))
++        k6 = derivative(
++            x + h_try * (_A[5][0] * k1[0] + _A[5][1] * k2[0]
++                         + _A[5][2] * k3[0] + _A[5][3] * k4[0]
++                         + _A[5][4] * k5[0]),
++            y + h_try * (_A[5][0] * k1[1] + _A[5][1] * k2[1]
++                         + _A[5][2] * k3[1] + _A[5][3] * k4[1]
++                         + _A[5][4] * k5[1]),
++            vx + h_try * (_A[5][0] * k1[2] + _A[5][1] * k2[2]
++                          + _A[5][2] * k3[2] + _A[5][3] * k4[2]
++                          + _A[5][4] * k5[2]),
++            vy + h_try * (_A[5][0] * k1[3] + _A[5][1] * k2[3]
++                          + _A[5][2] * k3[3] + _A[5][3] * k4[3]
++                          + _A[5][4] * k5[3]))
++        k7 = derivative(
++            x + h_try * (_A[6][0] * k1[0] + _A[6][1] * k2[0]
++                         + _A[6][2] * k3[0] + _A[6][3] * k4[0]
++                         + _A[6][4] * k5[0] + _A[6][5] * k6[0]),
++            y + h_try * (_A[6][0] * k1[1] + _A[6][1] * k2[1]
++                         + _A[6][2] * k3[1] + _A[6][3] * k4[1]
++                         + _A[6][4] * k5[1] + _A[6][5] * k6[1]),
++            vx + h_try * (_A[6][0] * k1[2] + _A[6][1] * k2[2]
++                          + _A[6][2] * k3[2] + _A[6][3] * k4[2]
++                          + _A[6][4] * k5[2] + _A[6][5] * k6[2]),
++            vy + h_try * (_A[6][0] * k1[3] + _A[6][1] * k2[3]
++                          + _A[6][2] * k3[3] + _A[6][3] * k4[3]
++                          + _A[6][4] * k5[3] + _A[6][5] * k6[3]))
++
++        # The seventh stage is evaluated at the fifth-order solution, so it is
++        # both the endpoint derivative and the first stage of the next step.
++        y5 = tuple(
++            state + h_try * sum(c * k[i] for c, k in zip(_B5, (k1, k2, k3, k4, k5, k6, k7)))
++            for i, state in enumerate((x, y, vx, vy))
++        )
++        y4 = tuple(
++            state + h_try * sum(c * k[i] for c, k in zip(_B4, (k1, k2, k3, k4, k5, k6, k7)))
++            for i, state in enumerate((x, y, vx, vy))
++        )
++
++        error = 0.0
++        for i in range(4):
++            atol = atol_pos if i < 2 else atol_vel
++            scale = atol + rtol * max(abs((x, y, vx, vy)[i]), abs(y5[i]))
++            error = max(error, abs(y5[i] - y4[i]) / scale)
++
++        if error <= 1.0:
++            x, y, vx, vy = y5
++            f0 = k7
++            t += h_try
++            steps += 1
++
++            g1 = x * vx + y * vy
++            dg1 = (vx * vx + vy * vy
++                   + x * f0[2] + y * f0[3])
++
++            if g0 < 0.0 and g1 >= 0.0:
++                events.append(_hermite_root(t - h_try, h_try, g0, g1, dg0, dg1))
++                if len(events) == 2:
++                    return events[1] - events[0]
++
++            # Track angle swept, for the exactly circular fallback below.
++            phi1 = math.atan2(y, x)
++            dphi = phi1 - phi0
++            if dphi > math.pi:
++                dphi -= 2.0 * math.pi
++            elif dphi < -math.pi:
++                dphi += 2.0 * math.pi
++            swept += dphi
++            phi0 = phi1
++
++            r = math.hypot(x, y)
++            speed_now = math.hypot(vx, vy)
++            if r and speed_now:
++                max_radial_fraction = max(
++                    max_radial_fraction, abs(g1) / (r * speed_now))
++
++            if (not events and abs(swept) >= 2.0 * math.pi
++                    and max_radial_fraction < 1e-12):
++                # Numerically circular: every angle is a closest approach.
++                return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++            g0 = g1
++            dg0 = dg1
++
++            factor = 5.0 if error == 0.0 else min(5.0, max(0.2, 0.9 * error ** -0.2))
++            h = h_try * factor
++        else:
++            factor = max(0.1, 0.9 * error ** -0.2)
++            h = h_try * factor
++
++    raise RuntimeError("could not find two successive closest approaches")

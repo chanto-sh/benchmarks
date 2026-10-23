@@ -1,0 +1,48 @@
+diff --git a/changelog/11143.bugfix.rst b/changelog/11143.bugfix.rst
+new file mode 100644
+index 0000000..c723473
+--- /dev/null
++++ b/changelog/11143.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed a crash when the first statement of a module was a number or another
++non-string constant, which was incorrectly treated as a docstring during
++assertion rewriting.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 157903f..9bf79f1 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -676,6 +676,7 @@ class AssertionRewriter(ast.NodeVisitor):
+                 expect_docstring
+                 and isinstance(item, ast.Expr)
+                 and isinstance(item.value, ast.Constant)
++                and isinstance(item.value.value, str)
+             ):
+                 doc = item.value.value
+                 if self.is_rewrite_disabled(doc):
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index d018032..12809be 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -141,6 +141,22 @@ class TestAssertionRewrite:
+         assert isinstance(m.body[1], ast.Assert)
+         assert m.body[1].msg is None
+ 
++    def test_first_expr_number_is_not_a_docstring(self) -> None:
++        s = "42\nassert 14"
++        m = rewrite(s)
++        # The imports must be inserted before the number, and the number must
++        # not be mistaken for a docstring.
++        assert isinstance(m.body[0], ast.Import)
++        assert isinstance(m.body[1], ast.Import)
++        assert isinstance(m.body[2], ast.Expr)
++        assert isinstance(m.body[2].value, ast.Constant)
++        assert m.body[2].value.value == 42
++
++        # A non-string first expression must not disable rewriting either.
++        s = "42\n'PYTEST_DONT_REWRITE'\nassert 14"
++        m = rewrite(s)
++        assert isinstance(m.body[0], ast.Import)
++
+     def test_dont_rewrite_plugin(self, pytester: Pytester) -> None:
+         contents = {
+             "conftest.py": "pytest_plugins = 'plugin'; import plugin",

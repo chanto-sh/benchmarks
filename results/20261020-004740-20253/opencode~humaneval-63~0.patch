@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index fc5adab..50803bc 100644
+--- a/solution.py
++++ b/solution.py
+@@ -14,3 +14,11 @@ def fibfib(n: int):
+     >>> fibfib(8)
+     24
+     """
++    if n < 0:
++        raise ValueError("n must be non-negative")
++    a, b, c = 0, 0, 1  # fibfib(0), fibfib(1), fibfib(2)
++    if n < 3:
++        return (a, b, c)[n]
++    for _ in range(3, n + 1):
++        a, b, c = b, c, a + b + c
++    return c

@@ -1,0 +1,98 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..316fc9b 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,91 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _coefficients(m, k, c, omega):
++    """Return (D, alpha, beta) for k - m omega^2 + i c omega."""
++    alpha = k - m * omega * omega
++    beta = c * omega
++    return math.hypot(alpha, beta), alpha, beta
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    D, _, _ = _coefficients(m, k, c, omega)
++    return abs(F0) / D
++
++
++def _homogeneous_basis(p, w0, t):
++    """Return h1, h2 such that the free motion is x0*h1 + (v0 + p*x0)*h2."""
++    delta = (p - w0) * (p + w0)
++
++    if delta < 0.0:
++        # Underdamped: e^(-p t) cos(wd t), e^(-p t) sin(wd t) / wd
++        wd = math.sqrt(-delta)
++        z = wd * t
++        decay = math.exp(-p * t)
++        h1 = decay * math.cos(z)
++        if z == 0.0:
++            sinc = 1.0
++        elif abs(z) < 1e-4:
++            z2 = z * z
++            sinc = 1.0 - z2 / 6.0 + z2 * z2 / 120.0
++        else:
++            sinc = math.sin(z) / z
++        h2 = decay * t * sinc
++    elif delta > 0.0:
++        # Overdamped: e^(-p t) cosh(q t), e^(-p t) sinh(q t) / q
++        q = math.sqrt(delta)
++        z = q * t
++        r1 = -p + q
++        r2 = -p - q
++        e1 = math.exp(r1 * t)
++        e2 = math.exp(r2 * t)
++        h1 = 0.5 * (e1 + e2)
++
++        if z < 0.5:
++            # Stable form near q = 0, where this tends to t*exp(-p*t).
++            if z < 1e-4:
++                z2 = z * z
++                sinh_over_z = 1.0 + z2 / 6.0 + z2 * z2 / 120.0
++            else:
++                sinh_over_z = math.sinh(z) / z
++            h2 = math.exp(-p * t) * t * sinh_over_z
++        else:
++            # Stable for large q*t: avoid overflowing exp(+q*t).
++            h2 = e1 * (-math.expm1(-2.0 * z)) / (2.0 * q)
++    else:
++        # Critically damped: e^(-p t), t e^(-p t)
++        decay = math.exp(-p * t)
++        h1 = decay
++        h2 = t * decay
++
++    return h1, h2
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    D, alpha, beta = _coefficients(m, k, c, omega)
++    if D == 0.0:
++        raise ValueError("undamped system driven exactly at resonance has no steady state")
++
++    # x_p(t) = (F0 / D) cos(omega t - phi)
++    phi = math.atan2(beta, alpha)
++    scale = F0 / D
++    xp = scale * math.cos(omega * t - phi)
++
++    # Initial values of the particular solution: F0*alpha/D^2 and F0*beta*omega/D^2.
++    xp0 = scale * (alpha / D)
++    vp0 = scale * (beta * omega / D)
++
++    p = c / (2.0 * m)
++    w0 = math.sqrt(k / m)
++    h1, h2 = _homogeneous_basis(p, w0, t)
++
++    y0 = x0 - xp0
++    v1 = v0 - vp0
++    return xp + y0 * h1 + (v1 + p * y0) * h2

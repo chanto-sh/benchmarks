@@ -1,0 +1,30 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..5a89484 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,24 @@
++VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    lower = word.lower()
++    if lower[0] in VOWELS or lower.startswith(("xr", "yt")):
++        return word + "ay"
++
++    # Find the run of leading consonants. A "y" after at least one consonant
++    # is treated as a vowel and ends the run, as does "qu".
++    index = 0
++    while index < len(lower) and lower[index] not in VOWELS:
++        if lower.startswith("qu", index):
++            index += 2
++            break
++        if lower[index] == "y" and index > 0:
++            break
++        index += 1
++
++    return word[index:] + word[:index] + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())

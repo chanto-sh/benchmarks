@@ -1,0 +1,170 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..a24f5d4 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,163 @@
++import re
++
++
+ class StackUnderflowError(Exception):
+-    pass
++    """Raised when an operation does not have enough stack values."""
++
++
++_NUMBER_PATTERN = re.compile(r"[+-]?[0-9]+\Z")
++
++
++class _UserWord:
++    """A user-defined word whose component words are resolved at definition time."""
++
++    def __init__(self, instructions):
++        self._instructions = instructions
++
++    def __call__(self, stack):
++        for instruction in self._instructions:
++            if isinstance(instruction, int):
++                stack.append(instruction)
++            else:
++                instruction(stack)
++
++
++def _require_values(stack, count):
++    if len(stack) < count:
++        raise StackUnderflowError("Insufficient number of items in stack")
++
++
++def _add(stack):
++    _require_values(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left + right)
++
++
++def _subtract(stack):
++    _require_values(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left - right)
++
++
++def _multiply(stack):
++    _require_values(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    stack.append(left * right)
++
++
++def _divide(stack):
++    _require_values(stack, 2)
++    right = stack.pop()
++    left = stack.pop()
++    if right == 0:
++        raise ZeroDivisionError("divide by zero")
++
++    quotient = abs(left) // abs(right)
++    if (left < 0) != (right < 0):
++        quotient = -quotient
++    stack.append(quotient)
++
++
++def _duplicate(stack):
++    _require_values(stack, 1)
++    stack.append(stack[-1])
++
++
++def _drop(stack):
++    _require_values(stack, 1)
++    stack.pop()
++
++
++def _swap(stack):
++    _require_values(stack, 2)
++    stack[-2], stack[-1] = stack[-1], stack[-2]
++
++
++def _over(stack):
++    _require_values(stack, 2)
++    stack.append(stack[-2])
++
++
++_BUILT_IN_WORDS = {
++    "+": _add,
++    "-": _subtract,
++    "*": _multiply,
++    "/": _divide,
++    "dup": _duplicate,
++    "drop": _drop,
++    "swap": _swap,
++    "over": _over,
++}
++
++
++def _as_number(token):
++    if _NUMBER_PATTERN.fullmatch(token):
++        return int(token)
++    return None
++
++
++def _resolve_word(token, definitions):
++    key = token.lower()
++    if key in definitions:
++        return definitions[key]
++    if key in _BUILT_IN_WORDS:
++        return _BUILT_IN_WORDS[key]
++    raise ValueError("undefined operation")
++
++
++def _execute_token(token, stack, definitions):
++    number = _as_number(token)
++    if number is not None:
++        stack.append(number)
++    else:
++        _resolve_word(token, definitions)(stack)
++
++
++def _define_word(tokens, start, definitions):
++    if start >= len(tokens):
++        raise ValueError("illegal operation")
++
++    name = tokens[start].lower()
++    if name in {":", ";"} or _as_number(name) is not None:
++        raise ValueError("illegal operation")
++
++    instructions = []
++    index = start + 1
++    while index < len(tokens) and tokens[index] != ";":
++        token = tokens[index]
++        number = _as_number(token)
++        if number is not None:
++            instructions.append(number)
++        else:
++            if token == ":":
++                raise ValueError("illegal operation")
++            instructions.append(_resolve_word(token, definitions))
++        index += 1
++
++    if index >= len(tokens):
++        raise ValueError("illegal operation")
++
++    definitions[name] = _UserWord(instructions)
++    return index + 1
+ 
+ 
+ def evaluate(input_data):
+-    pass
++    stack = []
++    definitions = {}
++    tokens = [token for line in input_data for token in line.split()]
++
++    index = 0
++    while index < len(tokens):
++        token = tokens[index]
++        if token == ":":
++            index = _define_word(tokens, index + 1, definitions)
++        elif token == ";":
++            raise ValueError("illegal operation")
++        else:
++            _execute_token(token, stack, definitions)
++            index += 1
++
++    return stack

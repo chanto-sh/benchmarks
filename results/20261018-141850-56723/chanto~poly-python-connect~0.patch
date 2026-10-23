@@ -1,0 +1,65 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..3d1eada 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,58 @@
+ 
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.rows = [line.split() for line in board.strip().splitlines()]
++
++    def _connects(self, player, start, target):
++        """Return True if `player` has a path from `start` cells to `target`."""
++        rows = self.rows
++        seen = set()
++        stack = [cell for cell in start if self._get(cell) == player]
++
++        def neighbours(r, c):
++            return [
++                (r, c - 1),
++                (r, c + 1),
++                (r - 1, c),
++                (r - 1, c + 1),
++                (r + 1, c),
++                (r + 1, c - 1),
++            ]
++
++        while stack:
++            cell = stack.pop()
++            if cell in seen:
++                continue
++            seen.add(cell)
++            if cell in target:
++                return True
++            r, c = cell
++            for nr, nc in neighbours(r, c):
++                if (nr, nc) not in seen and self._get((nr, nc)) == player:
++                    stack.append((nr, nc))
++        return False
++
++    def _get(self, cell):
++        r, c = cell
++        if 0 <= r < len(self.rows) and 0 <= c < len(self.rows[r]):
++            return self.rows[r][c]
++        return None
+ 
+     def get_winner(self):
+-        pass
++        if not self.rows:
++            return ""
++        height = len(self.rows)
++        width = max((len(row) for row in self.rows), default=0)
++        if width == 0:
++            return ""
++
++        left = {(r, 0) for r in range(height)}
++        right = {(r, width - 1) for r in range(height)}
++        top = {(0, c) for c in range(width)}
++        bottom = {(height - 1, c) for c in range(width)}
++
++        if self._connects("X", left, right):
++            return "X"
++        if self._connects("O", top, bottom):
++            return "O"
++        return ""

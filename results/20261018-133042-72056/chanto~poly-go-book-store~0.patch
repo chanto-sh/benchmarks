@@ -1,0 +1,78 @@
+diff --git a/book_store.go b/book_store.go
+index 12e5bed..33554c4 100644
+--- a/book_store.go
++++ b/book_store.go
+@@ -1,5 +1,72 @@
+ package bookstore
+ 
++const bookPrice = 800
++
++// groupPrices holds the total price in cents for a group of n distinct books.
++var groupPrices = [6]int{0, 800, 1520, 2160, 2560, 3000}
++
+ func Cost(books []int) int {
+-	panic("Please implement the Cost function")
++	var counts [5]int
++	for _, book := range books {
++		if book >= 1 && book <= 5 {
++			counts[book-1]++
++		}
++	}
++
++	memo := make(map[[5]int]int)
++	return costOf(counts, memo)
++}
++
++func costOf(counts [5]int, memo map[[5]int]int) int {
++	if counts == [5]int{} {
++		return 0
++	}
++	if price, ok := memo[counts]; ok {
++		return price
++	}
++
++	// Find the first book that still has copies; every grouping must place it
++	// in some group, so fix it in the current group to avoid permutations.
++	first := 0
++	for counts[first] == 0 {
++		first++
++	}
++
++	best := -1
++	// The current group always contains `first`; choose which other books join.
++	for mask := 0; mask < 1<<5; mask++ {
++		if mask&(1<<first) != 0 {
++			continue
++		}
++		group := [5]int{}
++		group[first] = 1
++		size := 1
++		valid := true
++		for i := 0; i < 5; i++ {
++			if mask&(1<<i) != 0 {
++				if counts[i] == 0 {
++					valid = false
++					break
++				}
++				group[i] = 1
++				size++
++			}
++		}
++		if !valid {
++			continue
++		}
++
++		remaining := counts
++		for i := 0; i < 5; i++ {
++			remaining[i] -= group[i]
++		}
++
++		price := groupPrices[size] + costOf(remaining, memo)
++		if best == -1 || price < best {
++			best = price
++		}
++	}
++
++	memo[counts] = best
++	return best
+ }

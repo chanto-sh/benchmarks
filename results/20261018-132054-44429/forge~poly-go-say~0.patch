@@ -1,0 +1,75 @@
+diff --git a/say.go b/say.go
+index f60502f..f93e23d 100644
+--- a/say.go
++++ b/say.go
+@@ -1,5 +1,69 @@
+ package say
+ 
++import "strings"
++
++var ones = []string{
++	"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
++	"ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
++	"seventeen", "eighteen", "nineteen",
++}
++
++var tens = []string{
++	"", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
++}
++
++var scales = []string{"", "thousand", "million", "billion"}
++
++// Say spells out n in English. The second return value is false when n is
++// outside the supported range of 0 to 999,999,999,999.
+ func Say(n int64) (string, bool) {
+-	panic("Please implement the Say function")
++	if n < 0 || n > 999999999999 {
++		return "", false
++	}
++	if n == 0 {
++		return "zero", true
++	}
++
++	var chunks []string
++	for v := n; v > 0; v /= 1000 {
++		chunks = append(chunks, sayHundreds(int(v%1000)))
++	}
++
++	var parts []string
++	for i := len(chunks) - 1; i >= 0; i-- {
++		if chunks[i] == "" {
++			continue
++		}
++		part := chunks[i]
++		if scales[i] != "" {
++			part += " " + scales[i]
++		}
++		parts = append(parts, part)
++	}
++
++	return strings.Join(parts, " "), true
++}
++
++// sayHundreds spells out 0 <= n < 1000, returning "" for zero.
++func sayHundreds(n int) string {
++	var parts []string
++	if n >= 100 {
++		parts = append(parts, ones[n/100]+" hundred")
++		n %= 100
++	}
++	if n > 0 {
++		parts = append(parts, sayTens(n))
++	}
++	return strings.Join(parts, " ")
++}
++
++// sayTens spells out 0 < n < 100.
++func sayTens(n int) string {
++	if n < 20 {
++		return ones[n]
++	}
++	if n%10 == 0 {
++		return tens[n/10]
++	}
++	return tens[n/10] + "-" + ones[n%10]
+ }

@@ -1,0 +1,208 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..28cd5b3 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,202 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++type letterCount struct {
++	id    int
++	count int
++}
++
++type column struct {
++	addends []letterCount
++	result  int
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	compact := strings.Join(strings.Fields(puzzle), "")
++	parts := strings.Split(compact, "==")
++	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
++		return nil, errors.New("alphametics: puzzle must contain exactly one ==")
++	}
++
++	addends := strings.Split(parts[0], "+")
++	words := make([]string, 0, len(addends)+1)
++	for _, word := range addends {
++		if word == "" {
++			return nil, errors.New("alphametics: empty addend")
++		}
++		words = append(words, word)
++	}
++	words = append(words, parts[1])
++
++	letterID := [256]int{}
++	for i := range letterID {
++		letterID[i] = -1
++	}
++	letters := make([]byte, 0, 10)
++	leading := make([]bool, 0, 10)
++
++	idFor := func(letter byte) int {
++		if (letter < 'A' || letter > 'Z') && (letter < 'a' || letter > 'z') {
++			return -1
++		}
++		if letterID[letter] == -1 {
++			letterID[letter] = len(letters)
++			letters = append(letters, letter)
++			leading = append(leading, false)
++		}
++		return letterID[letter]
++	}
++
++	maxLen := 0
++	for _, word := range words {
++		if len(word) > maxLen {
++			maxLen = len(word)
++		}
++		for j := 0; j < len(word); j++ {
++			id := idFor(word[j])
++			if id == -1 {
++				return nil, errors.New("alphametics: words may only contain letters")
++			}
++			if j == 0 && len(word) > 1 {
++				leading[id] = true
++			}
++		}
++	}
++	if len(letters) > 10 {
++		return nil, errors.New("alphametics: puzzle has more than ten distinct letters")
++	}
++
++	columns := make([]column, maxLen)
++	for col := 0; col < maxLen; col++ {
++		columns[col].result = -1
++
++		for i, word := range words {
++			pos := len(word) - 1 - col
++			if pos < 0 {
++				continue
++			}
++			id := letterID[word[pos]]
++			if i == len(words)-1 {
++				columns[col].result = id
++				continue
++			}
++
++			found := false
++			for j := range columns[col].addends {
++				if columns[col].addends[j].id == id {
++					columns[col].addends[j].count++
++					found = true
++					break
++				}
++			}
++			if !found {
++				columns[col].addends = append(columns[col].addends, letterCount{id: id, count: 1})
++			}
++		}
++	}
++
++	assigned := make([]int, len(letters))
++	for i := range assigned {
++		assigned[i] = -1
++	}
++	used := [10]bool{}
++
++	var search func(col, carry int) (map[string]int, bool)
++	search = func(col, carry int) (map[string]int, bool) {
++		if col == len(columns) {
++			if carry != 0 {
++				return nil, false
++			}
++			result := make(map[string]int, len(letters))
++			for i, letter := range letters {
++				result[string(letter)] = assigned[i]
++			}
++			return result, true
++		}
++
++		current := columns[col]
++		unknown := make([]letterCount, 0, len(current.addends))
++		for _, term := range current.addends {
++			if assigned[term.id] == -1 {
++				found := false
++				for i := range unknown {
++					if unknown[i].id == term.id {
++						unknown[i].count += term.count
++						found = true
++						break
++					}
++				}
++				if !found {
++					unknown = append(unknown, term)
++				}
++			}
++		}
++
++		fixedSum := carry
++		for _, term := range current.addends {
++			if assigned[term.id] != -1 {
++				fixedSum += assigned[term.id] * term.count
++			}
++		}
++
++		var assignAddends func(i, sum int) (map[string]int, bool)
++		assignAddends = func(i, sum int) (map[string]int, bool) {
++			if i < len(unknown) {
++				term := unknown[i]
++				for digit := 0; digit <= 9; digit++ {
++					if used[digit] || (digit == 0 && leading[term.id]) {
++						continue
++					}
++					assigned[term.id] = digit
++					used[digit] = true
++					if solution, ok := assignAddends(i+1, sum+digit*term.count); ok {
++						return solution, true
++					}
++					used[digit] = false
++					assigned[term.id] = -1
++				}
++				return nil, false
++			}
++
++			total := sum
++			resultDigit := total % 10
++			nextCarry := total / 10
++
++			if current.result == -1 {
++				if resultDigit != 0 {
++					return nil, false
++				}
++				return search(col+1, nextCarry)
++			}
++
++			if assigned[current.result] != -1 {
++				if assigned[current.result] != resultDigit {
++					return nil, false
++				}
++				return search(col+1, nextCarry)
++			}
++
++			if used[resultDigit] || (resultDigit == 0 && leading[current.result]) {
++				return nil, false
++			}
++			assigned[current.result] = resultDigit
++			used[resultDigit] = true
++			solution, ok := search(col+1, nextCarry)
++			used[resultDigit] = false
++			assigned[current.result] = -1
++			return solution, ok
++		}
++
++		return assignAddends(0, fixedSum)
++	}
++
++	solution, ok := search(0, 0)
++	if !ok {
++		return nil, errors.New("alphametics: no solution")
++	}
++	return solution, nil
+ }

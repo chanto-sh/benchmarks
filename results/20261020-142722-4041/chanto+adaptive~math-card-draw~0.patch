@@ -1,0 +1,47 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..b12fec5 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,5 @@
+ from fractions import Fraction
++from math import comb
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +7,35 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++
++    total_cards = r + b + g
++    m = min(m, total_cards)
++    if k > r or m <= 0:
++        return Fraction(0)
++
++    probability = Fraction(0)
++
++    # The deal stops at a green card in position j <= m.  The first j cards
++    # then contain exactly one green (which must be last), x reds and
++    # j - 1 - x blues.
++    for j in range(1, m + 1):
++        low = max(k, j - 1 - b)
++        high = min(r, j - 1)
++        if low > high:
++            continue
++        denominator = comb(total_cards, j) * j
++        for x in range(low, high + 1):
++            y = j - 1 - x
++            probability += Fraction(comb(r, x) * comb(b, y) * g, denominator)
++
++    # No green card appears among the first m cards; count the reds there.
++    low = max(k, m - b)
++    high = min(r, m)
++    denominator = comb(total_cards, m)
++    for x in range(low, high + 1):
++        y = m - x
++        probability += Fraction(comb(r, x) * comb(b, y), denominator)
++
++    return probability

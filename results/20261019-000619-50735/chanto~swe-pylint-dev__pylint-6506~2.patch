@@ -1,0 +1,106 @@
+diff --git a/pylint/config/exceptions.py b/pylint/config/exceptions.py
+index 74a001c..7c99c66 100644
+--- a/pylint/config/exceptions.py
++++ b/pylint/config/exceptions.py
+@@ -11,12 +11,16 @@ class UnrecognizedArgumentAction(Exception):
+     """
+ 
+ 
+-class _UnrecognizedOptionError(Exception):
+-    """Raised if an ArgumentManager instance tries to parse an option that is unknown."""
++class _UnrecognizedOptionError(SystemExit):
++    """Raised if an ArgumentManager instance tries to parse an option that is unknown.
++
++    Inherits from SystemExit so that an uncaught instance terminates the program
++    without printing a traceback.
++    """
+ 
+     def __init__(self, options: list[str], *args: object) -> None:
+         self.options = options
+-        super().__init__(*args)
++        super().__init__(*(args or (2,)))
+ 
+ 
+ class ArgumentPreprocessingError(Exception):
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index 778e644..08e6520 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -13,7 +13,10 @@ from typing import Any
+ 
+ from pylint import config
+ from pylint.config.config_initialization import _config_initialization
+-from pylint.config.exceptions import ArgumentPreprocessingError
++from pylint.config.exceptions import (
++    ArgumentPreprocessingError,
++    _UnrecognizedOptionError,
++)
+ from pylint.config.utils import _preprocess_options
+ from pylint.constants import full_version
+ from pylint.lint.base_options import _make_run_options
+@@ -132,9 +135,22 @@ group are mutually exclusive.",
+         linter.disable("I")
+         linter.enable("c-extension-no-member")
+ 
+-        args = _config_initialization(
+-            linter, args, reporter, config_file=self._rcfile, verbose_mode=self.verbose
+-        )
++        try:
++            args = _config_initialization(
++                linter,
++                args,
++                reporter,
++                config_file=self._rcfile,
++                verbose_mode=self.verbose,
++            )
++        except _UnrecognizedOptionError as exc:
++            prog = linter._arg_parser.prog
++            linter._arg_parser.print_usage(sys.stderr)
++            print(
++                f"{prog}: error: Unrecognized option found: {', '.join(exc.options)}",
++                file=sys.stderr,
++            )
++            raise
+ 
+         if linter.config.jobs < 0:
+             print(
+diff --git a/tests/config/test_unrecognized_option.py b/tests/config/test_unrecognized_option.py
+new file mode 100644
+index 0000000..77c0d3e
+--- /dev/null
++++ b/tests/config/test_unrecognized_option.py
+@@ -0,0 +1,34 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++# Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
++
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++from pytest import CaptureFixture
++
++from pylint.testutils._run import _Run as Run
++
++EMPTY_MODULE = Path(__file__).parent / ".." / "regrtest_data" / "empty.py"
++
++
++def test_unrecognized_long_option_reports_usage(capsys: CaptureFixture) -> None:
++    """An unknown long option is reported as a usage error, without a traceback."""
++    with pytest.raises(SystemExit) as exc_info:
++        Run([str(EMPTY_MODULE), "--unknown-option=yes"], exit=False)
++    assert exc_info.value.code == 2
++    output = capsys.readouterr()
++    assert "usage: pylint" in output.err
++    assert "Unrecognized option found: unknown-option=yes" in output.err
++
++
++def test_unrecognized_short_option_reports_usage(capsys: CaptureFixture) -> None:
++    """An unknown short option is reported as a usage error, without a traceback."""
++    with pytest.raises(SystemExit) as exc_info:
++        Run([str(EMPTY_MODULE), "-Q"], exit=False)
++    assert exc_info.value.code == 2
++    output = capsys.readouterr()
++    assert "usage: pylint" in output.err
++    assert "Unrecognized option found: Q" in output.err

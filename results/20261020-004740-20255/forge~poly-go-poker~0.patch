@@ -1,0 +1,257 @@
+diff --git a/poker.go b/poker.go
+index 2d9807d..45acc87 100644
+--- a/poker.go
++++ b/poker.go
+@@ -1,5 +1,251 @@
+ package poker
+ 
++import (
++	"fmt"
++	"sort"
++)
++
++// Ranks are stored numerically: 2..10, J=11, Q=12, K=13, A=14.
++type card struct {
++	rank int
++	suit rune
++}
++
++// group is a rank together with how many times it appears in a hand.
++type group struct {
++	rank  int
++	count int
++}
++
++// handScore is the category of a hand plus the ranks used to break ties.
++// Larger categories and lexicographically larger tie-breakers are better.
++type handScore struct {
++	category int
++	tiebreak []int
++}
++
++const (
++	highCard = iota
++	onePair
++	twoPair
++	threeOfAKind
++	straight
++	flush
++	fullHouse
++	fourOfAKind
++	straightFlush
++)
++
++var rankValues = map[string]int{
++	"2":  2,
++	"3":  3,
++	"4":  4,
++	"5":  5,
++	"6":  6,
++	"7":  7,
++	"8":  8,
++	"9":  9,
++	"10": 10,
++	"J":  11,
++	"Q":  12,
++	"K":  13,
++	"A":  14,
++}
++
++var validSuits = map[rune]bool{
++	'♤': true,
++	'♡': true,
++	'♢': true,
++	'♧': true,
++}
++
++// parseCard converts a single card such as "10♢" into a card value.
++func parseCard(s string) (card, error) {
++	runes := []rune(s)
++
++	var rankStr string
++	var suit rune
++
++	switch {
++	case len(runes) == 2:
++		rankStr, suit = string(runes[0]), runes[1]
++	case len(runes) == 3 && runes[0] == '1' && runes[1] == '0':
++		rankStr, suit = "10", runes[2]
++	default:
++		return card{}, fmt.Errorf("invalid card %q", s)
++	}
++
++	rank, ok := rankValues[rankStr]
++	if !ok {
++		return card{}, fmt.Errorf("invalid rank in card %q", s)
++	}
++	if !validSuits[suit] {
++		return card{}, fmt.Errorf("invalid suit in card %q", s)
++	}
++
++	return card{rank: rank, suit: suit}, nil
++}
++
++// parseHand converts a hand of exactly five space-separated cards.
++func parseHand(hand string) ([5]card, error) {
++	var cards [5]card
++
++	fields := splitFields(hand)
++	if len(fields) != 5 {
++		return cards, fmt.Errorf("hand %q does not contain 5 cards", hand)
++	}
++
++	for i, field := range fields {
++		c, err := parseCard(field)
++		if err != nil {
++			return cards, fmt.Errorf("invalid hand %q: %w", hand, err)
++		}
++		cards[i] = c
++	}
++
++	return cards, nil
++}
++
++// splitFields splits on single spaces, returning no empty fields.
++func splitFields(s string) []string {
++	var fields []string
++	start := -1
++	for i, r := range s {
++		if r == ' ' {
++			if start >= 0 {
++				fields = append(fields, s[start:i])
++				start = -1
++			}
++			continue
++		}
++		if start < 0 {
++			start = i
++		}
++	}
++	if start >= 0 {
++		fields = append(fields, s[start:])
++	}
++	return fields
++}
++
++// scoreHand returns the category and tie-breaking ranks of a five card hand.
++func scoreHand(cards [5]card) handScore {
++	ranks := make([]int, 5)
++	counts := make(map[int]int, 5)
++	suit := cards[0].suit
++	isFlush := true
++	for i, c := range cards {
++		ranks[i] = c.rank
++		counts[c.rank]++
++		if c.suit != suit {
++			isFlush = false
++		}
++	}
++	sort.Sort(sort.Reverse(sort.IntSlice(ranks)))
++
++	// Group ranks by multiplicity, ordering groups by count then by rank.
++	groups := make([]group, 0, 5)
++	for rank, count := range counts {
++		groups = append(groups, group{rank: rank, count: count})
++	}
++	sort.Slice(groups, func(i, j int) bool {
++		if groups[i].count != groups[j].count {
++			return groups[i].count > groups[j].count
++		}
++		return groups[i].rank > groups[j].rank
++	})
++
++	isStraight, straightHigh := straightHighCard(ranks)
++
++	switch {
++	case isStraight && isFlush:
++		return handScore{category: straightFlush, tiebreak: []int{straightHigh}}
++	case groups[0].count == 4:
++		return handScore{category: fourOfAKind, tiebreak: []int{groups[0].rank, groups[1].rank}}
++	case groups[0].count == 3 && groups[1].count == 2:
++		return handScore{category: fullHouse, tiebreak: []int{groups[0].rank, groups[1].rank}}
++	case isFlush:
++		return handScore{category: flush, tiebreak: ranks}
++	case isStraight:
++		return handScore{category: straight, tiebreak: []int{straightHigh}}
++	case groups[0].count == 3:
++		return handScore{category: threeOfAKind, tiebreak: groupRanks(groups)}
++	case groups[0].count == 2 && groups[1].count == 2:
++		return handScore{category: twoPair, tiebreak: groupRanks(groups)}
++	case groups[0].count == 2:
++		return handScore{category: onePair, tiebreak: groupRanks(groups)}
++	default:
++		return handScore{category: highCard, tiebreak: ranks}
++	}
++}
++
++// groupRanks flattens groups (already sorted best-first) into tie-breaking ranks.
++func groupRanks(groups []group) []int {
++	rankList := make([]int, len(groups))
++	for i, g := range groups {
++		rankList[i] = g.rank
++	}
++	return rankList
++}
++
++// straightHighCard reports whether the descending-sorted ranks form a straight
++// and, if so, the rank of the straight's highest card (5 for A-2-3-4-5).
++func straightHighCard(sorted []int) (bool, int) {
++	// Handle the ace-low straight specially: A 5 4 3 2.
++	if sorted[0] == 14 && sorted[1] == 5 && sorted[2] == 4 && sorted[3] == 3 && sorted[4] == 2 {
++		return true, 5
++	}
++	for i := 1; i < len(sorted); i++ {
++		if sorted[i-1]-1 != sorted[i] {
++			return false, 0
++		}
++	}
++	return true, sorted[0]
++}
++
++// compareScores returns a positive number when a beats b, negative when b beats
++// a, and zero when the hands tie.
++func compareScores(a, b handScore) int {
++	if a.category != b.category {
++		return a.category - b.category
++	}
++	for i := 0; i < len(a.tiebreak) && i < len(b.tiebreak); i++ {
++		if a.tiebreak[i] != b.tiebreak[i] {
++			return a.tiebreak[i] - b.tiebreak[i]
++		}
++	}
++	return 0
++}
++
++// BestHand returns the strongest hand(s) from the given list of five card hands.
++// In the case of a tie, every tied hand is returned in its original order.
+ func BestHand(hands []string) ([]string, error) {
+-	panic("Please implement the BestHand function")
++	var best []string
++	var bestScore handScore
++	first := true
++
++	for _, hand := range hands {
++		cards, err := parseHand(hand)
++		if err != nil {
++			return nil, err
++		}
++
++		score := scoreHand(cards)
++		if first {
++			best = []string{hand}
++			bestScore = score
++			first = false
++			continue
++		}
++
++		switch cmp := compareScores(score, bestScore); {
++		case cmp > 0:
++			best = []string{hand}
++			bestScore = score
++		case cmp == 0:
++			best = append(best, hand)
++		}
++	}
++
++	return best, nil
+ }

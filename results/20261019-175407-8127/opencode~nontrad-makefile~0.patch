@@ -1,0 +1,27 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..9bf1462 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3,16 +3,19 @@ PY ?= python3
+ DATA := $(wildcard data/*.csv)
+ OUT := dist
+ 
++.PHONY: all build test clean
++
+ all: build
+ 
+ build: $(OUT)/summary.json
+ 
+-$(OUT)/summary.json: scripts/summarize.py
++$(OUT)/summary.json: $(DATA) scripts/summarize.py
+ 	mkdir -p $(OUT)
+-	$(PY) scripts/summarize.py $(DATA) > $@
++	@tmp=$@.tmp; trap 'rm -f "$$tmp"' EXIT; \
++	$(PY) scripts/summarize.py $(DATA) > "$$tmp" && mv "$$tmp" "$@"
+ 
+ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)

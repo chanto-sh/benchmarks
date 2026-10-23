@@ -1,0 +1,87 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..d1a9168 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,79 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++``encode``/``decode`` are an exact bijection between finite lists of
++non-negative integers (the empty list included) and the non-negative integers:
++
++    decode(encode(x)) == x      for every list x
++    encode(decode(n)) == n      for every n >= 0
++
++Construction
++------------
++A key ``n`` carries a length and a payload in one integer:
++
++    n == 0                      -> the empty list
++    n >= 1                      -> n == (2 * payload + 1) << (k - 1)
++
++Because ``2 * payload + 1`` is odd, ``k - 1`` is exactly the number of
++trailing zero bits of ``n`` and ``payload == n >> k``.  Since every factorisation
++of a positive integer as ``2**t * odd`` is unique, this is a bijection between
++``k >= 1, payload >= 0`` and ``n >= 1``, with ``n == 0`` left over for ``k == 0``.
++
++The payload stores the elements byte-interleaved at a fixed width:
++
++    nb          = bytes needed by the widest element (0 when all elements are 0)
++    buf[p*k + i] = byte p (most significant first) of element i
++    payload      = int.from_bytes(buf, "big")
++
++Every ``payload >= 0`` has exactly one such layout (pad to ``nb * k`` bytes;
++block 0 of a non-zero payload is non-zero because the widest element's top
++byte is), so no information or space is wasted on framing.
++
++Cost: a list of ``k`` elements below ``2**b`` produces a key of about
++``k * b`` bits, which is within a small constant factor of the information
++content -- a list of 200 elements under ``10**30`` gives a ~20 000 bit key
++(a few thousand decimal digits) and both directions run in milliseconds.
++"""
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    values = list(lst)
++    for a in values:
++        if not isinstance(a, int):
++            raise TypeError("list elements must be integers, got %r" % (a,))
++        if a < 0:
++            raise ValueError("list elements must be non-negative, got %r" % (a,))
++    k = len(values)
++    if k == 0:
++        return 0
++
++    # Cross-reference the elements: byte p of element i lands at index p*k + i.
++    nb = (max(a.bit_length() for a in values) + 7) // 8
++    buf = bytearray(nb * k)
++    for i, a in enumerate(values):
++        buf[i::k] = a.to_bytes(nb, "big")
++    payload = int.from_bytes(buf, "big")
++
++    return (2 * payload + 1) << (k - 1)
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if not isinstance(n, int):
++        raise TypeError("key must be an integer, got %r" % (n,))
++    if n < 0:
++        raise ValueError("key must be non-negative, got %r" % (n,))
++    if n == 0:
++        return []
++
++    k = (n & -n).bit_length()  # trailing zero bits + 1 == list length
++    payload = n >> k
++
++    if payload == 0:
++        return [0] * k
++
++    # Round the payload up to a whole number of byte blocks, then read each
++    # element back out of its stride-k slice.
++    nb = (payload.bit_length() + 8 * k - 1) // (8 * k)
++    buf = payload.to_bytes(nb * k, "big")
++    return [int.from_bytes(buf[i::k], "big") for i in range(k)]

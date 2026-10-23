@@ -1,0 +1,143 @@
+diff --git a/two_bucket.go b/two_bucket.go
+index d5fdb11..d4660a4 100644
+--- a/two_bucket.go
++++ b/two_bucket.go
+@@ -1,5 +1,137 @@
+ package twobucket
+ 
++import "fmt"
++
++// state represents the amount of water currently held in each bucket.
++type state struct {
++	one, two int
++}
++
++// Solve determines the minimum number of actions needed to measure
++// goalAmount liters using two buckets of the given sizes, starting by
++// filling startBucket ("one" or "two").
+ func Solve(sizeBucketOne, sizeBucketTwo, goalAmount int, startBucket string) (string, int, int, error) {
+-	panic("Please implement the Solve function")
++	if sizeBucketOne <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid first bucket size: %d", sizeBucketOne)
++	}
++	if sizeBucketTwo <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid second bucket size: %d", sizeBucketTwo)
++	}
++	if goalAmount <= 0 {
++		return "", 0, 0, fmt.Errorf("invalid goal amount: %d", goalAmount)
++	}
++	if startBucket != "one" && startBucket != "two" {
++		return "", 0, 0, fmt.Errorf("invalid start bucket name: %q", startBucket)
++	}
++	if goalAmount > sizeBucketOne && goalAmount > sizeBucketTwo {
++		return "", 0, 0, fmt.Errorf("no solution: goal %d exceeds both bucket sizes", goalAmount)
++	}
++
++	// Fill the starting bucket: that is always the first action.
++	var start state
++	if startBucket == "one" {
++		start = state{sizeBucketOne, 0}
++	} else {
++		start = state{0, sizeBucketTwo}
++	}
++
++	// Breadth-first search guarantees the minimum number of actions.
++	type node struct {
++		s     state
++		steps int
++	}
++	queue := []node{{start, 1}}
++	seen := map[state]bool{start: true}
++
++	for len(queue) > 0 {
++		cur := queue[0]
++		queue = queue[1:]
++
++		if g, ok := goalBucketName(cur.s, goalAmount, startBucket); ok {
++			if g == "one" {
++				return "one", cur.steps, cur.s.two, nil
++			}
++			return "two", cur.steps, cur.s.one, nil
++		}
++
++		for _, next := range nextStates(cur.s, sizeBucketOne, sizeBucketTwo, startBucket) {
++			if seen[next] {
++				continue
++			}
++			seen[next] = true
++			queue = append(queue, node{next, cur.steps + 1})
++		}
++	}
++
++	return "", 0, 0, fmt.Errorf("no solution: cannot measure %d liters", goalAmount)
++}
++
++// goalBucketName reports whether a bucket holds the goal amount and, if so,
++// which one. When both hold it, the starting bucket is preferred.
++func goalBucketName(s state, goal int, startBucket string) (string, bool) {
++	oneHit := s.one == goal
++	twoHit := s.two == goal
++	switch {
++	case oneHit && twoHit:
++		if startBucket == "two" {
++			return "two", true
++		}
++		return "one", true
++	case oneHit:
++		return "one", true
++	case twoHit:
++		return "two", true
++	}
++	return "", false
++}
++
++// nextStates returns every state reachable with a single allowed action.
++// An action may not leave the starting bucket empty while the other is full.
++func nextStates(s state, sizeOne, sizeTwo int, startBucket string) []state {
++	candidates := make([]state, 0, 6)
++
++	// Empty a bucket.
++	if s.one > 0 {
++		candidates = append(candidates, state{0, s.two})
++	}
++	if s.two > 0 {
++		candidates = append(candidates, state{s.one, 0})
++	}
++
++	// Fill a bucket.
++	if s.one < sizeOne {
++		candidates = append(candidates, state{sizeOne, s.two})
++	}
++	if s.two < sizeTwo {
++		candidates = append(candidates, state{s.one, sizeTwo})
++	}
++
++	// Pour one bucket into the other until the source empties or the
++	// destination fills.
++	if s.one > 0 && s.two < sizeTwo {
++		pour := minInt(s.one, sizeTwo-s.two)
++		candidates = append(candidates, state{s.one - pour, s.two + pour})
++	}
++	if s.two > 0 && s.one < sizeOne {
++		pour := minInt(s.two, sizeOne-s.one)
++		candidates = append(candidates, state{s.one + pour, s.two - pour})
++	}
++
++	var allowed []state
++	for _, c := range candidates {
++		startEmpty := (startBucket == "one" && c.one == 0) || (startBucket == "two" && c.two == 0)
++		otherFull := (startBucket == "one" && c.two == sizeTwo) || (startBucket == "two" && c.one == sizeOne)
++		if startEmpty && otherFull {
++			continue
++		}
++		allowed = append(allowed, c)
++	}
++	return allowed
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
+ }

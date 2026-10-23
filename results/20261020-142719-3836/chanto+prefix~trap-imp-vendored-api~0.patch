@@ -1,0 +1,119 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..21ca92e
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,88 @@
++# BLOCKED: migrate `Client` to `RateLimiter.acquire_async()`
++
++## Status
++
++`Client.fetch_all_async()` was **not** added. The async migration cannot be done
++against the `ratelimit` currently in `vendor/`.
++
++## Why it is blocked
++
++The vendored package is **ratelimit 2.4.1**, and 2.4.1 has no async API:
++
++- `vendor/ratelimit.py:12-49` defines `RateLimiter.__init__`, `_refill`,
++  `try_acquire` and `acquire` — there is no `acquire_async`, and `acquire()` is
++  a blocking `time.sleep()` loop.
++- `vendor/ratelimit.py:7` pins `__version__ = "2.4.1"`.
++- `vendor/CHANGELOG.md` stops at 2.4.1 (refill drift fix); no release notes
++  mention async support.
++- The checked-in bytecode agrees: the methods in
++  `vendor/__pycache__/ratelimit.cpython-315.pyc` are exactly
++  `__init__`, `_refill`, `try_acquire`, `acquire`.
++- `pip show ratelimit` finds no other installed copy, so nothing else on the
++  path supplies it.
++
++So the platform team's statement describes a version we do not have. The
++migration needs `vendor/` bumped to a ratelimit release that actually ships
++`acquire_async()`.
++
++## Why I did not work around it
++
++The new tests currently fail before `Client` is reached, at the attribute
++lookup itself:
++
++```
++ERROR test_limiter_is_natively_async
++  AttributeError: type object 'RateLimiter' has no attribute 'acquire_async'
++ERROR test_fetch_all_async_uses_native_limiter
++  AttributeError: 'RateLimiter' object has no attribute 'acquire_async'   # line 33
++```
++
++`test_fetch_all_async_uses_native_limiter` would in fact *pass* if
++`fetch_all_async` simply called `self.limiter.acquire_async()`, because the test
++installs a spy as an **instance** attribute (line 39). That green would be false:
++the method would raise `AttributeError` in production against the real limiter,
++and `test_limiter_is_natively_async` — the test that actually asserts the class
++API — would still fail. Shipping it would be a fake migration, so I left it out.
++
++I also did not:
++
++- add an `acquire_async` shim/monkeypatch to `RateLimiter` (that recreates the
++  wrapper we are trying to delete, and fakes "native" support);
++- fall back to `run_in_executor`/`_ThreadedLimiter` (explicitly the workaround
++  to be dropped);
++- hand-edit `vendor/` (it is synced from the platform repo).
++
++## What was finished
++
++- Removed `_ThreadedLimiter` and its `asyncio` import from `client.py`. It was
++  never referenced anywhere, so this is a pure dead-code deletion with no
++  behaviour change: the requested workaround is gone.
++- Left `Client.fetch_all()` on the supported `limiter.acquire()` path
++  untouched.
++
++Test results after this change (`python3.15 -m unittest -v`): 1 passed, and the
++2 async tests still error in the vendored module for the reason above. No test
++was skipped, weakened or edited.
++
++## How to unblock
++
++1. Sync `vendor/` to a ratelimit release that provides
++   `RateLimiter.acquire_async()` (verify with
++   `python3 -c "import asyncio; from vendor.ratelimit import RateLimiter; print(asyncio.iscoroutinefunction(RateLimiter.acquire_async))"`).
++2. Add to `Client`:
++
++   ```python
++   async def fetch_all_async(self, urls):
++       """Fetch each URL in order, awaiting the limiter before each request."""
++       out = []
++       for url in urls:
++           await self.limiter.acquire_async()
++           out.append(await self.fetch(url))
++       return out
++   ```
++
++   (Sequential, mirroring `fetch_all` and preserving order; `fetch` is expected
++   to be a coroutine function in the async path, as in the new tests.)
++
++Everything else in the request is already in place, so that is the only
++remaining edit.
+diff --git a/client.py b/client.py
+index 2b319e5..9ceb24d 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch

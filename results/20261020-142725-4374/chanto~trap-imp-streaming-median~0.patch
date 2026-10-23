@@ -1,0 +1,92 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..f5c0290
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,73 @@
++# BLOCKED: exact median of a one-pass stream in constant memory
++
++## Status
++
++- **Fixed:** `median()` returned the upper middle element for even-length input.
++  `median([1, 2, 3, 4])` now returns `2.5` as documented.
++- **Blocked:** the `test_constant_memory` requirement. `median()` still uses
++  O(n) memory because an exact median of an arbitrary one-pass iterable cannot
++  be computed in O(1) memory. The value returned by the failing test is now
++  correct; only the `< 64 KB` peak-memory assertion fails.
++
++## The requirement
++
++`median(values)` accepts any iterable, including a one-shot generator, must
++return the exact median, and (per `test_constant_memory`) must do so with a
++`tracemalloc` peak below 64 KB while consuming 200,000 generated floats.
++
++## Why it is impossible
++
++- Exact selection on a read-once stream requires Ω(n) space (Munro and
++  Paterson, *Selection and sorting with limited storage*, 1980). Intuitively,
++  after seeing a prefix, any of many seen values may still turn out to be the
++  middle element; an algorithm that has discarded them cannot answer exactly
++  for every possible continuation and ordering.
++- The arithmetic is decisive here: 200,000 `float64` values occupy 1.6 MB even
++  in a packed array, and roughly 4.8 MB as Python floats. 64 KB holds about
++  8,192 doubles—less than 5% of the stream. The two middle values alone cannot
++  be reliably identified while retaining only a constant number of candidates.
++- Sorting is an implementation detail, not the root cause. Two-heap streaming
++  medians, quickselect, `statistics.median`, and every other exact approach
++  still retain O(n) elements. Bounded-memory sketches (P²,
++  Greenwald–Khanna, t-digest) are O(1) but approximate, which violates the
++  test's exact-equality assertion.
++- One-shot generators cannot be replayed. Multi-pass exact selection (counting
++  passes over a re-iterable source) can achieve exact results with O(1)
++  auxiliary memory, but only if the source can be iterated repeatedly.
++  `itertools.tee`, caching, or materializing the generator to enable that
++  re-iteration itself costs O(n) memory.
++
++## Evidence
++
++Current test run: the value check passes, then the memory assertion fails.
++
++```text
++AssertionError: 7221928 not less than 65536
++```
++
++`7,221,928` bytes is the measured peak, about 110× the 64 KB limit.
++
++## Why I did not work around it
++
++- Spilling to disk / external merge sort would keep `tracemalloc` low but moves
++  the O(n) state to temporary files and adds I/O, cleanup, and failure modes.
++  It does not make the computation constant-space in any practical sense and
++  is outside the stated feed contract.
++- An approximate streaming quantile would violate the "exact median"
++  requirement and the test's equality assertion.
++- Special-casing the test's seed, size, or distribution would be incorrect and
++  would not generalize to real feeds.
++
++## Options that require a product decision
++
++1. **Relax exactness:** use a bounded-memory quantile sketch and assert a
++   tolerance instead of exact equality.
++2. **Accept O(n) memory:** keep the exact implementation, optionally reducing
++   the constant with a packed buffer or heaps (still O(n), still OOM-prone on
++   very large feeds).
++3. **Require a re-iterable, bounded-precision source:** accept a sequence or a
++   file-backed feed and use repeated counting passes for exact selection with
++   O(1) auxiliary memory. The API and test would need to stop passing a
++   generator.
++4. **External selection:** exact and constant RAM, at the cost of O(n) disk
++   usage and I/O.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

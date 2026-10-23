@@ -1,0 +1,84 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..56f3ea0 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,78 @@
+ package scale
+ 
++import (
++	"strings"
++	"unicode"
++)
++
++// The twelve chromatic pitches expressed with sharps and with flats.
++var sharpChromatic = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
++var flatChromatic = []string{"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
++
++// Tonics whose scales are notated with flats. The casing is significant:
++// uppercase entries are major keys (or the natural key C), lowercase entries
++// are minor keys, following the key-signature table in the instructions.
++var flatTonics = map[string]bool{
++	"F": true, "Bb": true, "Eb": true, "Ab": true, "Db": true, "Gb": true,
++	"d": true, "g": true, "c": true, "f": true, "bb": true, "eb": true,
++}
++
++// Scale returns the notes of a scale starting and ending on tonic.
++// An empty interval produces the twelve-note chromatic scale; otherwise the
++// interval string (M = whole step, m = half step, A = augmented second)
++// determines the notes, returning N+1 notes for N intervals.
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	note := normalize(tonic)
++
++	chromatic := sharpChromatic
++	if flatTonics[tonic] {
++		chromatic = flatChromatic
++	}
++
++	start := indexOf(chromatic, note)
++
++	if interval == "" {
++		notes := make([]string, 12)
++		for i := range notes {
++			notes[i] = chromatic[(start+i)%12]
++		}
++		return notes
++	}
++
++	notes := []string{note}
++	position := start
++	for _, step := range interval {
++		switch step {
++		case 'M':
++			position += 2
++		case 'A':
++			position += 3
++		default: // 'm'
++			position++
++		}
++		position %= 12
++		notes = append(notes, chromatic[position])
++	}
++	return notes
++}
++
++// normalize capitalizes the note letter and lowercases the accidental,
++// yielding e.g. "bb" -> "Bb" and "f#" -> "F#".
++func normalize(tonic string) string {
++	if tonic == "" {
++		return ""
++	}
++	runes := []rune(tonic)
++	runes[0] = unicode.ToUpper(runes[0])
++	rest := strings.ToLower(string(runes[1:]))
++	return string(runes[0]) + rest
++}
++
++func indexOf(notes []string, note string) int {
++	for i, n := range notes {
++		if n == note {
++			return i
++		}
++	}
++	return 0
+ }

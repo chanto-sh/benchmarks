@@ -1,0 +1,187 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..588c62f 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,181 @@
+ package alphametics
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++type columnLetter struct {
++	letter int
++	count  int
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, fmt.Errorf("invalid puzzle %q: expected exactly one == operator", puzzle)
++	}
++
++	addendWords := strings.Split(parts[0], "+")
++	addends := make([][]byte, 0, len(addendWords))
++	for _, word := range addendWords {
++		word = strings.TrimSpace(word)
++		if word == "" {
++			return nil, fmt.Errorf("invalid puzzle %q: empty addend", puzzle)
++		}
++		addends = append(addends, []byte(word))
++	}
++	resultWord := strings.TrimSpace(parts[1])
++	if resultWord == "" {
++		return nil, fmt.Errorf("invalid puzzle %q: empty result", puzzle)
++	}
++	result := []byte(resultWord)
++
++	// Assign every distinct letter an index.
++	index := make(map[byte]int)
++	letters := make([]byte, 0, 10)
++	for _, word := range append(addends, result) {
++		for _, ch := range word {
++			if _, ok := index[ch]; !ok {
++				index[ch] = len(letters)
++				letters = append(letters, ch)
++			}
++		}
++	}
++	if len(letters) > 10 {
++		return nil, fmt.Errorf("invalid puzzle %q: more than 10 distinct letters", puzzle)
++	}
++
++	// A leading letter of a multi-digit number cannot be zero.
++	nonZero := make([]bool, len(letters))
++	for _, word := range addends {
++		if len(word) > 1 {
++			nonZero[index[word[0]]] = true
++		}
++	}
++	if len(result) > 1 {
++		nonZero[index[result[0]]] = true
++	}
++
++	// Store words reversed so that column 0 is the rightmost column.
++	reversedAddends := make([][]int, len(addends))
++	maxLen := 0
++	for i, word := range addends {
++		reversedAddends[i] = make([]int, len(word))
++		for j := range word {
++			reversedAddends[i][j] = index[word[len(word)-1-j]]
++		}
++		if len(word) > maxLen {
++			maxLen = len(word)
++		}
++	}
++	reversedResult := make([]int, len(result))
++	for j := range result {
++		reversedResult[j] = index[result[len(result)-1-j]]
++	}
++
++	// For each column, collect the distinct addend letters and how often each
++	// occurs. This makes column sums cheap to maintain during the search.
++	columns := make([][]columnLetter, maxLen)
++	for col := 0; col < maxLen; col++ {
++		counts := make(map[int]int)
++		for _, word := range reversedAddends {
++			if col < len(word) {
++				counts[word[col]]++
++			}
++		}
++		for letter, count := range counts {
++			columns[col] = append(columns[col], columnLetter{letter: letter, count: count})
++		}
++	}
++
++	assigned := make([]int, len(letters))
++	for i := range assigned {
++		assigned[i] = -1
++	}
++
++	var solveColumn func(col, carry, used int) bool
++	solveColumn = func(col, carry, used int) bool {
++		if col >= maxLen && col >= len(reversedResult) && carry == 0 {
++			return true
++		}
++
++		// Base sum from letters in this addend column that are already known.
++		sum := carry
++		var unknown []columnLetter
++		if col < maxLen {
++			for _, cl := range columns[col] {
++				if assigned[cl.letter] >= 0 {
++					sum += assigned[cl.letter] * cl.count
++				} else {
++					unknown = append(unknown, cl)
++				}
++			}
++		}
++
++		var assignAddends func(pos, sum, used int) bool
++		assignAddends = func(pos, sum, used int) bool {
++			if pos < len(unknown) {
++				cl := unknown[pos]
++				for digit := 0; digit <= 9; digit++ {
++					if used&(1<<digit) != 0 {
++						continue
++					}
++					if digit == 0 && nonZero[cl.letter] {
++						continue
++					}
++					assigned[cl.letter] = digit
++					if assignAddends(pos+1, sum+digit*cl.count, used|(1<<digit)) {
++						return true
++					}
++					assigned[cl.letter] = -1
++				}
++				return false
++			}
++
++			total := sum
++			digit := total % 10
++			nextCarry := total / 10
++
++			if col >= len(reversedResult) {
++				// Any digit beyond the result word must be zero.
++				if digit != 0 {
++					return false
++				}
++				return solveColumn(col+1, nextCarry, used)
++			}
++
++			r := reversedResult[col]
++			if assigned[r] >= 0 {
++				if assigned[r] != digit {
++					return false
++				}
++				return solveColumn(col+1, nextCarry, used)
++			}
++			if used&(1<<digit) != 0 {
++				return false
++			}
++			if digit == 0 && nonZero[r] {
++				return false
++			}
++			assigned[r] = digit
++			if solveColumn(col+1, nextCarry, used|(1<<digit)) {
++				return true
++			}
++			assigned[r] = -1
++			return false
++		}
++
++		return assignAddends(0, sum, used)
++	}
++
++	if !solveColumn(0, 0, 0) {
++		return nil, fmt.Errorf("no solution for puzzle %q", puzzle)
++	}
++
++	solution := make(map[string]int, len(letters))
++	for i, letter := range letters {
++		solution[string(letter)] = assigned[i]
++	}
++	return solution, nil
+ }

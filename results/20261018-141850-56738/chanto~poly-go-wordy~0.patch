@@ -1,0 +1,83 @@
+diff --git a/wordy.go b/wordy.go
+index fd738c1..2391656 100644
+--- a/wordy.go
++++ b/wordy.go
+@@ -1,5 +1,77 @@
+ package wordy
+ 
++import (
++	"strconv"
++	"strings"
++)
++
++const prefix = "What is "
++
++// Answer parses and evaluates a simple math word problem, evaluating
++// operations from left to right. It returns false for unsupported or
++// invalid questions.
+ func Answer(question string) (int, bool) {
+-	panic("Please implement the Answer function")
++	if !strings.HasPrefix(question, prefix) || !strings.HasSuffix(question, "?") {
++		return 0, false
++	}
++
++	tokens := strings.Fields(strings.TrimSuffix(strings.TrimPrefix(question, prefix), "?"))
++	if len(tokens) == 0 {
++		return 0, false
++	}
++
++	result, ok := parseInt(tokens[0])
++	if !ok {
++		return 0, false
++	}
++
++	for i := 1; i < len(tokens); {
++		op, next, ok := parseOperator(tokens, i)
++		if !ok || next >= len(tokens) {
++			return 0, false
++		}
++		operand, ok := parseInt(tokens[next])
++		if !ok {
++			return 0, false
++		}
++
++		switch op {
++		case "plus":
++			result += operand
++		case "minus":
++			result -= operand
++		case "multiplied by":
++			result *= operand
++		case "divided by":
++			if operand == 0 {
++				return 0, false
++			}
++			result /= operand
++		}
++		i = next + 1
++	}
++
++	return result, true
++}
++
++// parseOperator reads an operator starting at index i, returning its
++// canonical name and the index immediately following it.
++func parseOperator(tokens []string, i int) (string, int, bool) {
++	switch tokens[i] {
++	case "plus", "minus":
++		return tokens[i], i + 1, true
++	case "multiplied", "divided":
++		if i+1 < len(tokens) && tokens[i+1] == "by" {
++			return tokens[i] + " by", i + 2, true
++		}
++	}
++	return "", 0, false
++}
++
++func parseInt(token string) (int, bool) {
++	n, err := strconv.Atoi(token)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
+ }

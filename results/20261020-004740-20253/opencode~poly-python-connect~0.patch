@@ -1,0 +1,65 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..9629e31 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,58 @@
+ 
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.grid = [line.split() for line in board.splitlines() if line.strip()]
++        self.height = len(self.grid)
++        self.width = len(self.grid[0]) if self.grid else 0
++
++    def _neighbors(self, row, col):
++        # Rows are shifted progressively to the right, so a cell's
++        # hexagonal neighbours depend on the row offset.
++        for drow, dcol in (
++            (0, -1),
++            (0, 1),
++            (-1, 0),
++            (-1, 1),
++            (1, -1),
++            (1, 0),
++        ):
++            r, c = row + drow, col + dcol
++            if 0 <= r < self.height and 0 <= c < self.width:
++                yield r, c
++
++    def _connects(self, player, starts, has_won):
++        visited = set()
++        stack = [pos for pos in starts if self.grid[pos[0]][pos[1]] == player]
++        while stack:
++            row, col = stack.pop()
++            if (row, col) in visited:
++                continue
++            visited.add((row, col))
++            if has_won(row, col):
++                return True
++            for r, c in self._neighbors(row, col):
++                if (r, c) not in visited and self.grid[r][c] == player:
++                    stack.append((r, c))
++        return False
+ 
+     def get_winner(self):
+-        pass
++        if not self.grid:
++            return ""
++
++        x_wins = self._connects(
++            "X",
++            ((r, 0) for r in range(self.height)),
++            lambda row, col: col == self.width - 1,
++        )
++        if x_wins:
++            return "X"
++
++        o_wins = self._connects(
++            "O",
++            ((0, c) for c in range(self.width)),
++            lambda row, col: row == self.height - 1,
++        )
++        if o_wins:
++            return "O"
++
++        return ""

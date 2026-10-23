@@ -1,0 +1,382 @@
+diff --git a/roots.py b/roots.py
+index d624667..c3bece3 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,4 +1,19 @@
+-"""Real roots of integer polynomials, used by the curve-fitting tool."""
++"""Real roots of integer polynomials, used by the curve-fitting tool.
++
++The public entry point is :func:`real_roots`.  It combines
++
++* exact square-free factorisation, so repeated roots are reported once, and
++* Sturm sequences, which count the *exact* number of distinct real roots in an
++  interval (independent of sampling resolution, root spacing, or whether a
++  root happens to land on an endpoint),
++
++to isolate every root, and then refines each isolated root by bisection.
++
++All internal arithmetic is exact (``fractions.Fraction``), so large coefficients
++and wide input intervals do not degrade correctness.
++"""
++
++from fractions import Fraction
+ 
+ 
+ def evaluate(coeffs, x):
+@@ -9,24 +24,232 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++# ---------------------------------------------------------------------------
++# Exact polynomial helpers.  Polynomials are lists of coefficients ordered from
++# the highest degree down.  Trailing (high-order) zeros are stripped and a
++# polynomial is always non-empty.
++# ---------------------------------------------------------------------------
++
++
++def _trim(p):
++    """Drop leading (high-degree) zero coefficients."""
++    if not p:
++        return [Fraction(0)]
++    i = 0
++    while i < len(p) - 1 and p[i] == 0:
++        i += 1
++    return p[i:]
++
++
++def _is_zero(p):
++    return all(c == 0 for c in p)
++
++
++def _as_poly(coeffs):
++    return _trim([Fraction(c) for c in coeffs])
++
++
++def _poly_eval(p, x):
++    y = Fraction(0)
++    for c in p:
++        y = y * x + c
++    return y
++
++
++def _derivative(p):
++    n = len(p) - 1
++    if n < 1:
++        return [Fraction(0)]
++    return _trim([p[i] * (n - i) for i in range(n)])
++
++
++def _divmod(p, q):
++    """Exact polynomial division with remainder (highest degree first)."""
++    p = _trim(list(p))
++    q = _trim(list(q))
++    if _is_zero(q):
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(p) < len(q):
++        return [Fraction(0)], p
++
++    r = list(p)
++    quot = [Fraction(0)] * (len(p) - len(q) + 1)
++    lead = q[0]
++    for i in range(len(quot)):
++        c = r[i] / lead
++        quot[i] = c
++        if c:
++            for j in range(1, len(q)):
++                r[i + j] -= c * q[j]
++    rem = r[len(quot):]
++    return _trim(quot), _trim(rem)
++
++
++def _gcd(p, q):
++    """Monic greatest common divisor via the Euclidean algorithm."""
++    p = _trim(list(p))
++    q = _trim(list(q))
++    while not _is_zero(q):
++        _, r = _divmod(p, q)
++        p, q = q, r
++    if _is_zero(p):
++        return [Fraction(0)]
++    lead = p[0]
++    return [c / lead for c in p]
++
++
++def _square_free_part(p):
++    """p / gcd(p, p'): the same real roots, each with multiplicity one."""
++    dp = _derivative(p)
++    if _is_zero(dp):
++        return p  # constant polynomial
++    g = _gcd(p, dp)
++    q, r = _divmod(p, g)
++    if not _is_zero(r):  # pragma: no cover - gcd division is always exact
++        raise ArithmeticError("non-exact square-free division")
++    return q
++
++
++def _sturm_chain(p):
++    """Sturm sequence for a square-free polynomial, highest degree first."""
++    p = _trim(list(p))
++    if len(p) <= 1:
++        return [p]
++    chain = [p, _derivative(p)]
++    while True:
++        _, r = _divmod(chain[-2], chain[-1])
++        if _is_zero(r):
++            break
++        chain.append(_trim([-c for c in r]))
++    return chain
++
++
++def _sign_variations(chain, x):
++    """Number of sign changes in the chain at x, ignoring zero terms."""
++    changes = 0
++    last = 0
++    for poly in chain:
++        v = _poly_eval(poly, x)
++        if v == 0:
++            continue
++        s = 1 if v > 0 else -1
++        if last and s != last:
++            changes += 1
++        last = s
++    return changes
++
++
++def _divide_by_root(p, r):
++    """Exact division by (x - r); r must be a simple root of p."""
++    q, rem = _divmod(p, [Fraction(1), -r])
++    if not _is_zero(rem):  # pragma: no cover - guarded by callers
++        raise ArithmeticError("(x - r) is not a factor")
++    return q
++
++
++# ---------------------------------------------------------------------------
++# Isolation and refinement
++# ---------------------------------------------------------------------------
++
++# Refine isolated roots to an interval far narrower than the requested 1e-9.
++_TOLERANCE = Fraction(1, 10 ** 12)
++
++# Bisection halves the interval each step; 400 steps is far more than needed.
++_MAX_BISECTIONS = 400
++
++
++def _pick_split(p, a, b, degree):
++    """A rational point in (a, b) that is not a root of p.
++
++    p has at most `degree` roots, so `degree + 1` distinct candidate points
++    guarantee at least one non-root.
++    """
++    span = b - a
++    denom = degree + 2
++    for k in range(1, degree + 2):
++        m = a + span * Fraction(k, denom)
++        if _poly_eval(p, m) != 0:
++            return m
++    return (a + b) / 2  # pragma: no cover - unreachable for a real polynomial
++
++
++def _refine(p, a, b):
++    """Bisect (a, b) containing exactly one simple root down to _TOLERANCE."""
++    fa = _poly_eval(p, a)
++    fb = _poly_eval(p, b)
++    if fa == 0:
++        return a
++    if fb == 0:
++        return b
++    if fa * fb > 0:  # pragma: no cover - should never happen with Sturm counts
++        return (a + b) / 2
++    for _ in range(_MAX_BISECTIONS):
++        if b - a <= _TOLERANCE:
++            break
++        m = (a + b) / 2
++        fm = _poly_eval(p, m)
++        if fm == 0:
++            return m
++        if (fm > 0) == (fa > 0):
++            a, fa = m, fm
++        else:
++            b, fb = m, fm
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: ints or fractions.Fraction; both endpoints are inclusive.
++
++    Returns a list of floats sorted ascending.  Repeated roots are reported
++    once; roots at ``lo`` or ``hi`` are included.
+     """
+-    n = 1000
++    p = _as_poly(coeffs)
++    if _is_zero(p):
++        raise ValueError("the zero polynomial has every real number as a root")
++    lo = Fraction(lo)
++    hi = Fraction(hi)
++    if lo > hi:
++        raise ValueError("lo must not be greater than hi")
++    if len(p) == 1:  # non-zero constant
++        return []
++
++    p = _square_free_part(p)
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Endpoint roots are factored out so every remaining root lies strictly
++    # inside (lo, hi); then Sturm counts need no special-casing.
++    if _poly_eval(p, lo) == 0:
++        roots.append(lo)
++        p = _divide_by_root(p, lo)
++    if len(p) > 1 and _poly_eval(p, hi) == 0:
++        roots.append(hi)
++        p = _divide_by_root(p, hi)
++
++    if len(p) > 1:
++        chain = _sturm_chain(p)
++        vlo = _sign_variations(chain, lo)
++        vhi = _sign_variations(chain, hi)
++        degree = len(p) - 1
++
++        # Each stack entry is (a, b, V(a), V(b)) with a, b non-roots.  Sturm's
++        # theorem gives exactly V(a) - V(b) distinct roots in (a, b).
++        stack = [(lo, hi, vlo, vhi)]
++        while stack:
++            a, b, va, vb = stack.pop()
++            count = va - vb
++            if count <= 0:
++                continue
++            if count == 1:
++                roots.append(_refine(p, a, b))
++                continue
++            m = _pick_split(p, a, b, degree)
++            vm = _sign_variations(chain, m)
++            stack.append((a, m, va, vm))
++            stack.append((m, b, vm, vb))
++
++    roots.sort()
++    return [float(r) for r in roots]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..a6551ea 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -1,5 +1,6 @@
+ import math
+ import unittest
++from fractions import Fraction
+ 
+ from roots import real_roots
+ 
+@@ -19,6 +20,97 @@ class TestRoots(unittest.TestCase):
+ 
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
++        self.assertEqual(real_roots([1, 0, 1], -10 ** 9, 10 ** 9), [])
++
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4; the double root must appear once.
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_high_multiplicity(self):
++        # (x - 2)^4: even multiplicity gives no sign change, but 2 is a root.
++        self.assertRoots(real_roots([1, -8, 24, -32, 16], -5, 5), [2])
++
++    def test_mixed_multiplicities(self):
++        # (x - 1)(x - 2)^2 = x^3 - 5x^2 + 8x - 4
++        self.assertRoots(real_roots([1, -5, 8, -4], 1, 5), [1, 2])
++
++    def test_close_roots(self):
++        # (x - 1)(10^6 x - (10^6 + 1)) has roots 1 and 1 + 1e-6, closer
++        # than any practical uniform grid spacing.
++        self.assertRoots(
++            real_roots([10 ** 6, -(2 * 10 ** 6 + 1), 10 ** 6 + 1], 0, 2),
++            [1.0, 1.0 + 1e-6],
++        )
++
++    def test_very_close_roots(self):
++        # Roots 1 and 1 + 1e-9, still distinct at the requested precision.
++        self.assertRoots(
++            real_roots([10 ** 9, -(2 * 10 ** 9 + 1), 10 ** 9 + 1], 0, 2),
++            [1.0, 1.0 + 1e-9],
++        )
++
++    def test_root_at_lower_bound(self):
++        self.assertRoots(real_roots([1, 0, -1], 1, 5), [1])
++        self.assertRoots(real_roots([1, -2], 2, 5), [2])
++
++    def test_root_at_upper_bound(self):
++        self.assertRoots(real_roots([1, 0, -1], -5, 1), [-1, 1])
++
++    def test_roots_at_both_bounds(self):
++        self.assertRoots(real_roots([1, 0, -1], -1, 1), [-1, 1])
++
++    def test_fraction_bounds(self):
++        self.assertRoots(
++            real_roots([1, 0, -2], Fraction(0), Fraction(3, 2)),
++            [math.sqrt(2)],
++        )
++
++    def test_large_coefficients(self):
++        # x^2 - 10^20 has roots +/- 10^10.
++        self.assertRoots(
++            real_roots([1, 0, -10 ** 20], -10 ** 11, 10 ** 11),
++            [-(10 ** 10), 10 ** 10],
++        )
++
++    def test_degree_fifteen(self):
++        # (7x - 3)^2 (x - 2)^3 (5x + 11)(x + 100)(x^2 - 2)(x^2 - 7)
++        # scaled up by 10^25, so coefficients are large and a double root
++        # and an irrational pair are mixed together.
++        p = [1]
++        for factor, times in (
++            ([7, -3], 2),
++            ([1, -2], 3),
++            ([5, 11], 1),
++            ([1, 100], 1),
++            ([1, 0, -2], 1),
++            ([1, 0, -7], 1),
++        ):
++            for _ in range(times):
++                p = _mul(p, factor)
++        coeffs = [c * 10 ** 25 for c in p]
++        self.assertRoots(
++            real_roots(coeffs, -200, 200),
++            sorted(
++                [
++                    3 / 7,
++                    2.0,
++                    -11 / 5,
++                    -100.0,
++                    -math.sqrt(2),
++                    math.sqrt(2),
++                    -math.sqrt(7),
++                    math.sqrt(7),
++                ]
++            ),
++        )
++
++
++def _mul(a, b):
++    out = [0] * (len(a) + len(b) - 1)
++    for i, x in enumerate(a):
++        for j, y in enumerate(b):
++            out[i + j] += x * y
++    return out
+ 
+ 
+ if __name__ == "__main__":

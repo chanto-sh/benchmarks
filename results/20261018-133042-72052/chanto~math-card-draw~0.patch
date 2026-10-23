@@ -1,0 +1,60 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..4c6e425 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,13 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _falling_factorials(n):
++    """Return [1, n, n(n-1), ..., n!]."""
++    result = [1] * (n + 1)
++    for i in range(1, n + 1):
++        result[i] = result[i - 1] * (n - i + 1)
++    return result
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +15,40 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)
++    if m <= 0:
++        return Fraction(0)
++
++    fall_r = _falling_factorials(r)
++    fall_b = _falling_factorials(b)
++    fall_n = _falling_factorials(n)
++
++    total = Fraction(0)
++
++    # The first green is at position t <= m: the first t - 1 cards are red
++    # or blue, and the card at position t is green.
++    if g:
++        for t in range(1, m + 1):
++            denom = fall_n[t]
++            lo = max(k, t - 1 - b)
++            hi = min(r, t - 1)
++            for j in range(lo, hi + 1):
++                ways = comb(t - 1, j) * fall_r[j] * fall_b[t - 1 - j] * g
++                total += Fraction(ways, denom)
++
++    # No green in the first m cards: the deal stops after m cards.
++    if m <= r + b:
++        denom = fall_n[m]
++        lo = max(k, m - b)
++        hi = min(r, m)
++        for j in range(lo, hi + 1):
++            ways = comb(m, j) * fall_r[j] * fall_b[m - j]
++            total += Fraction(ways, denom)
++
++    return total

@@ -1,0 +1,20 @@
+diff --git a/solution.py b/solution.py
+index bab6eae..5c976f6 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,13 @@
+-def adjac(ele, sub = []): 
+-    pass
++def adjac(ele, sub=[]):
++    if not ele:
++        yield sub
++    else:
++        yield from (
++            idx
++            for coordinate in range(ele[0] - 1, ele[0] + 2)
++            for idx in adjac(ele[1:], sub + [coordinate])
++        )
++
++
++def get_coordinates(test_tup):
++    return list(adjac(test_tup))

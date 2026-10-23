@@ -1,0 +1,77 @@
+diff --git a/beer_song.go b/beer_song.go
+index 7a26646..d4282ce 100644
+--- a/beer_song.go
++++ b/beer_song.go
+@@ -1,13 +1,69 @@
+ package beer
+ 
++import (
++	"fmt"
++	"strings"
++)
++
++// bottleCount describes n bottles of beer, using the singular form for one
++// bottle and the special "no more" phrasing for zero bottles.
++func bottleCount(n int) string {
++	switch n {
++	case 0:
++		return "no more bottles"
++	case 1:
++		return "1 bottle"
++	default:
++		return fmt.Sprintf("%d bottles", n)
++	}
++}
++
++// Song returns the lyrics of the whole song, from 99 bottles down to none.
+ func Song() string {
+-	panic("Please implement the Song function")
++	s, _ := Verses(99, 0)
++	return s
+ }
+ 
++// Verses returns the lyrics from verse start down to verse stop inclusive,
++// with a blank line separating (and following) each verse.
+ func Verses(start, stop int) (string, error) {
+-	panic("Please implement the Verses function")
++	if start < 0 || start > 99 {
++		return "", fmt.Errorf("invalid start verse: %d", start)
++	}
++	if stop < 0 || stop > 99 {
++		return "", fmt.Errorf("invalid stop verse: %d", stop)
++	}
++	if start < stop {
++		return "", fmt.Errorf("start verse %d is less than stop verse %d", start, stop)
++	}
++
++	verses := make([]string, 0, start-stop+1)
++	for n := start; n >= stop; n-- {
++		v, err := Verse(n)
++		if err != nil {
++			return "", err
++		}
++		verses = append(verses, v)
++	}
++	return strings.Join(verses, "\n") + "\n", nil
+ }
+ 
++// Verse returns the lyrics of a single verse for n bottles of beer.
+ func Verse(n int) (string, error) {
+-	panic("Please implement the Verse function")
++	if n < 0 || n > 99 {
++		return "", fmt.Errorf("invalid verse: %d", n)
++	}
++
++	if n == 0 {
++		return "No more bottles of beer on the wall, no more bottles of beer.\n" +
++			"Go to the store and buy some more, 99 bottles of beer on the wall.\n", nil
++	}
++
++	action := "Take one down and pass it around"
++	if n == 1 {
++		action = "Take it down and pass it around"
++	}
++
++	return fmt.Sprintf("%s of beer on the wall, %s of beer.\n%s, %s of beer on the wall.\n",
++		bottleCount(n), bottleCount(n), action, bottleCount(n-1)), nil
+ }

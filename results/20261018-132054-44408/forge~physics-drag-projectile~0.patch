@@ -1,0 +1,237 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..fa4f6a0 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,229 @@
+-"""Point-mass projectile with quadratic air drag."""
++"""Point-mass projectile with quadratic air drag.
++
++The motion obeys
++
++    d v / dt = -(k / m) |v| v - g y_hat
++
++which has no closed-form solution once ``k > 0``.  The trajectory is therefore
++integrated numerically with an adaptive fifth-order Dormand--Prince (RK45)
++scheme.  The apex and the landing point are located by root finding on a cubic
++Hermite interpolant of the accepted step, so the event times do not depend on
++the integrator landing exactly on them.  Tolerance is set far below the four
++significant figures the range table is printed with.
++"""
++
++import math
++
++__all__ = ["flight"]
++
++# --- Dormand--Prince 5(4) coefficients -------------------------------------
++_A21 = 1.0 / 5.0
++
++_A31 = 3.0 / 40.0
++_A32 = 9.0 / 40.0
++
++_A41 = 44.0 / 45.0
++_A42 = -56.0 / 15.0
++_A43 = 32.0 / 9.0
++
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++
++_A71 = 35.0 / 384.0
++_A73 = 500.0 / 1113.0
++_A74 = 125.0 / 192.0
++_A75 = -2187.0 / 6784.0
++_A76 = 11.0 / 84.0
++
++# 4th-order embedded weights (the 5th-order solution is the 7th stage).
++_B41 = 5179.0 / 57600.0
++_B43 = 7571.0 / 16695.0
++_B44 = 393.0 / 640.0
++_B45 = -92097.0 / 339200.0
++_B46 = 187.0 / 2100.0
++_B47 = 1.0 / 40.0
++
++_RTOL = 1e-12
++_ATOL = 1e-13
++_MAX_STEPS = 2_000_000
++
++
++def _deriv(state, km, g):
++    """Time derivative of (x, y, vx, vy)."""
++    vx = state[2]
++    vy = state[3]
++    c = km * math.hypot(vx, vy)  # (k/m) * |v|
++    return (vx, vy, -c * vx, -c * vy - g)
++
++
++def _step(state, h, km, g):
++    """One Dormand--Prince step; returns (new state, error, k1, k7)."""
++    k1 = _deriv(state, km, g)
++
++    y2 = [state[i] + h * _A21 * k1[i] for i in range(4)]
++    k2 = _deriv(y2, km, g)
++
++    y3 = [state[i] + h * (_A31 * k1[i] + _A32 * k2[i]) for i in range(4)]
++    k3 = _deriv(y3, km, g)
++
++    y4 = [state[i] + h * (_A41 * k1[i] + _A42 * k2[i] + _A43 * k3[i])
++          for i in range(4)]
++    k4 = _deriv(y4, km, g)
++
++    y5 = [state[i] + h * (_A51 * k1[i] + _A52 * k2[i] + _A53 * k3[i]
++                          + _A54 * k4[i]) for i in range(4)]
++    k5 = _deriv(y5, km, g)
++
++    y6 = [state[i] + h * (_A61 * k1[i] + _A62 * k2[i] + _A63 * k3[i]
++                          + _A64 * k4[i] + _A65 * k5[i]) for i in range(4)]
++    k6 = _deriv(y6, km, g)
++
++    y7 = [state[i] + h * (_A71 * k1[i] + _A73 * k3[i] + _A74 * k4[i]
++                          + _A75 * k5[i] + _A76 * k6[i]) for i in range(4)]
++    k7 = _deriv(y7, km, g)
++
++    y4o = [state[i] + h * (_B41 * k1[i] + _B43 * k3[i] + _B44 * k4[i]
++                           + _B45 * k5[i] + _B46 * k6[i] + _B47 * k7[i])
++           for i in range(4)]
++
++    err = [y7[i] - y4o[i] for i in range(4)]
++    return y7, err, k1, k7
++
++
++def _hermite(f0, f1, m0, m1, s):
++    """Cubic Hermite interpolant on s in [0, 1] (m0/m1 already scaled)."""
++    s2 = s * s
++    s3 = s2 * s
++    return ((2.0 * s3 - 3.0 * s2 + 1.0) * f0
++            + (s3 - 2.0 * s2 + s) * m0
++            + (-2.0 * s3 + 3.0 * s2) * f1
++            + (s3 - s2) * m1)
++
++
++def _root(f0, f1, d0, d1, h):
++    """Locate the crossing of a decreasing function on [0, 1] (f0 > 0 >= f1)."""
++    m0 = h * d0
++    m1 = h * d1
++    lo = 0.0
++    hi = 1.0
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        if _hermite(f0, f1, m0, m1, mid) > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
+ 
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    ``v0`` is the launch speed (m/s), ``angle_deg`` the elevation angle,
++    ``mass`` the projectile mass (kg), ``k`` the quadratic drag coefficient
++    (kg/m, force ``F = -k |v| v``), ``g`` gravity (m/s^2) and ``h0`` the
++    launch height (m).
++
++    ``range`` is the horizontal distance travelled when the projectile
++    returns to ``y = 0``, ``apex`` the maximum height above ``y = 0`` and
++    ``time`` the total time of flight.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    angle = math.radians(angle_deg)
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++
++    # Already on the ground and not moving upwards: no flight at all.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    km = k / mass if k else 0.0
++
++    state = [0.0, h0, vx0, vy0]
++    t = 0.0
++
++    # If the launch is not upwards the highest point is the start itself.
++    apex = h0 if vy0 <= 0.0 else None
++
++    # Start with a step short compared with the fastest physical timescale.
++    scale = max(v0, math.sqrt(2.0 * g * h0), 1e-6)
++    tau = scale / g
++    if km > 0.0:
++        tau = min(tau, 1.0 / (km * scale))
++    h = 1e-3 * tau
++    if h <= 0.0:
++        h = 1e-6
++
++    for _ in range(_MAX_STEPS):
++        new, err, k1, k7 = _step(state, h, km, g)
++
++        # Error norm (max norm, mixed absolute/relative).
++        err_norm = 0.0
++        for i in range(4):
++            sc = _ATOL + _RTOL * max(abs(state[i]), abs(new[i]))
++            e = abs(err[i]) / sc
++            if e > err_norm:
++                err_norm = e
++
++        if err_norm != err_norm:  # NaN from a wildly oversized step
++            h *= 0.25
++            continue
++
++        if err_norm > 1.0:
++            h *= max(0.1, 0.9 * err_norm ** -0.2)
++            continue
++
++        # A ground-level launch whose first step already ends below ground
++        # hides the entire flight inside one step.  Refine until the rising
++        # part is resolved so the landing root is well bracketed.
++        if state[1] == 0.0 and state[3] > 0.0 and new[1] <= 0.0:
++            h *= 0.5
++            continue
++
++        # Apex: vy crosses zero from positive to negative.
++        if apex is None and state[3] > 0.0 and new[3] <= 0.0:
++            s = _root(state[3], new[3], k1[3], k7[3], h)
++            apex = _hermite(state[1], new[1], h * k1[1], h * k7[1], s)
++
++        # Landing: height crosses zero on the way down.
++        if state[1] > 0.0 and new[1] <= 0.0:
++            s = _root(state[1], new[1], k1[1], k7[1], h)
++            x_land = _hermite(state[0], new[0], h * k1[0], h * k7[0], s)
++            if apex is None:
++                apex = h0
++            return {"range": x_land, "apex": apex, "time": t + s * h}
++
++        # Accept the step and adapt the step size for the next one.
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err_norm ** -0.2
++            if factor > 5.0:
++                factor = 5.0
++            elif factor < 0.2:
++                factor = 0.2
++
++        t += h
++        state = new
++        h *= factor
++
++    raise RuntimeError("projectile integration did not converge")

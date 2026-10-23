@@ -1,0 +1,170 @@
+diff --git a/react.go b/react.go
+index fabc3c0..1bc160e 100644
+--- a/react.go
++++ b/react.go
+@@ -1,36 +1,155 @@
+ package react
+ 
+-// Define reactor, cell and canceler types here.
+-// These types will implement the Reactor, Cell and Canceler interfaces, respectively.
++// callbackEntry holds a registered callback and whether it has been canceled.
++type callbackEntry struct {
++	fn      func(int)
++	removed bool
++}
++
++type canceler struct {
++	entry *callbackEntry
++}
+ 
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	c.entry.removed = true
++}
++
++// cell is used for both input and compute cells. For input cells compute is
++// nil; for compute cells it derives the value from the dependencies.
++type cell struct {
++	reactor    *reactor
++	value      int
++	deps       []*cell
++	dependents []*cell
++	compute    func() int
++	callbacks  []*callbackEntry
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	if c.value == value {
++		return
++	}
++	c.value = value
++	c.reactor.propagate(c)
+ }
+ 
+ func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++	entry := &callbackEntry{fn: callback}
++	c.callbacks = append(c.callbacks, entry)
++	return &canceler{entry: entry}
++}
++
++func (c *cell) notify(value int) {
++	for _, entry := range c.callbacks {
++		if !entry.removed {
++			entry.fn(value)
++		}
++	}
+ }
+ 
++type reactor struct{}
++
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	return &cell{reactor: r, value: initial}
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	d := dep.(*cell)
++	c := &cell{
++		reactor: r,
++		deps:    []*cell{d},
++		compute: func() int { return compute(d.value) },
++	}
++	c.value = c.compute()
++	d.dependents = append(d.dependents, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	d1 := dep1.(*cell)
++	d2 := dep2.(*cell)
++	c := &cell{
++		reactor: r,
++		deps:    []*cell{d1, d2},
++		compute: func() int { return compute(d1.value, d2.value) },
++	}
++	c.value = c.compute()
++	d1.dependents = append(d1.dependents, c)
++	d2.dependents = append(d2.dependents, c)
++	return c
++}
++
++// propagate updates all cells reachable from start. Cells are processed in
++// topological order so each one observes the already-updated values of its
++// dependencies. A compute cell is only recomputed when one of its
++// dependencies actually changed, and callbacks fire once, after the whole
++// system has reached a new stable state, only for cells whose value changed.
++func (r *reactor) propagate(start *cell) {
++	affected := make(map[*cell]bool)
++	var gather func(*cell)
++	gather = func(c *cell) {
++		for _, d := range c.dependents {
++			if !affected[d] {
++				affected[d] = true
++				gather(d)
++			}
++		}
++	}
++	gather(start)
++
++	// Topological order of the affected subgraph.
++	var order []*cell
++	visited := make(map[*cell]bool)
++	var visit func(*cell)
++	visit = func(c *cell) {
++		if visited[c] {
++			return
++		}
++		visited[c] = true
++		for _, d := range c.deps {
++			if affected[d] {
++				visit(d)
++			}
++		}
++		order = append(order, c)
++	}
++	for c := range affected {
++		visit(c)
++	}
++
++	changed := map[*cell]bool{start: true}
++	for _, c := range order {
++		if c.compute == nil {
++			continue
++		}
++		stale := false
++		for _, d := range c.deps {
++			if changed[d] {
++				stale = true
++				break
++			}
++		}
++		if !stale {
++			continue
++		}
++		old := c.value
++		c.value = c.compute()
++		if c.value != old {
++			changed[c] = true
++		}
++	}
++
++	for _, c := range order {
++		if changed[c] {
++			c.notify(c.value)
++		}
++	}
+ }

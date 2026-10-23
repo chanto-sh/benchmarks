@@ -1,0 +1,73 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..d961ebf 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,67 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    """Measure exactly `goal` liters using two buckets.
++
++    Returns a tuple of (number of actions, name of the bucket holding the
++    goal, liters left in the other bucket).
++    """
++    if start_bucket not in ("one", "two"):
++        raise ValueError("start_bucket must be either 'one' or 'two'.")
++
++    capacities = (bucket_one, bucket_two)
++    start_index = 0 if start_bucket == "one" else 1
++    other_index = 1 - start_index
++
++    if goal > max(capacities):
++        raise ValueError("The goal cannot be larger than both bucket sizes.")
++
++    # First action: fill the starting bucket.
++    initial = [0, 0]
++    initial[start_index] = capacities[start_index]
++    initial = tuple(initial)
++
++    name_of = ("one", "two")
++    queue = deque([(initial, 1)])
++    visited = {initial}
++
++    while queue:
++        state, actions = queue.popleft()
++
++        for index, amount in enumerate(state):
++            if amount == goal:
++                return (actions, name_of[index], state[1 - index])
++
++        for nxt in _next_states(state, capacities):
++            # Rule: no action may leave the starting bucket empty while the
++            # other bucket is full.
++            if nxt[start_index] == 0 and nxt[other_index] == capacities[other_index]:
++                continue
++            if nxt not in visited:
++                visited.add(nxt)
++                queue.append((nxt, actions + 1))
++
++    raise ValueError("It is not possible to measure exactly the goal amount.")
++
++
++def _next_states(state, capacities):
++    """Yield every state reachable from `state` with a single action."""
++    one, two = state
++    cap_one, cap_two = capacities
++
++    # Fill bucket one / bucket two.
++    yield (cap_one, two)
++    yield (one, cap_two)
++
++    # Empty bucket one / bucket two.
++    yield (0, two)
++    yield (one, 0)
++
++    # Pour bucket one into bucket two.
++    amount = min(one, cap_two - two)
++    yield (one - amount, two + amount)
++
++    # Pour bucket two into bucket one.
++    amount = min(two, cap_one - one)
++    yield (one + amount, two - amount)

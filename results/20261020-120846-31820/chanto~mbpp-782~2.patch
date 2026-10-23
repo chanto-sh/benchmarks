@@ -1,0 +1,14 @@
+diff --git a/solution.py b/solution.py
+index 937a447..df8ce78 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,8 @@
+ def odd_length_sum(arr):
+-    pass
++    total = 0
++    n = len(arr)
++    for i, value in enumerate(arr):
++        left = i + 1
++        right = n - i
++        total += value * ((left * right + 1) // 2)
++    return total

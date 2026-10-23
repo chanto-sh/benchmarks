@@ -1,0 +1,199 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..6b5f45b 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,193 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++const (
++	nat = iota
++	color
++	drink
++	smoke
++	pet
++	numCategories
++)
++
++var nationalities = [5]string{
++	englishman: "Englishman",
++	spaniard:   "Spaniard",
++	ukrainian:  "Ukrainian",
++	norwegian:  "Norwegian",
++	japanese:   "Japanese",
++}
++
++// SolvePuzzle searches the space of assignments of values to houses and
++// returns the nationalities of the water drinker and the zebra owner.
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	var pos [numCategories][5]int
++	if sol, ok := search(&pos, 0); ok {
++		return sol
++	}
++	panic("zebra puzzle has no solution")
++}
++
++// search assigns a permutation of the values of category cat to houses, then
++// recurses to the remaining categories, pruning partial assignments that
++// already violate a constraint.
++func search(pos *[numCategories][5]int, cat int) (Solution, bool) {
++	if cat == numCategories {
++		return solution(pos), true
++	}
++
++	var used [5]bool
++	var assign func(value int) (Solution, bool)
++	assign = func(value int) (Solution, bool) {
++		if value == 5 {
++			// The whole category is placed, so every constraint involving
++			// it can now be checked against real positions.
++			if !consistent(pos, cat+1) {
++				return Solution{}, false
++			}
++			return search(pos, cat+1)
++		}
++		for house := 0; house < 5; house++ {
++			if used[house] {
++				continue
++			}
++			used[house] = true
++			pos[cat][value] = house
++			if sol, ok := assign(value + 1); ok {
++				return sol, true
++			}
++			used[house] = false
++		}
++		return Solution{}, false
++	}
++
++	return assign(0)
++}
++
++// consistent reports whether the constraints whose categories have all been
++// assigned (the first depth categories) are satisfied by pos.
++func consistent(pos *[numCategories][5]int, depth int) bool {
++	has := func(c int) bool { return c < depth }
++
++	// The Englishman lives in the red house.
++	if has(nat) && has(color) && pos[nat][englishman] != pos[color][red] {
++		return false
++	}
++	// The Spaniard owns the dog.
++	if has(nat) && has(pet) && pos[nat][spaniard] != pos[pet][dog] {
++		return false
++	}
++	// Coffee is drunk in the green house.
++	if has(drink) && has(color) && pos[drink][coffee] != pos[color][green] {
++		return false
++	}
++	// The Ukrainian drinks tea.
++	if has(nat) && has(drink) && pos[nat][ukrainian] != pos[drink][tea] {
++		return false
++	}
++	// The green house is immediately to the right of the ivory house.
++	if has(color) && pos[color][green] != pos[color][ivory]+1 {
++		return false
++	}
++	// The Old Gold smoker owns snails.
++	if has(smoke) && has(pet) && pos[smoke][oldGold] != pos[pet][snails] {
++		return false
++	}
++	// Kools are smoked in the yellow house.
++	if has(smoke) && has(color) && pos[smoke][kools] != pos[color][yellow] {
++		return false
++	}
++	// Milk is drunk in the middle house.
++	if has(drink) && pos[drink][milk] != 2 {
++		return false
++	}
++	// The Norwegian lives in the first house.
++	if has(nat) && pos[nat][norwegian] != 0 {
++		return false
++	}
++	// The Chesterfields smoker lives next to the fox owner.
++	if has(smoke) && has(pet) && abs(pos[smoke][chesterfields]-pos[pet][fox]) != 1 {
++		return false
++	}
++	// The Kools smoker lives next to the horse owner.
++	if has(smoke) && has(pet) && abs(pos[smoke][kools]-pos[pet][horse]) != 1 {
++		return false
++	}
++	// The Lucky Strike smoker drinks orange juice.
++	if has(smoke) && has(drink) && pos[smoke][luckyStrike] != pos[drink][orangeJuice] {
++		return false
++	}
++	// The Japanese smokes Parliaments.
++	if has(nat) && has(smoke) && pos[nat][japanese] != pos[smoke][parliaments] {
++		return false
++	}
++	// The Norwegian lives next to the blue house.
++	if has(nat) && has(color) && abs(pos[nat][norwegian]-pos[color][blue]) != 1 {
++		return false
++	}
++
++	return true
++}
++
++func solution(pos *[numCategories][5]int) Solution {
++	nationalityAt := func(house int) string {
++		for n := 0; n < 5; n++ {
++			if pos[nat][n] == house {
++				return nationalities[n]
++			}
++		}
++		return ""
++	}
++
++	return Solution{
++		DrinksWater: nationalityAt(pos[drink][water]),
++		OwnsZebra:   nationalityAt(pos[pet][zebra]),
++	}
++}
++
++func abs(x int) int {
++	if x < 0 {
++		return -x
++	}
++	return x
+ }

@@ -1,0 +1,183 @@
+diff --git a/alphametics.go b/alphametics.go
+index fa04bde..868906c 100644
+--- a/alphametics.go
++++ b/alphametics.go
+@@ -1,5 +1,177 @@
+ package alphametics
+ 
++import (
++	"errors"
++	"strings"
++)
++
++// column represents a single digit position of the puzzle, counted from the
++// right. addends holds how often each letter occurs in this column's addends
++// (a letter may occur more than once, for example in "A + A"). result is the
++// letter in the result column, or 0 when the result is shorter than the
++// column.
++type column struct {
++	addends map[byte]int
++	result  byte
++}
++
++type solver struct {
++	columns  []column
++	leading  map[byte]bool
++	digits   [256]int
++	used     [10]bool
++	assigned map[byte]bool
++	solution map[string]int
++}
++
+ func Solve(puzzle string) (map[string]int, error) {
+-	panic("Please implement the Solve function")
++	parts := strings.Split(puzzle, "==")
++	if len(parts) != 2 {
++		return nil, errors.New("puzzle must contain exactly one == operator")
++	}
++
++	result := strings.Join(strings.Fields(parts[1]), "")
++	if result == "" {
++		return nil, errors.New("puzzle has no result")
++	}
++
++	var addends []string
++	for _, term := range strings.Split(parts[0], "+") {
++		word := strings.Join(strings.Fields(term), "")
++		if word == "" {
++			return nil, errors.New("puzzle has an empty addend")
++		}
++		addends = append(addends, word)
++	}
++
++	maxLen := len(result)
++	for _, word := range addends {
++		if len(word) > maxLen {
++			maxLen = len(word)
++		}
++	}
++
++	columns := make([]column, maxLen)
++	for i := range columns {
++		columns[i].addends = make(map[byte]int)
++	}
++
++	leading := make(map[byte]bool)
++	for _, word := range addends {
++		if len(word) > 1 {
++			leading[word[0]] = true
++		}
++		for i := 0; i < len(word); i++ {
++			letter := word[len(word)-1-i]
++			columns[i].addends[letter]++
++		}
++	}
++	if len(result) > 1 {
++		leading[result[0]] = true
++	}
++	for i := 0; i < len(result); i++ {
++		columns[i].result = result[len(result)-1-i]
++	}
++
++	s := &solver{
++		columns:  columns,
++		leading:  leading,
++		assigned: make(map[byte]bool),
++	}
++	for i := range s.digits {
++		s.digits[i] = -1
++	}
++
++	if s.solveColumn(0, 0) {
++		return s.solution, nil
++	}
++	return nil, errors.New("no solution")
++}
++
++func (s *solver) solveColumn(col, carry int) bool {
++	if col == len(s.columns) {
++		if carry != 0 {
++			return false
++		}
++		s.solution = make(map[string]int, len(s.assigned))
++		for letter := range s.assigned {
++			s.solution[string(letter)] = s.digits[letter]
++		}
++		return true
++	}
++
++	c := s.columns[col]
++	var unassigned []byte
++	for letter := range c.addends {
++		if !s.assigned[letter] {
++			unassigned = append(unassigned, letter)
++		}
++	}
++
++	// Assigned letters already contribute a fixed amount to the column.
++	total := carry
++	for letter, count := range c.addends {
++		if s.assigned[letter] {
++			total += count * s.digits[letter]
++		}
++	}
++
++	return s.assignAddends(c, unassigned, 0, total, col)
++}
++
++func (s *solver) assignAddends(c column, unassigned []byte, idx, total, col int) bool {
++	if idx == len(unassigned) {
++		if c.result == 0 {
++			// No result digit: this column must contribute nothing.
++			if total%10 != 0 {
++				return false
++			}
++			return s.solveColumn(col+1, total/10)
++		}
++
++		digit := total % 10
++		letter := c.result
++		if s.assigned[letter] {
++			if s.digits[letter] != digit {
++				return false
++			}
++			return s.solveColumn(col+1, total/10)
++		}
++
++		if s.used[digit] || (digit == 0 && s.leading[letter]) {
++			return false
++		}
++		s.use(letter, digit)
++		if s.solveColumn(col+1, total/10) {
++			return true
++		}
++		s.unuse(letter, digit)
++		return false
++	}
++
++	letter := unassigned[idx]
++	count := c.addends[letter]
++	for digit := 0; digit < 10; digit++ {
++		if s.used[digit] || (digit == 0 && s.leading[letter]) {
++			continue
++		}
++		s.use(letter, digit)
++		if s.assignAddends(c, unassigned, idx+1, total+count*digit, col) {
++			return true
++		}
++		s.unuse(letter, digit)
++	}
++	return false
++}
++
++func (s *solver) use(letter byte, digit int) {
++	s.used[digit] = true
++	s.digits[letter] = digit
++	s.assigned[letter] = true
++}
++
++func (s *solver) unuse(letter byte, digit int) {
++	delete(s.assigned, letter)
++	s.digits[letter] = -1
++	s.used[digit] = false
+ }

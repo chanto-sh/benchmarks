@@ -1,0 +1,94 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..76797c6 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,79 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of an n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, (n + 1) // 2 + 1):
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(100):
++            p_prev = 1.0
++            p = x
++            for k in range(2, n + 1):
++                p_prev, p = p, ((2 * k - 1) * x * p - (k - 1) * p_prev) / k
++            derivative = n * (x * p - p_prev) / (x * x - 1)
++            dx = p / derivative
++            x -= dx
++            if abs(dx) <= 1e-15:
++                break
++        p_prev = 1.0
++        p = x
++        for k in range(2, n + 1):
++            p_prev, p = p, ((2 * k - 1) * x * p - (k - 1) * p_prev) / k
++        derivative = n * (x * p - p_prev) / (x * x - 1)
++        weight = 2.0 / ((1.0 - x * x) * derivative * derivative)
++        if abs(x) < 1e-15:
++            nodes.append(0.0)
++            weights.append(weight)
++        else:
++            nodes.extend((-x, x))
++            weights.extend((weight, weight))
++    return nodes, weights
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(12)
++_PHASE_STEP = math.pi / 2.0
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity and gives
++
++        2 * integral of cos(t*u**2) du from 0 to sqrt(b).
++
++    The remaining integrand oscillates, so the interval is split wherever
++    t*u**2 advances by a quarter period and each piece is integrated with a
++    Gauss-Legendre rule.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b <= 0.0:
++        return 0.0
++    t = abs(t)
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    end = math.sqrt(b)
++    step = _PHASE_STEP / t
++
++    boundaries = [0.0]
++    k = 1
++    while True:
++        u = math.sqrt(k * step)
++        if u >= end:
++            break
++        boundaries.append(u)
++        k += 1
++    boundaries.append(end)
++
++    cos = math.cos
++    parts = []
++    for left, right in zip(boundaries, boundaries[1:]):
++        middle = 0.5 * (left + right)
++        half = 0.5 * (right - left)
++        parts.append(half * math.fsum(
++            weight * cos(t * (middle + half * node) ** 2)
++            for node, weight in zip(_GL_NODES, _GL_WEIGHTS)
++        ))
++
++    return 2.0 * math.fsum(parts)

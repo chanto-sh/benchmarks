@@ -1,0 +1,63 @@
+diff --git a/connect.py b/connect.py
+index 688dd68..791a45a 100644
+--- a/connect.py
++++ b/connect.py
+@@ -1,7 +1,56 @@
+ 
+ class ConnectGame:
+     def __init__(self, board):
+-        pass
++        self.rows = [
++            line.split() for line in board.splitlines() if line.strip()
++        ]
+ 
+     def get_winner(self):
+-        pass
++        height = len(self.rows)
++        width = max((len(row) for row in self.rows), default=0)
++
++        def has_connection(player, starts, reached_opposite_side):
++            visited = set(starts)
++            stack = list(starts)
++
++            while stack:
++                row, column = stack.pop()
++                if reached_opposite_side(row, column):
++                    return True
++
++                for next_row, next_column in (
++                    (row, column - 1),
++                    (row, column + 1),
++                    (row - 1, column),
++                    (row - 1, column + 1),
++                    (row + 1, column - 1),
++                    (row + 1, column),
++                ):
++                    if (
++                        0 <= next_row < height
++                        and 0 <= next_column < width
++                        and (next_row, next_column) not in visited
++                        and self.rows[next_row][next_column] == player
++                    ):
++                        visited.add((next_row, next_column))
++                        stack.append((next_row, next_column))
++
++            return False
++
++        x_starts = [
++            (row, 0)
++            for row in range(height)
++            if self.rows[row] and self.rows[row][0] == "X"
++        ]
++        if has_connection("X", x_starts, lambda row, column: column == width - 1):
++            return "X"
++
++        o_starts = [
++            (0, column)
++            for column in range(width)
++            if self.rows and self.rows[0][column] == "O"
++        ]
++        if has_connection("O", o_starts, lambda row, column: row == height - 1):
++            return "O"
++
++        return ""

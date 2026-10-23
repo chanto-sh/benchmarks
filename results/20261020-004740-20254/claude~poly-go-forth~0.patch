@@ -1,0 +1,220 @@
+diff --git a/forth.go b/forth.go
+index 2b457e6..a0acfe1 100644
+--- a/forth.go
++++ b/forth.go
+@@ -1,5 +1,214 @@
+ package forth
+ 
++import (
++	"errors"
++	"strconv"
++	"strings"
++)
++
++// op identifies a primitive operation in a compiled word definition.
++type op int
++
++const (
++	opPush op = iota
++	opAdd
++	opSub
++	opMul
++	opDiv
++	opDup
++	opDrop
++	opSwap
++	opOver
++)
++
++// instruction is a single step in a compiled word definition.
++type instruction struct {
++	code  op
++	value int // only meaningful for opPush
++}
++
++var builtins = map[string]instruction{
++	"+":    {code: opAdd},
++	"-":    {code: opSub},
++	"*":    {code: opMul},
++	"/":    {code: opDiv},
++	"dup":  {code: opDup},
++	"drop": {code: opDrop},
++	"swap": {code: opSwap},
++	"over": {code: opOver},
++}
++
++var (
++	errEmptyStack   = errors.New("empty stack")
++	errOneValue     = errors.New("only one value on the stack")
++	errDivideByZero = errors.New("divide by zero")
++	errIllegal      = errors.New("illegal operation")
++	errUndefined    = errors.New("undefined operation")
++)
++
++// Forth evaluates the given lines of Forth and returns the resulting stack.
+ func Forth(input []string) ([]int, error) {
+-	panic("Please implement the Forth function")
++	var tokens []string
++	for _, line := range input {
++		tokens = append(tokens, strings.Fields(line)...)
++	}
++
++	words := make(map[string][]instruction)
++	stack := make([]int, 0)
++
++	for i := 0; i < len(tokens); i++ {
++		token := strings.ToLower(tokens[i])
++
++		if token == ":" {
++			// A definition runs from ":" to the matching ";". Words are
++			// resolved while compiling, so later redefinitions do not
++			// affect words that referenced an earlier definition.
++			if i+2 >= len(tokens) {
++				return nil, errIllegal
++			}
++			name := strings.ToLower(tokens[i+1])
++			if _, ok := parseNumber(name); ok {
++				return nil, errIllegal
++			}
++
++			var body []instruction
++			closed := false
++			for i += 2; i < len(tokens); i++ {
++				t := strings.ToLower(tokens[i])
++				if t == ";" {
++					closed = true
++					break
++				}
++				if t == ":" {
++					return nil, errIllegal
++				}
++				if n, ok := parseNumber(t); ok {
++					body = append(body, instruction{code: opPush, value: n})
++					continue
++				}
++				if def, ok := words[t]; ok {
++					body = append(body, def...)
++					continue
++				}
++				if b, ok := builtins[t]; ok {
++					body = append(body, b)
++					continue
++				}
++				return nil, errUndefined
++			}
++			if !closed {
++				return nil, errIllegal
++			}
++			words[name] = body
++			continue
++		}
++
++		if n, ok := parseNumber(token); ok {
++			stack = append(stack, n)
++			continue
++		}
++
++		insts, ok := words[token]
++		if !ok {
++			if b, isBuiltin := builtins[token]; isBuiltin {
++				insts = []instruction{b}
++			} else {
++				return nil, errUndefined
++			}
++		}
++		var err error
++		stack, err = execute(insts, stack)
++		if err != nil {
++			return nil, err
++		}
++	}
++
++	return stack, nil
++}
++
++// parseNumber reports whether tok is an integer literal and returns its value.
++func parseNumber(tok string) (int, bool) {
++	digits := tok
++	if strings.HasPrefix(digits, "-") {
++		digits = digits[1:]
++	}
++	if digits == "" {
++		return 0, false
++	}
++	for i := 0; i < len(digits); i++ {
++		if digits[i] < '0' || digits[i] > '9' {
++			return 0, false
++		}
++	}
++	n, err := strconv.Atoi(tok)
++	if err != nil {
++		return 0, false
++	}
++	return n, true
++}
++
++func execute(insts []instruction, stack []int) ([]int, error) {
++	for _, ins := range insts {
++		switch ins.code {
++		case opPush:
++			stack = append(stack, ins.value)
++
++		case opAdd, opSub, opMul, opDiv:
++			if len(stack) == 0 {
++				return nil, errEmptyStack
++			}
++			if len(stack) == 1 {
++				return nil, errOneValue
++			}
++			b := stack[len(stack)-1]
++			a := stack[len(stack)-2]
++			var result int
++			switch ins.code {
++			case opAdd:
++				result = a + b
++			case opSub:
++				result = a - b
++			case opMul:
++				result = a * b
++			case opDiv:
++				if b == 0 {
++					return nil, errDivideByZero
++				}
++				result = a / b
++			}
++			stack = stack[:len(stack)-1]
++			stack[len(stack)-1] = result
++
++		case opDup:
++			if len(stack) == 0 {
++				return nil, errEmptyStack
++			}
++			stack = append(stack, stack[len(stack)-1])
++
++		case opDrop:
++			if len(stack) == 0 {
++				return nil, errEmptyStack
++			}
++			stack = stack[:len(stack)-1]
++
++		case opSwap:
++			if len(stack) == 0 {
++				return nil, errEmptyStack
++			}
++			if len(stack) == 1 {
++				return nil, errOneValue
++			}
++			stack[len(stack)-1], stack[len(stack)-2] = stack[len(stack)-2], stack[len(stack)-1]
++
++		case opOver:
++			if len(stack) == 0 {
++				return nil, errEmptyStack
++			}
++			if len(stack) == 1 {
++				return nil, errOneValue
++			}
++			stack = append(stack, stack[len(stack)-2])
++		}
++	}
++	return stack, nil
+ }

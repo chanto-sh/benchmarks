@@ -1,0 +1,55 @@
+diff --git a/affine_cipher.py b/affine_cipher.py
+index 2d41e04..26086c8 100644
+--- a/affine_cipher.py
++++ b/affine_cipher.py
+@@ -1,6 +1,48 @@
++from math import gcd
++
++ALPHABET_SIZE = 26
++
++
++def _mmi(a, m):
++    """Return the modular multiplicative inverse of a mod m."""
++    for x in range(1, m):
++        if (a * x) % m == 1:
++            return x
++    raise ValueError("a and m must be coprime.")
++
++
++def _check_coprime(a, m):
++    if gcd(a, m) != 1:
++        raise ValueError("a and m must be coprime.")
++
++
+ def encode(plain_text, a, b):
+-    pass
++    _check_coprime(a, ALPHABET_SIZE)
++
++    encoded = []
++    for char in plain_text.lower():
++        if char.isalpha():
++            index = ord(char) - ord("a")
++            encoded.append(chr((a * index + b) % ALPHABET_SIZE + ord("a")))
++        elif char.isdigit():
++            encoded.append(char)
++
++    chunks = [
++        "".join(encoded[i : i + 5]) for i in range(0, len(encoded), 5)
++    ]
++    return " ".join(chunks)
+ 
+ 
+ def decode(ciphered_text, a, b):
+-    pass
++    _check_coprime(a, ALPHABET_SIZE)
++    inverse = _mmi(a, ALPHABET_SIZE)
++
++    decoded = []
++    for char in ciphered_text.lower():
++        if char.isalpha():
++            index = ord(char) - ord("a")
++            decoded.append(chr((inverse * (index - b)) % ALPHABET_SIZE + ord("a")))
++        elif char.isdigit():
++            decoded.append(char)
++
++    return "".join(decoded)

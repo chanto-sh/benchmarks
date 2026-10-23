@@ -1,0 +1,36 @@
+diff --git a/solution.py b/solution.py
+index 981f86b..17a1402 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,30 @@
+ def find_kth(arr1, arr2, k):
+-    pass
++    if k <= 0:
++        raise ValueError("k must be positive")
++
++    m, n = len(arr1), len(arr2)
++    if m > n:
++        arr1, arr2 = arr2, arr1
++        m, n = n, m
++
++    if k > m + n:
++        raise ValueError("k is larger than the total number of elements")
++
++    low = max(0, k - n)
++    high = min(k, m)
++
++    while low <= high:
++        i = (low + high) // 2
++        j = k - i
++
++        left1 = arr1[i - 1] if i > 0 else float("-inf")
++        right1 = arr1[i] if i < m else float("inf")
++        left2 = arr2[j - 1] if j > 0 else float("-inf")
++        right2 = arr2[j] if j < n else float("inf")
++
++        if left1 <= right2 and left2 <= right1:
++            return max(left1, left2)
++        if left1 > right2:
++            high = i - 1
++        else:
++            low = i + 1

@@ -1,0 +1,49 @@
+diff --git a/game.py b/game.py
+index 768dec9..1ed4aef 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,43 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Let E[i] be the expected remaining turns from square i (0 <= i < n).
++    # E[n] = 0, so for each i:
++    #   E[i] = 1 + (1/k) * sum_{d=1..k} E[land(i, d)]
++    # This is a linear system A * E = b over the rationals.
++    jump = Fraction(1, k)
++    a = [[Fraction(0) for _ in range(n)] for _ in range(n)]
++    b = [Fraction(0) for _ in range(n)]
++
++    for i in range(n):
++        a[i][i] += 1
++        b[i] = Fraction(1)
++        for d in range(1, k + 1):
++            j = i + d
++            if j == n:
++                continue  # absorbing state, E[n] = 0
++            if j > n:
++                j = 2 * n - j  # bounce back by the excess
++            a[i][j] -= jump
++
++    # Exact Gaussian elimination with row pivoting on any nonzero pivot.
++    for col in range(n):
++        pivot = next(r for r in range(col, n) if a[r][col] != 0)
++        if pivot != col:
++            a[col], a[pivot] = a[pivot], a[col]
++            b[col], b[pivot] = b[pivot], b[col]
++        inv = a[col][col]
++        for r in range(col + 1, n):
++            factor = a[r][col] / inv
++            if factor == 0:
++                continue
++            for c in range(col, n):
++                a[r][c] -= factor * a[col][c]
++            b[r] -= factor * b[col]
++
++    x = [Fraction(0) for _ in range(n)]
++    for r in range(n - 1, -1, -1):
++        total = b[r] - sum(a[r][c] * x[c] for c in range(r + 1, n))
++        x[r] = total / a[r][r]
++
++    return x[0]

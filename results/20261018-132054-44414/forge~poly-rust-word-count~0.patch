@@ -1,0 +1,23 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index a0e9034..ee689f3 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -2,5 +2,17 @@ use std::collections::HashMap;
+ 
+ /// Count occurrences of words.
+ pub fn word_count(words: &str) -> HashMap<String, u32> {
+-    todo!("Count of occurrences of words in {words:?}");
++    let mut counts = HashMap::new();
++
++    // Split on any character that is neither alphanumeric nor an apostrophe.
++    // The apostrophe is kept as part of a word (contractions), but leading and
++    // trailing apostrophes are quotation marks and must be trimmed.
++    for token in words.split(|c: char| !c.is_alphanumeric() && c != '\'') {
++        let word = token.trim_matches('\'').to_lowercase();
++        if !word.is_empty() {
++            *counts.entry(word).or_insert(0) += 1;
++        }
++    }
++
++    counts
+ }

@@ -1,0 +1,73 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..b626dd6 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,66 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (a, b, amplitude) for a cos(omega t) + b sin(omega t)."""
++    detuning = k - m * omega * omega
++    denom = math.hypot(detuning, c * omega)
++    if denom == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0, 0.0
++        raise ValueError("undamped system driven exactly at resonance has no steady state")
++
++    scale = F0 / denom
++    a = scale * (detuning / denom)
++    b = scale * (c * omega / denom)
++    return a, b, scale
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return _steady_state(m, k, c, F0, omega)[2]
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, b, _ = _steady_state(m, k, c, F0, omega)
++
++    wt = omega * t
++    x_steady = a * math.cos(wt) + b * math.sin(wt)
++
++    # Homogeneous part, chosen to cancel the steady state at t = 0 and
++    # give the requested initial velocity.
++    c0 = x0 - a
++    v0_h = v0 - b * omega
++
++    alpha = c / (2.0 * m)
++    omega0_sq = k / m
++    disc = alpha * alpha - omega0_sq
++    s = v0_h + alpha * c0
++
++    if disc < 0.0:
++        beta = math.sqrt(-disc)
++        z = beta * t
++        x_h = math.exp(-alpha * t) * (c0 * math.cos(z) + s * math.sin(z) / beta)
++    elif disc > 0.0:
++        beta = math.sqrt(disc)
++        z = beta * t
++        if z > 10.0:
++            # Use the individual decaying exponentials to avoid overflow.
++            # The slow rate is written without cancellation for large alpha.
++            r1 = -omega0_sq / (alpha + beta)
++            r2 = -(alpha + beta)
++            x_h = 0.5 * (
++                (c0 + s / beta) * math.exp(r1 * t)
++                + (c0 - s / beta) * math.exp(r2 * t)
++            )
++        else:
++            x_h = math.exp(-alpha * t) * (
++                c0 * math.cosh(z) + s * math.sinh(z) / beta
++            )
++    else:
++        x_h = math.exp(-alpha * t) * (c0 + s * t)
++
++    return x_steady + x_h

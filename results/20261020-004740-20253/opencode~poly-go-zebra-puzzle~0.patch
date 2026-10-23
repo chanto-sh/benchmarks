@@ -1,0 +1,204 @@
+diff --git a/zebra_puzzle.go b/zebra_puzzle.go
+index 757f64c..ec8642b 100644
+--- a/zebra_puzzle.go
++++ b/zebra_puzzle.go
+@@ -5,6 +5,198 @@ type Solution struct {
+ 	OwnsZebra   string
+ }
+ 
++const houseCount = 5
++
++// Values for each category. The order is arbitrary; only distinctness matters.
++const (
++	englishman = iota
++	spaniard
++	ukrainian
++	norwegian
++	japanese
++)
++
++const (
++	red = iota
++	green
++	ivory
++	yellow
++	blue
++)
++
++const (
++	coffee = iota
++	tea
++	milk
++	orangeJuice
++	water
++)
++
++const (
++	oldGold = iota
++	kools
++	chesterfields
++	luckyStrike
++	parliaments
++)
++
++const (
++	dog = iota
++	snails
++	fox
++	horse
++	zebra
++)
++
++var nationalityNames = [houseCount]string{
++	englishman: "Englishman",
++	spaniard:   "Spaniard",
++	ukrainian:  "Ukrainian",
++	norwegian:  "Norwegian",
++	japanese:   "Japanese",
++}
++
++// puzzle holds, for each house, the value assigned to each category.
++// A value of -1 means the house has not been assigned in that category yet.
++type puzzle struct {
++	nationality [houseCount]int
++	color       [houseCount]int
++	drink       [houseCount]int
++	smoke       [houseCount]int
++	pet         [houseCount]int
++}
++
++func newPuzzle() *puzzle {
++	p := &puzzle{}
++	for i := 0; i < houseCount; i++ {
++		p.nationality[i] = -1
++		p.color[i] = -1
++		p.drink[i] = -1
++		p.smoke[i] = -1
++		p.pet[i] = -1
++	}
++	return p
++}
++
++// position returns the house a value is assigned to, or -1 if unassigned.
++func position(category []int, value int) int {
++	for house, v := range category {
++		if v == value {
++			return house
++		}
++	}
++	return -1
++}
++
++func contains(values []int, value int) bool {
++	return position(values, value) >= 0
++}
++
++// valid reports whether all constraints that can currently be evaluated hold.
++// Constraints are skipped while one of their values is still unassigned.
++func (p *puzzle) valid() bool {
++	sameHouse := func(a []int, aValue int, b []int, bValue int) bool {
++		aHouse, bHouse := position(a, aValue), position(b, bValue)
++		if aHouse < 0 || bHouse < 0 {
++			return true
++		}
++		return aHouse == bHouse
++	}
++
++	adjacent := func(a []int, aValue int, b []int, bValue int) bool {
++		aHouse, bHouse := position(a, aValue), position(b, bValue)
++		if aHouse < 0 || bHouse < 0 {
++			return true
++		}
++		distance := aHouse - bHouse
++		return distance == 1 || distance == -1
++	}
++
++	rightOf := func(a []int, aValue int, b []int, bValue int) bool {
++		aHouse, bHouse := position(a, aValue), position(b, bValue)
++		if aHouse < 0 || bHouse < 0 {
++			return true
++		}
++		return aHouse == bHouse+1
++	}
++
++	at := func(category []int, value int, house int) bool {
++		actual := position(category, value)
++		return actual < 0 || actual == house
++	}
++
++	return sameHouse(p.nationality[:], englishman, p.color[:], red) &&
++		sameHouse(p.nationality[:], spaniard, p.pet[:], dog) &&
++		sameHouse(p.drink[:], coffee, p.color[:], green) &&
++		sameHouse(p.nationality[:], ukrainian, p.drink[:], tea) &&
++		rightOf(p.color[:], green, p.color[:], ivory) &&
++		sameHouse(p.smoke[:], oldGold, p.pet[:], snails) &&
++		sameHouse(p.smoke[:], kools, p.color[:], yellow) &&
++		at(p.drink[:], milk, 2) &&
++		at(p.nationality[:], norwegian, 0) &&
++		adjacent(p.smoke[:], chesterfields, p.pet[:], fox) &&
++		adjacent(p.smoke[:], kools, p.pet[:], horse) &&
++		sameHouse(p.smoke[:], luckyStrike, p.drink[:], orangeJuice) &&
++		sameHouse(p.nationality[:], japanese, p.smoke[:], parliaments) &&
++		adjacent(p.nationality[:], norwegian, p.color[:], blue)
++}
++
++// solve assigns one whole category at a time. Because every value in a
++// category is assigned before moving on, most constraints become fully
++// determined early and can reject a whole permutation at once.
++func (p *puzzle) solve() bool {
++	categories := []*[houseCount]int{
++		&p.nationality,
++		&p.color,
++		&p.drink,
++		&p.smoke,
++		&p.pet,
++	}
++	return p.assignCategory(categories, 0)
++}
++
++func (p *puzzle) assignCategory(categories []*[houseCount]int, index int) bool {
++	if index == len(categories) {
++		return true
++	}
++	return fillCategory(categories[index], 0, func() bool {
++		if !p.valid() {
++			return false
++		}
++		return p.assignCategory(categories, index+1)
++	})
++}
++
++// fillCategory tries every permutation of the values 0..houseCount-1 in the
++// given category, invoking accept once the category is completely filled.
++func fillCategory(category *[houseCount]int, house int, accept func() bool) bool {
++	if house == houseCount {
++		return accept()
++	}
++	for value := 0; value < houseCount; value++ {
++		if contains(category[:], value) {
++			continue
++		}
++		category[house] = value
++		if fillCategory(category, house+1, accept) {
++			return true
++		}
++		category[house] = -1
++	}
++	return false
++}
++
+ func SolvePuzzle() Solution {
+-	panic("Please implement the SolvePuzzle function")
++	p := newPuzzle()
++	if !p.solve() {
++		return Solution{}
++	}
++
++	waterDrinkerHouse := position(p.drink[:], water)
++	zebraOwnerHouse := position(p.pet[:], zebra)
++
++	return Solution{
++		DrinksWater: nationalityNames[p.nationality[waterDrinkerHouse]],
++		OwnsZebra:   nationalityNames[p.nationality[zebraOwnerHouse]],
++	}
+ }

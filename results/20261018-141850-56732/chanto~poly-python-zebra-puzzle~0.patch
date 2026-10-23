@@ -1,0 +1,70 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..21a17cd 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,63 @@
++from itertools import permutations
++
++_NATIONALITIES = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++_COLORS = ("red", "green", "ivory", "yellow", "blue")
++_PETS = ("dog", "snails", "fox", "horse", "zebra")
++_DRINKS = ("coffee", "tea", "milk", "orange juice", "water")
++_HOBBIES = ("dancing", "painting", "reading", "football", "chess")
++
++
++def _solve():
++    for nationalities in permutations(_NATIONALITIES):
++        if nationalities[0] != "Norwegian":
++            continue
++
++        for colors in permutations(_COLORS):
++            if colors.index("green") != colors.index("ivory") + 1:
++                continue
++            if colors.index("blue") != 1:
++                continue
++            if nationalities.index("Englishman") != colors.index("red"):
++                continue
++
++            for drinks in permutations(_DRINKS):
++                if drinks[2] != "milk":
++                    continue
++                if drinks[nationalities.index("Ukrainian")] != "tea":
++                    continue
++                if drinks[colors.index("green")] != "coffee":
++                    continue
++
++                for pets in permutations(_PETS):
++                    if pets[nationalities.index("Spaniard")] != "dog":
++                        continue
++                    if abs(colors.index("yellow") - pets.index("horse")) != 1:
++                        continue
++
++                    for hobbies in permutations(_HOBBIES):
++                        if hobbies[colors.index("yellow")] != "painting":
++                            continue
++                        if hobbies[nationalities.index("Japanese")] != "chess":
++                            continue
++                        if hobbies[drinks.index("orange juice")] != "football":
++                            continue
++                        if hobbies[pets.index("snails")] != "dancing":
++                            continue
++                        if abs(hobbies.index("reading") - pets.index("fox")) != 1:
++                            continue
++
++                        return (
++                            nationalities[drinks.index("water")],
++                            nationalities[pets.index("zebra")],
++                        )
++
++
++_SOLUTION = _solve()
++
++
+ def drinks_water():
+-    pass
++    return _SOLUTION[0]
+ 
+ 
+ def owns_zebra():
+-    pass
++    return _SOLUTION[1]

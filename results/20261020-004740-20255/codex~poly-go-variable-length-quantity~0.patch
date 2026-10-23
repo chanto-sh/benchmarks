@@ -1,0 +1,58 @@
+diff --git a/variable_length_quantity.go b/variable_length_quantity.go
+index 2ddd432..1bc6c78 100644
+--- a/variable_length_quantity.go
++++ b/variable_length_quantity.go
+@@ -1,9 +1,51 @@
+ package variablelengthquantity
+ 
++import "errors"
++
+ func EncodeVarint(input []uint32) []byte {
+-	panic("Please implement the EncodeVarint function")
++	output := make([]byte, 0, len(input)*5)
++
++	for _, value := range input {
++		var encoded [5]byte
++		index := len(encoded) - 1
++		encoded[index] = byte(value & 0x7f)
++
++		for value >>= 7; value > 0; value >>= 7 {
++			index--
++			encoded[index] = byte(value&0x7f) | 0x80
++		}
++
++		output = append(output, encoded[index:]...)
++	}
++
++	return output
+ }
+ 
+ func DecodeVarint(input []byte) ([]uint32, error) {
+-	panic("Please implement the DecodeVarint function")
++	output := make([]uint32, 0)
++	var value uint32
++	incomplete := false
++
++	for _, b := range input {
++		payload := b & 0x7f
++		if value > ^uint32(0)>>7 {
++			return nil, errors.New("value overflows uint32")
++		}
++		value = value<<7 | uint32(payload)
++
++		if b&0x80 == 0 {
++			output = append(output, value)
++			value = 0
++			incomplete = false
++			continue
++		}
++
++		incomplete = true
++	}
++
++	if incomplete {
++		return nil, errors.New("incomplete variable-length quantity")
++	}
++
++	return output, nil
+ }

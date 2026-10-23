@@ -1,0 +1,117 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..556f9a9 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,108 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
++
++var (
++	errNegativeRoll = errors.New("Negative roll is invalid")
++	errLaneExceeded = errors.New("Pin count exceeds pins on the lane")
++	errGameOver     = errors.New("Cannot roll after game is over")
++	errIncomplete   = errors.New("Score cannot be taken until the end of the game")
++)
++
++// Game tracks the rolls made during a single ten-frame bowling game.
++type Game struct {
++	rolls        []int
++	frame        int
++	rollsInFrame int
++	gameOver     bool
++}
+ 
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{frame: 1}
+ }
+ 
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if g.gameOver {
++		return errGameOver
++	}
++	if pins < 0 {
++		return errNegativeRoll
++	}
++	if pins > 10 {
++		return errLaneExceeded
++	}
++
++	if g.frame < 10 {
++		return g.rollOpenFrame(pins)
++	}
++	return g.rollTenthFrame(pins)
+ }
+ 
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	if !g.gameOver {
++		return 0, errIncomplete
++	}
++
++	score := 0
++	roll := 0
++	for frame := 1; frame <= 10; frame++ {
++		switch {
++		case g.rolls[roll] == 10:
++			score += 10 + g.rolls[roll+1] + g.rolls[roll+2]
++			roll++
++		case g.rolls[roll]+g.rolls[roll+1] == 10:
++			score += 10 + g.rolls[roll+2]
++			roll += 2
++		default:
++			score += g.rolls[roll] + g.rolls[roll+1]
++			roll += 2
++		}
++	}
++	return score, nil
++}
++
++func (g *Game) rollOpenFrame(pins int) error {
++	if g.rollsInFrame == 1 && g.rolls[len(g.rolls)-1]+pins > 10 {
++		return errLaneExceeded
++	}
++
++	g.rolls = append(g.rolls, pins)
++	if g.rollsInFrame == 0 && pins < 10 {
++		g.rollsInFrame = 1
++		return nil
++	}
++
++	g.frame++
++	g.rollsInFrame = 0
++	return nil
++}
++
++func (g *Game) rollTenthFrame(pins int) error {
++	switch g.rollsInFrame {
++	case 0:
++		g.rolls = append(g.rolls, pins)
++		g.rollsInFrame = 1
++	case 1:
++		first := g.rolls[len(g.rolls)-1]
++		if first < 10 && first+pins > 10 {
++			return errLaneExceeded
++		}
++
++		g.rolls = append(g.rolls, pins)
++		g.rollsInFrame = 2
++		if first < 10 && first+pins < 10 {
++			g.gameOver = true
++		}
++	case 2:
++		first := g.rolls[len(g.rolls)-2]
++		second := g.rolls[len(g.rolls)-1]
++		if first == 10 && second < 10 && second+pins > 10 {
++			return errLaneExceeded
++		}
++
++		g.rolls = append(g.rolls, pins)
++		g.rollsInFrame = 3
++		g.gameOver = true
++	}
++	return nil
+ }

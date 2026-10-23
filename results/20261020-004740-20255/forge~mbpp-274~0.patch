@@ -1,0 +1,20 @@
+diff --git a/solution.py b/solution.py
+index 3515118..8ed583b 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,12 @@
+-import math  
+-def even_binomial_Coeff_Sum( n): 
+-    pass
++import math
++
++
++def even_binomial_Coeff_Sum(n):
++    """Return the sum of the binomial coefficients C(n, k) for even k.
++
++    Sum_{k even} C(n, k) == 2^(n-1) for n >= 1, so we compute it directly
++    while guarding against non-positive input.
++    """
++    if n < 1:
++        return 0
++    return sum(math.comb(n, k) for k in range(0, n + 1, 2))

@@ -1,0 +1,199 @@
+diff --git a/clean.py b/clean.py
+new file mode 100644
+index 0000000..f79fc59
+--- /dev/null
++++ b/clean.py
+@@ -0,0 +1,193 @@
++#!/usr/bin/env python3
++"""Clean a raw customer export.
++
++Usage:
++    python3 clean.py <input.csv> <output.csv>
++"""
++
++import csv
++import re
++import sys
++from datetime import date
++from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
++from pathlib import Path
++
++FIELD_NAMES = ["customer_id", "name", "email", "signup_date", "country", "spend"]
++
++DIGITS_RE = re.compile(r"[0-9]+")
++ISO_DATE_RE = re.compile(r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$")
++DMY_DATE_RE = re.compile(r"^([0-9]{1,2})/([0-9]{1,2})/([0-9]{4})$")
++MONTH_DATE_RE = re.compile(r"^([A-Za-z]{3})\s+([0-9]{1,2}),\s*([0-9]{4})$")
++
++MONTHS = {
++    "jan": 1,
++    "feb": 2,
++    "mar": 3,
++    "apr": 4,
++    "may": 5,
++    "jun": 6,
++    "jul": 7,
++    "aug": 8,
++    "sep": 9,
++    "oct": 10,
++    "nov": 11,
++    "dec": 12,
++}
++
++CENT = Decimal("0.01")
++
++
++def load_country_aliases(path):
++    aliases = {}
++    with open(path, newline="", encoding="utf-8-sig") as handle:
++        for row in csv.DictReader(handle):
++            alias = (row.get("alias") or "").strip().lower()
++            if alias:
++                aliases[alias] = (row.get("code") or "").strip()
++    return aliases
++
++
++def parse_signup_date(value):
++    """Return a date for a supported format, or None if invalid/unparseable."""
++    value = value.strip()
++
++    match = ISO_DATE_RE.fullmatch(value)
++    if match:
++        year, month, day = (int(part) for part in match.groups())
++    else:
++        match = DMY_DATE_RE.fullmatch(value)
++        if match:
++            day, month, year = (int(part) for part in match.groups())
++        else:
++            match = MONTH_DATE_RE.fullmatch(value)
++            if not match:
++                return None
++            month = MONTHS.get(match.group(1).lower())
++            if month is None:
++                return None
++            day = int(match.group(2))
++            year = int(match.group(3))
++
++    try:
++        return date(year, month, day)
++    except ValueError:
++        return None
++
++
++def parse_spend(value):
++    """Return a Decimal rounded half-up to cents, or None if not a number."""
++    value = value.strip()
++    if not value:
++        return Decimal("0.00")
++
++    value = value.replace("$", "").replace(",", "").strip()
++    if not value:
++        return Decimal("0.00")
++
++    try:
++        amount = Decimal(value)
++        if not amount.is_finite():
++            return None
++        return amount.quantize(CENT, rounding=ROUND_HALF_UP)
++    except (InvalidOperation, ValueError):
++        return None
++
++
++def clean_email(value):
++    email = value.strip().lower()
++    if email.count("@") != 1:
++        return None
++
++    local, domain = email.split("@")
++    if not local:
++        return None
++    if "." not in domain or domain.startswith(".") or domain.endswith("."):
++        return None
++    return email
++
++
++def field(row, name):
++    value = row.get(name)
++    return "" if value is None else value.strip()
++
++
++def clean(input_path, output_path):
++    aliases_path = Path(__file__).resolve().with_name("country_aliases.csv")
++    aliases = load_country_aliases(aliases_path)
++
++    # customer_id -> (signup_date, name, email, country, spend)
++    kept = {}
++
++    with open(input_path, newline="", encoding="utf-8-sig") as handle:
++        reader = csv.reader(handle)
++        fieldnames = None
++        for header_row in reader:
++            if header_row and any(cell.strip() for cell in header_row):
++                fieldnames = [cell.strip() for cell in header_row]
++                break
++
++        if fieldnames is not None:
++            for row in csv.DictReader(handle, fieldnames=fieldnames):
++                customer_id_text = field(row, "customer_id")
++                if not DIGITS_RE.fullmatch(customer_id_text):
++                    continue
++                customer_id = int(customer_id_text)
++
++                email = clean_email(field(row, "email"))
++                if email is None:
++                    continue
++
++                signup_date = parse_signup_date(field(row, "signup_date"))
++                if signup_date is None:
++                    continue
++
++                spend = parse_spend(field(row, "spend"))
++                if spend is None:
++                    continue
++
++                name = re.sub(r"\s+", " ", field(row, "name"))
++                country = aliases.get(field(row, "country").lower(), "")
++
++                existing = kept.get(customer_id)
++                # Later rows win ties, so replace on equal as well as newer dates.
++                if existing is None or signup_date >= existing[0]:
++                    kept[customer_id] = (
++                        signup_date,
++                        name,
++                        email,
++                        country,
++                        spend,
++                    )
++
++    with open(output_path, "w", newline="", encoding="utf-8") as handle:
++        writer = csv.writer(handle, lineterminator="\n")
++        writer.writerow(FIELD_NAMES)
++        for customer_id in sorted(kept):
++            signup_date, name, email, country, spend = kept[customer_id]
++            writer.writerow(
++                [
++                    customer_id,
++                    name,
++                    email,
++                    signup_date.isoformat(),
++                    country,
++                    f"{spend:.2f}",
++                ]
++            )
++
++
++def main(argv):
++    if len(argv) != 3:
++        print(f"usage: {Path(argv[0]).name} <input.csv> <output.csv>", file=sys.stderr)
++        return 2
++
++    try:
++        clean(argv[1], argv[2])
++    except OSError as exc:
++        print(f"error: {exc}", file=sys.stderr)
++        return 1
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv))

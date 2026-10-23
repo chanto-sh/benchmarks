@@ -1,0 +1,123 @@
+diff --git a/forth.py b/forth.py
+index 7cf4ff3..7b2cfc3 100644
+--- a/forth.py
++++ b/forth.py
+@@ -1,6 +1,117 @@
++import re
++
++_NUMBER = re.compile(r"-?\d+\Z")
++
++
+ class StackUnderflowError(Exception):
+     pass
+ 
+ 
++def _is_number(token):
++    return bool(_NUMBER.match(token))
++
++
+ def evaluate(input_data):
+-    pass
++    stack = []
++    definitions = {}
++
++    def require(count):
++        if len(stack) < count:
++            raise StackUnderflowError("Insufficient number of items in stack")
++
++    def add():
++        require(2)
++        right = stack.pop()
++        left = stack.pop()
++        stack.append(left + right)
++
++    def subtract():
++        require(2)
++        right = stack.pop()
++        left = stack.pop()
++        stack.append(left - right)
++
++    def multiply():
++        require(2)
++        right = stack.pop()
++        left = stack.pop()
++        stack.append(left * right)
++
++    def divide():
++        require(2)
++        right = stack.pop()
++        left = stack.pop()
++        if right == 0:
++            raise ZeroDivisionError("divide by zero")
++        stack.append(left // right)
++
++    def dup():
++        require(1)
++        stack.append(stack[-1])
++
++    def drop():
++        require(1)
++        stack.pop()
++
++    def swap():
++        require(2)
++        stack[-2], stack[-1] = stack[-1], stack[-2]
++
++    def over():
++        require(2)
++        stack.append(stack[-2])
++
++    builtins = {
++        "+": add,
++        "-": subtract,
++        "*": multiply,
++        "/": divide,
++        "dup": dup,
++        "drop": drop,
++        "swap": swap,
++        "over": over,
++    }
++
++    def execute(tokens):
++        for token in tokens:
++            if _is_number(token):
++                stack.append(int(token))
++            elif token in definitions:
++                execute(definitions[token])
++            elif token in builtins:
++                builtins[token]()
++            else:
++                raise ValueError("undefined operation")
++
++    for line in input_data:
++        tokens = [token.lower() for token in line.split()]
++        index = 0
++        while index < len(tokens):
++            token = tokens[index]
++            if token == ":":
++                index += 1
++                if index >= len(tokens):
++                    raise ValueError("undefined operation")
++                name = tokens[index]
++                if _is_number(name):
++                    raise ValueError("illegal operation")
++                index += 1
++                body = []
++                while index < len(tokens) and tokens[index] != ";":
++                    body.append(tokens[index])
++                    index += 1
++                if index >= len(tokens):
++                    raise ValueError("undefined operation")
++                expanded = []
++                for item in body:
++                    if item in definitions:
++                        expanded.extend(definitions[item])
++                    else:
++                        expanded.append(item)
++                definitions[name] = expanded
++                index += 1
++            else:
++                execute([token])
++                index += 1
++
++    return stack

@@ -1,0 +1,116 @@
+diff --git a/test_text_utils.py b/test_text_utils.py
+new file mode 100644
+index 0000000..86462dc
+--- /dev/null
++++ b/test_text_utils.py
+@@ -0,0 +1,60 @@
++"""Tests for text_utils.slugify."""
++
++import unittest
++
++from text_utils import slugify
++
++
++class SlugifyTests(unittest.TestCase):
++    def test_docstring_examples(self):
++        self.assertEqual(slugify("Hello, World!"), "hello-world")
++        self.assertEqual(slugify("  Crème Brûlée  "), "creme-brulee")
++        self.assertEqual(slugify("a--b__c"), "a-b-c")
++        self.assertEqual(slugify("The quick brown fox", max_length=13), "the-quick")
++        self.assertEqual(slugify("!!!"), "")
++
++    def test_lowercases(self):
++        self.assertEqual(slugify("MiXeD CaSe"), "mixed-case")
++
++    def test_accented_letters_become_ascii(self):
++        self.assertEqual(slugify("Éàñ Ünïcode"), "ean-unicode")
++        self.assertEqual(slugify("naïve café"), "naive-cafe")
++
++    def test_runs_of_separators_collapse(self):
++        self.assertEqual(slugify("a  --  b"), "a-b")
++        self.assertEqual(slugify("a/b\\c.d"), "a-b-c-d")
++
++    def test_no_leading_or_trailing_hyphens(self):
++        self.assertEqual(slugify("---hello---"), "hello")
++        self.assertEqual(slugify("  ...hello...  "), "hello")
++
++    def test_digits_are_kept(self):
++        self.assertEqual(slugify("Version 2.0 (beta)"), "version-2-0-beta")
++
++    def test_empty_and_punctuation_only(self):
++        self.assertEqual(slugify(""), "")
++        self.assertEqual(slugify("   "), "")
++        self.assertEqual(slugify("?!@#$%^&*()"), "")
++
++    def test_max_length_cuts_at_hyphen_boundary(self):
++        self.assertEqual(slugify("the quick brown fox", max_length=13), "the-quick")
++        self.assertEqual(slugify("the quick brown fox", max_length=12), "the-quick")
++        self.assertEqual(slugify("the quick brown fox", max_length=10), "the-quick")
++
++    def test_max_length_never_leaves_trailing_hyphen(self):
++        self.assertEqual(slugify("hello world", max_length=6), "hello")
++        self.assertEqual(slugify("hello world", max_length=5), "hello")
++
++    def test_max_length_cuts_mid_word_when_no_boundary(self):
++        self.assertEqual(slugify("helloworld", max_length=5), "hello")
++
++    def test_max_length_zero_or_negative_returns_empty(self):
++        self.assertEqual(slugify("hello world", max_length=0), "")
++        self.assertEqual(slugify("hello world", max_length=-3), "")
++
++    def test_max_length_longer_than_slug_keeps_full_slug(self):
++        self.assertEqual(slugify("hello world", max_length=100), "hello-world")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/text_utils.py b/text_utils.py
+index b106e7e..9ce5579 100644
+--- a/text_utils.py
++++ b/text_utils.py
+@@ -1,5 +1,7 @@
+ """Text helpers."""
+ 
++import unicodedata
++
+ 
+ def slugify(text, max_length=None):
+     """Convert text to a URL slug.
+@@ -20,4 +22,36 @@ def slugify(text, max_length=None):
+         slugify("The quick brown fox", max_length=13) == "the-quick"
+         slugify("!!!") == ""
+     """
+-    raise NotImplementedError
++    # Decompose accented letters, then drop the combining marks so that
++    # "é" becomes "e", "ñ" becomes "n", and so on.
++    decomposed = unicodedata.normalize("NFKD", text)
++    ascii_text = "".join(
++        char for char in decomposed if not unicodedata.combining(char)
++    ).lower()
++
++    # Collapse every run of non-alphanumeric characters into one hyphen.
++    parts = []
++    in_separator = False
++    for char in ascii_text:
++        if char.isascii() and char.isalnum():
++            parts.append(char)
++            in_separator = False
++        elif not in_separator:
++            parts.append("-")
++            in_separator = True
++
++    slug = "".join(parts).strip("-")
++
++    if max_length is not None and len(slug) > max_length:
++        if max_length <= 0:
++            return ""
++        truncated = slug[:max_length]
++        if truncated.endswith("-"):
++            truncated = truncated[:-1]
++        else:
++            boundary = truncated.rfind("-")
++            if boundary > 0:
++                truncated = truncated[:boundary]
++        slug = truncated.strip("-")
++
++    return slug

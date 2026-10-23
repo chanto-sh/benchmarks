@@ -1,0 +1,24 @@
+diff --git a/solution.py b/solution.py
+index d7fd595..d279258 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,3 +1,16 @@
+-import math 
+-def is_polite(n): 
+-    pass
++def is_polite(n):
++    if n <= 0:
++        return 0
++
++    # A positive integer is polite iff it is not a power of two.
++    # The count of non-powers of two up to x is x - floor(log2(x)) - 1,
++    # which equals x - x.bit_length().
++    low, high = 1, 2 * n + 2
++    while low < high:
++        mid = (low + high) // 2
++        if mid - mid.bit_length() >= n:
++            high = mid
++        else:
++            low = mid + 1
++    return low
++

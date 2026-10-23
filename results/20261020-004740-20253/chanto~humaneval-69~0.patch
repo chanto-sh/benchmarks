@@ -1,0 +1,16 @@
+diff --git a/solution.py b/solution.py
+index ff48b79..b8f368a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,11 @@ def search(lst):
+         search([1, 2, 2, 3, 3, 3, 4, 4, 4]) == 3
+         search([5, 5, 4, 4, 4]) == -1
+     '''
++    counts = {}
++    for value in lst:
++        counts[value] = counts.get(value, 0) + 1
++    result = -1
++    for value, frequency in counts.items():
++        if frequency >= value and value > result:
++            result = value
++    return result

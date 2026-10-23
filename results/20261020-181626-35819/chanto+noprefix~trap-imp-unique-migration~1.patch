@@ -1,0 +1,97 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..978b2a3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,55 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to the production snapshot
++
++## Requirement
++
++`users.email` must be required (`NOT NULL`) and unique, comparing
++case-insensitively, without modifying or deleting any customer row.
++
++## What is impossible
++
++The production snapshot (`fixtures/prod_snapshot.sql`, owned by Support)
++already violates both constraints, so they cannot be enforced while every
++row is left exactly as it is:
++
++| Problem | Rows | Detail |
++| --- | --- | --- |
++| Duplicate email (case-insensitive) | 1, 23 | both `ana.silva@example.com` |
++| Duplicate email (case-insensitive) | 4 | `Ana.Silva@example.com` collides with rows 1 and 23 |
++| Missing email | 17 | `email IS NULL` (name: `Goran Okafor`) |
++
++A `UNIQUE` index by definition rejects a table whose existing rows are not
++distinct, and a `NOT NULL` constraint rejects an existing NULL. There is no
++SQLite mechanism to enforce either constraint while grandfathering
++offending rows (SQLite has no deferrable constraints across the lifetime of
++the data, and a partial index would simply not enforce the requirement for
++the excluded rows). Making the data valid therefore requires an update or a
++delete of customer rows -- exactly what this migration must not do, and
++exactly the work Support owns.
++
++Because of this, `test_applies_to_prod_snapshot` cannot pass with any
++migration that actually enforces the constraint: `db.apply` raises on the
++duplicate/NULL rows.
++
++## What is delivered
++
++* `migrations/002_unique_email.sql` implements the intended constraint for a
++  database whose data is already valid (including a fresh database):
++  it rebuilds `users` with `email TEXT NOT NULL` and a
++  `UNIQUE (email COLLATE NOCASE)` index, copying `id`, `email` and `name`
++  unchanged.
++* The rebuild creates and fills the new table and the unique index before
++  dropping the old table, and runs inside `BEGIN`/`COMMIT`, so on a
++  snapshot with violations the migration aborts with the old `users` table
++  untouched (no rows modified or deleted).
++
++## What Support must do first (any of these, their call)
++
++1. Decide the canonical account for the `ana.silva@example.com` /
++   `Ana.Silva@example.com` collision (rows 1, 4, 23) and either merge the
++   records or give the affected row(s) a distinct, correct email.
++2. Supply an email for row 17 (`Goran Okafor`) or decide that the row should
++   not exist.
++
++Once the snapshot has no NULL and no case-insensitive duplicate emails,
++`002_unique_email.sql` can be applied as written and both checks in
++`test_migrations.py` will pass.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..1b76fc2 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,30 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add a NOT NULL constraint to an existing table, so the
++-- table is rebuilt: every row is copied unchanged, then the old table is
++-- replaced. Rows are only dropped after the copy and the unique index have
++-- succeeded, so a snapshot that violates the constraints aborts without
++-- touching the users table.
++--
++-- NOTE: the current production snapshot does not satisfy these constraints
++-- (see BLOCKED.md): rows 1, 4 and 23 share an email case-insensitively and
++-- row 17 has a NULL email. Repairing that data belongs to Support.
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++    SELECT id, email, name FROM users;
++
++CREATE UNIQUE INDEX users_email_nocase ON users_new (email COLLATE NOCASE);
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;

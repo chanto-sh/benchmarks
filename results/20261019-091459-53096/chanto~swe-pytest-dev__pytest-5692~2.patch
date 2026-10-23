@@ -1,0 +1,32 @@
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..af67ab7 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -11,8 +11,10 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -482,6 +484,7 @@ class LogXML:
+         self.log_passing_tests = log_passing_tests
+         self.report_duration = report_duration
+         self.family = family
++        self.suite_start_time = None
+         self.stats = dict.fromkeys(["error", "passed", "failure", "skipped"], 0)
+         self.node_reporters = {}  # nodeid -> _NodeReporter
+         self.node_reporters_ordered = []
+@@ -666,6 +669,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()

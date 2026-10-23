@@ -1,0 +1,48 @@
+diff --git a/sublist.go b/sublist.go
+index d6af72d..42304e3 100644
+--- a/sublist.go
++++ b/sublist.go
+@@ -3,5 +3,42 @@ package sublist
+ // Relation type is defined in relations.go file.
+ 
+ func Sublist(l1, l2 []int) Relation {
+-	panic("Please implement the Sublist function")
++	switch {
++	case len(l1) == len(l2):
++		if contains(l2, l1) {
++			return RelationEqual
++		}
++		return RelationUnequal
++	case len(l1) < len(l2):
++		if contains(l2, l1) {
++			return RelationSublist
++		}
++		return RelationUnequal
++	default:
++		if contains(l1, l2) {
++			return RelationSuperlist
++		}
++		return RelationUnequal
++	}
++}
++
++// contains reports whether the whole of needle appears as a contiguous
++// sub-sequence of haystack. An empty needle is contained in any haystack.
++func contains(haystack, needle []int) bool {
++	if len(needle) > len(haystack) {
++		return false
++	}
++	for start := 0; start <= len(haystack)-len(needle); start++ {
++		match := true
++		for i, v := range needle {
++			if haystack[start+i] != v {
++				match = false
++				break
++			}
++		}
++		if match {
++			return true
++		}
++	}
++	return false
+ }

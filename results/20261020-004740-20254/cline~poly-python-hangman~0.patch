@@ -1,0 +1,38 @@
+diff --git a/hangman.py b/hangman.py
+index 5f0db27..afc0b8e 100644
+--- a/hangman.py
++++ b/hangman.py
+@@ -7,14 +7,30 @@ STATUS_ONGOING = 'ongoing'
+ 
+ class Hangman:
+     def __init__(self, word):
++        self.word = word
+         self.remaining_guesses = 9
+         self.status = STATUS_ONGOING
++        self.guessed_letters = set()
+ 
+     def guess(self, char):
+-        pass
++        if self.status != STATUS_ONGOING:
++            raise ValueError("The game has already ended.")
++
++        if char not in self.word or char in self.guessed_letters:
++            self.remaining_guesses -= 1
++        else:
++            self.guessed_letters.add(char)
++
++        if all(letter in self.guessed_letters for letter in self.word):
++            self.status = STATUS_WIN
++        elif self.remaining_guesses < 0:
++            self.status = STATUS_LOSE
+ 
+     def get_masked_word(self):
+-        pass
++        return ''.join(
++            char if char in self.guessed_letters else '_'
++            for char in self.word
++        )
+ 
+     def get_status(self):
+-        pass
++        return self.status

@@ -1,0 +1,62 @@
+diff --git a/pov.py b/pov.py
+index 21dbe4b..5a6bacc 100644
+--- a/pov.py
++++ b/pov.py
+@@ -19,7 +19,55 @@ class Tree:
+         return self.__dict__() == other.__dict__()
+ 
+     def from_pov(self, from_node):
+-        pass
++        path = self._find_path(from_node)
++        if path is None:
++            raise ValueError("Tree could not be reoriented")
++
++        target = path[-1]
++        children = [self._clone(child) for child in target.children]
++
++        if len(path) > 1:
++            # Rebuild the former root-to-target chain upside down: every node on
++            # the path becomes a child of the node below it, carrying the
++            # siblings that were left behind at its original level.
++            node = Tree(path[0].label, self._detach(path[0], path[1]))
++            for index in range(1, len(path) - 1):
++                node = Tree(
++                    path[index].label,
++                    self._detach(path[index], path[index + 1]) + [node],
++                )
++            children.append(node)
++
++        return Tree(target.label, children)
++
++    def _detach(self, node, child_on_path):
++        """Clone all children of `node` except the one continuing the path."""
++        return [
++            self._clone(child) for child in node.children if child is not child_on_path
++        ]
+ 
+     def path_to(self, from_node, to_node):
+-        pass
++        if self._find_path(from_node) is None:
++            raise ValueError("Tree could not be reoriented")
++        if self._find_path(to_node) is None:
++            raise ValueError("No path found")
++
++        path = self.from_pov(from_node)._find_path(to_node)
++        if path is None:
++            raise ValueError("No path found")
++
++        return [node.label for node in path]
++
++    def _find_path(self, label):
++        """Return the list of nodes from this node down to `label`, or None."""
++        if self.label == label:
++            return [self]
++        for child in self.children:
++            found = child._find_path(label)
++            if found is not None:
++                return [self] + found
++        return None
++
++    @staticmethod
++    def _clone(node):
++        return Tree(node.label, [Tree._clone(child) for child in node.children])

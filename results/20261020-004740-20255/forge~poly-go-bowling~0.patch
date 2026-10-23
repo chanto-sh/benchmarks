@@ -1,0 +1,139 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..a9f515f 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,130 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
++
++var (
++	errNegativeRoll = errors.New("Negative roll is invalid")
++	errTooManyPins  = errors.New("Pin count exceeds pins on the lane")
++	errGameOver     = errors.New("Cannot roll after game is over")
++	errIncomplete   = errors.New("Score cannot be taken until the end of the game")
++)
++
++// Game keeps track of the rolls and the current position in a game of bowling.
++type Game struct {
++	rolls      []int
++	frame      int // 0-based index of the current frame
++	ball       int // 0-based index of the next roll within the current frame
++	tenthStart int // index in rolls of the first roll of the tenth frame
++	gameOver   bool
++}
+ 
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{}
+ }
+ 
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if g.gameOver {
++		return errGameOver
++	}
++	if pins < 0 {
++		return errNegativeRoll
++	}
++	if pins > 10 {
++		return errTooManyPins
++	}
++
++	// Frames before the tenth.
++	if g.frame < 9 {
++		if g.ball == 1 {
++			// Second roll of the frame: the frame total cannot exceed ten pins.
++			if g.rolls[len(g.rolls)-1]+pins > 10 {
++				return errTooManyPins
++			}
++			g.rolls = append(g.rolls, pins)
++			g.frame++
++			g.ball = 0
++			if g.frame == 9 {
++				g.tenthStart = len(g.rolls)
++			}
++			return nil
++		}
++
++		g.rolls = append(g.rolls, pins)
++		if pins == 10 { // a strike ends the frame
++			g.frame++
++			g.ball = 0
++			if g.frame == 9 {
++				g.tenthStart = len(g.rolls)
++			}
++		} else {
++			g.ball = 1
++		}
++		return nil
++	}
++
++	// Tenth frame: two rolls plus up to two fill balls.
++	tenth := g.rolls[g.tenthStart:]
++	switch len(tenth) {
++	case 0:
++		g.rolls = append(g.rolls, pins)
++		return nil
++	case 1:
++		if tenth[0] != 10 && tenth[0]+pins > 10 {
++			return errTooManyPins
++		}
++		g.rolls = append(g.rolls, pins)
++		// An open tenth frame ends the game right after its second roll.
++		if tenth[0] != 10 && tenth[0]+pins < 10 {
++			g.gameOver = true
++		}
++		return nil
++	case 2:
++		// Fill balls after a strike: the pair is limited to ten pins unless
++		// the first fill ball was itself a strike.
++		if tenth[0] == 10 && tenth[1] != 10 && tenth[1]+pins > 10 {
++			return errTooManyPins
++		}
++		g.rolls = append(g.rolls, pins)
++		g.gameOver = true
++		return nil
++	default:
++		g.gameOver = true
++		return errGameOver
++	}
+ }
+ 
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	score := 0
++	i := 0
++
++	for frame := 0; frame < 10; frame++ {
++		if i >= len(g.rolls) {
++			return 0, errIncomplete
++		}
++
++		if g.rolls[i] == 10 { // strike
++			if i+2 >= len(g.rolls) {
++				return 0, errIncomplete
++			}
++			score += 10 + g.rolls[i+1] + g.rolls[i+2]
++			i++
++			continue
++		}
++
++		if i+1 >= len(g.rolls) {
++			return 0, errIncomplete
++		}
++
++		if g.rolls[i]+g.rolls[i+1] == 10 { // spare
++			if i+2 >= len(g.rolls) {
++				return 0, errIncomplete
++			}
++			score += 10 + g.rolls[i+2]
++		} else {
++			score += g.rolls[i] + g.rolls[i+1]
++		}
++		i += 2
++	}
++
++	return score, nil
+ }

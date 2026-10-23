@@ -1,0 +1,86 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..b961e68 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,80 @@
+ package scale
+ 
++import "strings"
++
++// chromatic scales expressed with sharps and with flats.
++var sharpChromatic = []string{"A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"}
++var flatChromatic = []string{"A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"}
++
++// intervalSteps maps an interval symbol to its distance in half steps.
++var intervalSteps = map[byte]int{'m': 1, 'M': 2, 'A': 3}
++
++// Scale generates the scale starting at tonic, following the interval pattern.
++// An empty interval produces the twelve note chromatic scale.
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	notes := chromaticFor(tonic)
++	start := indexOf(notes, normalizeTonic(tonic))
++
++	scale := make([]string, 0, len(interval)+1)
++	position := start
++	if interval == "" {
++		for i := 0; i < len(notes); i++ {
++			scale = append(scale, notes[(position+i)%len(notes)])
++		}
++		return scale
++	}
++
++	scale = append(scale, notes[position])
++	for i := 0; i < len(interval); i++ {
++		position = (position + intervalSteps[interval[i]]) % len(notes)
++		scale = append(scale, notes[position])
++	}
++
++	return scale
++}
++
++// normalizeTonic returns the tonic with an uppercase first letter, leaving the
++// rest (accidentals) untouched: "bb" -> "Bb", "f#" -> "F#", "d" -> "D".
++func normalizeTonic(tonic string) string {
++	if tonic == "" {
++		return tonic
++	}
++	return strings.ToUpper(tonic[:1]) + tonic[1:]
++}
++
++// usesSharps reports whether the given tonic is written with sharps.
++func usesSharps(tonic string) bool {
++	if len(tonic) > 1 {
++		switch tonic[len(tonic)-1] {
++		case '#':
++			return true
++		case 'b':
++			return false
++		}
++	}
++	// Natural tonics: uppercase C, G, D, A, E, B are sharp; F is flat.
++	// Lowercase (minor) a, e, b are sharp; d, g, c, f are flat.
++	switch tonic {
++	case "C", "G", "D", "A", "E", "B", "a", "e", "b":
++		return true
++	}
++	return false
++}
++
++// chromaticFor chooses the sharp or flat chromatic scale for the tonic.
++func chromaticFor(tonic string) []string {
++	if usesSharps(tonic) {
++		return sharpChromatic
++	}
++	return flatChromatic
++}
++
++// indexOf returns the position of note in notes, or 0 if it is not found.
++func indexOf(notes []string, note string) int {
++	for i, n := range notes {
++		if n == note {
++			return i
++		}
++	}
++	return 0
+ }

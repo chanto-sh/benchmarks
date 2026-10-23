@@ -1,0 +1,118 @@
+diff --git a/sgf_parsing.py b/sgf_parsing.py
+index fa30f3f..6956dd3 100644
+--- a/sgf_parsing.py
++++ b/sgf_parsing.py
+@@ -25,5 +25,112 @@ class SgfTree:
+         return not self == other
+ 
+ 
++class _Parser:
++    def __init__(self, text):
++        self.text = text
++        self.pos = 0
++
++    def _peek(self):
++        if self.pos >= len(self.text):
++            return ""
++        return self.text[self.pos]
++
++    def parse(self):
++        if self._peek() != "(":
++            raise ValueError("tree missing")
++        tree = self._parse_tree()
++        if self.pos != len(self.text):
++            raise ValueError("tree missing")
++        return tree
++
++    def _parse_tree(self):
++        # Consume '('.
++        self.pos += 1
++
++        nodes = []
++        while self._peek() == ";":
++            node = self._parse_node()
++            if nodes:
++                nodes[-1].children.append(node)
++            nodes.append(node)
++
++        if not nodes:
++            raise ValueError("tree with no nodes")
++
++        while self._peek() == "(":
++            nodes[-1].children.append(self._parse_tree())
++
++        if self._peek() != ")":
++            raise ValueError("tree missing")
++        self.pos += 1
++
++        return nodes[0]
++
++    def _parse_node(self):
++        # Consume ';'.
++        self.pos += 1
++
++        properties = {}
++        while True:
++            char = self._peek()
++            if not char or char in ";()":
++                break
++
++            start = self.pos
++            while self._peek().isalpha():
++                self.pos += 1
++            key = self.text[start:self.pos]
++
++            if not key:
++                raise ValueError("properties without delimiter")
++            if not key.isupper():
++                raise ValueError("property must be in uppercase")
++            if self._peek() != "[":
++                raise ValueError("properties without delimiter")
++
++            values = []
++            while self._peek() == "[":
++                values.append(self._parse_value())
++            properties[key] = values
++
++        return SgfTree(properties=properties)
++
++    def _parse_value(self):
++        # Consume '['.
++        self.pos += 1
++
++        value = []
++        while True:
++            if self.pos >= len(self.text):
++                raise ValueError("properties without delimiter")
++            char = self.text[self.pos]
++
++            if char == "\\":
++                self.pos += 1
++                if self.pos >= len(self.text):
++                    raise ValueError("properties without delimiter")
++                escaped = self.text[self.pos]
++                if escaped == "\n":
++                    # Escaped newlines are removed entirely.
++                    pass
++                elif escaped.isspace():
++                    value.append(" ")
++                else:
++                    value.append(escaped)
++                self.pos += 1
++            elif char == "]":
++                self.pos += 1
++                break
++            elif char.isspace():
++                # All whitespace except newlines becomes a space.
++                value.append("\n" if char == "\n" else " ")
++                self.pos += 1
++            else:
++                value.append(char)
++                self.pos += 1
++
++        return "".join(value)
++
++
+ def parse(input_string):
+-    pass
++    return _Parser(input_string).parse()

@@ -1,0 +1,69 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..6dfd2c3 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,63 @@
+ MOD = 1_000_000_007
+ 
++# States are (ends_with_A, number_of_Cs_mod_3), indexed as 3 * ends_with_A + r.
++_NUM_STATES = 6
++
++
++def _mat_mul(a, b):
++    """Multiply two square matrices modulo MOD."""
++    size = len(a)
++    result = [[0] * size for _ in range(size)]
++    for i in range(size):
++        result_i = result[i]
++        for k in range(size):
++            a_ik = a[i][k]
++            if a_ik:
++                b_k = b[k]
++                for j in range(size):
++                    result_i[j] = (result_i[j] + a_ik * b_k[j]) % MOD
++    return result
++
++
++def _mat_vec_mul(matrix, vector):
++    """Multiply a square matrix by a column vector modulo MOD."""
++    return [
++        sum(matrix[i][j] * vector[j] for j in range(len(vector))) % MOD
++        for i in range(len(vector))
++    ]
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("length must be non-negative")
++
++    # transition[new][old] is 1 when appending a letter moves old -> new.
++    transition = [[0] * _NUM_STATES for _ in range(_NUM_STATES)]
++    for ends_with_a in (0, 1):
++        for r in range(3):
++            old = 3 * ends_with_a + r
++
++            # Append B: still does not end with A, C count unchanged.
++            transition[r][old] += 1
++
++            # Append C: still does not end with A, C count advances by one.
++            transition[(r + 1) % 3][old] += 1
++
++            # Append A: only allowed if the previous letter was not A.
++            if not ends_with_a:
++                transition[3 + r][old] += 1
++
++    # Start from the empty code: no trailing A, zero Cs.
++    vector = [0] * _NUM_STATES
++    vector[0] = 1
++
++    power = transition
++    while n:
++        if n & 1:
++            vector = _mat_vec_mul(power, vector)
++        power = _mat_mul(power, power)
++        n >>= 1
++
++    # Valid codes have a C count divisible by 3, either trailing state.
++    return (vector[0] + vector[3]) % MOD

@@ -1,0 +1,24 @@
+diff --git a/solution.py b/solution.py
+index d3be4f5..bb7e53a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,17 @@
+-def jacobsthal_num(n): 
+-    pass
++def jacobsthal_num(n):
++    """Return the nth Jacobsthal number.
++
++    The sequence starts 0, 1, 1, 3, 5, 11, 21, ... and satisfies
++    J(n) = J(n - 1) + 2 * J(n - 2) for n >= 2.
++    """
++    if n < 0:
++        raise ValueError("n must be a non-negative integer")
++    if n == 0:
++        return 0
++    if n == 1:
++        return 1
++
++    prev, curr = 0, 1
++    for _ in range(2, n + 1):
++        prev, curr = curr, curr + 2 * prev
++    return curr

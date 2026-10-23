@@ -1,0 +1,86 @@
+diff --git a/ledger/__init__.py b/ledger/__init__.py
+index 2f0f364..d9172d5 100644
+--- a/ledger/__init__.py
++++ b/ledger/__init__.py
+@@ -1,2 +1,2 @@
+ from .book import Book
+-from .errors import LedgerError, UnknownAccount
++from .errors import InvalidAmount, LedgerError, SelfTransfer, UnknownAccount
+diff --git a/ledger/book.py b/ledger/book.py
+index ea150f9..a447351 100644
+--- a/ledger/book.py
++++ b/ledger/book.py
+@@ -1,4 +1,4 @@
+-from .errors import UnknownAccount
++from .errors import InvalidAmount, SelfTransfer, UnknownAccount
+ 
+ 
+ class Book:
+@@ -10,9 +10,13 @@ class Book:
+             raise UnknownAccount(account)
+         return self.balances[account]
+ 
+-    def transfer(self, src, dst, amount):
++    def transfer(self, src: str, dst: str, amount: float) -> None:
+         for a in (src, dst):
+             if a not in self.balances:
+                 raise UnknownAccount(a)
++        if src == dst:
++            raise SelfTransfer(src)
++        if amount <= 0:
++            raise InvalidAmount(amount)
+         self.balances[src] -= amount
+         self.balances[dst] += amount
+diff --git a/ledger/errors.py b/ledger/errors.py
+index 8bc408e..097631d 100644
+--- a/ledger/errors.py
++++ b/ledger/errors.py
+@@ -4,3 +4,11 @@ class LedgerError(Exception):
+ 
+ class UnknownAccount(LedgerError):
+     pass
++
++
++class InvalidAmount(LedgerError):
++    """Raised when a transfer amount is zero or negative."""
++
++
++class SelfTransfer(LedgerError):
++    """Raised when a transfer's source and destination are the same account."""
+diff --git a/test_book.py b/test_book.py
+index 56affe9..83b5959 100644
+--- a/test_book.py
++++ b/test_book.py
+@@ -1,6 +1,6 @@
+ import unittest
+ 
+-from ledger import Book, UnknownAccount
++from ledger import Book, InvalidAmount, LedgerError, SelfTransfer, UnknownAccount
+ 
+ 
+ class BookTest(unittest.TestCase):
+@@ -13,6 +13,24 @@ class BookTest(unittest.TestCase):
+         with self.assertRaises(UnknownAccount):
+             Book({"a": 1}).transfer("a", "zz", 1)
+ 
++    def test_rejects_non_positive_amounts(self):
++        for amount in (0, -5):
++            with self.subTest(amount=amount):
++                b = Book({"a": 10, "b": 0})
++                with self.assertRaises(InvalidAmount):
++                    b.transfer("a", "b", amount)
++                self.assertEqual((b.balance("a"), b.balance("b")), (10, 0))
++
++    def test_rejects_self_transfer(self):
++        b = Book({"a": 10})
++        with self.assertRaises(SelfTransfer):
++            b.transfer("a", "a", 5)
++        self.assertEqual(b.balance("a"), 10)
++
++    def test_rejections_are_ledger_errors(self):
++        self.assertTrue(issubclass(InvalidAmount, LedgerError))
++        self.assertTrue(issubclass(SelfTransfer, LedgerError))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

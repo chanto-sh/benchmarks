@@ -1,0 +1,81 @@
+diff --git a/requests/utils.py b/requests/utils.py
+index 8d17b6b..2ab2125 100644
+--- a/requests/utils.py
++++ b/requests/utils.py
+@@ -24,7 +24,7 @@ from . import certs
+ from .compat import parse_http_list as _parse_list_header
+ from .compat import (quote, urlparse, bytes, str, OrderedDict, unquote, is_py2,
+                      builtin_str, getproxies, proxy_bypass, urlunparse,
+-                     basestring)
++                     basestring, chardet)
+ from .cookies import RequestsCookieJar, cookiejar_from_dict
+ from .structures import CaseInsensitiveDict
+ from .exceptions import InvalidURL, FileModeWarning
+@@ -359,12 +359,21 @@ def get_encoding_from_headers(headers):
+ def stream_decode_response_unicode(iterator, r):
+     """Stream decodes a iterator."""
+ 
+-    if r.encoding is None:
++    if r.encoding is None and not r._content_consumed:
++        # The encoding of a streaming response can only be detected once the
++        # whole body has been read.
++        content = b''.join(iterator)
++        encoding = chardet.detect(content)['encoding']
++        iterator = (content,)
++    else:
++        encoding = r.encoding or r.apparent_encoding
++
++    if encoding is None:
+         for item in iterator:
+             yield item
+         return
+ 
+-    decoder = codecs.getincrementaldecoder(r.encoding)(errors='replace')
++    decoder = codecs.getincrementaldecoder(encoding)(errors='replace')
+     for chunk in iterator:
+         rv = decoder.decode(chunk)
+         if rv:
+diff --git a/tests/test_requests.py b/tests/test_requests.py
+index d2a2714..c0178c5 100755
+--- a/tests/test_requests.py
++++ b/tests/test_requests.py
+@@ -980,6 +980,24 @@ class TestRequests:
+         chunks = r.iter_content(decode_unicode=True)
+         assert all(isinstance(chunk, str) for chunk in chunks)
+ 
++    def test_response_decode_unicode_without_encoding(self):
++        """
++        When no encoding is set, decode_unicode should fall back to the
++        apparent encoding, just like Response.text.
++        """
++        r = requests.Response()
++        r._content_consumed = True
++        r._content = b'the content'
++
++        chunks = r.iter_content(decode_unicode=True)
++        assert all(isinstance(chunk, str) for chunk in chunks)
++
++        # also for streaming
++        r = requests.Response()
++        r.raw = io.BytesIO(b'the content')
++        chunks = r.iter_content(decode_unicode=True)
++        assert all(isinstance(chunk, str) for chunk in chunks)
++
+     def test_response_chunk_size_int(self):
+         """Ensure that chunk_size is passed as an integer, otherwise
+         raise a TypeError.
+diff --git a/tests/test_utils.py b/tests/test_utils.py
+index 17149d2..7f0b86f 100644
+--- a/tests/test_utils.py
++++ b/tests/test_utils.py
+@@ -25,7 +25,9 @@ class TestSuperLen:
+         'stream, value', (
+             (StringIO.StringIO, 'Test'),
+             (BytesIO, b'Test'),
+-            pytest.mark.skipif('cStringIO is None')((cStringIO, 'Test')),
++            pytest.param(cStringIO, 'Test',
++                         marks=pytest.mark.skipif(cStringIO is None,
++                                                  reason='cStringIO is not available')),
+         ))
+     def test_io_streams(self, stream, value):
+         """Ensures that we properly deal with different kinds of IO streams."""

@@ -1,0 +1,86 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..0697004 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,79 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _pair(a, b):
++    """A bijection N x N -> N whose keys are linear in the input bit sizes.
++
++    A number x is represented by the bit string of x + 1 with its leading 1
++    removed ("beta" coding).  For strings of lengths m and n, all pairs with
++    m + n = M are packed into the contiguous block of M-bit strings, ordered
++    by m.  This makes the result only about len(beta(a)) + len(beta(b)) bits.
++    """
++    ea = a + 1
++    ma = ea.bit_length() - 1
++    sa = ea - (1 << ma)
++
++    eb = b + 1
++    mb = eb.bit_length() - 1
++    sb = eb - (1 << mb)
++
++    total = ma + mb
++    if total == 0:
++        return 0
++    return 1 + ((total - 1 + ma) << total) + ((sa << mb) | sb)
++
++
++def _start(total):
++    """Smallest key in the block of pairs with total string length `total`."""
++    if total == 0:
++        return 0
++    return 1 + ((total - 1) << total)
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    if n == 0:
++        return 0, 0
++
++    lo, hi = 0, n.bit_length()
++    while lo < hi:
++        mid = (lo + hi + 1) // 2
++        if _start(mid) <= n:
++            lo = mid
++        else:
++            hi = mid - 1
++    total = lo
++
++    rest = n - _start(total)
++    low_mask = (1 << total) - 1
++    payload = rest & low_mask
++    ma = rest >> total
++
++    mb = total - ma
++    if ma:
++        sa = payload >> mb
++    else:
++        sa = 0
++    if mb:
++        sb = payload & ((1 << mb) - 1)
++    else:
++        sb = 0
++
++    return ((1 << ma) | sa) - 1, ((1 << mb) | sb) - 1
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(value, key) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

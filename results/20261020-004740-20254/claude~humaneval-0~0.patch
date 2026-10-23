@@ -1,0 +1,13 @@
+diff --git a/solution.py b/solution.py
+index 8ad0e07..f5a4e8b 100644
+--- a/solution.py
++++ b/solution.py
+@@ -9,3 +9,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
+     >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
+     True
+     """
++    for i, a in enumerate(numbers):
++        for b in numbers[i + 1:]:
++            if abs(a - b) < threshold:
++                return True
++    return False

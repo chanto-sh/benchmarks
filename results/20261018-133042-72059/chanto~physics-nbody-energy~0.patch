@@ -1,0 +1,117 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..bea7cf1 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,32 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses velocity Verlet (kick-drift-kick), which is symplectic and therefore
++    keeps the energy error bounded over long integrations instead of drifting.
++    """
++    n = len(masses)
++    positions = [list(p) for p in positions]
++    velocities = [list(v) for v in velocities]
++
++    acc = accelerations(masses, positions, G)
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        # Kick: advance velocities by half a step.
++        for i in range(n):
++            velocities[i][0] += half_dt * acc[i][0]
++            velocities[i][1] += half_dt * acc[i][1]
++
++        # Drift: advance positions using the half-step velocities.
++        for i in range(n):
++            positions[i][0] += dt * velocities[i][0]
++            positions[i][1] += dt * velocities[i][1]
++
++        # Kick: recompute accelerations and advance velocities the other half.
++        acc = accelerations(masses, positions, G)
++        for i in range(n):
++            velocities[i][0] += half_dt * acc[i][0]
++            velocities[i][1] += half_dt * acc[i][1]
++
++    return positions, velocities
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..cd426bc 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,6 +4,13 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def total_momentum(masses, velocities):
++    return [
++        sum(m * v[0] for m, v in zip(masses, velocities)),
++        sum(m * v[1] for m, v in zip(masses, velocities)),
++    ]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +24,59 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_two_body_energy(self):
++        # Equal masses with a highly eccentric relative orbit (e = 0.5).
++        m = [1.0, 1.0]
++        pos = [[-0.5, 0.0], [0.5, 0.0]]
++        v = math.sqrt(3.0)
++        vel = [[0.0, -v / 2], [0.0, v / 2]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++
++    def test_figure_eight_energy_and_momentum(self):
++        # Chenciner-Montgomery figure-eight solution for three equal masses.
++        m = [1.0, 1.0, 1.0]
++        x, y = 0.97000436, -0.24308753
++        vx, vy = -0.93240737, -0.86473146
++        pos = [[x, y], [-x, -y], [0.0, 0.0]]
++        vel = [[vx / 2, vy / 2], [vx / 2, vy / 2], [-vx, -vy]]
++        e0 = energy(m, pos, vel)
++        p0 = total_momentum(m, vel)
++        p, q = simulate(m, pos, vel, 0.002, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-5)
++        for got, want in zip(total_momentum(m, q), p0):
++            self.assertAlmostEqual(got, want, places=10)
++
++    def test_lagrange_three_body_long_run(self):
++        # Equal masses at the vertices of an equilateral triangle.
++        m = [1.0, 1.0, 1.0]
++        a = 2.0
++        omega = math.sqrt(3.0 / a**3)
++        r = a / math.sqrt(3.0)
++        pos = [[r, 0.0], [-r / 2, a / 2], [-r / 2, -a / 2]]
++        vel = [
++            [0.0, omega * r],
++            [-omega * a / 2, -omega * r / 2],
++            [omega * a / 2, -omega * r / 2],
++        ]
++        e0 = energy(m, pos, vel)
++        p0 = total_momentum(m, vel)
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++        for got, want in zip(total_momentum(m, q), p0):
++            self.assertAlmostEqual(got, want, places=10)
++
++    def test_does_not_modify_inputs(self):
++        m = [3.0, 1.0]
++        pos = [[-0.5, 0.0], [1.5, 0.0]]
++        vel = [[0.0, -0.5], [0.0, 1.5]]
++        pos_copy = [xy[:] for xy in pos]
++        vel_copy = [xy[:] for xy in vel]
++        simulate(m, pos, vel, 0.01, 100)
++        self.assertEqual(pos, pos_copy)
++        self.assertEqual(vel, vel_copy)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

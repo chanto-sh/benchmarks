@@ -1,0 +1,130 @@
+diff --git a/react.go b/react.go
+index fabc3c0..4a051f3 100644
+--- a/react.go
++++ b/react.go
+@@ -1,36 +1,115 @@
+ package react
+ 
+-// Define reactor, cell and canceler types here.
+-// These types will implement the Reactor, Cell and Canceler interfaces, respectively.
++// reactor holds all cells in creation order. Because a compute cell can only
++// depend on cells that already exist, creation order is a valid topological
++// order: recomputing the cells in this order guarantees dependencies are
++// updated before the cells that depend on them.
++type reactor struct {
++	cells []*cell
++}
++
++// cell implements InputCell and ComputeCell. An input cell has a nil compute
++// function; its value is set directly.
++type cell struct {
++	value     int
++	compute   func() int
++	callbacks []*callbackEntry
++	reactor   *reactor
++}
++
++// callbackEntry is a registered change notification with an active flag so
++// that Cancel is idempotent.
++type callbackEntry struct {
++	fn     func(int)
++	active bool
++	cell   *cell
++}
++
++type canceler struct {
++	cb *callbackEntry
++}
+ 
+ func (c *canceler) Cancel() {
+-	panic("Please implement the Cancel function")
++	if c == nil || c.cb == nil || !c.cb.active {
++		return
++	}
++	c.cb.active = false
++	cell := c.cb.cell
++	for i, cb := range cell.callbacks {
++		if cb == c.cb {
++			cell.callbacks = append(cell.callbacks[:i], cell.callbacks[i+1:]...)
++			break
++		}
++	}
+ }
+ 
+ func (c *cell) Value() int {
+-	panic("Please implement the Value function")
++	return c.value
+ }
+ 
+ func (c *cell) SetValue(value int) {
+-	panic("Please implement the SetValue function")
++	c.value = value
++	c.reactor.recompute()
+ }
+ 
+ func (c *cell) AddCallback(callback func(int)) Canceler {
+-	panic("Please implement the AddCallback function")
++	cb := &callbackEntry{fn: callback, active: true, cell: c}
++	c.callbacks = append(c.callbacks, cb)
++	return &canceler{cb: cb}
++}
++
++func (c *cell) fireCallbacks() {
++	// Copy so callbacks can be added/removed during notification.
++	callbacks := make([]*callbackEntry, len(c.callbacks))
++	copy(callbacks, c.callbacks)
++	for _, cb := range callbacks {
++		if cb.active {
++			cb.fn(c.value)
++		}
++	}
++}
++
++// recompute recalculates every compute cell in creation (topological) order
++// and then notifies callbacks only for cells whose value actually changed.
++func (r *reactor) recompute() {
++	changed := make([]*cell, 0)
++	for _, c := range r.cells {
++		if c.compute == nil {
++			continue
++		}
++		newValue := c.compute()
++		if newValue != c.value {
++			c.value = newValue
++			changed = append(changed, c)
++		}
++	}
++	for _, c := range changed {
++		c.fireCallbacks()
++	}
+ }
+ 
+ func New() Reactor {
+-	panic("Please implement the New function")
++	return &reactor{}
+ }
+ 
+ func (r *reactor) CreateInput(initial int) InputCell {
+-	panic("Please implement the CreateInput function")
++	c := &cell{value: initial, reactor: r}
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute1(dep Cell, compute func(int) int) ComputeCell {
+-	panic("Please implement the CreateCompute1 function")
++	c := &cell{reactor: r}
++	c.compute = func() int { return compute(dep.Value()) }
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
+ }
+ 
+ func (r *reactor) CreateCompute2(dep1, dep2 Cell, compute func(int, int) int) ComputeCell {
+-	panic("Please implement the CreateCompute2 function")
++	c := &cell{reactor: r}
++	c.compute = func() int { return compute(dep1.Value(), dep2.Value()) }
++	c.value = c.compute()
++	r.cells = append(r.cells, c)
++	return c
+ }

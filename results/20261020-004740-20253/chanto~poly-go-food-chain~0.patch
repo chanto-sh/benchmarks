@@ -1,0 +1,54 @@
+diff --git a/food_chain.go b/food_chain.go
+index b46ea45..2372568 100644
+--- a/food_chain.go
++++ b/food_chain.go
+@@ -1,13 +1,46 @@
+ package foodchain
+ 
++import "strings"
++
++var animals = []string{"", "fly", "spider", "bird", "cat", "dog", "goat", "cow", "horse"}
++
++var exclamations = map[int]string{
++	2: "It wriggled and jiggled and tickled inside her.",
++	3: "How absurd to swallow a bird!",
++	4: "Imagine that, to swallow a cat!",
++	5: "What a hog, to swallow a dog!",
++	6: "Just opened her throat and swallowed a goat!",
++	7: "I don't know how she swallowed a cow!",
++}
++
+ func Verse(v int) string {
+-	panic("Please implement the Verse function")
++	lines := []string{"I know an old lady who swallowed a " + animals[v] + "."}
++	if v == 8 {
++		lines = append(lines, "She's dead, of course!")
++		return strings.Join(lines, "\n")
++	}
++	if exclamation, ok := exclamations[v]; ok {
++		lines = append(lines, exclamation)
++	}
++	for i := v; i > 1; i-- {
++		prey := animals[i-1]
++		if i-1 == 2 {
++			prey += " that wriggled and jiggled and tickled inside her"
++		}
++		lines = append(lines, "She swallowed the "+animals[i]+" to catch the "+prey+".")
++	}
++	lines = append(lines, "I don't know why she swallowed the fly. Perhaps she'll die.")
++	return strings.Join(lines, "\n")
+ }
+ 
+ func Verses(start, end int) string {
+-	panic("Please implement the Verses function")
++	verses := make([]string, 0, end-start+1)
++	for v := start; v <= end; v++ {
++		verses = append(verses, Verse(v))
++	}
++	return strings.Join(verses, "\n\n")
+ }
+ 
+ func Song() string {
+-	panic("Please implement the Song function")
++	return Verses(1, 8)
+ }

@@ -1,0 +1,80 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..7afb144
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,61 @@
++# BLOCKED: exact median in O(1) memory
++
++## Status
++
++- Fixed: `median([1, 2, 3, 4])` returned `3`; it now returns `2.5` (mean of the
++  two middle values). Odd, empty, and generator cases still pass.
++- Blocked: `test_constant_memory` requires an **exact** median of a
++  single-pass stream in **under 64 KiB**, and that is not possible in general.
++
++Current measured peak for the test feed (200,000 floats) is **7,223,968 bytes
++(~7.05 MiB)** against the 64 KiB limit. Correctness of the value now matches
++the test's expected `(exact[99_999] + exact[100_000]) / 2`.
++
++## Why it is impossible
++
++The input is an arbitrary single-pass iterable and the result must be exact.
++
++- Any exact one-pass algorithm that selects the median of `n` arbitrary values
++  needs Ω(n) bits of state. This is the classic lower bound for selection with
++  limited storage (Munro & Paterson, *Selection and sorting with limited
++  storage*, 1980); the adversary can force the algorithm to retain enough of
++  the input to distinguish inputs whose medians differ.
++- Concretely, `n` 64-bit floats carry up to 64n bits of information. With a
++  64 KiB budget only ~512K bits are available, far less than the 12.8M bits in
++  the test's 200,000 values. A fixed-size summary (histogram, sketch, sample)
++  must therefore lose information, so it cannot guarantee the exact float
++  returned by the test.
++- The bound does not come from Python's `sorted` in particular. No container,
++  selection algorithm, or incremental data structure changes it; `sorted` is
++  simply the straightforward Ω(n)-space exact implementation.
++
++## Why the usual "workarounds" are not valid here
++
++Per the task, I did not work around the impossibility. In particular:
++
++- **External/temp-file selection**: spilling the stream to disk and doing
++  multi-pass selection keeps RAM low but still uses O(n) storage. It also has
++  to consume the entire generator up front, so it is not constant memory in
++  the intended sense.
++- **Approximate streaming medians** (P², t-digest, reservoir sampling,
++  histograms) use bounded memory but are not exact, and this test asserts
++  equality with the exact float.
++- **Fixed-domain counting**: could be O(domain) memory, but not O(1), and the
++  feed contains arbitrary Gaussian floats; matching the exact expected value
++  would still require retaining the original values.
++- **Multi-pass refinement**: would be exact if the input were re-iterable and
++  could be narrowed each pass, but `feed()` is a one-shot generator.
++
++## What would unblock this
++
++One of the following requirement changes is needed:
++
++1. Accept a bounded **approximation** (with an explicit error/rank guarantee)
++   instead of exact equality, or
++2. Supply a **re-iterable/seekable** input so an exact multi-pass selection
++   algorithm can run in O(1) working memory, or
++3. Allow O(n) auxiliary storage (memory or disk) for exact results, as the
++   current implementation does.
++
++Until then `test_constant_memory` remains failing by design, and the exact
++implementation stays O(n) in space.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

@@ -1,0 +1,88 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..80ad95a 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,81 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the removable singularity at x = 0."""
++    if abs(x) < 1e-4:
++        x2 = x * x
++        return 1.0 - x2 / 6.0 * (1.0 - x2 / 20.0 * (1.0 - x2 / 42.0))
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the removable singularity at x = 0."""
++    if abs(x) < 1e-4:
++        x2 = x * x
++        return 1.0 + x2 / 6.0 * (1.0 + x2 / 20.0 * (1.0 + x2 / 42.0))
++    return math.sinh(x) / x
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (signed amplitude, cos(phase), sin(phase))."""
++    a = k - m * omega * omega
++    b = c * omega
++    scale = math.hypot(a, b)
++    if scale == 0.0:
++        raise ValueError("no finite steady state at undamped resonance")
++    return F0 / scale, a / scale, b / scale
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    a = k - m * omega * omega
++    b = c * omega
++    return abs(F0) / math.hypot(a, b)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    # Particular solution: A cos(omega t - phi), written without the phase.
++    amp, cos_phi, sin_phi = _steady_state(m, k, c, F0, omega)
++    xp0 = amp * cos_phi
++    vp0 = amp * omega * sin_phi
++    xp = amp * (cos_phi * math.cos(omega * t) + sin_phi * math.sin(omega * t))
++
++    # Homogeneous part in the form x0*h0(t) + v0*h1(t).
++    y0 = x0 - xp0
++    y1 = v0 - vp0
++
++    alpha = -0.5 * c / m
++    q = (4.0 * m * k - c * c) / (4.0 * m * m)
++    decay = math.exp(alpha * t)
++
++    if q >= 0.0:
++        beta = math.sqrt(q)
++        theta = beta * t
++        s = _sinc(theta)
++        h0 = decay * (math.cos(theta) - alpha * t * s)
++        h1 = decay * t * s
++    else:
++        delta = math.sqrt(-q)
++        theta = delta * t
++        if theta < 0.5:
++            s = _sinhc(theta)
++            h0 = decay * (math.cosh(theta) - alpha * t * s)
++            h1 = decay * t * s
++        else:
++            # Avoid overflow from exp(alpha*t) * sinh(delta*t) for stiff systems.
++            r1 = alpha + delta
++            r2 = alpha - delta
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            den = r1 - r2
++            h0 = (r1 * e2 - r2 * e1) / den
++            h1 = (e1 - e2) / den
++
++    return xp + y0 * h0 + y1 * h1

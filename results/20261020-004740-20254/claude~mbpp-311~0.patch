@@ -1,0 +1,25 @@
+diff --git a/solution.py b/solution.py
+index 451015d..b16f8b2 100644
+--- a/solution.py
++++ b/solution.py
+@@ -1,2 +1,18 @@
+-def set_left_most_unset_bit(n): 
+-    pass
++def set_left_most_unset_bit(n):
++    """Set the leftmost (most significant) unset bit of ``n``.
++
++    Bits are considered from the most significant set bit downwards,
++    including the bit just above it when every lower bit is already set.
++    """
++    if n < 0:
++        raise ValueError("n must be a non-negative integer")
++
++    width = n.bit_length() or 1
++    zeros = ~n & ((1 << width) - 1)
++
++    if zeros:
++        position = zeros.bit_length() - 1
++    else:
++        position = width
++
++    return n | (1 << position)

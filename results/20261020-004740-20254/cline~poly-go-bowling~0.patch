@@ -1,0 +1,160 @@
+diff --git a/bowling.go b/bowling.go
+index 15b4fe4..246c9ed 100644
+--- a/bowling.go
++++ b/bowling.go
+@@ -1,15 +1,151 @@
+ package bowling
+ 
+-// Define the Game type here.
++import "errors"
+ 
++// Game keeps track of the rolls of a single bowling game.
++type Game struct {
++	rolls []int
++}
++
++// NewGame returns a new, unstarted game.
+ func NewGame() *Game {
+-	panic("Please implement the NewGame function")
++	return &Game{}
+ }
+ 
++// Roll records a throw of the ball that knocked down pins.
+ func (g *Game) Roll(pins int) error {
+-	panic("Please implement the Roll function")
++	if pins < 0 {
++		return errors.New("Negative roll is invalid")
++	}
++	if pins > 10 {
++		return errors.New("Pin count exceeds pins on the lane")
++	}
++
++	// Walk the first nine frames to find where the current roll belongs.
++	i := 0
++	for frame := 0; frame < 9; frame++ {
++		if i >= len(g.rolls) {
++			// This roll starts a new frame with a full rack of pins.
++			g.rolls = append(g.rolls, pins)
++			return nil
++		}
++		if g.rolls[i] == 10 {
++			// Strike: the frame is complete after one roll.
++			i++
++			continue
++		}
++		if i+1 < len(g.rolls) {
++			// The frame already has both of its rolls.
++			i += 2
++			continue
++		}
++		// This is the second roll of the current frame.
++		if g.rolls[i]+pins > 10 {
++			return errors.New("Pin count exceeds pins on the lane")
++		}
++		g.rolls = append(g.rolls, pins)
++		return nil
++	}
++
++	// Everything from i on belongs to the tenth frame and its fill balls.
++	return g.rollTenth(pins, i)
++}
++
++// rollTenth validates and records a roll in the tenth frame or its fill balls.
++func (g *Game) rollTenth(pins, i int) error {
++	tenth := g.rolls[i:]
++	switch len(tenth) {
++	case 0:
++		// First roll of the tenth frame.
++		g.rolls = append(g.rolls, pins)
++		return nil
++	case 1:
++		if tenth[0] == 10 {
++			// First fill ball after a strike: a fresh rack is standing.
++			g.rolls = append(g.rolls, pins)
++			return nil
++		}
++		if tenth[0]+pins > 10 {
++			return errors.New("Pin count exceeds pins on the lane")
++		}
++		g.rolls = append(g.rolls, pins)
++		return nil
++	case 2:
++		if tenth[0] == 10 {
++			// Second fill ball after a strike. A fresh rack is standing
++			// unless the first fill ball was itself a strike.
++			if tenth[1] != 10 && tenth[1]+pins > 10 {
++				return errors.New("Pin count exceeds pins on the lane")
++			}
++			g.rolls = append(g.rolls, pins)
++			return nil
++		}
++		if tenth[0]+tenth[1] == 10 {
++			// A spare in the tenth frame gets exactly one fill ball,
++			// thrown at a fresh rack of pins.
++			g.rolls = append(g.rolls, pins)
++			return nil
++		}
++		// The tenth frame was an open frame.
++		return errors.New("Cannot roll after game is over")
++	default:
++		return errors.New("Cannot roll after game is over")
++	}
+ }
+ 
++// Score returns the total score of the game.
+ func (g *Game) Score() (int, error) {
+-	panic("Please implement the Score function")
++	if !g.complete() {
++		return 0, errors.New("Score cannot be taken until the end of the game")
++	}
++
++	total := 0
++	i := 0
++	for frame := 0; frame < 10; frame++ {
++		switch {
++		case g.rolls[i] == 10:
++			// Strike: ten pins plus the next two rolls.
++			total += 10 + g.rolls[i+1] + g.rolls[i+2]
++			i++
++		case g.rolls[i]+g.rolls[i+1] == 10:
++			// Spare: ten pins plus the next roll.
++			total += 10 + g.rolls[i+2]
++			i += 2
++		default:
++			// Open frame: just the pins knocked down.
++			total += g.rolls[i] + g.rolls[i+1]
++			i += 2
++		}
++	}
++	return total, nil
++}
++
++// complete reports whether every roll required to score the game has been made.
++func (g *Game) complete() bool {
++	i := 0
++	for frame := 0; frame < 9; frame++ {
++		if i >= len(g.rolls) {
++			return false
++		}
++		if g.rolls[i] == 10 {
++			i++
++		} else {
++			i += 2
++		}
++	}
++
++	if i >= len(g.rolls) {
++		return false
++	}
++	tenth := g.rolls[i:]
++	if tenth[0] == 10 {
++		return len(tenth) >= 3
++	}
++	if len(tenth) < 2 {
++		return false
++	}
++	if tenth[0]+tenth[1] == 10 {
++		return len(tenth) >= 3
++	}
++	return len(tenth) == 2
+ }

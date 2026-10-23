@@ -1,0 +1,185 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..a511bf2 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -10,5 +12,170 @@ def newtonian(gm):
+ 
+ 
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``accel`` is the central acceleration field.  Angular momentum is
++    conserved, so the motion reduces to the one-dimensional radial equation
++
++        r'' = L**2 / r**3 + a_r(r),
++
++    where ``L = x*vy - y*vx``.  Periapsis passages are the upward crossings
++    of ``r'`` through zero.  The radial equation is integrated with an
++    adaptive Dormand-Prince step and the crossings are located from the
++    step's cubic Hermite interpolant.
++    """
++    x0, y0 = r0
++    vx0, vy0 = v0
++    r = math.hypot(x0, y0)
++    if r == 0.0:
++        raise ValueError("starting position must not be the origin")
++    initial_r = r
++
++    # Radial direction used to sample the (central) acceleration law.
++    ux, uy = x0 / r, y0 / r
++
++    def radial_accel(radius):
++        ax, ay = accel(ux * radius, uy * radius)
++        return ax * ux + ay * uy
++
++    angular_momentum = x0 * vy0 - y0 * vx0
++    vr = (x0 * vx0 + y0 * vy0) / r
++    L2 = angular_momentum * angular_momentum
++
++    def acceleration(radius):
++        return L2 / (radius * radius * radius) + radial_accel(radius)
++
++    # A circular orbit has no isolated closest approach.  Its radial period
++    # is conventionally the orbital period.
++    a0 = radial_accel(r)
++    centrifugal = L2 / (r * r * r)
++    radial_acceleration = centrifugal + a0
++    velocity_scale = abs(vr) + abs(angular_momentum) / r
++    accel_scale = abs(a0) + abs(centrifugal)
++    if (angular_momentum != 0.0 and accel_scale > 0.0
++            and abs(vr) <= 1e-12 * velocity_scale
++            and abs(radial_acceleration) <= 1e-12 * accel_scale):
++        return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    # Dormand-Prince 5(4) coefficients.
++    a21 = 1.0 / 5.0
++    a31, a32 = 3.0 / 40.0, 9.0 / 40.0
++    a41, a42, a43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++    a51, a52, a53, a54 = (19372.0 / 6561.0, -25360.0 / 2187.0,
++                          64448.0 / 6561.0, -212.0 / 729.0)
++    a61, a62, a63, a64, a65 = (9017.0 / 3168.0, -355.0 / 33.0,
++                               46732.0 / 5247.0, 49.0 / 176.0,
++                               -5103.0 / 18656.0)
++    b1, b3, b4, b5, b6 = (35.0 / 384.0, 500.0 / 1113.0,
++                          125.0 / 192.0, -2187.0 / 6784.0,
++                          11.0 / 84.0)
++    e1, e3, e4, e5, e6, e7 = (71.0 / 57600.0, -71.0 / 16695.0,
++                              71.0 / 1920.0, -17253.0 / 339200.0,
++                              22.0 / 525.0, -1.0 / 40.0)
++
++    rtol = 1e-11
++    atol_r = 1e-13 * r
++    atol_vr = 1e-13 * max(velocity_scale, abs(angular_momentum) / r)
++
++    def hermite_radial_velocity(s, r0_, vr0_, r1_, vr1_, step):
++        """Derivative of the cubic Hermite interpolant at fraction ``s``."""
++        return ((6.0 * s * s - 6.0 * s) * r0_
++                + (3.0 * s * s - 4.0 * s + 1.0) * step * vr0_
++                + (-6.0 * s * s + 6.0 * s) * r1_
++                + (3.0 * s * s - 2.0 * s) * step * vr1_)
++
++    def hermite_radius(s, r0_, vr0_, r1_, vr1_, step):
++        s2 = s * s
++        s3 = s2 * s
++        return ((2.0 * s3 - 3.0 * s2 + 1.0) * r0_
++                + (s3 - 2.0 * s2 + s) * step * vr0_
++                + (-2.0 * s3 + 3.0 * s2) * r1_
++                + (s3 - s2) * step * vr1_)
++
++    # Initial step based on the local radial timescales.
++    if velocity_scale > 0.0:
++        h = 0.01 * r / velocity_scale
++    elif abs(radial_acceleration) > 0.0:
++        h = 0.01 * math.sqrt(r / abs(radial_acceleration))
++    else:
++        raise ValueError("orbit does not have a finite radial period")
++
++    t = 0.0
++    # If we start exactly at periapsis, count it as the first passage.
++    passages = [0.0] if vr == 0.0 and radial_acceleration > 0.0 else []
++    steps = 0
++
++    while len(passages) < 2:
++        steps += 1
++        if steps > 100000:
++            raise ValueError("orbit does not have a finite radial period")
++
++        # One Dormand-Prince 5(4) trial step.
++        k1r, k1v = vr, acceleration(r)
++        k2r = vr + h * (a21 * k1v)
++        k2v = acceleration(r + h * (a21 * k1r))
++        k3r = vr + h * (a31 * k1v + a32 * k2v)
++        k3v = acceleration(r + h * (a31 * k1r + a32 * k2r))
++        k4r = vr + h * (a41 * k1v + a42 * k2v + a43 * k3v)
++        k4v = acceleration(r + h * (a41 * k1r + a42 * k2r + a43 * k3r))
++        k5r = vr + h * (a51 * k1v + a52 * k2v + a53 * k3v + a54 * k4v)
++        k5v = acceleration(r + h * (a51 * k1r + a52 * k2r + a53 * k3r + a54 * k4r))
++        k6r = vr + h * (a61 * k1v + a62 * k2v + a63 * k3v + a64 * k4v + a65 * k5v)
++        k6v = acceleration(r + h * (a61 * k1r + a62 * k2r + a63 * k3r + a64 * k4r + a65 * k5r))
++        r_new = r + h * (b1 * k1r + b3 * k3r + b4 * k4r + b5 * k5r + b6 * k6r)
++        vr_new = vr + h * (b1 * k1v + b3 * k3v + b4 * k4v + b5 * k5v + b6 * k6v)
++        if not (math.isfinite(r_new) and math.isfinite(vr_new)) or r_new <= 0.0:
++            # The trial step left the physical radial domain; retry smaller.
++            h *= 0.2
++            continue
++        k7v = acceleration(r_new)
++
++        err_r = h * (e1 * k1r + e3 * k3r + e4 * k4r + e5 * k5r + e6 * k6r + e7 * vr_new)
++        err_vr = h * (e1 * k1v + e3 * k3v + e4 * k4v + e5 * k5v + e6 * k6v + e7 * k7v)
++
++        scale_r = atol_r + rtol * max(abs(r), abs(r_new))
++        scale_vr = atol_vr + rtol * max(abs(vr), abs(vr_new))
++        error = math.hypot(err_r / scale_r, err_vr / scale_vr)
++
++        if error > 1.0:
++            # Reject and retry with a smaller step.
++            factor = max(0.2, 0.9 * error ** -0.2)
++            h *= factor
++            continue
++
++        if r_new < 1e-14 * initial_r and vr_new < 0.0:
++            raise ValueError("orbit reaches the origin; radial period is undefined")
++        if r_new > 1e12 * initial_r and vr_new > 0.0:
++            raise ValueError("orbit is not bound; no successive periapses")
++
++        # A periapsis passage is a negative-to-positive crossing of vr.
++        if vr < 0.0 and vr_new >= 0.0:
++            lo, hi = 0.0, 1.0
++            for _ in range(60):
++                mid = 0.5 * (lo + hi)
++                if hermite_radial_velocity(mid, r, vr, r_new, vr_new, h) < 0.0:
++                    lo = mid
++                else:
++                    hi = mid
++            s = 0.5 * (lo + hi)
++            t_event = t + h * s
++            r_event = hermite_radius(s, r, vr, r_new, vr_new, h)
++            passages.append(t_event)
++            t = t_event
++            r = r_event
++            vr = 0.0
++            # Continue from the event; the next step will be controlled by
++            # the error estimator.  Avoid taking a very large first step.
++            h *= min(1.0, max(0.1, 1.0 - s))
++            continue
++
++        t += h
++        r, vr = r_new, vr_new
++
++        if error == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, max(0.2, 0.9 * error ** -0.2))
++        h *= factor
++
++    return passages[1] - passages[0]

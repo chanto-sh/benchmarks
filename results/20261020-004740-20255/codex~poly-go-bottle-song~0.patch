@@ -1,0 +1,46 @@
+diff --git a/bottle_song.go b/bottle_song.go
+index 0e79b84..1c059fc 100644
+--- a/bottle_song.go
++++ b/bottle_song.go
+@@ -1,5 +1,40 @@
+ package bottlesong
+ 
++import "strings"
++
+ func Recite(startBottles, takeDown int) []string {
+-	panic("Please implement the Recite function")
++	numbers := [...]string{
++		"no", "One", "Two", "Three", "Four", "Five",
++		"Six", "Seven", "Eight", "Nine", "Ten",
++	}
++
++	var verses []string
++	for bottles := startBottles; bottles > startBottles-takeDown; bottles-- {
++		if len(verses) > 0 {
++			verses = append(verses, "")
++		}
++
++		currentBottles := numbers[bottles]
++		if bottles == 1 {
++			currentBottles += " green bottle hanging on the wall,"
++		} else {
++			currentBottles += " green bottles hanging on the wall,"
++		}
++
++		remainingBottles := strings.ToLower(numbers[bottles-1])
++		if bottles-1 == 1 {
++			remainingBottles += " green bottle hanging on the wall."
++		} else {
++			remainingBottles += " green bottles hanging on the wall."
++		}
++
++		verses = append(verses,
++			currentBottles,
++			currentBottles,
++			"And if one green bottle should accidentally fall,",
++			"There'll be "+remainingBottles,
++		)
++	}
++
++	return verses
+ }

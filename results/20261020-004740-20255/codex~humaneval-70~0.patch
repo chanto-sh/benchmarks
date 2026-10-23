@@ -1,0 +1,15 @@
+diff --git a/solution.py b/solution.py
+index c5a4193..acbaaaf 100644
+--- a/solution.py
++++ b/solution.py
+@@ -10,3 +10,10 @@ def strange_sort_list(lst):
+     strange_sort_list([5, 5, 5, 5]) == [5, 5, 5, 5]
+     strange_sort_list([]) == []
+     '''
++    ordered = sorted(lst)
++    return [
++        ordered[index // 2]
++        if index % 2 == 0
++        else ordered[-(index // 2 + 1)]
++        for index in range(len(ordered))
++    ]

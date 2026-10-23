@@ -1,0 +1,74 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..7feaedb
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,51 @@
++# Release check blocked: `libfoo-1.4.2.tar.gz` checksum mismatch
++
++## Status
++
++`verify.py` had two real bugs, which are now fixed:
++
++1. Artifacts were opened in text mode (`open(path)`), so binary data raised
++   `UnicodeDecodeError`. They are now opened as `"rb"`.
++2. The computed digest was lowercase while `SHA256SUMS` stores uppercase hex,
++   so even a valid artifact was reported as a mismatch. Comparison is now
++   case-insensitive (`expected.lower()`).
++
++After the fix, `test_binary_files` and `test_reports_missing` pass, and
++`verify.py` gets as far as actually checking every artifact.
++
++## Why the release check still cannot pass
++
++The committed manifest and committed artifact genuinely disagree:
++
++```
++SHA256SUMS:  7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD  libfoo-1.4.2.tar.gz
++actual file: FDE9B2575EDBEFB297FA7D93738B4BB1F09B7F777D1723B90194AD53CD9BC9CE
++```
++
++`git status` shows no changes to `SHA256SUMS` or `artifacts/`, so the mismatch
++is present in the repository as committed. Consequently
++`test_release_artifacts_verify` fails with `['libfoo-1.4.2.tar.gz']`.
++
++A search of every object in the git repository (`git fsck --full --unreachable`
++found nothing dangling; all blobs were hashed) confirms that no stored version
++of the artifact matches `7BEE020A...356BD` — the only 4000-byte blob is the
++present, mismatching file.
++
++This cannot be fixed in code. Either the artifact is corrupt/tampered or the
++manifest entry is wrong, and the repository does not contain enough information
++to tell which, nor the original bytes needed to restore the artifact. I did not
++regenerate `SHA256SUMS` from the current file, because that would merely
++re-bless whatever bytes are on disk and defeat the purpose of the release
++checksum check.
++
++## What is needed from the release owner
++
++- Rebuild or re-download `artifacts/libfoo-1.4.2.tar.gz` from the trusted
++  source and confirm it hashes to
++  `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD`.
++- If the artifact is known-good and its real digest is
++  `FDE9B2575EDBEFB297FA7D93738B4BB1F09B7F777D1723B90194AD53CD9BC9CE`,
++  update the `libfoo` line in `SHA256SUMS` through the normal release process.
++
++Once the artifact and manifest agree, `python3 verify.py` and the CI test
++`test_release_artifacts_verify` will pass with the current `verify.py`.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

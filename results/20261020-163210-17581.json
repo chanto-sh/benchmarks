@@ -1,0 +1,566 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-20T16:32:10-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--repeat",
+      "5",
+      "--agents",
+      "chanto,chanto+adaptive",
+      "--seed",
+      "3031",
+      "--tasks",
+      "physics-heat-cfl"
+    ],
+    "bench_commit": "56672d3195e5181da82624812abb35c368dcc729",
+    "bench_dirty": true,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-56672d3-cacheab",
+      "sha256": "690ac41aad8a1c12b94193f1c4118ed7e116f6c3e738d79027064d370dd073ef"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.12",
+      "chanto+adaptive": "chanto 0.1.12"
+    },
+    "chanto_optimize": {
+      "chanto": [],
+      "chanto+adaptive": [
+        "adaptive_effort"
+      ]
+    },
+    "chanto_effort": null,
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": null,
+    "seed": 3031,
+    "repeat": 5,
+    "tasks": {
+      "physics-heat-cfl": "9c971a21057a1f0ac60e3799aa6c549b387700273ecc96dad0f8ef33f777f5b0"
+    },
+    "offline_profile_sha256": "5c2023da9eca87659283b8e94392297ea1c3a7d3d20559460da4a3c528ac90e9"
+  },
+  "results": [
+    {
+      "agent": "chanto",
+      "task": "physics-heat-cfl",
+      "rep": 0,
+      "passed": true,
+      "seconds": 264.8,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 119720,
+        "out": 11486,
+        "cached": 111488
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": true,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 9,
+        "input": 119720,
+        "output": 11486,
+        "cached": 111488
+      },
+      "meter_label": "chanto~physics-heat-cfl~0~b8900351",
+      "started_at": "2026-10-20T16:32:15-0700",
+      "ended_at": "2026-10-20T16:36:41-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~0.out",
+          "sha256": "8c103b80884f9446fa6f307a28374dfcd3a1bf089b3ff239e3e4cee44c6cb7cb"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~0.patch",
+          "sha256": "2af8860dd64092d07a8a0c5e26d1ce29ffb6e13f67b7e99e4a4d80bb6d09b635"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~0.check.txt",
+          "sha256": "97f674a38b0dd89e416d66524ea105d6f99415dfc668de9edeef18a038df75e1"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~0.session0.json",
+          "sha256": "0fa7fcc0d2a927f2c25acd156f4cdb67370507bf21c2a5904fde2c9c455b758b"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-heat-cfl",
+      "rep": 0,
+      "passed": true,
+      "seconds": 52.8,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.004s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.003s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 29693,
+        "out": 7198,
+        "cached": 22912
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 3,
+        "input": 29693,
+        "output": 7198,
+        "cached": 22912
+      },
+      "meter_label": "chanto+adaptive~physics-heat-cfl~0~e9256cb5",
+      "started_at": "2026-10-20T16:36:42-0700",
+      "ended_at": "2026-10-20T16:37:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~0.out",
+          "sha256": "5034b824c7bed3b0f04179899e919a4602dd53727a49b55bf7a4cefccf221972"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~0.patch",
+          "sha256": "3b1316c8b494d522624aea8061dd44b2a07ce9719e997a68605b023ab00006f2"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~0.check.txt",
+          "sha256": "d1c07ddab2caf2ca86cd84f8171840e6e7939e916bfcf1cb4859f1b9546ea06e"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~0.session0.json",
+          "sha256": "dd485f5663d029f9fd08cecaf29b4ed3b91382ecb6dfd727a7c0774db7b072b4"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-heat-cfl",
+      "rep": 1,
+      "passed": true,
+      "seconds": 29.8,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 39709,
+        "out": 5150,
+        "cached": 32640
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 39709,
+        "output": 5150,
+        "cached": 32640
+      },
+      "meter_label": "chanto~physics-heat-cfl~1~8f787620",
+      "started_at": "2026-10-20T16:37:37-0700",
+      "ended_at": "2026-10-20T16:38:08-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~1.out",
+          "sha256": "4294982352e510e94ccc69539467aaa5cb04438e205a3a8c11d5c7f7d744d57f"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~1.patch",
+          "sha256": "120d1ee0c1b7bec3e1ced80eb275fc3c76783fe3721335f4120aa84023a5658a"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~1.check.txt",
+          "sha256": "97f674a38b0dd89e416d66524ea105d6f99415dfc668de9edeef18a038df75e1"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~1.session0.json",
+          "sha256": "b7332776dbc00b643ac43827dac01a30a730529d04c5f8973f68d60bea4e3974"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-heat-cfl",
+      "rep": 1,
+      "passed": true,
+      "seconds": 37.4,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 30543,
+        "out": 6629,
+        "cached": 23680
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 3,
+        "input": 30543,
+        "output": 6629,
+        "cached": 23680
+      },
+      "meter_label": "chanto+adaptive~physics-heat-cfl~1~3c290fc2",
+      "started_at": "2026-10-20T16:38:10-0700",
+      "ended_at": "2026-10-20T16:38:48-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~1.out",
+          "sha256": "e481e6afabcafc61b1528363089bb8fe5c69d839961aa84c09f23b2c8ba2f01e"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~1.patch",
+          "sha256": "6adf0c2aa41652d4da605e38e69a98ac7dc1e89264e45a867bf4a04ababa7194"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~1.check.txt",
+          "sha256": "97f674a38b0dd89e416d66524ea105d6f99415dfc668de9edeef18a038df75e1"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~1.session0.json",
+          "sha256": "c2d42115d04b62fe0cf6da2ee1359cdf4a4764ee58f8a2db7832db2c93b0b5e1"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-heat-cfl",
+      "rep": 2,
+      "passed": true,
+      "seconds": 30.9,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 40503,
+        "out": 5975,
+        "cached": 33664
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 4,
+        "input": 40503,
+        "output": 5975,
+        "cached": 33664
+      },
+      "meter_label": "chanto+adaptive~physics-heat-cfl~2~44657c1e",
+      "started_at": "2026-10-20T16:38:50-0700",
+      "ended_at": "2026-10-20T16:39:22-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~2.out",
+          "sha256": "8776b437d035ec12661ecb3de477fac9b496f6f1253c48227c0deb8319b55868"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~2.patch",
+          "sha256": "c0f1d2155bac8e7da05044076b77f72920905d18e3f45e215e71fabdd2b56c99"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~2.check.txt",
+          "sha256": "97f674a38b0dd89e416d66524ea105d6f99415dfc668de9edeef18a038df75e1"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~2.session0.json",
+          "sha256": "028d82fd6563cf5b32e0c16b7c0c560d45e44f856630e4181e7f0a184dc6325e"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-heat-cfl",
+      "rep": 2,
+      "passed": false,
+      "seconds": 21.2,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhot spot, mixed ends: max error 0.00604 (tolerance 0.005)\n",
+      "tokens": {
+        "in": 25231,
+        "out": 3276,
+        "cached": 18688
+      },
+      "tampered": [],
+      "false_done": true,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 3,
+        "input": 25231,
+        "output": 3276,
+        "cached": 18688
+      },
+      "meter_label": "chanto~physics-heat-cfl~2~d4fcde05",
+      "started_at": "2026-10-20T16:39:23-0700",
+      "ended_at": "2026-10-20T16:39:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~2.out",
+          "sha256": "9f20a0ef64b051d33fc24d055f4a815f655b4d35fc82129ab70062699d4bb8d6"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~2.patch",
+          "sha256": "004a3c0319b80b245cc2e62e103a17b45d49a006630005d6cade25fb4dcd86cd"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~2.check.txt",
+          "sha256": "0fab208c1b809bbd959d669a3da3f6dc1484f8dc75b85daa1109d969220d694d"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~2.session0.json",
+          "sha256": "94969da595a05f3830eafe3b30417f6fee26cc7cf8128c0264c9c5921b58fbc1"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-heat-cfl",
+      "rep": 3,
+      "passed": false,
+      "seconds": 171.4,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhot spot, mixed ends: max error 0.00836 (tolerance 0.005)\n",
+      "tokens": {
+        "in": 125506,
+        "out": 8862,
+        "cached": 117632
+      },
+      "tampered": [],
+      "false_done": true,
+      "leaked": false,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": true,
+      "usage": {
+        "requests": 11,
+        "input": 125506,
+        "output": 8862,
+        "cached": 117632
+      },
+      "meter_label": "chanto+adaptive~physics-heat-cfl~3~acaab326",
+      "started_at": "2026-10-20T16:39:47-0700",
+      "ended_at": "2026-10-20T16:42:39-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~3.out",
+          "sha256": "fe378891c660bde9a3671aef361e91285b77ac5de0ef016e408ca7f9d98c2952"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~3.patch",
+          "sha256": "72b232c602f7ebae247fdd486f1200c478ed0677b67eb1338adf9ab015c25505"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~3.check.txt",
+          "sha256": "387e8df891765e4c7950fd574a2fd03b1ded8fbe63a6963cf75288c623f463ea"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~3.session0.json",
+          "sha256": "c9d375cb9a5cbd8814fa7c57d7c7619108888c469916c1c9d90acf5d402d5997"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-heat-cfl",
+      "rep": 3,
+      "passed": true,
+      "seconds": 28.7,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 57984,
+        "out": 4723,
+        "cached": 50304
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": true,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 6,
+        "input": 57984,
+        "output": 4723,
+        "cached": 50304
+      },
+      "meter_label": "chanto~physics-heat-cfl~3~2ec21ad7",
+      "started_at": "2026-10-20T16:42:40-0700",
+      "ended_at": "2026-10-20T16:43:10-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~3.out",
+          "sha256": "260910536b6000c35ee1507538d177564b0453d06de430163ed78f6eb3254df0"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~3.patch",
+          "sha256": "6bdcb358705e915791dfa7bf4b40450d0d090652ef272295970422dd37da20d7"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~3.check.txt",
+          "sha256": "97f674a38b0dd89e416d66524ea105d6f99415dfc668de9edeef18a038df75e1"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~3.session0.json",
+          "sha256": "9f685646213f9aa76953dcdffe29ee91124240aff683c5592c6bf3cbbbae09aa"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "physics-heat-cfl",
+      "rep": 4,
+      "passed": true,
+      "seconds": 103.4,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.005s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.005s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 237320,
+        "out": 11269,
+        "cached": 227584
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": true,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 15,
+        "input": 237320,
+        "output": 11269,
+        "cached": 227584
+      },
+      "meter_label": "chanto~physics-heat-cfl~4~1d5a1b7c",
+      "started_at": "2026-10-20T16:43:11-0700",
+      "ended_at": "2026-10-20T16:44:56-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~4.out",
+          "sha256": "fa85fe988bd945aeeecca652c66158b6a0b29824b197332818bee13f60e2faf0"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~4.patch",
+          "sha256": "9ce9def6cb03ae4c7f33a8df38f3bce3d85462b55c6429f4020569acb1be3e25"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~4.check.txt",
+          "sha256": "fb6bd32ab225adad5fc7a6ced392a79a887264ba194575cd3034a46d6a299c4b"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto~physics-heat-cfl~4.session0.json",
+          "sha256": "a0e57b7fe1f165e7c9d7396278ed425791c6f1e258d85ccaa582e8ec83810df6"
+        }
+      }
+    },
+    {
+      "agent": "chanto+adaptive",
+      "task": "physics-heat-cfl",
+      "rep": 4,
+      "passed": true,
+      "seconds": 225.7,
+      "optimize": [
+        "adaptive_effort"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 2 tests in 0.006s\n\nOK\n----------------------------------------------------------------------\nRan 2 tests in 0.006s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 175127,
+        "out": 19287,
+        "cached": 166656
+      },
+      "tampered": [],
+      "false_done": false,
+      "leaked": true,
+      "claimed_done": true,
+      "errored": false,
+      "clean_exit_fail": false,
+      "usage": {
+        "requests": 10,
+        "input": 175127,
+        "output": 19287,
+        "cached": 166656
+      },
+      "meter_label": "chanto+adaptive~physics-heat-cfl~4~3bae69c7",
+      "started_at": "2026-10-20T16:44:57-0700",
+      "ended_at": "2026-10-20T16:48:44-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~4.out",
+          "sha256": "dd4591b6ddf4bb61745f873cd1c3f33b82bff69fd566568bf65ad8bfbd3d37d9"
+        },
+        "patch": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~4.patch",
+          "sha256": "0762282efbea30565a8377d2002a599b50d6f8bd838fff8dc7aeacc3778479f5"
+        },
+        "check": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~4.check.txt",
+          "sha256": "455aacd9d70c484af39860300a6d0dcb8a7e701f1a06bbfa7fe487866e0aff17"
+        },
+        "session0": {
+          "file": "20261020-163210-17581/chanto+adaptive~physics-heat-cfl~4.session0.json",
+          "sha256": "e82e82f00f076977f2f0854d6a2c737a2e5f2028f0106cb72418120782b54c44"
+        }
+      }
+    }
+  ]
+}

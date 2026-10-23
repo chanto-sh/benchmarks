@@ -1,0 +1,72 @@
+diff --git a/zebra_puzzle.py b/zebra_puzzle.py
+index 2d78762..09bab90 100644
+--- a/zebra_puzzle.py
++++ b/zebra_puzzle.py
+@@ -1,6 +1,65 @@
++from itertools import permutations
++
++
++def solve():
++    colors = ("red", "green", "ivory", "yellow", "blue")
++    nationalities = ("Englishman", "Spaniard", "Ukrainian", "Norwegian", "Japanese")
++    drinks = ("coffee", "tea", "milk", "orange juice", "water")
++    hobbies = ("dancing", "painter", "reading", "football", "chess")
++    pets = ("dog", "snails", "fox", "horse", "zebra")
++
++    for house_colors in permutations(colors):
++        green = house_colors.index("green")
++        ivory = house_colors.index("ivory")
++        if green != ivory + 1:
++            continue
++
++        for people in permutations(nationalities):
++            if people[0] != "Norwegian":
++                continue
++            if people.index("Englishman") != house_colors.index("red"):
++                continue
++            if abs(people.index("Norwegian") - house_colors.index("blue")) != 1:
++                continue
++
++            for beverages in permutations(drinks):
++                if beverages[2] != "milk":
++                    continue
++                if beverages[green] != "coffee":
++                    continue
++                if beverages[people.index("Ukrainian")] != "tea":
++                    continue
++
++                for activities in permutations(hobbies):
++                    if activities[people.index("Japanese")] != "chess":
++                        continue
++                    if activities[house_colors.index("yellow")] != "painter":
++                        continue
++                    if activities[beverages.index("orange juice")] != "football":
++                        continue
++
++                    for animals in permutations(pets):
++                        if animals[people.index("Spaniard")] != "dog":
++                            continue
++                        if animals[activities.index("dancing")] != "snails":
++                            continue
++                        if abs(animals.index("fox") - activities.index("reading")) != 1:
++                            continue
++                        if abs(animals.index("horse") - activities.index("painter")) != 1:
++                            continue
++
++                        return (
++                            people[beverages.index("water")],
++                            people[animals.index("zebra")],
++                        )
++
++
++_WATER_DRINKER, _ZEBRA_OWNER = solve()
++
++
+ def drinks_water():
+-    pass
++    return _WATER_DRINKER
+ 
+ 
+ def owns_zebra():
+-    pass
++    return _ZEBRA_OWNER

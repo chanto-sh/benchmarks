@@ -1,0 +1,240 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..a24b4a1 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,226 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31 = 3.0 / 40.0
++_A32 = 9.0 / 40.0
++_A41 = 44.0 / 45.0
++_A42 = -56.0 / 15.0
++_A43 = 32.0 / 9.0
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++_B1 = 35.0 / 384.0
++_B3 = 500.0 / 1113.0
++_B4 = 125.0 / 192.0
++_B5 = -2187.0 / 6784.0
++_B6 = 11.0 / 84.0
++_E1 = 71.0 / 57600.0
++_E3 = -71.0 / 16695.0
++_E4 = 71.0 / 1920.0
++_E5 = -17253.0 / 339200.0
++_E6 = 22.0 / 525.0
++_E7 = -1.0 / 40.0
++
++
++def _dopri5_step(r, vr, h, l2, force):
++    """Take one Dormand-Prince step of the radial equation.
++
++    The radial equation is r'' = L^2/r^3 + f(r), where f is the outward
++    radial component of the central acceleration.
++    """
++    k1r = vr
++    k1v = l2 / (r * r * r) + force(r)
++
++    r2 = r + h * _A21 * k1r
++    v2 = vr + h * _A21 * k1v
++    k2r = v2
++    k2v = l2 / (r2 * r2 * r2) + force(r2)
++
++    r3 = r + h * (_A31 * k1r + _A32 * k2r)
++    v3 = vr + h * (_A31 * k1v + _A32 * k2v)
++    k3r = v3
++    k3v = l2 / (r3 * r3 * r3) + force(r3)
++
++    r4 = r + h * (_A41 * k1r + _A42 * k2r + _A43 * k3r)
++    v4 = vr + h * (_A41 * k1v + _A42 * k2v + _A43 * k3v)
++    k4r = v4
++    k4v = l2 / (r4 * r4 * r4) + force(r4)
++
++    r5 = r + h * (_A51 * k1r + _A52 * k2r + _A53 * k3r + _A54 * k4r)
++    v5 = vr + h * (_A51 * k1v + _A52 * k2v + _A53 * k3v + _A54 * k4v)
++    k5r = v5
++    k5v = l2 / (r5 * r5 * r5) + force(r5)
++
++    r6 = r + h * (_A61 * k1r + _A62 * k2r + _A63 * k3r
++                  + _A64 * k4r + _A65 * k5r)
++    v6 = vr + h * (_A61 * k1v + _A62 * k2v + _A63 * k3v
++                   + _A64 * k4v + _A65 * k5v)
++    k6r = v6
++    k6v = l2 / (r6 * r6 * r6) + force(r6)
++
++    r_new = r + h * (_B1 * k1r + _B3 * k3r + _B4 * k4r
++                     + _B5 * k5r + _B6 * k6r)
++    v_new = vr + h * (_B1 * k1v + _B3 * k3v + _B4 * k4v
++                      + _B5 * k5v + _B6 * k6v)
++
++    k7r = v_new
++    k7v = l2 / (r_new * r_new * r_new) + force(r_new)
++
++    err_r = h * (_E1 * k1r + _E3 * k3r + _E4 * k4r
++                 + _E5 * k5r + _E6 * k6r + _E7 * k7r)
++    err_v = h * (_E1 * k1v + _E3 * k3v + _E4 * k4v
++                 + _E5 * k5v + _E6 * k6v + _E7 * k7v)
++    return r_new, v_new, err_r, err_v
++
++
++def _max_step(r, vr, l, force):
++    """A conservative bound on a step that cannot jump over a turning point."""
++    l2 = l * l
++    radial_acc = force(r) + l2 / (r * r * r)
++    speed = abs(vr) + math.sqrt(abs(radial_acc) * r) + abs(l) / r
++    if speed == 0.0:
++        return math.inf
++    return 0.1 * r / speed
++
++
++def _next_turning(r, vr, t, l, force, r_limit=math.inf):
++    """Integrate forward to the next radial turning point.
++
++    Returns (t_event, r_event, is_periapsis), or ``None`` if the particle
++    escapes past ``r_limit`` without turning.
++    """
++    l2 = l * l
++    h = _max_step(r, vr, l, force)
++    if not math.isfinite(h):
++        h = 1.0
++
++    # Scale the local error controls to the state's own magnitude.  The
++    # tolerances are deliberately tight: the only accumulated quantity that
++    # matters is the time between two events.
++    tol = 1.0e-13
++
++    steps = 0
++    while steps < 200000:
++        steps += 1
++        h_cap = _max_step(r, vr, l, force)
++        if math.isfinite(h_cap):
++            h = min(h, h_cap)
++
++        r_new, v_new, err_r, err_v = _dopri5_step(r, vr, h, l2, force)
++
++        radial_acc = force(r) + l2 / (r * r * r)
++        v_char = abs(l) / r + math.sqrt(abs(radial_acc) * r)
++        scale_r = tol * max(abs(r), abs(r_new), 1.0e-300)
++        scale_v = tol * max(abs(vr), abs(v_new), v_char, 1.0e-300)
++        err = max(abs(err_r) / scale_r, abs(err_v) / scale_v)
++
++        if err <= 1.0 and math.isfinite(r_new) and r_new > 0.0:
++            crossed = (vr < 0.0 < v_new) or (vr > 0.0 > v_new) or v_new == 0.0
++            if crossed and vr != 0.0:
++                lo = 0.0
++                hi = h
++                # Locate the turning point inside this step.
++                for _ in range(45):
++                    mid = 0.5 * (lo + hi)
++                    rm, vm, _, _ = _dopri5_step(r, vr, mid, l2, force)
++                    if (vm > 0.0) == (vr > 0.0):
++                        lo = mid
++                    else:
++                        hi = mid
++                root_h = 0.5 * (lo + hi)
++                r_ev, v_ev, _, _ = _dopri5_step(r, vr, root_h, l2, force)
++                return t + root_h, r_ev, vr < 0.0
++
++            if r_new > r_limit:
++                return None
++
++            r, vr, t = r_new, v_new, t + h
++
++            if err == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * err ** -0.2
++            factor = min(5.0, max(0.2, factor))
++            h *= factor
++        else:
++            if err == 0.0 or not math.isfinite(err):
++                h *= 0.1
++            else:
++                h *= max(0.1, 0.9 * err ** -0.2)
++            if h == 0.0:
++                h = 1.0e-12 * max(abs(r), 1.0)
++
++    return None
++
++
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    x0, y0 = r0
++    vx0, vy0 = v0
++    r = math.hypot(x0, y0)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    # A central force is radial, so its radial component may be sampled
++    # along any fixed ray.  Keeping the initial ray avoids repeatedly
++    # taking square roots of arbitrary coordinates and handles force laws
++    # written in Cartesian form.
++    ux, uy = x0 / r, y0 / r
++
++    def force(radius):
++        ax, ay = accel(radius * ux, radius * uy)
++        return ax * ux + ay * uy
++
++    vr = (x0 * vx0 + y0 * vy0) / r
++    l = x0 * vy0 - y0 * vx0
++    l2 = l * l
++
++    # A circular orbit is a degenerate case: there is no distinct radial
++    # turning point.  Its radial period is the orbital period.
++    a_eff0 = force(r) + l2 / (r * r * r)
++    v_scale = (abs(vr) + abs(l) / r
++               + math.sqrt(abs(force(r)) * r))
++    if abs(vr) <= 1.0e-13 * max(v_scale, 1.0e-300):
++        if abs(a_eff0) <= 1.0e-13 * max(abs(force(r)) + l2 / (r * r * r),
++                                       1.0e-300):
++            if l != 0.0:
++                return 2.0 * math.pi * r * r / abs(l)
++            return math.inf
++
++    periapses = []
++    t = 0.0
++
++    # If the initial point is itself a periapsis, count it.
++    if abs(vr) <= 1.0e-12 * max(v_scale, 1.0e-300) and a_eff0 > 0.0:
++        periapses.append(0.0)
++
++    # A bound orbit with a very large apoapsis is still allowed; this only
++    # stops a genuinely escaping trajectory from being followed forever.
++    r_limit = 1.0e12 * max(r, abs(l), 1.0e-300)
++    max_turns = 100
++    for _ in range(max_turns):
++        event = _next_turning(r, vr, t, l, force, r_limit)
++        if event is None:
++            return math.inf
++        t, r, is_peri = event
++        vr = 0.0
++
++        if is_peri:
++            periapses.append(t)
++            if len(periapses) >= 2:
++                return periapses[1] - periapses[0]
++
++        # Guard against a non-repeating (unbound) orbit.  A bound orbit will
++        # produce a second periapsis long before this many turns.
++        if r > r_limit:
++            return math.inf
++
++    return math.inf

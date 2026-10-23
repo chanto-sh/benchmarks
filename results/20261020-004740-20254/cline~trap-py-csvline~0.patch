@@ -1,0 +1,39 @@
+diff --git a/csvline.py b/csvline.py
+index 1bc0564..0f54b77 100644
+--- a/csvline.py
++++ b/csvline.py
+@@ -4,4 +4,33 @@ def split_csv_line(line: str) -> list[str]:
+     Fields may be quoted with double quotes; a quoted field can contain commas,
+     and a doubled quote ("") inside it stands for one quote character.
+     """
+-    return line.split(",")
++    fields: list[str] = []
++    field: list[str] = []
++    in_quotes = False
++    i = 0
++    length = len(line)
++
++    while i < length:
++        char = line[i]
++        if in_quotes:
++            if char == '"':
++                if i + 1 < length and line[i + 1] == '"':
++                    # Doubled quote inside a quoted field -> one quote character.
++                    field.append('"')
++                    i += 1
++                else:
++                    in_quotes = False
++            else:
++                field.append(char)
++        elif char == '"' and not field:
++            # A quote only opens a quoted field at the start of that field.
++            in_quotes = True
++        elif char == ",":
++            fields.append("".join(field))
++            field = []
++        else:
++            field.append(char)
++        i += 1
++
++    fields.append("".join(field))
++    return fields

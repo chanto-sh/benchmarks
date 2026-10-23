@@ -1,0 +1,221 @@
+diff --git a/roots.py b/roots.py
+index d624667..29fec0f 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd, lcm
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,192 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++# Width of the final isolating interval.  The returned midpoint is therefore
++# within 5e-13 of the exact root, comfortably inside the required 1e-9.
++_TOL = Fraction(1, 10**12)
++
++
++def _trim(poly):
++    """Drop leading zero coefficients."""
++    i = 0
++    while i < len(poly) and poly[i] == 0:
++        i += 1
++    return list(poly[i:])
++
++
++def _derivative(poly):
++    n = len(poly) - 1
++    return [c * (n - i) for i, c in enumerate(poly[:-1])]
++
++
++def _primitive(poly):
++    """Clear denominators and content, using only positive scaling factors."""
++    poly = _trim([Fraction(c) for c in poly])
++    if not poly:
++        return []
++
++    denominator = 1
++    for c in poly:
++        denominator = lcm(denominator, c.denominator)
++
++    integers = [c.numerator * (denominator // c.denominator) for c in poly]
++    content = 0
++    for c in integers:
++        content = gcd(content, abs(c))
++    if content > 1:
++        integers = [c // content for c in integers]
++    return integers
++
++
++def _divmod_poly(dividend, divisor):
++    """Polynomial division over Q; coefficients are highest degree first."""
++    dividend = [Fraction(c) for c in dividend]
++    divisor = [Fraction(c) for c in divisor]
++    if not divisor:
++        raise ZeroDivisionError("polynomial division by zero")
++
++    quotient = [Fraction(0)] * (len(dividend) - len(divisor) + 1)
++    remainder = dividend[:]
++
++    while len(remainder) >= len(divisor):
++        coefficient = remainder[0] / divisor[0]
++        shift = len(remainder) - len(divisor)
++        quotient[len(quotient) - 1 - shift] = coefficient
++        for i in range(len(divisor)):
++            remainder[i] -= coefficient * divisor[i]
++        while remainder and remainder[0] == 0:
++            remainder.pop(0)
++
++    return _trim(quotient), _trim(remainder)
++
++
++def _gcd_poly(a, b):
++    """Primitive polynomial gcd over Q."""
++    a, b = _primitive(a), _primitive(b)
++    while b:
++        _, remainder = _divmod_poly(a, b)
++        a, b = b, _primitive(remainder)
++    return _primitive(a)
++
++
++def _square_free_part(poly):
++    """Remove repeated factors from a polynomial, keeping every distinct root."""
++    poly = _primitive(poly)
++    if len(poly) <= 1:
++        return poly
++
++    derivative = _primitive(_derivative(poly))
++    common = _gcd_poly(poly, derivative)
++    quotient, _ = _divmod_poly(poly, common)
++    return _primitive(quotient)
++
++
++def _sturm_sequence(poly):
++    """Sturm sequence for a square-free polynomial."""
++    poly = _primitive(poly)
++    sequence = [poly]
++    if len(poly) <= 1:
++        return sequence
++
++    sequence.append(_primitive(_derivative(poly)))
++    while True:
++        _, remainder = _divmod_poly(sequence[-2], sequence[-1])
++        if not remainder:
++            break
++        # Positive scaling does not change the signs used by Sturm's theorem.
++        sequence.append(_primitive([-c for c in remainder]))
++    return sequence
++
++
++def _sign_at(poly, x):
++    """Exact sign of an integer polynomial at a rational point."""
++    if not isinstance(x, Fraction):
++        x = Fraction(x)
++
++    numerator, denominator = x.numerator, x.denominator
++    value = 0
++    denominator_power = 1
++    for coefficient in poly:
++        value = value * numerator + coefficient * denominator_power
++        denominator_power *= denominator
++
++    return (value > 0) - (value < 0)
++
++
++def _variations(sequence, x):
++    """Number of sign changes in a Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    previous = 0
++    for poly in sequence:
++        sign = _sign_at(poly, x)
++        if sign == 0:
++            continue
++        if previous and sign != previous:
++            changes += 1
++        previous = sign
++    return changes
++
++
++def _root_count(sequence, a, b):
++    """Number of distinct roots in (a, b]."""
++    return _variations(sequence, a) - _variations(sequence, b)
++
++
++def _refine_root(sequence, a, b):
++    """Refine an interval known to contain exactly one root in (a, b]."""
++    if _sign_at(sequence[0], b) == 0:
++        return b
++    while b - a > _TOL:
++        middle = (a + b) / 2
++        if _root_count(sequence, a, middle):
++            b = middle
++        else:
++            a = middle
++    if _sign_at(sequence[0], b) == 0:
++        return b
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    poly = _primitive(coeffs)
++    if len(poly) <= 1:
++        return []
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++
++    square_free = _square_free_part(poly)
++    if len(square_free) <= 1:
++        return []
++
++    sequence = _sturm_sequence(square_free)
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Sturm's theorem counts (lo, hi]; handle lo itself separately so that the
++    # requested interval is inclusive at both ends.
++    if _sign_at(square_free, lo) == 0:
++        roots.append(lo)
++
++    count = _root_count(sequence, lo, hi)
++    if count:
++        pending = [(lo, hi, count)]
++        while pending:
++            a, b, count = pending.pop()
++            if count == 1:
++                roots.append(_refine_root(sequence, a, b))
++                continue
++
++            middle = (a + b) / 2
++            left_count = _root_count(sequence, a, middle)
++            if left_count:
++                pending.append((a, middle, left_count))
++            if count - left_count:
++                pending.append((middle, b, count - left_count))
++
++    roots.sort()
++    return [float(root) for root in roots]

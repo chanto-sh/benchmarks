@@ -1,0 +1,111 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..3736bcd 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,104 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _fma(a, b, c):
++    fma = getattr(math, "fma", None)
++    return fma(a, b, c) if fma is not None else a * b + c
++
++
++def _detuning(m, k, omega):
++    """k - m*omega**2, retaining accuracy near resonance."""
++    w2 = omega * omega
++    w2_error = _fma(omega, omega, -w2)
++    return _fma(-m, w2, k) - m * w2_error
++
++
++def _sinc(z):
++    """sin(z) / z, continuous at z = 0."""
++    if z == 0.0:
++        return 1.0
++    z2 = z * z
++    if abs(z) < 1e-4:
++        return 1.0 - z2 / 6.0 + z2 * z2 / 120.0
++    return math.sin(z) / z
++
++
++def _sinhc(z):
++    """sinh(z) / z, continuous at z = 0."""
++    if z == 0.0:
++        return 1.0
++    z2 = z * z
++    if abs(z) < 1e-4:
++        return 1.0 + z2 / 6.0 + z2 * z2 / 120.0 + z2 * z2 * z2 / 5040.0
++    return math.sinh(z) / z
++
++
++def _steady_state(m, k, c, F0, omega):
++    """Return (A, B, xp'(0)) for xp = A cos(omega t) + B sin(omega t)."""
++    d = _detuning(m, k, omega)
++    e = c * omega
++    den = math.hypot(d, e)
++    if den == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0, 0.0
++        raise ValueError("no finite steady state at exact resonance without damping")
++    scale = F0 / den
++    A = scale * (d / den)
++    B = scale * (e / den)
++    return A, B, B * omega
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    d = _detuning(m, k, omega)
++    e = c * omega
++    den = math.hypot(d, e)
++    if den == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        raise ValueError("no finite steady state at exact resonance without damping")
++    return abs(F0) / den
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, B, vp0 = _steady_state(m, k, c, F0, omega)
++
++    # Solve for the homogeneous part with zero initial conditions after
++    # subtracting the particular solution.
++    xh0 = x0 - A
++    vh0 = v0 - vp0
++
++    alpha = c / (2.0 * m)
++    w0sq = k / m
++    delta = alpha * alpha - w0sq
++    C = xh0
++    D = vh0 + alpha * C
++
++    if delta < 0.0:
++        # Underdamped (including the undamped case c = 0).
++        wd = math.sqrt(-delta)
++        z = wd * t
++        xh = math.exp(-alpha * t) * (C * math.cos(z) + D * t * _sinc(z))
++    elif delta == 0.0:
++        # Critically damped.
++        xh = math.exp(-alpha * t) * (C + D * t)
++    else:
++        # Overdamped.  The form below remains accurate as delta -> 0+.
++        beta = math.sqrt(delta)
++        z = beta * t
++        if abs(z) <= 1.0:
++            decay = math.exp(-alpha * t)
++            xh = decay * (C * math.cosh(z) + D * t * _sinhc(z))
++        else:
++            # Use exp(r1*t) and exp(r2*t) directly, with the slow root
++            # computed without cancellation when beta is close to alpha.
++            r1 = -w0sq / (alpha + beta)
++            r2 = -alpha - beta
++            e1 = math.exp(r1 * t)
++            e2 = math.exp(r2 * t)
++            xh = 0.5 * C * (e1 + e2) + 0.5 * D * (e1 - e2) / beta
++
++    return xh + A * math.cos(omega * t) + B * math.sin(omega * t)

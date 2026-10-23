@@ -1,0 +1,56 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..455e7d8 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,41 @@
+ import math
+ 
+ 
++# Positive nodes and weights of the 16-point Gauss-Legendre rule on [-1, 1].
++_GL16 = (
++    (0.0950125098376374401853193354249581, 0.189450610455068496285396723208283),
++    (0.281603550779258913230460501460496, 0.182603415044923588866763667969220),
++    (0.458016777657227386342419442983578, 0.169156519395002538189312079030359),
++    (0.617876244402643748446671764048791, 0.149595988816576732081501730547479),
++    (0.755404408355003033895101194847442, 0.124628971255533872052476282192016),
++    (0.865631202387831743880467897712393, 0.0951585116824927848099251076022463),
++    (0.944575023073232576077988415534608, 0.0622535239386478928628438369943777),
++    (0.989400934991649932596154173450333, 0.0271524594117540948517805724560181),
++)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 gives 2 * integral of cos(t*u**2) from 0 to
++    sqrt(b), which is smooth.  The interval is split so that the phase
++    advances by at most pi/4 per piece and each piece is integrated with a
++    16-point Gauss-Legendre rule.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    upper = math.sqrt(b)
++    n = max(1, math.ceil(8.0 * t * b / math.pi))
++    h = upper / n
++    total = 0.0
++    for i in range(n):
++        mid = (i + 0.5) * h
++        half = 0.5 * h
++        piece = 0.0
++        for node, weight in _GL16:
++            u1 = mid - half * node
++            u2 = mid + half * node
++            piece += weight * (math.cos(t * u1 * u1) + math.cos(t * u2 * u2))
++        total += half * piece
++    return 2.0 * total

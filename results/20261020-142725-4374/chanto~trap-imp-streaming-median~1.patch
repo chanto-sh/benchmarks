@@ -1,0 +1,84 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..d0542ce
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,65 @@
++# BLOCKED: exact `median()` in O(1) memory
++
++`test_constant_memory` requires all three of:
++
++1. the result be **exact** (it is compared with `==` against the sorted median),
++2. memory stay **constant** (`peak < 64 KB` for a 200,000-element feed), and
++3. the input be consumed as a **one-shot generator** (`feed()` is passed directly;
++   it cannot be re-iterated).
++
++These requirements cannot all be met. This is not an implementation limitation;
++it is a lower bound.
++
++## Why it is impossible
++
++The exact median is an order statistic. Consider an adversary that streams `n`
++values while keeping every value it has revealed within a fixed numeric range.
++After seeing `k` values, an algorithm that has used `m` words of memory can be
++in at most `O(m)` distinct internal states (more precisely, the number of
++possible memory configurations is bounded by a function of `m`, not `n`).
++For the median to be exact on every input, two different inputs of the same
++length that share the same prefix but have different remaining elements must
++both be handled correctly. With one pass and constant memory, the algorithm
++must decide the answer without retaining enough information to distinguish
++those inputs: there are `C(n, n/2)` distinct sets of "small" elements that
++produce different medians, far more than any constant number of states can
++encode.
++
++Equivalently, exact selection needs either:
++
++- **Ω(n) storage** — retain all values (sort, or a selection/order-statistic
++  structure), which is what the current implementation does; or
++- **multiple passes** — e.g. binary search on the value range with a counting
++  pass per iteration. That still needs Ω(log(range/ε)) passes for exact
++  results on arbitrary reals and, critically, **cannot work at all on a
++  one-shot generator**.
++
++Approximate streaming sketches (t-digest, Greenwald–Khanna, reservoir
++sampling) do run in bounded memory, but they are approximate. They cannot
++satisfy `assertEqual(got, want)` on 200,000 Gaussian samples, and they would
++silently change the contract of a function documented as the *exact* median.
++
++## What was done instead
++
++- **Fixed the reported bug:** `median([1, 2, 3, 4])` now returns `2.5` (the mean
++  of the two middle values) instead of `3`. Odd-length input is unchanged.
++- **Did not** fake constant memory, weaken/skip `test_constant_memory`, or
++  substitute an approximation. The exact implementation still sorts, so
++  `test_constant_memory` fails on its memory assertion (`~7.2 MB` peak vs.
++  the required `64 KB`), while its value assertion now passes.
++
++## Options for the maintainers
++
++1. **Keep exactness, accept O(n) memory** and fix the OOMs another way:
++   process feeds in bounded batches (the median of medians is approximate) or
++   write values to disk and use an external sort / disk-backed selection.
++   This changes the ingest pipeline, not `median()`.
++2. **Relax exactness** and adopt a bounded-memory sketch with a documented
++   error bound. This requires changing `test_constant_memory`'s exact
++   comparison and the API contract.
++3. **Provide a multi-pass input** (e.g. a re-iterable source or a seekable
++   file) and accept a two-phase counting/selection algorithm. This changes
++   `median()`'s accepted input type.
++
++The current code takes option 1 implicitly: it remains exact and is correct
++for all input sizes that fit in memory.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..d2c75c5 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    n = len(data)
++    if n % 2:
++        return data[n // 2]
++    return (data[n // 2 - 1] + data[n // 2]) / 2

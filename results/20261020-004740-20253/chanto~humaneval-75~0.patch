@@ -1,0 +1,23 @@
+diff --git a/solution.py b/solution.py
+index b74ff86..eaee401 100644
+--- a/solution.py
++++ b/solution.py
+@@ -7,3 +7,18 @@ def is_multiply_prime(a):
+     is_multiply_prime(30) == True
+     30 = 2 * 3 * 5
+     """
++    if a < 2:
++        return False
++
++    count = 0
++    factor = 2
++    while factor * factor <= a:
++        while a % factor == 0:
++            a //= factor
++            count += 1
++        factor += 1
++
++    if a > 1:
++        count += 1
++
++    return count == 3

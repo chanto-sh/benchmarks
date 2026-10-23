@@ -1,0 +1,50 @@
+diff --git a/dominoes.py b/dominoes.py
+index d71e6a8..d8ec839 100644
+--- a/dominoes.py
++++ b/dominoes.py
+@@ -1,2 +1,44 @@
+ def can_chain(dominoes):
+-    pass
++    if not dominoes:
++        return []
++
++    total = len(dominoes)
++    used = [False] * total
++    chain = []
++
++    def search(end):
++        if len(chain) == total:
++            return chain[0][0] == end
++
++        for index, (left, right) in enumerate(dominoes):
++            if used[index]:
++                continue
++
++            if left == end:
++                used[index] = True
++                chain.append((left, right))
++                if search(right):
++                    return True
++                chain.pop()
++                used[index] = False
++            elif right == end:
++                used[index] = True
++                chain.append((right, left))
++                if search(left):
++                    return True
++                chain.pop()
++                used[index] = False
++
++        return False
++
++    first_left, first_right = dominoes[0]
++
++    for orientation in ((first_left, first_right), (first_right, first_left)):
++        used[0] = True
++        chain.append(orientation)
++        if search(orientation[1]):
++            return chain
++        chain.pop()
++        used[0] = False
++
++    return None

@@ -1,0 +1,52 @@
+diff --git a/crypto_square.go b/crypto_square.go
+index 5da31f8..11ee063 100644
+--- a/crypto_square.go
++++ b/crypto_square.go
+@@ -1,5 +1,46 @@
+ package cryptosquare
+ 
++import (
++	"math"
++	"strings"
++	"unicode"
++)
++
++// Encode normalizes pt and encodes it using the classic square code.
+ func Encode(pt string) string {
+-	panic("Please implement the Encode function")
++	normalized := normalize(pt)
++	if len(normalized) == 0 {
++		return ""
++	}
++
++	cols := int(math.Ceil(math.Sqrt(float64(len(normalized)))))
++	rows := (len(normalized) + cols - 1) / cols
++
++	chunks := make([]string, cols)
++	for c := 0; c < cols; c++ {
++		var b strings.Builder
++		for r := 0; r < rows; r++ {
++			idx := r*cols + c
++			if idx < len(normalized) {
++				b.WriteRune(normalized[idx])
++			} else {
++				b.WriteByte(' ')
++			}
++		}
++		chunks[c] = b.String()
++	}
++
++	return strings.Join(chunks, " ")
++}
++
++// normalize removes all characters that are neither letters nor digits and
++// down-cases the remaining ones.
++func normalize(pt string) []rune {
++	var out []rune
++	for _, r := range pt {
++		if unicode.IsLetter(r) || unicode.IsDigit(r) {
++			out = append(out, unicode.ToLower(r))
++		}
++	}
++	return out
+ }

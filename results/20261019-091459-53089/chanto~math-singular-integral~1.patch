@@ -1,0 +1,77 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..21bd44e 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,62 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, n + 1):
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(100):
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p1, p2 = ((2 * j - 1) * x * p1 - (j - 1) * p2) / j, p1
++            pp = n * (x * p1 - p2) / (x * x - 1.0)
++            dx = p1 / pp
++            x -= dx
++            if abs(dx) <= 1e-16:
++                break
++        p1, p2 = 1.0, 0.0
++        for j in range(1, n + 1):
++            p1, p2 = ((2 * j - 1) * x * p1 - (j - 1) * p2) / j, p1
++        pp = n * (x * p1 - p2) / (x * x - 1.0)
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * pp * pp))
++    return tuple(nodes), tuple(weights)
++
++
++_NODES, _WEIGHTS = _gauss_legendre(16)
++_PHASE_STEP = math.pi / 4.0
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity:
++        integral = 2 * integral_0^sqrt(b) cos(t*u**2) du.
++    The remaining integrand is smooth but oscillatory for large t*b, so the
++    interval is split into pieces of bounded phase change and integrated with
++    composite Gauss-Legendre quadrature.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0:
++        return 2.0 * math.sqrt(b)
++
++    c = math.sqrt(b)
++    intervals = max(1, int(math.ceil(t * b / _PHASE_STEP)))
++    inv_intervals = 1.0 / intervals
++
++    total = 0.0
++    left = 0.0
++    for k in range(1, intervals + 1):
++        right = c * math.sqrt(k * inv_intervals)
++        mid = 0.5 * (left + right)
++        half = 0.5 * (right - left)
++
++        piece = 0.0
++        for x, w in zip(_NODES, _WEIGHTS):
++            u = mid + half * x
++            piece += w * math.cos(t * u * u)
++        total += half * piece
++        left = right
++
++    return 2.0 * total

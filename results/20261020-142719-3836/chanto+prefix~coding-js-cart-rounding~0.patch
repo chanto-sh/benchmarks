@@ -1,0 +1,80 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..493f34e 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -2,6 +2,19 @@ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+ const { fmt } = require("./format");
+ 
++// Parse a price ("19.99" or 19.99) into integer cents, rounding half up on any
++// fraction of a cent.
++function toCents(price) {
++  const match = /^(-?)(\d*)(?:\.(\d*))?$/.exec(String(price).trim());
++  if (!match || (match[2] === "" && match[3] === undefined)) {
++    throw new TypeError(`Invalid price: ${price}`);
++  }
++  const [, sign, whole, frac = ""] = match;
++  let cents = Number(whole || "0") * 100 + Number(frac.slice(0, 2).padEnd(2, "0"));
++  if (frac[2] >= "5") cents += 1;
++  return sign === "-" ? -cents : cents;
++}
++
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+ function checkout(cart) {
+@@ -9,7 +22,7 @@ function checkout(cart) {
+   let discount = 0;
+   let taxable = 0;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = toCents(item.price) * item.qty;
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..8becef1 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,7 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++// Per-line percentage discounts. The line amount is in cents and the discount
++// is rounded to the cent (half up) for that line on its own.
++function discountFor(lineCents, pct) {
++  return Math.round((lineCents * pct) / 100);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..4c01f27 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,9 @@
+-// Money as a plain "1234.50" string for receipts and the API.
+-function fmt(amount) {
+-  return amount.toFixed(2);
++// Money is handled as integer cents. Format cents as a plain "1234.50" string
++// for receipts and the API.
++function fmt(cents) {
++  const sign = cents < 0 ? "-" : "";
++  const n = Math.abs(Math.round(cents));
++  return `${sign}${Math.floor(n / 100)}.${String(n % 100).padStart(2, "0")}`;
+ }
+ 
+ module.exports = { fmt };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..cade5a0 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,8 @@
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++// The amount is in cents and the tax is rounded to the cent (half up) once for
++// the whole cart.
++function taxFor(amountCents, rate) {
++  return Math.round((amountCents * rate) / 100);
+ }
+ 
+ module.exports = { taxFor };

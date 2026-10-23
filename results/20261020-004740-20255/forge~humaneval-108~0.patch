@@ -1,0 +1,19 @@
+diff --git a/solution.py b/solution.py
+index 3eb7783..bd2252a 100644
+--- a/solution.py
++++ b/solution.py
+@@ -9,3 +9,14 @@ def count_nums(arr):
+     >>> count_nums([-1, 11, -11]) == 1
+     >>> count_nums([1, 1, 2]) == 3
+     """
++    def digit_sum(num):
++        total = 0
++        if num < 0:
++            total -= int(str(-num)[0])
++            digits = str(-num)[1:]
++        else:
++            digits = str(num)
++        total += sum(int(d) for d in digits)
++        return total
++
++    return sum(1 for n in arr if digit_sum(n) > 0)

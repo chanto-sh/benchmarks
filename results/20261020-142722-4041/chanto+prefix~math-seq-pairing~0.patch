@@ -1,0 +1,124 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..4b6c49b 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,116 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++Each value is written with an Elias gamma code.  The concatenation of
++these codes is a self-delimiting bit string, and every list corresponds
++to exactly one such string.  Those strings are enumerated by length and
++then lexicographically; an integer key is the position in that
++enumeration.  The resulting keys have about the same number of bits as
++the information in the list.
++"""
++
++
++def _count(length):
++    """Number of valid code strings of the given length."""
++    if length < 0:
++        return 0
++    if length == 0:
++        return 1
++    if length & 1:
++        return ((1 << length) + 1) // 3
++    return ((1 << length) - 1) // 3
++
++
++def _before(length):
++    """Number of valid code strings shorter than ``length``."""
++    if length <= 0:
++        return 0
++    if length & 1:
++        return ((1 << length) + 1) // 3
++    return ((1 << length) + 2) // 3
++
++
++def _prefix_count(length, zeros):
++    """Valid strings whose first code word has at most ``zeros`` zeros.
++
++    A code word with ``z`` leading zeros has length ``2*z + 1`` and
++    ``2**z`` possible payloads.
++    """
++    if zeros < 0:
++        return 0
++    # Sum over z=0..zeros of 2**z * count(length - 2*z - 1).
++    total = (1 << length) - (1 << (length - zeros - 1))
++    sign = -1 if (length - 1) & 1 else 1
++    total -= sign * ((1 << (zeros + 1)) - 1)
++    total //= 3
++    # The z with no room for a suffix has count 2**z (not 0).
++    if (length & 1) and zeros == (length - 1) // 2:
++        total += 1 << zeros
++    return total
++
++
++def _gamma(value):
++    """Elias gamma code of a non-negative integer."""
++    encoded = bin(value + 1)[2:]
++    return "0" * (len(encoded) - 1) + encoded
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    bits = "".join(_gamma(value) for value in lst)
++    length = len(bits)
++
++    rank = 0
++    i = 0
++    remaining = length
++    while remaining:
++        zeros = 0
++        while bits[i] == "0":
++            zeros += 1
++            i += 1
++        i += 1  # the 1 terminating the length prefix
++
++        suffix = remaining - (2 * zeros + 1)
++        rank += _count(remaining) - _prefix_count(remaining, zeros)
++        if zeros:
++            payload = int(bits[i:i + zeros], 2)
++            rank += payload * _count(suffix)
++        i += zeros
++        remaining = suffix
++
++    return _before(length) + rank
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    length = max(0, n.bit_length() - 1)
++    while _before(length + 1) <= n:
++        length += 1
++    while length > 0 and _before(length) > n:
++        length -= 1
++    rank = n - _before(length)
++
++    values = []
++    while length > 0:
++        total = _count(length)
++        # Lexicographic order puts the longest zero runs first, so count
++        # this string's position from the end of the length block.
++        remaining = total - rank
++        max_zeros = (length - 1) // 2
++        zeros = 0
++        if remaining > _prefix_count(length, 0):
++            low, high = 1, max_zeros
++            while low < high:
++                mid = (low + high) // 2
++                if _prefix_count(length, mid) >= remaining:
++                    high = mid
++                else:
++                    low = mid + 1
++            zeros = low
++
++        offset = _prefix_count(length, zeros) - remaining
++        suffix = length - 2 * zeros - 1
++        payload, rank = divmod(offset, _count(suffix))
++        values.append((1 << zeros) + payload - 1)
++
++        length = suffix
++    return values

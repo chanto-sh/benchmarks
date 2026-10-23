@@ -1,0 +1,72 @@
+diff --git a/two_bucket.py b/two_bucket.py
+index 7029bcb..dbc547e 100644
+--- a/two_bucket.py
++++ b/two_bucket.py
+@@ -1,2 +1,66 @@
++from collections import deque
++
++
+ def measure(bucket_one, bucket_two, goal, start_bucket):
+-    pass
++    """Return the shortest way to measure ``goal`` liters.
++
++    The result is ``(actions, bucket, other_liters)``.  A ``ValueError`` is
++    raised when the goal cannot be measured.
++    """
++    if start_bucket not in ("one", "two"):
++        raise ValueError("start_bucket must be either 'one' or 'two'.")
++    if bucket_one <= 0 or bucket_two <= 0:
++        raise ValueError("Bucket sizes must be positive.")
++    if goal < 0:
++        raise ValueError("The goal must be non-negative.")
++    if goal > max(bucket_one, bucket_two):
++        raise ValueError("The goal cannot be larger than both buckets.")
++
++    if start_bucket == "one":
++        initial = (bucket_one, 0)
++    else:
++        initial = (0, bucket_two)
++
++    def is_forbidden(one, two):
++        if start_bucket == "one":
++            return one == 0 and two == bucket_two
++        return one == bucket_one and two == 0
++
++    def result(one, two, actions):
++        if one == goal:
++            return actions, "one", two
++        return actions, "two", one
++
++    if initial[0] == goal or initial[1] == goal:
++        return result(initial[0], initial[1], 1)
++
++    queue = deque([(initial[0], initial[1], 1)])
++    visited = {initial}
++
++    while queue:
++        one, two, actions = queue.popleft()
++        next_actions = actions + 1
++        one_to_two = min(one, bucket_two - two)
++        two_to_one = min(two, bucket_one - one)
++
++        candidates = (
++            (bucket_one, two),
++            (one, bucket_two),
++            (0, two),
++            (one, 0),
++            (one - one_to_two, two + one_to_two),
++            (one + two_to_one, two - two_to_one),
++        )
++
++        for next_one, next_two in candidates:
++            state = (next_one, next_two)
++            if state in visited or state == (one, two) or is_forbidden(*state):
++                continue
++
++            if next_one == goal or next_two == goal:
++                return result(next_one, next_two, next_actions)
++
++            visited.add(state)
++            queue.append((next_one, next_two, next_actions))
++
++    raise ValueError("The goal cannot be measured with these buckets.")

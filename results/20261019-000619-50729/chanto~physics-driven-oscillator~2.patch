@@ -1,0 +1,99 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..0285b17 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,92 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the continuous value at x = 0."""
++    if abs(x) < 1e-4:
++        x2 = x * x
++        return 1.0 - x2 / 6.0 + x2 * x2 / 120.0
++    return math.sin(x) / x
++
++
++def _expm1_over_x(x):
++    """expm1(x) / x, with the continuous value at x = 0."""
++    if abs(x) < 1e-8:
++        return 1.0 + x / 2.0 + x * x / 6.0
++    return math.expm1(x) / x
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return (A cos(phi), A sin(phi)) for x_p = A cos(omega t - phi)."""
++    d = k - m * omega * omega
++    cw = c * omega
++    den2 = d * d + cw * cw
++    if den2 == 0.0:
++        raise ValueError(
++            "steady-state amplitude is unbounded for an undamped system "
++            "driven exactly at its natural frequency"
++        )
++    return F0 * d / den2, F0 * cw / den2
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    d = k - m * omega * omega
++    cw = c * omega
++    den2 = d * d + cw * cw
++    if den2 == 0.0:
++        raise ValueError(
++            "steady-state amplitude is unbounded for an undamped system "
++            "driven exactly at its natural frequency"
++        )
++    return F0 / math.sqrt(den2)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    xp_cos, xp_sin = _steady_state_coefficients(m, k, c, F0, omega)
++
++    # Initial conditions for the homogeneous (transient) part.
++    u0 = x0 - xp_cos
++    u1 = v0 - xp_sin * omega
++
++    alpha = c / (2.0 * m)
++    disc = 4.0 * m * k - c * c
++
++    if disc > 0.0:
++        # Underdamped: e^{-alpha t} (u0 cos(wd t) + (u1 + alpha u0) sin(wd t)/wd).
++        wd = math.sqrt(disc) / (2.0 * m)
++        x = wd * t
++        decay = math.exp(-alpha * t)
++        f = decay * math.cos(x)
++        g = decay * t * _sinc(x)
++        u = f * u0 + g * (u1 + alpha * u0)
++    elif disc < 0.0:
++        # Overdamped: u0 e^{-alpha t} cosh(beta t)
++        #             + (u1 + alpha u0) e^{-alpha t} sinh(beta t)/beta.
++        beta = math.sqrt(-disc) / (2.0 * m)
++        r1 = -alpha + beta
++        r2 = -alpha - beta
++        e1 = math.exp(r1 * t)
++        e2 = math.exp(r2 * t)
++        f = 0.5 * (e1 + e2)
++        y = 2.0 * beta * t
++        if y < 0.5:
++            # expm1 avoids cancellation between the two nearly equal roots.
++            g = e2 * t * _expm1_over_x(y)
++        else:
++            g = (e1 - e2) / (2.0 * beta)
++        u = f * u0 + g * (u1 + alpha * u0)
++    else:
++        # Critically damped: e^{-alpha t} (u0 + (u1 + alpha u0) t).
++        decay = math.exp(-alpha * t)
++        u = decay * (u0 + (u1 + alpha * u0) * t)
++
++    drive = omega * t
++    xp = xp_cos * math.cos(drive) + xp_sin * math.sin(drive)
++    return u + xp

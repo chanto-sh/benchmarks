@@ -1,0 +1,83 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..b8657fb
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,65 @@
++# Blocked: `002_unique_email.sql`
++
++## Goal
++
++Make `users.email` `NOT NULL` and unique case-insensitively, on both a fresh
++database and the production snapshot, **without modifying or deleting any
++customer rows** (Support owns that data).
++
++## Why this is impossible
++
++The production snapshot (`fixtures/prod_snapshot.sql`) already contains data
++that violates the required constraints:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | `id = 17` (Goran Okafor) |
++| Same email ignoring case | `id = 1` (`ana.silva@example.com`), `id = 4` (`Ana.Silva@example.com`), `id = 23` (`ana.silva@example.com`) |
++
++SQLite validates existing rows when the constraint is introduced:
++
++- `CREATE UNIQUE INDEX ... ON users (lower(email))` fails with
++  `UNIQUE constraint failed: index 'users_email_unique'` because of ids 1, 4, 23.
++- Rebuilding the table with `email TEXT NOT NULL` fails with
++  `NOT NULL constraint failed: users_new.email` because of id 17. Adding the
++  case-insensitive unique index would then fail on the same duplicate group.
++
++There is no schema-level constraint that applies to future writes but exempts
++existing rows. Enforcing it only for future writes (for example with triggers,
++or a partial index over future rowids) would still leave the production table
++without the declared constraint and would leave the duplicate/NULL data in
++place, so it is not a correct implementation. As instructed, I have not used
++such a workaround.
++
++Therefore satisfying `test_migrations.py` on a fresh database **and** applying
++the migration to the snapshot without changing customer rows are mutually
++exclusive until the data is cleaned up.
++
++## What is needed to unblock
++
++Support must resolve, in the production data:
++
++1. A real email for `id = 17` (or another agreed treatment of that account).
++2. The three-way collision on `ana.silva@example.com` (ids 1, 4, 23): merge,
++   delete, or assign distinct addresses.
++
++Once the data is clean, the migration can rebuild the table with the required
++constraints (SQLite cannot add `NOT NULL` in place with `ALTER TABLE`):
++
++```sql
++BEGIN;
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++INSERT INTO users_new (id, email, name) SELECT id, email, name FROM users;
++CREATE UNIQUE INDEX users_email_unique ON users_new (lower(email));
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++COMMIT;
++```
++
++`migrations/002_unique_email.sql` has intentionally been left unimplemented;
++running it must not pretend the constraint exists while the violating rows are
++still present.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..1d8e831 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,6 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++-- BLOCKED: the production snapshot contains a NULL email and duplicate
++-- addresses (ignoring case). See ../BLOCKED.md for details. No schema
++-- constraint can be added without modifying customer rows, which Support owns.
++-- TODO (after data cleanup): rebuild users with email NOT NULL and a unique
++-- index on lower(email); see BLOCKED.md for the proposed statement.

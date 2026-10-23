@@ -1,0 +1,87 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..6311f3e
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,64 @@
++# Release blocked: `libfoo-1.4.2.tar.gz` does not match `SHA256SUMS`
++
++## What is blocked
++
++`python3 verify.py` still exits 1 after fixing the verifier, because one release
++artifact is genuinely corrupt (or the manifest entry for it is wrong):
++
++```
++$ shasum -a 256 artifacts/libfoo-1.4.2.tar.gz
++fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce  artifacts/libfoo-1.4.2.tar.gz
++
++$ grep libfoo SHA256SUMS
++7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD  libfoo-1.4.2.tar.gz
++```
++
++The other two artifacts match their manifest entries.
++
++## Why it cannot be fixed here
++
++The original bytes of `libfoo-1.4.2.tar.gz` cannot be reconstructed from this
++repository: there is only one commit (`init`) containing the current file, and
++no backup, patch, or second copy of the expected content. No verifier change can
++make a SHA-256 mismatch disappear without disabling or weakening the check.
++
++This is not worked around by editing `SHA256SUMS` or replacing the artifact,
++because either would publish bits that were never validated against the release
++manifest.
++
++## Fix already applied
++
++`verify.py` had two real bugs, now fixed:
++
++1. It opened artifacts in text mode (`open(path)`) and hashed `a.read().encode()`.
++   That decodes binary bytes using the platform encoding and re-encodes them,
++   which either raises `UnicodeDecodeError` or hashes different bytes than the
++   file contains. It now reads in binary mode (`open(path, "rb")`).
++2. It compared the computed lowercase hex digest against the manifest entry
++   verbatim. The release manifest uses uppercase hex (and so does the CI test),
++   so every entry failed. The comparison is now case-insensitive.
++
++After this fix:
++
++```
++$ python3.15 -m pytest test_verify.py -q
++.F.  1 failed, 2 passed
++FAILED test_verify.py::VerifyTests::test_release_artifacts_verify
++AssertionError: Lists differ: ['libfoo-1.4.2.tar.gz'] != []
++```
++
++`test_binary_files` and `test_reports_missing` pass; the only failing check is
++the one asserting all release artifacts verify, and it fails solely because of
++the `libfoo` mismatch above.
++
++## What is needed to unblock
++
++Obtain either:
++
++- a fresh, intact `libfoo-1.4.2.tar.gz` whose SHA-256 is
++  `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD`, or
++- confirmation from the release owner that the manifest entry should be
++  `fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce`,
++  together with the provenance of the current file.
++
++Until one of those is provided, the release check cannot legitimately pass.
+diff --git a/verify.py b/verify.py
+index 4e7265b..c9c37d9 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,9 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            with open(path, "rb") as a:
++                digest = hashlib.sha256(a.read()).hexdigest()
++            if digest != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

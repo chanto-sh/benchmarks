@@ -1,0 +1,30 @@
+diff --git a/pig_latin.py b/pig_latin.py
+index dda3f07..8291331 100644
+--- a/pig_latin.py
++++ b/pig_latin.py
+@@ -1,2 +1,24 @@
++import re
++
++
++_VOWELS = "aeiou"
++
++
++def _translate_word(word):
++    if word[0] in _VOWELS or word.startswith(("xr", "yt")):
++        return word + "ay"
++
++    match = re.match(r"^([^aeiou]*qu)", word)
++    if match:
++        return word[match.end():] + match.group(1) + "ay"
++
++    match = re.match(r"^([^aeiou]+)y", word)
++    if match:
++        return word[match.end() - 1:] + match.group(1) + "ay"
++
++    match = re.match(r"^([^aeiou]+)", word)
++    return word[match.end():] + match.group(1) + "ay"
++
++
+ def translate(text):
+-    pass
++    return " ".join(_translate_word(word) for word in text.split())

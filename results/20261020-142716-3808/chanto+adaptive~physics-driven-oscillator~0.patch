@@ -1,0 +1,113 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..d84ae49 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,106 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with the continuous value at x = 0."""
++    return 1.0 if x == 0.0 else math.sin(x) / x
++
++
++def _small_time_solution(m, k, c, F0, omega, x0, v0, t, scale):
++    """Taylor series for x(t), used when |scale * t| is small."""
++    order = 20
++    r = omega / scale
++    force_coefficient = F0 / (m * scale * scale)
++    damping_coefficient = c / (m * scale)
++    stiffness_coefficient = k / (m * scale * scale)
++
++    # Normalized derivatives y_n = x^(n)(0) / scale^n.
++    y = [x0, v0 / scale]
++    r_power = 1.0
++    for n in range(order - 1):
++        if n % 2 == 0:
++            sign = 1.0 if (n // 2) % 2 == 0 else -1.0
++            forcing = sign * force_coefficient * r_power
++        else:
++            forcing = 0.0
++        y.append(
++            forcing
++            - damping_coefficient * y[n + 1]
++            - stiffness_coefficient * y[n]
++        )
++        r_power *= r
++
++    s = scale * t
++    result = 0.0
++    for n in range(order, -1, -1):
++        result = result * s + y[n] / math.factorial(n)
++    return result
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    return abs(F0) / math.hypot(k - m * omega * omega, c * omega)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    # The closed form loses relative precision at very small times when its
++    # leading terms cancel, so use the Taylor series there.
++    scale = max(abs(omega), abs(c) / m, math.sqrt(abs(k) / m))
++    if scale == 0.0:
++        scale = 1.0
++    if abs(scale * t) <= 0.25:
++        return _small_time_solution(m, k, c, F0, omega, x0, v0, t, scale)
++
++    # Particular solution, written as X cos(omega t) + Y sin(omega t).
++    d = k - m * omega * omega
++    cw = c * omega
++    den = d * d + cw * cw
++    X = F0 * d / den
++    Y = F0 * cw / den
++
++    wt = omega * t
++    x_particular = X * math.cos(wt) + Y * math.sin(wt)
++
++    # Homogeneous part needed to satisfy the initial conditions.
++    a = x0 - X
++    b = v0 - Y * omega
++    alpha = c / (2.0 * m)
++    critical_damping = 2.0 * math.sqrt(m * k)
++    # Factored form avoids cancellation when c is close to critical damping.
++    discriminant = (c - critical_damping) * (c + critical_damping)
++
++    if discriminant < 0.0:
++        # Underdamped (this also covers c = 0).
++        omega_d = math.sqrt(-discriminant) / (2.0 * m)
++        z = omega_d * t
++        x_homogeneous = math.exp(-alpha * t) * (
++            a * math.cos(z) + (b + alpha * a) * t * _sinc(z)
++        )
++    elif discriminant > 0.0:
++        # Overdamped.  Use decaying exponentials so cosh/sinh cannot overflow.
++        beta = math.sqrt(discriminant) / (2.0 * m)
++        root_sum = alpha + beta
++        # alpha - beta = (alpha^2 - beta^2) / (alpha + beta); this avoids
++        # cancellation when the two real roots are nearly equal.
++        root_gap = (k / m) / root_sum
++        u = root_gap * t
++        v = root_sum * t
++        e_minus_u = math.exp(-u)
++        e_minus_v = math.exp(-v)
++        cosh_factor = 0.5 * (e_minus_u + e_minus_v)
++        z = 2.0 * beta * t
++        if z == 0.0:
++            sinh_factor = t * math.exp(-alpha * t)
++        elif abs(z) < 0.5:
++            sinh_factor = e_minus_v * math.expm1(z) / (2.0 * beta)
++        else:
++            sinh_factor = (e_minus_u - e_minus_v) / (2.0 * beta)
++        x_homogeneous = a * cosh_factor + (b + alpha * a) * sinh_factor
++    else:
++        # Critically damped: a double root at -alpha.
++        x_homogeneous = (a + (b + alpha * a) * t) * math.exp(-alpha * t)
++
++    return x_particular + x_homogeneous

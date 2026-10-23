@@ -1,0 +1,34 @@
+diff --git a/variable_length_quantity.py b/variable_length_quantity.py
+index 41bdcdc..574869c 100644
+--- a/variable_length_quantity.py
++++ b/variable_length_quantity.py
+@@ -1,6 +1,27 @@
+ def encode(numbers):
+-    pass
++    """Encode a sequence of integers as a variable length quantity byte stream."""
++    encoded = []
++    for number in numbers:
++        chunk = [number & 0x7F]
++        number >>= 7
++        while number:
++            chunk.append((number & 0x7F) | 0x80)
++            number >>= 7
++        encoded.extend(reversed(chunk))
++    return encoded
+ 
+ 
+ def decode(bytes_):
+-    pass
++    """Decode a variable length quantity byte stream into integers."""
++    numbers = []
++    value = 0
++    in_sequence = False
++    for byte in bytes_:
++        value = (value << 7) | (byte & 0x7F)
++        in_sequence = bool(byte & 0x80)
++        if not in_sequence:
++            numbers.append(value)
++            value = 0
++    if in_sequence:
++        raise ValueError("incomplete sequence")
++    return numbers

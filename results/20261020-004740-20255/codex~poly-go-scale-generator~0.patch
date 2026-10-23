@@ -1,0 +1,111 @@
+diff --git a/scale_generator.go b/scale_generator.go
+index a2980bf..8fa7a9d 100644
+--- a/scale_generator.go
++++ b/scale_generator.go
+@@ -1,5 +1,105 @@
+ package scale
+ 
++import "strings"
++
++var sharpScale = []string{
++	"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
++}
++
++var flatScale = []string{
++	"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
++}
++
+ func Scale(tonic, interval string) []string {
+-	panic("Please implement the Scale function")
++	normalized, minor, ok := normalizeTonic(tonic)
++	if !ok {
++		return nil
++	}
++
++	chromatic := sharpScale
++	if usesFlats(normalized, minor) {
++		chromatic = flatScale
++	}
++
++	start := indexOf(chromatic, normalized)
++	if start == -1 {
++		return nil
++	}
++
++	if interval == "" {
++		scale := make([]string, 0, 12)
++		for step := 0; step < 12; step++ {
++			scale = append(scale, chromatic[(start+step)%12])
++		}
++		return scale
++	}
++
++	scale := make([]string, 0, len(interval)+1)
++	scale = append(scale, chromatic[start])
++	for _, step := range interval {
++		switch step {
++		case 'm':
++			start++
++		case 'M':
++			start += 2
++		case 'A':
++			start += 3
++		default:
++			return nil
++		}
++		start %= 12
++		scale = append(scale, chromatic[start])
++	}
++
++	return scale
++}
++
++func normalizeTonic(tonic string) (string, bool, bool) {
++	if tonic == "" {
++		return "", false, false
++	}
++
++	first := tonic[0]
++	if first < 'A' || first > 'G' {
++		if first < 'a' || first > 'g' {
++			return "", false, false
++		}
++	}
++
++	minor := first >= 'a' && first <= 'g'
++	normalized := strings.ToUpper(tonic[:1]) + strings.ToLower(tonic[1:])
++	if len(normalized) == 1 {
++		return normalized, minor, true
++	}
++	if len(normalized) == 2 && (normalized[1] == '#' || normalized[1] == 'b') {
++		return normalized, minor, true
++	}
++	return "", false, false
++}
++
++func usesFlats(tonic string, minor bool) bool {
++	if minor {
++		switch tonic {
++		case "A", "E", "B", "F#", "C#", "G#", "D#", "A#":
++			return false
++		default:
++			return true
++		}
++	}
++
++	switch tonic {
++	case "C", "G", "D", "A", "E", "B", "F#", "C#":
++		return false
++	default:
++		return true
++	}
++}
++
++func indexOf(notes []string, note string) int {
++	for i, candidate := range notes {
++		if candidate == note {
++			return i
++		}
++	}
++	return -1
+ }
