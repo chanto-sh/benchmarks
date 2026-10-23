@@ -36,7 +36,10 @@ ROOT = Path(__file__).resolve().parent
 TASKS = ROOT / "tasks"
 # Work dirs live outside this repo so agents can't wander into the Chanto sources.
 # Not /tmp: a restart wipes it mid-run.
-WORK = Path(os.environ.get("BENCH_WORK", Path.home() / ".local/share/chanto-bench/work"))
+# Where the benchmark keeps installed agents, work folders and runs
+# (install-agents.sh installs into the same place).
+BENCH_HOME = Path(os.environ.get("BENCH_HOME", Path.home() / ".local/share/chanto-bench"))
+WORK = Path(os.environ.get("BENCH_WORK", BENCH_HOME / "work"))
 RESULTS = ROOT / "results"
 # The Chanto checkout under test: its release binary by default, and like this
 # repository it's hidden from the agents. A sibling clone unless set.
@@ -46,11 +49,11 @@ CHANTO_REPO = Path(os.environ.get("CHANTO_REPO", ROOT.parent / "chanto")).resolv
 # POSIX extended syntax (the macOS sandbox's), so only its metacharacters are escaped.
 CHECKOUT_NAMES = "|".join(sorted({"bench", "[^/]*benchmarks", re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", ROOT.name)}))
 # Agents installed with npm into an isolated prefix (see README).
-NPM_BIN = Path(os.environ.get("BENCH_NPM_BIN", Path.home() / ".local/share/chanto-bench/agents/node_modules/.bin"))
+NPM_BIN = Path(os.environ.get("BENCH_NPM_BIN", BENCH_HOME / "agents/node_modules/.bin"))
 # cline ships its launcher outside .bin, so name it directly.
 CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "bin" / "cline"))
 # Agents shipped as standalone binaries (opencode, goose), pinned and checksummed.
-BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", Path.home() / ".local/share/chanto-bench/bin"))
+BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", BENCH_HOME / "bin"))
 # Python agents installed with `uv tool install`, each in its own environment.
 UV_TOOLS = Path.home() / ".local/share/uv/tools"
 AGENT_INSTALLS = [NPM_BIN.parent.parent, BIN_DIR, UV_TOOLS / "aider-chat", UV_TOOLS / "openhands"]
@@ -502,7 +505,7 @@ def offline_hidden():
     """What agents may not read: this repository (tasks' hidden tests, past
     runs), the Chanto sources, other agents' and shards' workspaces, and package
     caches that could hold a newer release with the fix."""
-    return [ROOT, CHANTO_REPO, Path.home() / ".cache/chanto-bench", Path.home() / ".local/share/chanto-bench", WORK,
+    return [ROOT, CHANTO_REPO, Path.home() / ".cache/chanto-bench", BENCH_HOME, WORK,
             Path.home() / "Library/Caches/pip", Path.home() / ".cache/pip", Path.home() / ".cache/uv",
             Path.home() / "Library/Caches/uv",
             # A downloaded SWE-bench dataset holds the gold patches too.

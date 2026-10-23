@@ -11,13 +11,17 @@ same model, and every raw result behind the published numbers.
 
 Clone this next to a Chanto checkout and build Chanto. The runner uses
 `../chanto/target/release/chanto` (set `CHANTO_REPO` or `BENCH_CHANTO_BIN` to
-point elsewhere).
+point elsewhere). The runner itself needs only Python 3; `install-agents.sh`
+installs the agents it compares at pinned versions (with npm, uv and
+checksum-verified downloads) into `~/.local/share/chanto-bench`, which runs use
+before anything on your PATH.
 
 ```sh
 git clone https://github.com/chanto-sh/chanto.git
 git clone https://github.com/chanto-sh/benchmarks.git chanto-benchmarks
 (cd chanto && cargo build --release)
 cd chanto-benchmarks
+./install-agents.sh      # the other agents, at the versions RESULTS.md reports
 
 # A local model through Ollama
 python3 run.py --agents chanto,opencode,claude --model qwen3.8-bench
