@@ -616,6 +616,10 @@ else:
         home.mkdir(parents=True)
         secret = hidden / "grading-input"
         secret.write_text("original")
+        # The Chanto sources are hidden as well as this repository.
+        (hidden / "chanto").mkdir()
+        sibling = hidden / "chanto" / "main.rs"
+        sibling.write_text("hidden")
         binary = hidden / "binary"
         binary.write_text('#!/bin/sh\necho "$1"\n')
         binary.chmod(0o755)
@@ -623,14 +627,15 @@ else:
         hidden, wd, home = hidden.resolve(), wd.resolve(), home.resolve()
         script = """
 import os, pathlib, socket, subprocess, sys
-secret, binary, wd, home, port, packages = sys.argv[1:]
+secret, sibling, binary, wd, home, port, packages = sys.argv[1:]
 assert os.getcwd() == wd, os.getcwd()
-try:
-    pathlib.Path(secret).read_text()
-except OSError:
-    pass
-else:
-    raise AssertionError("bench data readable")
+for path, what in ((secret, "bench data"), (sibling, "Chanto sources")):
+    try:
+        pathlib.Path(path).read_text()
+    except OSError:
+        pass
+    else:
+        raise AssertionError(what + " readable")
 if packages:
     assert os.listdir(packages) == [], "installed packages visible"
 for path in (wd, home):
@@ -656,8 +661,9 @@ else:
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 time.sleep(0.3)
-                with patch.object(run, "ROOT", hidden / "bench"), patch.object(run, "WORK", hidden / "work"), patch.object(run, "AGENT_INSTALLS", []):
-                    cmd = run.offline_linux(wd, home, [sys.executable, "-c", script, str(secret), str(binary), str(wd), str(home), str(port), packages],
+                with patch.object(run, "ROOT", hidden), patch.object(run, "CHANTO_REPO", hidden / "chanto"), \
+                        patch.object(run, "WORK", hidden / "work"), patch.object(run, "AGENT_INSTALLS", []):
+                    cmd = run.offline_linux(wd, home, [sys.executable, "-c", script, str(secret), str(sibling), str(binary), str(wd), str(home), str(port), packages],
                                             [port], sock_dir, binary)
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=wd)
             finally:
