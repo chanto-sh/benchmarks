@@ -1,0 +1,166 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..01a6312 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,34 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses the kick-drift-kick (velocity Verlet) leapfrog scheme, which is
++    symplectic: the energy error stays bounded and does not drift secularly,
++    however long the run.  Because the pair forces are equal and opposite,
++    total momentum is conserved to round-off.
++
++    The input sequences are left untouched; fresh lists are returned.
++    """
++    masses = list(masses)
++    n = len(masses)
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++
++    acc = accelerations(masses, pos, G)
++    half = 0.5 * dt
++    for _ in range(steps):
++        # half kick with the acceleration at the current position
++        for i in range(n):
++            vel[i][0] += half * acc[i][0]
++            vel[i][1] += half * acc[i][1]
++        # drift
++        for i in range(n):
++            pos[i][0] += dt * vel[i][0]
++            pos[i][1] += dt * vel[i][1]
++        # full kick from the acceleration at the new position
++        acc = accelerations(masses, pos, G)
++        for i in range(n):
++            vel[i][0] += half * acc[i][0]
++            vel[i][1] += half * acc[i][1]
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..6ea4bdd 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -1,9 +1,36 @@
++import copy
+ import math
+ import unittest
+ 
+ from nbody import energy, simulate
+ 
+ 
++def momentum(masses, velocities):
++    return [
++        sum(m * v[0] for m, v in zip(masses, velocities)),
++        sum(m * v[1] for m, v in zip(masses, velocities)),
++    ]
++
++
++def sample_relative_energy(masses, positions, velocities, dt, steps, every=100):
++    """Advance in chunks, returning relative energy deviations along the way.
++
++    A velocity-Verlet state is complete in (x, v), so re-entering ``simulate``
++    at a chunk boundary continues the very same trajectory as one long call.
++    """
++    pos = [list(p) for p in positions]
++    vel = [list(v) for v in velocities]
++    e0 = energy(masses, pos, vel)
++    devs = [0.0]
++    done = 0
++    while done < steps:
++        k = min(every, steps - done)
++        pos, vel = simulate(masses, pos, vel, dt, k)
++        done += k
++        devs.append((energy(masses, pos, vel) - e0) / abs(e0))
++    return devs
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +44,83 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    # figure-eight: a well-known periodic three-body choreography (G = m = 1)
++    FIG8_MASSES = [1.0, 1.0, 1.0]
++
++    def _figure_eight(self):
++        x, y = 0.97000436, -0.24308753
++        vx, vy = 0.93240737, 0.86473146
++        pos = [[x, y], [0.0, 0.0], [-x, -y]]
++        vel = [[vx / 2, vy / 2], [-vx, -vy], [vx / 2, vy / 2]]
++        return self.FIG8_MASSES, pos, vel
++
++    def test_eccentric_two_body_energy(self):
++        # unequal masses, zero total momentum, elliptical relative orbit
++        m = [1.0, 2.0]
++        pos = [[-1.0, 0.0], [1.0, 0.0]]
++        vel = [[0.0, 1.0], [0.0, -0.5]]
++        devs = sample_relative_energy(m, pos, vel, 0.002, 40000, every=200)
++        self.assertLess(max(abs(d) for d in devs), 1e-5)
++
++    def test_energy_is_bounded_and_does_not_drift(self):
++        # A symplectic integrator keeps the energy error bounded: extending the
++        # run must not inflate it.  A drifting scheme would show ~4x when the
++        # number of steps is quadrupled.
++        m, pos, vel = self._figure_eight()
++        short = max(abs(d) for d in sample_relative_energy(m, pos, vel, 0.002, 10000))
++        long = max(abs(d) for d in sample_relative_energy(m, pos, vel, 0.002, 40000))
++        self.assertLess(long, 1e-4)
++        self.assertLess(long, 2.0 * short)
++
++    def test_second_order_convergence(self):
++        # Halving dt should shrink the energy error by ~4x.
++        m, pos, vel = self._figure_eight()
++        coarse = max(abs(d) for d in sample_relative_energy(m, pos, vel, 0.004, 2500))
++        fine = max(abs(d) for d in sample_relative_energy(m, pos, vel, 0.002, 5000))
++        self.assertLess(coarse, 5.0 * fine)
++        self.assertGreater(coarse, 1.5 * fine)
++
++    def test_momentum_conserved(self):
++        m = [1.0, 2.0, 0.5, 1.5]
++        pos = [[0.0, 0.0], [4.0, 1.0], [-3.0, 3.0], [0.0, -5.0]]
++        vel = [[0.0, 0.2], [-0.05, -0.02], [0.1, -0.05], [0.0, 0.1]]
++        p0 = momentum(m, vel)
++        p, q = simulate(m, pos, vel, 0.001, 20000)
++        p1 = momentum(m, q)
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-9)
++
++    def test_planetary_system(self):
++        # heavy central star + light planets on near-circular orbits
++        star = 1.0
++        radii = [1.0, 1.6, 2.4, 3.5]
++        m = [star] + [1e-3] * len(radii)
++        pos = [[0.0, 0.0]]
++        vel = [[0.0, 0.0]]
++        for i, r in enumerate(radii):
++            a = 0.7 * i
++            vc = math.sqrt(star / r)
++            pos.append([r * math.cos(a), r * math.sin(a)])
++            vel.append([-vc * math.sin(a), vc * math.cos(a)])
++        devs = sample_relative_energy(m, pos, vel, 0.002, 60000, every=500)
++        self.assertLess(max(abs(d) for d in devs), 1e-5)
++
++    def test_inputs_are_not_modified(self):
++        m, pos, vel = self._figure_eight()
++        pos0 = copy.deepcopy(pos)
++        vel0 = copy.deepcopy(vel)
++        p, q = simulate(m, pos, vel, 0.01, 100)
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        # returned data must be independent copies, not aliases of the inputs
++        self.assertIsNot(p[0], pos[0])
++        self.assertIsNot(q[0], vel[0])
++
++    def test_zero_steps_returns_start_state(self):
++        m, pos, vel = self._figure_eight()
++        p, q = simulate(m, pos, vel, 0.01, 0)
++        self.assertEqual(p, pos)
++        self.assertEqual(q, vel)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

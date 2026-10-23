@@ -1,0 +1,87 @@
+diff --git a/doc/whatsnew/fragments/7993.bugfix b/doc/whatsnew/fragments/7993.bugfix
+new file mode 100644
+index 0000000..c91faf5
+--- /dev/null
++++ b/doc/whatsnew/fragments/7993.bugfix
+@@ -0,0 +1,5 @@
++Fix a bug where using custom braces in the ``--msg-template`` would raise a
++``UserWarning`` and produce a broken message. Escaped braces (``{{`` and ``}}``)
++are now preserved.
++
++Closes #7993
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..ea26869 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -15,6 +15,7 @@ import re
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
++from string import Formatter
+ from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, TextIO, cast, overload
+ 
+ from pylint.message import Message
+@@ -174,15 +175,31 @@ class TextReporter(BaseReporter):
+         # Set template to the currently selected template
+         self._template = template
+ 
++        class NamespaceFormatter(Formatter):
++            def __init__(self) -> None:
++                super().__init__()
++                self.arguments: list[str] = []
++
++            def parse(self, format_string):
++                for literal_text, field_name, format_spec, conversion in super().parse(
++                    format_string
++                ):
++                    if field_name is not None:
++                        self.arguments.append(field_name)
++                    yield literal_text, field_name, format_spec, conversion
++
++        formatter = NamespaceFormatter()
++        for _ in formatter.parse(template):
++            pass
++
+         # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++        for argument in formatter.arguments:
++            if argument not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{argument}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
++                template = re.sub(r"\{" + argument + r"(:.*?)?\}", "", template)
+         self._fixed_template = template
+ 
+     def write_message(self, msg: Message) -> None:
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..82a06e6 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -113,6 +113,22 @@ def test_template_option_non_existing(linter) -> None:
+     assert out_lines[2] == "my_mod:2::()"
+ 
+ 
++def test_template_option_with_custom_braces(linter) -> None:
++    """Test the msg-template option with escaped braces.
++
++    Escaped braces must be preserved and not be mistaken for a template argument.
++    """
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    linter.set_current_module("my_mod")
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[1] == '{ "Category": "convention" }'
++
++
+ def test_deprecation_set_output(recwarn):
+     """TODO remove in 3.0."""
+     reporter = BaseReporter()

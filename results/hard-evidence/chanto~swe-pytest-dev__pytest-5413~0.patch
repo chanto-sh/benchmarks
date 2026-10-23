@@ -1,0 +1,27 @@
+diff --git a/changelog/5413.bugfix.rst b/changelog/5413.bugfix.rst
+new file mode 100644
+index 0000000..724b80c
+--- /dev/null
++++ b/changelog/5413.bugfix.rst
+@@ -0,0 +1,4 @@
++``ExceptionInfo.__str__`` now returns the exception message (``str(excinfo.value)``)
++instead of the location where the exception was raised, so ``str(excinfo)``
++behaves like catching the exception normally. Exceptions without a message keep
++the previous location-based representation.
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index c4ed961..da98d0c 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -537,6 +537,12 @@ class ExceptionInfo:
+     def __str__(self):
+         if self._excinfo is None:
+             return repr(self)
++        # Return the exception message so that ``str(excinfo)`` behaves like
++        # ``str(e)`` when catching the exception normally. Exceptions without a
++        # message keep the location-based representation.
++        message = str(self.value)
++        if message:
++            return message
+         entry = self.traceback[-1]
+         loc = ReprFileLocation(entry.path, entry.lineno + 1, self.exconly())
+         return str(loc)

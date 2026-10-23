@@ -1,0 +1,12 @@
+yaml-lite 2.3.0 has been out for months, but our web app (@acme/web) still resolves yaml-lite to an old 1.x. Someone says it's the pin in @acme/ui; I'm not sure. resolve.py is our resolver and registry.json is the mirror of the package registry it reads.
+
+Please figure out what's actually holding yaml-lite back for @acme/web's production install, and write answers.json with:
+
+- "resolved_version": the yaml-lite version @acme/web currently resolves to.
+- "declared_by": the package and version whose constraint caps it, as "name@version".
+- "blocking_constraint": that constraint string, exactly as written.
+- "pulled_in_by": the line in one of our own manifests that brings that package in, as "path:line".
+- "config_kit_3_resolves": true or false: if @acme/settings switched to "config-kit": "^3.0.0", would @acme/web still resolve at all?
+- "conflict_package": if it wouldn't, the package whose constraints can't be satisfied (otherwise null).
+
+Please don't commit any manifest changes; I just want the analysis.

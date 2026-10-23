@@ -1,0 +1,117 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..a50371e 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,6 +1,6 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+-const { fmt } = require("./format");
++const { toCents, fmt } = require("./format");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+@@ -9,7 +9,7 @@ function checkout(cart) {
+   let discount = 0;
+   let taxable = 0;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = toCents(item.price) * item.qty;
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..fca836b 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,10 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++const { parseDecimal, roundHalfUp } = require("./format");
++
++// Per-line percentage discounts. `lineCents` is the line amount in cents and
++// `pct` is a percentage (e.g. 15). Rounded to the cent (half up) per line.
++function discountFor(lineCents, pct) {
++  const { num, den } = parseDecimal(pct);
++  return roundHalfUp(lineCents * num, den * 100);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..3eab94f 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,51 @@
+-// Money as a plain "1234.50" string for receipts and the API.
+-function fmt(amount) {
+-  return amount.toFixed(2);
++// Money is handled as integer cents throughout the pricing code. These helpers
++// parse decimal values exactly (no binary floating point), round half up, and
++// format cents back to plain "1234.50" strings for receipts and the API.
++
++// Parse a decimal value into an exact fraction { num, den }.
++function parseDecimal(value) {
++  const s = String(value).trim();
++  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(s);
++  const whole = match ? match[2] : "";
++  const fraction = match ? match[3] || "" : "";
++  if (!match || (whole === "" && fraction === "")) {
++    throw new Error(`Invalid decimal value: ${value}`);
++  }
++  const sign = match[1] === "-" ? -1 : 1;
++  const exponent = match[4] ? Number(match[4]) : 0;
++  let num = sign * Number(whole + fraction);
++  let scale = fraction.length - exponent;
++  if (scale < 0) {
++    num *= 10 ** -scale;
++    scale = 0;
++  }
++  return { num, den: 10 ** scale };
++}
++
++// Round numerator / denominator to an integer, half away from zero.
++function roundHalfUp(numerator, denominator) {
++  if (denominator < 0) {
++    numerator = -numerator;
++    denominator = -denominator;
++  }
++  const sign = numerator < 0 ? -1 : 1;
++  const abs = Math.abs(numerator);
++  return sign * Math.floor((2 * abs + denominator) / (2 * denominator));
++}
++
++// Parse a money amount (e.g. "19.99") into integer cents.
++function toCents(amount) {
++  const { num, den } = parseDecimal(amount);
++  return roundHalfUp(num * 100, den);
++}
++
++// Format integer cents as a plain "1234.50" string.
++function fmt(cents) {
++  const sign = cents < 0 ? "-" : "";
++  const abs = Math.abs(cents);
++  const dollars = Math.floor(abs / 100);
++  const remainder = String(abs % 100).padStart(2, "0");
++  return `${sign}${dollars}.${remainder}`;
+ }
+ 
+-module.exports = { fmt };
++module.exports = { parseDecimal, roundHalfUp, toCents, fmt };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..abebe64 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,10 @@
+-// Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++const { parseDecimal, roundHalfUp } = require("./format");
++
++// Sales tax on the taxable part of a cart. `amountCents` is in cents and
++// `rate` is a percentage (e.g. 8.25). Rounded to the cent (half up) once.
++function taxFor(amountCents, rate) {
++  const { num, den } = parseDecimal(rate);
++  return roundHalfUp(amountCents * num, den * 100);
+ }
+ 
+ module.exports = { taxFor };

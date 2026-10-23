@@ -1,0 +1,120 @@
+diff --git a/changelog/2034.bugfix.rst b/changelog/2034.bugfix.rst
+new file mode 100644
+index 0000000..51b837a
+--- /dev/null
++++ b/changelog/2034.bugfix.rst
+@@ -0,0 +1,3 @@
++Fix traceback file paths being displayed relative to the current working
++directory when a fixture changes it. Paths are now shown relative to the
++directory ``pytest`` was invoked from.
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index 7b17d76..34aa59e 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -427,6 +427,7 @@ class ExceptionInfo(Generic[_E]):
+     _excinfo = attr.ib(type=Optional[Tuple["Type[_E]", "_E", TracebackType]])
+     _striptext = attr.ib(type=str, default="")
+     _traceback = attr.ib(type=Optional[Traceback], default=None)
++    _config = attr.ib(default=None, eq=False, repr=False)
+ 
+     @classmethod
+     def from_exc_info(
+@@ -622,6 +623,7 @@ class ExceptionInfo(Generic[_E]):
+             funcargs=funcargs,
+             truncate_locals=truncate_locals,
+             chain=chain,
++            config=self._config,
+         )
+         return fmt.repr_excinfo(self)
+ 
+@@ -656,6 +658,7 @@ class FormattedExcinfo:
+     truncate_locals = attr.ib(type=bool, default=True)
+     chain = attr.ib(type=bool, default=True)
+     astcache = attr.ib(default=attr.Factory(dict), init=False, repr=False)
++    _config = attr.ib(default=None, eq=False, repr=False)
+ 
+     def _getindent(self, source: "Source") -> int:
+         # figure out indent for given source
+@@ -791,7 +794,11 @@ class FormattedExcinfo:
+     def _makepath(self, path):
+         if not self.abspath:
+             try:
+-                np = py.path.local().bestrelpath(path)
++                if self._config is not None:
++                    base = py.path.local(self._config.invocation_params.dir)
++                else:
++                    base = py.path.local()
++                np = base.bestrelpath(path)
+             except OSError:
+                 return path
+             if len(np) < len(str(path)):
+diff --git a/src/_pytest/config/__init__.py b/src/_pytest/config/__init__.py
+index bb5034a..4050a4f 100644
+--- a/src/_pytest/config/__init__.py
++++ b/src/_pytest/config/__init__.py
+@@ -896,6 +896,7 @@ class Config:
+             style = "long"
+         else:
+             style = "native"
++        excinfo._config = self
+         excrepr = excinfo.getrepr(
+             funcargs=True, showlocals=getattr(option, "showlocals", False), style=style
+         )
+diff --git a/src/_pytest/nodes.py b/src/_pytest/nodes.py
+index 4a79bc8..41bd41a 100644
+--- a/src/_pytest/nodes.py
++++ b/src/_pytest/nodes.py
+@@ -335,6 +335,7 @@ class Node(metaclass=NodeMeta):
+     ) -> Union[str, ReprExceptionInfo, ExceptionChainRepr, FixtureLookupErrorRepr]:
+         if isinstance(excinfo.value, ConftestImportFailure):
+             excinfo = ExceptionInfo(excinfo.value.excinfo)
++        excinfo._config = self.config
+         if isinstance(excinfo.value, fail.Exception):
+             if not excinfo.value.pytrace:
+                 style = "value"
+diff --git a/testing/test_cwd_traceback.py b/testing/test_cwd_traceback.py
+new file mode 100644
+index 0000000..537b9a2
+--- /dev/null
++++ b/testing/test_cwd_traceback.py
+@@ -0,0 +1,40 @@
++"""Regression test for the file paths shown in failure tracebacks.
++
++When a fixture changes the current working directory, the paths reported in a
++failure used to be computed relative to that new directory (for example
++``../test_foo.py``), which made it impossible for editors to locate the file.
++The paths must stay relative to the directory pytest was invoked from.
++"""
++import pytest
++
++
++def test_path_relative_to_invocation_dir(testdir):
++    testdir.makepyfile(
++        """
++        import os
++
++        import pytest
++
++
++        @pytest.fixture
++        def private_dir(tmpdir):
++            out_dir = tmpdir.mkdir("ddd")
++            old_dir = os.getcwd()
++            os.chdir(str(out_dir))
++            yield out_dir
++            os.chdir(old_dir)
++
++
++        def test_show_wrong_path(private_dir):
++            assert False
++        """
++    )
++    result = testdir.runpytest()
++    result.stdout.fnmatch_lines(
++        [
++            "*def test_show_wrong_path(private_dir):*",
++            "*E       assert False*",
++            "*test_path_relative_to_invocation_dir.py:*: AssertionError",
++        ]
++    )
++    result.stdout.no_fnmatch_line("*../test_path_relative_to_invocation_dir.py*")

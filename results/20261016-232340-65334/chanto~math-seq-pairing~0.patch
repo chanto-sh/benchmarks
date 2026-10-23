@@ -1,0 +1,61 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..7d580c5 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,54 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _pair(a, b):
++    """A bijection N x N -> N with roughly additive bit length.
++
++    Non-negative integers are grouped by the length i of their binary
++    representation.  Pairs whose representation lengths sum to s fill a
++    contiguous block of (s + 1) * 2**s keys.
++    """
++    i = (a + 1).bit_length() - 1
++    j = (b + 1).bit_length() - 1
++    s = i + j
++    ra = a - ((1 << i) - 1)
++    rb = b - ((1 << j) - 1)
++    base = ((s - 1) << s) + 1  # sum((m + 1) * 2**m for m in range(s))
++    return base + (i << s) + (ra << j) + rb
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    lo, hi = 0, n.bit_length() + 1
++    while lo + 1 < hi:
++        mid = (lo + hi) // 2
++        if ((mid - 1) << mid) + 1 <= n:
++            lo = mid
++        else:
++            hi = mid
++
++    s = lo
++    q = n - (((s - 1) << s) + 1)
++    i = q >> s
++    j = s - i
++    r = q - (i << s)
++    a = ((1 << i) - 1) + (r >> j)
++    b = ((1 << j) - 1) + (r & ((1 << j) - 1))
++    return a, b
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = 0
++    for value in reversed(lst):
++        n = _pair(value, n) + 1
++    return n
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

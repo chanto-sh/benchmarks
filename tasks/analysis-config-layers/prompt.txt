@@ -1,0 +1,9 @@
+We're auditing what our service actually runs with in production (APP_ENV=production) before a migration. The config is layered; loader.py is the code that resolves it.
+
+For each of these settings, tell me the effective value in production and exactly which line sets that winning value: db.pool_size, cache.ttl_seconds, db.host, worker.max_retries.
+
+Write answers.json shaped like this, with sources as "path:line" relative to this folder:
+
+{"db.pool_size": {"value": "...", "source": "config/....ini:N"}, "cache.ttl_seconds": {...}, "db.host": {...}, "worker.max_retries": {...}}
+
+Don't change any of the config files.

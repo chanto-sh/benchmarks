@@ -1,0 +1,80 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..8a8a115 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,73 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    # The complex particular solution has denominator
++    # (k - m*omega**2) + i*c*omega.  hypot avoids unnecessary overflow.
++    denom = math.hypot(k - m * omega * omega, c * omega)
++    return abs(F0) / denom
++
++
++def _overdamped_basis(beta, gamma, t):
++    """Return e**(-beta*t) * (cosh(gamma*t), sinh(gamma*t)/gamma).
++
++    The exponential form is used away from gamma*t == 0 because it avoids
++    overflow in cosh/sinh; the direct form is accurate near the critically
++    damped limit, where sinh(gamma*t)/gamma tends to t.
++    """
++    x = gamma * t
++    if abs(x) < 1.0:
++        decay = math.exp(-beta * t)
++        if x == 0.0:
++            return decay, decay * t
++        return decay * math.cosh(x), decay * t * (math.sinh(x) / x)
++
++    root1 = -beta + gamma
++    root2 = -beta - gamma
++    e1 = math.exp(root1 * t)
++    e2 = math.exp(root2 * t)
++    return 0.5 * (e1 + e2), (e1 - e2) / (2.0 * gamma)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    # Particular solution: a*cos(omega*t) + b*sin(omega*t).
++    detuning = k - m * omega * omega
++    damping = c * omega
++    denom = math.hypot(detuning, damping)
++    a = F0 * (detuning / denom) / denom
++    b = F0 * (damping / denom) / denom
++
++    # Homogeneous solution for y = x - x_particular.  Writing
++    # y = exp(-beta*t)*u turns the homogeneous equation into
++    # u'' + (omega0**2 - beta**2)*u = 0.
++    y0 = x0 - a
++    y1 = v0 - b * omega
++    beta = c / (2.0 * m)
++    delta = k / m - beta * beta
++    u1 = y1 + beta * y0
++
++    if delta > 0.0:
++        omega_d = math.sqrt(delta)
++        x = omega_d * t
++        if x == 0.0:
++            sinc = 1.0
++        else:
++            sinc = math.sin(x) / x
++        homogeneous = math.exp(-beta * t) * (
++            y0 * math.cos(x) + u1 * t * sinc
++        )
++    elif delta == 0.0:
++        homogeneous = math.exp(-beta * t) * (y0 + u1 * t)
++    else:
++        gamma = math.sqrt(-delta)
++        cosh_term, sinh_term = _overdamped_basis(beta, gamma, t)
++        homogeneous = y0 * cosh_term + u1 * sinh_term
++
++    return homogeneous + a * math.cos(omega * t) + b * math.sin(omega * t)

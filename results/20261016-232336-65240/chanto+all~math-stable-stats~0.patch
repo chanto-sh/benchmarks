@@ -1,0 +1,66 @@
+diff --git a/stats.py b/stats.py
+index add4f59..c10eccf 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,55 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    lo = min(xs)
++    hi = max(xs)
++
++    # Shift the data close to its values so the differences that determine
++    # the variance stay small even when the readings sit around a huge offset.
++    # An endpoint is ideal, but the range itself can overflow for inputs of
++    # opposite signs, in which case the midpoint is used instead.
++    shift = lo if math.isfinite(hi - lo) else lo / 2.0 + hi / 2.0
++
++    scale = 0.0
++    for x in xs:
++        d = abs(x - shift)
++        if d > scale:
++            scale = d
++
++    if scale == 0.0:
++        return shift, 0.0
++
++    # Mean of the shifted values.  Dividing by the largest magnitude before
++    # summing prevents overflow for large inputs; fsum keeps the sum accurate.
++    mean_shift = scale * (math.fsum((x - shift) / scale for x in xs) / n)
++    mean = shift + mean_shift
++
++    # Second pass: average squared deviation from the shifted mean.  Scaling
++    # by the largest deviation avoids overflow during the summation even when
++    # n times the variance exceeds the largest representable float.
++    spread = 0.0
++    for x in xs:
++        d = abs((x - shift) - mean_shift)
++        if d > spread:
++            spread = d
++
++    if spread == 0.0:
++        return mean, 0.0
++
++    m2 = math.fsum((((x - shift) - mean_shift) / spread) ** 2 for x in xs) / n
++    return mean, spread * (spread * m2)
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if not math.isfinite(m):
++        return m
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

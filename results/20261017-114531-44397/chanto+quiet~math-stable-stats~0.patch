@@ -1,0 +1,40 @@
+diff --git a/stats.py b/stats.py
+index add4f59..fcd4f28 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,29 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    # Shift by one of the readings before squaring.  This keeps the variance
++    # from being computed as the difference of two huge, nearly equal sums
++    # when the data sits around a large offset (timestamps, absolute
++    # pressures, ...).  Differences of nearby doubles are exact (Sterbenz),
++    # so the shifted variance retains full precision.
++    ref = xs[0]
++    mean_shift = math.fsum(x - ref for x in xs) / n
++    var = math.fsum((x - ref - mean_shift) ** 2 for x in xs) / n
++    return ref + mean_shift, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    # Factor out the maximum: every exponent is then <= 0, so exp() can
++    # neither overflow nor lose the dominant terms to underflow.
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # log1p preserves accuracy when exp(x) is tiny; for positive x use the
++    # algebraically equivalent x + log(1 + exp(-x)) to avoid overflow.
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

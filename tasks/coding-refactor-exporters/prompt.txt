@@ -1,0 +1,3 @@
+reports/csv_export.py, reports/json_export.py and reports/md_export.py each carry their own copy of the same four helpers (`_load_rows`, `_parse_ts`, `_in_range`, `_fmt_money`). Please pull them into a single module, reports/common.py, as public functions `load_rows`, `parse_ts`, `in_range` and `fmt_money`, and make all three exporters use it, with no private copies left behind.
+
+Heads-up: the copies have drifted over the years. The ones in csv_export.py are the versions we trust, so after the refactor every exporter should behave the way the CSV one does. test_reports.py must stay green.

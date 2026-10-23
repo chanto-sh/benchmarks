@@ -1,0 +1,63 @@
+diff --git a/changelog/5256.bugfix.rst b/changelog/5256.bugfix.rst
+new file mode 100644
+index 0000000..14c0335
+--- /dev/null
++++ b/changelog/5256.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed the assertion rewriting message for byte strings: comparing two ``bytes``
++objects now shows a readable diff of their ``repr()`` instead of treating them
++as sequences and reporting confusing integer "items" (the byte ordinals).
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..a82f032 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -127,6 +127,8 @@ def assertrepr_compare(config, op, left, right):
+         if op == "==":
+             if istext(left) and istext(right):
+                 explanation = _diff_text(left, right, verbose)
++            elif isinstance(left, bytes) and isinstance(right, bytes):
++                explanation = _diff_text(left, right, verbose)
+             else:
+                 if issequence(left) and issequence(right):
+                     explanation = _compare_eq_sequence(left, right, verbose)
+@@ -178,12 +180,10 @@ def _diff_text(left, right, verbose=0):
+     def escape_for_readable_diff(binary_text):
+         """
+         Ensures that the internal string is always valid unicode, converting any bytes safely to valid unicode.
+-        This is done using repr() which then needs post-processing to fix the encompassing quotes and un-escape
+-        newlines and carriage returns (#429).
++        This is done using repr(), which yields the ``b'...'`` representation of the
++        bytes without the risk of raising a decoding error (#429).
+         """
+-        r = str(repr(binary_text)[1:-1])
+-        r = r.replace(r"\n", "\n")
+-        r = r.replace(r"\r", "\r")
++        r = str(repr(binary_text))
+         return r
+ 
+     if isinstance(left, bytes):
+diff --git a/testing/test_assertion.py b/testing/test_assertion.py
+index 0fcfd9f..ec6b01f 100644
+--- a/testing/test_assertion.py
++++ b/testing/test_assertion.py
+@@ -586,6 +586,20 @@ class TestAssert_reprcompare:
+         msg = "\n".join(expl)
+         assert msg
+ 
++    def test_bytes_diff(self):
++        left = b"spam"
++        right = b"eggs"
++        expl = callequal(left, right)
++        assert expl[0] == "b'spam' == b'eggs'"
++        assert expl[1] == "- b'spam'"
++        assert expl[2] == "+ b'eggs'"
++
++    def test_bytes_diff_different_lengths(self):
++        expl = callequal(b"", b"42")
++        assert expl[0] == "b'' == b'42'"
++        assert expl[1] == "- b''"
++        assert expl[2] == "+ b'42'"
++
+ 
+ class TestAssert_reprcompare_dataclass:
+     @pytest.mark.skipif(sys.version_info < (3, 7), reason="Dataclasses in Python3.7+")

@@ -1,0 +1,89 @@
+diff --git a/stats.py b/stats.py
+index add4f59..affe6b6 100644
+--- a/stats.py
++++ b/stats.py
+@@ -2,20 +2,78 @@
+ import math
+ 
+ 
++def _scaled_mean(xs, n, offset=0.0):
++    """Arithmetic mean of (x - offset), scaling only if needed for overflow."""
++    max_abs = max(abs(x - offset) for x in xs)
++    if max_abs == 0.0:
++        return 0.0
++    _, exp = math.frexp(max_abs)
++    # Scale by the least power of two that keeps n terms below the float
++    # limit.  For ordinary data shift is zero, so no precision is lost.
++    shift = max(0, exp + n.bit_length() - 1022)
++    total = math.fsum(math.ldexp(x - offset, -shift) for x in xs)
++    try:
++        return math.ldexp(total / n, shift)
++    except OverflowError:
++        return math.copysign(max_abs, total)
++
++
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    mean = _scaled_mean(xs, n)
++
++    # Compute the variance in coordinates shifted by one of the data points.
++    # That keeps the centering exact even when the readings share a huge
++    # offset and differ by only a few ulps.
++    origin = xs[0]
++    max_abs = 0.0
++    for x in xs:
++        d = x - origin
++        if math.isinf(d):
++            return mean, math.inf
++        d = abs(d)
++        if d > max_abs:
++            max_abs = d
++    if max_abs == 0.0:
++        return origin, 0.0
++
++    mean_d = _scaled_mean(xs, n, origin)
++
++    # Second pass in the shifted coordinates, scaling the deviations by a
++    # power of two so squaring them cannot overflow unnecessarily.
++    dmax = 0.0
++    for x in xs:
++        d = abs((x - origin) - mean_d)
++        if d > dmax:
++            dmax = d
++    if dmax == 0.0:
++        return mean, 0.0
++    if math.isinf(dmax):
++        return mean, math.inf
++
++    _, exp = math.frexp(dmax)
++    shift = exp - 1
++    ss = math.fsum(math.ldexp((x - origin) - mean_d, -shift) ** 2 for x in xs)
++    try:
++        std = math.ldexp(math.sqrt(ss / n), shift)
++    except OverflowError:
++        return mean, math.inf
++    return mean, std * std
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    xs = list(xs)
++    m = max(xs)
++    # Shifting by the maximum keeps every exponential in (0, 1].  fsum keeps
++    # the accumulation accurate for large batches.
++    s = math.fsum(math.exp(x - m) for x in xs)
++    return m + math.log(s)
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

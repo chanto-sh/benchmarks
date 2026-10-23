@@ -1,0 +1,7 @@
+We're consolidating warehouses and I need a few figures from inventory.json, the stock dump from our WMS. Only count warehouses that are still active. Each line is one bin, so a SKU can appear in several bins, and SKU codes were typed by hand (casing and stray spaces vary). Weights are per unit, in whatever unit the line says; weight_est_kg is an old rough estimate, don't use it.
+
+Write answers.json with:
+
+- "bx_total_weight_kg": total weight in kg of all stock in the BX product family (SKUs starting with "BX-"), rounded to 2 decimals.
+- "distinct_skus": the number of distinct SKUs stocked.
+- "highest_value_warehouse": the code of the warehouse whose stock (qty x unit_cost_usd) is worth the most.

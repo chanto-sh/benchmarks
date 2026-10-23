@@ -1,0 +1,60 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..a3fcfd5 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -44,6 +44,8 @@ Unreleased
+     to set the domain, which modern browsers interpret as an exact match rather than
+     a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
+     :issue:`5051`
++-   The ``flask routes`` command shows the ``Subdomain`` or ``Host`` for each route
++    when it is set. :issue:`5063`
+ 
+ 
+ Version 2.2.4
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..758376c 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -1018,20 +1018,32 @@ def routes_command(sort: str, all_methods: bool) -> None:
+         for rule in rules
+     ]
+ 
+-    headers = ("Endpoint", "Methods", "Rule")
+-    widths = (
+-        max(len(rule.endpoint) for rule in rules),
+-        max(len(methods) for methods in rule_methods),
+-        max(len(rule.rule) for rule in rules),
+-    )
+-    widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    headers = ["Endpoint", "Methods", "Rule"]
++    columns = [
++        [rule.endpoint for rule in rules],
++        rule_methods,
++        [rule.rule for rule in rules],
++    ]
++
++    # Show the host or subdomain for each rule, if one is used.
++    if current_app.url_map.host_matching:
++        headers.append("Host")
++        columns.append([rule.host or "" for rule in rules])
++    elif any(rule.subdomain for rule in rules):
++        headers.append("Subdomain")
++        columns.append([rule.subdomain or "" for rule in rules])
++
++    widths = [
++        max(len(header), max(len(value) for value in column))
++        for header, column in zip(headers, columns)
++    ]
++    row = "  ".join(f"{{{i}:<{width}}}" for i, width in enumerate(widths))
+ 
+     click.echo(row.format(*headers).strip())
+     click.echo(row.format(*("-" * width for width in widths)))
+ 
+-    for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++    for row_values in zip(*columns):
++        click.echo(row.format(*row_values).rstrip())
+ 
+ 
+ cli = FlaskGroup(

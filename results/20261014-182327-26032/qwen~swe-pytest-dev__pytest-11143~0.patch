@@ -1,0 +1,38 @@
+diff --git a/changelog/11143.bugfix.rst b/changelog/11143.bugfix.rst
+new file mode 100644
+index 0000000..cddb497
+--- /dev/null
++++ b/changelog/11143.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed assertion rewriting raising ``TypeError: argument of type 'int' is not iterable``
++when a module's first statement is a non-string constant (e.g. a number), which was
++mistaken for a module docstring.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 157903f..9bf79f1 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -676,6 +676,7 @@ class AssertionRewriter(ast.NodeVisitor):
+                 expect_docstring
+                 and isinstance(item, ast.Expr)
+                 and isinstance(item.value, ast.Constant)
++                and isinstance(item.value.value, str)
+             ):
+                 doc = item.value.value
+                 if self.is_rewrite_disabled(doc):
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index d018032..0ad858b 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -141,6 +141,12 @@ class TestAssertionRewrite:
+         assert isinstance(m.body[1], ast.Assert)
+         assert m.body[1].msg is None
+ 
++    def test_dont_rewrite_with_number_first(self) -> None:
++        s = "42\nassert 14"
++        m = rewrite(s)
++        assert isinstance(m.body[2], ast.Expr)
++        assert m.body[2].value.value == 42
++
+     def test_dont_rewrite_plugin(self, pytester: Pytester) -> None:
+         contents = {
+             "conftest.py": "pytest_plugins = 'plugin'; import plugin",

@@ -1,0 +1,181 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..bcb2d9e
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,4 @@
++Assertion rewriting now "unrolls" ``all(...)`` and ``any(...)`` calls whose
++argument is a generator expression or comprehension, so that the failure
++report points at the element which caused the assertion to fail instead of
++showing the opaque truth value of the call.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..df08df5 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -833,6 +833,9 @@ class AssertionRewriter(ast.NodeVisitor):
+                 lineno=assert_.lineno,
+             )
+ 
++        if self._is_all_any(assert_.test):
++            return self._rewrite_all_any(assert_)
++
+         self.statements = []
+         self.variables = []
+         self.variable_counter = itertools.count()
+@@ -964,6 +967,156 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    @staticmethod
++    def _is_all_any(node):
++        """Return True if *node* is an ``all``/``any`` call over a comprehension."""
++        if not (
++            isinstance(node, ast.Call)
++            and isinstance(node.func, ast.Name)
++            and node.func.id in ("all", "any")
++            and len(node.args) == 1
++            and not node.keywords
++        ):
++            return False
++        comp = node.args[0]
++        if not isinstance(comp, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
++            return False
++        # Async comprehensions cannot be translated to plain ``for`` loops.
++        for generator in comp.generators:
++            if getattr(generator, "is_async", 0):
++                return False
++        return True
++
++    @staticmethod
++    def _wrap_in_comprehension_loops(body, generators):
++        """Wrap *body* in the loops/filters of a comprehension.
++
++        The resulting statements are equivalent to executing *body* for every
++        element produced by the comprehension, with the loop variables bound.
++        """
++        for generator in reversed(generators):
++            for condition in reversed(generator.ifs):
++                body = [ast.If(condition, body, [])]
++            body = [ast.For(generator.target, generator.iter, body, [])]
++        return body
++
++    def _format_assert_explanation(self, assert_, explanation):
++        """Build the "assert ..." template for *explanation*.
++
++        This mirrors the way :meth:`visit_Assert` builds its message so that a
++        user supplied assertion message is preserved.
++        """
++        if assert_.msg:
++            assertmsg = self.helper("_format_assertmsg", assert_.msg)
++            explanation = "\n>assert " + explanation
++        else:
++            assertmsg = ast.Str("")
++            explanation = "assert " + explanation
++        return ast.BinOp(assertmsg, ast.Add(), ast.Str(explanation))
++
++    def _rewrite_all_any(self, assert_):
++        """Rewrite ``assert all(...)``/``assert any(...)`` by unrolling the iterable.
++
++        Instead of reporting the opaque result of the builtin, the iterable is
++        unrolled so that the existing per-element reports are used, which
++        produces useful failure messages.
++        """
++        call = assert_.test
++        comp = call.args[0]
++        is_all = call.func.id == "all"
++
++        self.statements = []
++        self.variables = []
++        self.variable_counter = itertools.count()
++        self.stack = []
++        self.on_failure = []
++
++        if is_all:
++            # ``all`` short-circuits on the first falsy value: a plain for loop
++            # with an inner assertion has exactly the same semantics.
++            inner = ast.Assert(comp.elt, assert_.msg)
++            set_location(inner, assert_.lineno, assert_.col_offset)
++            body = self.visit_Assert(inner)
++            body = self._wrap_in_comprehension_loops(body, comp.generators)
++            for stmt in body:
++                set_location(stmt, assert_.lineno, assert_.col_offset)
++            return body
++
++        # ``any`` fails only if no element is truthy, so we record the result
++        # while unrolling and raise afterwards if nothing matched.
++        result_var = self.variable()
++        statements = [
++            ast.Assign([ast.Name(result_var, ast.Store())], _NameConstant(False))
++        ]
++
++        save_statements = self.statements
++        save_on_failure = self.on_failure
++        self.push_format_context()
++        self.statements = body = []
++        self.on_failure = body
++        cond, cond_expl = self.visit(comp.elt)
++        # ``expl_name`` holds the formatted "assert ..." explanation for the
++        # currently evaluated element.
++        expl_name = self.pop_format_context(
++            self._format_assert_explanation(assert_, cond_expl)
++        )
++        self.statements = save_statements
++        self.on_failure = save_on_failure
++        expl_var = self.variable()
++        statements.append(
++            ast.Assign(
++                [ast.Name(expl_var, ast.Store())],
++                ast.BinOp(
++                    self._format_assert_explanation(assert_, "False"),
++                    ast.Mod(),
++                    ast.Dict([], []),
++                ),
++            )
++        )
++        body.append(ast.Assign([ast.Name(expl_var, ast.Store())], expl_name))
++        body.append(
++            ast.If(
++                cond,
++                [
++                    ast.Assign(
++                        [ast.Name(result_var, ast.Store())], _NameConstant(True)
++                    ),
++                    ast.Break(),
++                ],
++                [],
++            )
++        )
++        # Once a match was found the remaining (possibly nested) iterations
++        # must not evaluate the element again.
++        guarded = [
++            ast.If(ast.UnaryOp(ast.Not(), ast.Name(result_var, ast.Load())), body, [])
++        ]
++        statements.extend(
++            self._wrap_in_comprehension_loops(guarded, comp.generators)
++        )
++        exc = ast_Call(
++            ast.Name("AssertionError", ast.Load()),
++            [self.helper("_format_explanation", ast.Name(expl_var, ast.Load()))],
++            [],
++        )
++        if sys.version_info[0] >= 3:
++            raise_ = ast.Raise(exc, None)
++        else:
++            raise_ = ast.Raise(exc, None, None)
++        statements.append(
++            ast.If(
++                ast.UnaryOp(ast.Not(), ast.Name(result_var, ast.Load())),
++                [raise_],
++                [],
++            )
++        )
++        if self.variables:
++            variables = [ast.Name(name, ast.Store()) for name in self.variables]
++            statements.append(ast.Assign(variables, _NameConstant(None)))
++        for stmt in statements:
++            set_location(stmt, assert_.lineno, assert_.col_offset)
++        return statements
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after

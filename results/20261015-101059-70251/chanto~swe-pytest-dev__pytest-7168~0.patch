@@ -1,0 +1,49 @@
+diff --git a/changelog/7168.bugfix.rst b/changelog/7168.bugfix.rst
+new file mode 100644
+index 0000000..4172662
+--- /dev/null
++++ b/changelog/7168.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed internal error when the ``__repr__`` of a test outcome's value raised an
++exception whose object also raised on attribute access (for example a failing
++``__getattribute__``), by no longer accessing ``__class__`` on the object being
++repr'd.
+diff --git a/src/_pytest/_io/saferepr.py b/src/_pytest/_io/saferepr.py
+index 23af4d0..47a00de 100644
+--- a/src/_pytest/_io/saferepr.py
++++ b/src/_pytest/_io/saferepr.py
+@@ -20,7 +20,7 @@ def _format_repr_exception(exc: BaseException, obj: Any) -> str:
+     except BaseException as exc:
+         exc_info = "unpresentable exception ({})".format(_try_repr_or_str(exc))
+     return "<[{} raised in repr()] {} object at 0x{:x}>".format(
+-        exc_info, obj.__class__.__name__, id(obj)
++        exc_info, type(obj).__name__, id(obj)
+     )
+ 
+ 
+diff --git a/testing/io/test_saferepr.py b/testing/io/test_saferepr.py
+index 0608420..249b95e 100644
+--- a/testing/io/test_saferepr.py
++++ b/testing/io/test_saferepr.py
+@@ -119,6 +119,21 @@ def test_baseexception():
+         saferepr(BrokenObj(RaisingOnStrRepr([BaseException, SystemExit])))
+ 
+ 
++def test_raise_in_getattribute():
++    class A:
++        def __getattribute__(self, name):
++            raise RuntimeError("broken")
++
++        def __repr__(self):
++            raise RuntimeError("broken repr")
++
++    obj = A()
++    s = saferepr(obj)
++    assert "RuntimeError" in s
++    assert "raised in repr()" in s
++    assert "A object at 0x{:x}".format(id(obj)) in s
++
++
+ def test_buggy_builtin_repr():
+     # Simulate a case where a repr for a builtin raises.
+     # reprlib dispatches by type name, so use "int".

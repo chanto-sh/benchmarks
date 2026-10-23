@@ -1,0 +1,19 @@
+# cputurn.py: per-turn CPU and peak memory against the instant mock model
+# command: python3 cputurn.py chanto cn openhands --reps 10 --turns 40
+# machine: MacBookPro18,2 Apple M1 Max, 32 GB, macOS 26.3
+# chanto: chanto 0.1.12 (dc096b6 + local changes)
+# cn: 1.5.47 (@continuedev/cli)
+# openhands: OpenHands CLI 1.16.0 (PyPI openhands 1.16.0), shell commands as subprocesses (tmux hidden from PATH)
+# date: 2026-10-23T05:40:19Z
+
+CPU/turn: 40 turns, 50 KB/turn, 10 reps (model instant, CPU excl. model)
+
+agent       turns reps            CPU ms/turn (time-l)             peak RSS MB
+------------------------------------------------------------------------------
+chanto         41   10        4.6 |    4.7± 0.4 (  9%)    32.1 |   31.7± 1.2 (  4%)
+cn             41   10       61.5 |   61.5± 1.2 (  2%)   347.5 |  347.6± 1.2 (  0%)
+openhands      42   10      186.3 |  186.6± 1.6 (  1%)   416.2 |  416.2± 1.7 (  0%)
+
+Each cell: median | mean±sd (CV%). Low CV% + separated means = a real difference.
+peak RSS = max process-tree resident set over the run (sampled every 60 ms).
+turns = model requests the agent made (short = it quit early vs the mock).

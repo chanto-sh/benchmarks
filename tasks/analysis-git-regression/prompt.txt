@@ -1,0 +1,8 @@
+Accounting noticed bulk invoice lines are sometimes a cent short. For example `python3 -m invoice 12 1999 5` prints 22308, but 12 units at 19.99 with 5% off plus the 2% bulk discount is 22308.84, which should round to 22309. It used to be right when bulk pricing first shipped.
+
+Before anyone touches the code, I want to know which commit introduced this and where the faulty line is now. Please write answers.json with:
+
+- "commit": the hash of the commit that introduced the bug (at least 7 characters).
+- "location": the faulty line in the current code, as "path:line" (for example "invoice/tax.py:4").
+
+Don't fix it yet, just find it.

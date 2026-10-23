@@ -1,0 +1,88 @@
+diff --git a/changelog/5338.feature.rst b/changelog/5338.feature.rst
+new file mode 100644
+index 0000000..f7aedfd
+--- /dev/null
++++ b/changelog/5338.feature.rst
+@@ -0,0 +1,2 @@
++The JUnit XML report now includes the ``hostname`` and ``timestamp`` attributes
++on the ``testsuite`` element.
+diff --git a/doc/en/usage.rst b/doc/en/usage.rst
+index 41d51ad..228eaf9 100644
+--- a/doc/en/usage.rst
++++ b/doc/en/usage.rst
+@@ -649,7 +649,7 @@ added at the test-suite level of the generated xml:
+ 
+ .. code-block:: xml
+ 
+-    <testsuite errors="0" failures="0" name="pytest" skipped="0" tests="1" time="0.006">
++    <testsuite errors="0" failures="0" hostname="..." name="pytest" skipped="0" tests="1" time="0.006" timestamp="...">
+       <properties>
+         <property name="ARCH" value="PPC"/>
+         <property name="STORAGE_TYPE" value="CEPH"/>
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..bcb6016 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -11,8 +11,10 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..baee092 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -1,4 +1,6 @@
+ import os
++import socket
++from datetime import datetime
+ from xml.dom import minidom
+ 
+ import py
+@@ -1118,6 +1120,31 @@ def test_root_testsuites_tag(testdir):
+     assert suite_node.tag == "testsuite"
+ 
+ 
++def test_hostname(testdir):
++    testdir.makepyfile(
++        """
++        def test_x():
++            pass
++    """
++    )
++    _, dom = runandparse(testdir)
++    suite_node = dom.find_first_by_tag("testsuite")
++    assert suite_node["hostname"] == socket.gethostname()
++
++
++def test_timestamp(testdir):
++    testdir.makepyfile(
++        """
++        def test_x():
++            pass
++    """
++    )
++    _, dom = runandparse(testdir)
++    suite_node = dom.find_first_by_tag("testsuite")
++    timestamp = suite_node["timestamp"]
++    datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f")
++
++
+ def test_runs_twice(testdir):
+     f = testdir.makepyfile(
+         """

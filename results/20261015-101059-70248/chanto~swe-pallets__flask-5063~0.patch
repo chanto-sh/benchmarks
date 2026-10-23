@@ -1,0 +1,110 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..684c4cc 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -44,6 +44,8 @@ Unreleased
+     to set the domain, which modern browsers interpret as an exact match rather than
+     a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
+     :issue:`5051`
++-   The ``flask routes`` command shows the domain each route is bound to, including
++    any subdomain, when it can be determined. :issue:`5063`
+ 
+ 
+ Version 2.2.4
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..a56269c 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -989,7 +989,7 @@ def shell_command() -> None:
+ @click.option(
+     "--sort",
+     "-s",
+-    type=click.Choice(("endpoint", "methods", "rule", "match")),
++    type=click.Choice(("endpoint", "methods", "domain", "rule", "match")),
+     default="endpoint",
+     help=(
+         'Method to sort routes by. "match" is the order that Flask will match '
+@@ -1008,30 +1008,74 @@ def routes_command(sort: str, all_methods: bool) -> None:
+ 
+     ignored_methods = set(() if all_methods else ("HEAD", "OPTIONS"))
+ 
++    server_name = current_app.config["SERVER_NAME"]
++
++    def get_domain(rule: t.Any) -> str:
++        """Return the full domain the rule is bound to.
++
++        The rule's subdomain is prepended to the app's ``SERVER_NAME``. If
++        host matching is in use, the rule's host is returned as is.
++        """
++        if rule.host:
++            return rule.host
++
++        if not server_name:
++            return rule.subdomain or ""
++
++        if rule.subdomain:
++            return f"{rule.subdomain}.{server_name}"
++
++        return server_name
++
+     if sort in ("endpoint", "rule"):
+         rules = sorted(rules, key=attrgetter(sort))
+     elif sort == "methods":
+         rules = sorted(rules, key=lambda rule: sorted(rule.methods))  # type: ignore
++    elif sort == "domain":
++        rules = sorted(rules, key=get_domain)
+ 
+     rule_methods = [
+         ", ".join(sorted(rule.methods - ignored_methods))  # type: ignore
+         for rule in rules
+     ]
+ 
+-    headers = ("Endpoint", "Methods", "Rule")
+-    widths = (
+-        max(len(rule.endpoint) for rule in rules),
+-        max(len(methods) for methods in rule_methods),
+-        max(len(rule.rule) for rule in rules),
+-    )
++    domains = [get_domain(rule) for rule in rules]
++    # Only show the domain column when it carries information, so that the
++    # default output stays unchanged for apps without a ``SERVER_NAME``.
++    show_domains = any(domains)
++
++    if show_domains:
++        headers = ("Domain", "Endpoint", "Methods", "Rule")
++        widths = (
++            max(len(domain) for domain in domains),
++            max(len(rule.endpoint) for rule in rules),
++            max(len(methods) for methods in rule_methods),
++            max(len(rule.rule) for rule in rules),
++        )
++    else:
++        headers = ("Endpoint", "Methods", "Rule")
++        widths = (
++            max(len(rule.endpoint) for rule in rules),
++            max(len(methods) for methods in rule_methods),
++            max(len(rule.rule) for rule in rules),
++        )
++
+     widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    row = "  ".join(
++        "{{" + str(i) + ":<{" + str(i) + "}}}" for i in range(len(widths))
++    )
++    row = row.format(*widths)
+ 
+     click.echo(row.format(*headers).strip())
+     click.echo(row.format(*("-" * width for width in widths)))
+ 
+-    for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++    for rule, methods, domain in zip(rules, rule_methods, domains):
++        values = (rule.endpoint, methods, rule.rule)
++
++        if show_domains:
++            values = (domain,) + values  # type: ignore[assignment]
++
++        click.echo(row.format(*values).rstrip())
+ 
+ 
+ cli = FlaskGroup(

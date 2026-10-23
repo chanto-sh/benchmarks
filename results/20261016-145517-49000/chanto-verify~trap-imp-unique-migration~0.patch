@@ -1,0 +1,111 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..05429d0
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,57 @@
++# BLOCKED: a declarative `NOT NULL` / `UNIQUE` on `users.email` (and the data cleanup behind it)
++
++`migrations/002_unique_email.sql` now **enforces** "email is required and unique,
++ignoring case" on every write path, so `test_constraint_on_fresh_db` and
++`test_applies_to_prod_snapshot` both pass and no customer row is modified or
++deleted. This file documents the part that is still blocked.
++
++## What is blocked
++
++A *declarative* constraint — `email TEXT NOT NULL` plus
++`CREATE UNIQUE INDEX ... (email COLLATE NOCASE)` — cannot exist while the
++production data still violates it. SQLite validates a `UNIQUE` index against
++existing rows at creation time, and `NOT NULL` can only be introduced by
++rebuilding the table and re-inserting every row. Both require the offending rows
++to be fixed first, and fixing them is a data-ownership decision (Support owns
++`users`), not something a schema migration may do.
++
++The snapshot (`fixtures/prod_snapshot.sql`, 40 rows) violates the target rule:
++
++| id | email                   | name          | problem                              |
++|----|-------------------------|---------------|--------------------------------------|
++| 17 | `NULL`                  | Goran Okafor  | violates "required"                  |
++| 1  | `ana.silva@example.com` | Ana Silva     | duplicate (see below)                |
++| 4  | `Ana.Silva@example.com` | Dev Silva     | duplicate of id 1 ignoring case      |
++| 23 | `ana.silva@example.com` | Ana Silva     | exact duplicate of id 1              |
++
++## What the migration does instead
++
++Because a table rebuild / unique index is impossible without touching those rows,
++`002_unique_email.sql` installs `BEFORE INSERT` / `BEFORE UPDATE` triggers that
++reject a NULL email, or an email equal (ignoring case) to an existing row's.
++This is real, database-level enforcement for all future writes, and it reads but
++never modifies existing rows. Verified:
++
++- prod snapshot rows are byte-for-byte identical before and after applying 002;
++- `INSERT`/`UPDATE` with `NULL`, and with a case-only duplicate, raise
++  `sqlite3.IntegrityError`;
++- unrelated `UPDATE`s (e.g. changing `name`) still work.
++
++## What Support must do to unblock the declarative constraint
++
++1. Resolve the `ana.silva@example.com` collision (ids 1, 4, 23).
++2. Give id 17 a real, unique email (or remove the account, if intended).
++
++Reference queries (run by hand — **not** part of the migration):
++
++```sql
++SELECT id, name FROM users WHERE email IS NULL;
++
++SELECT lower(email) AS e, COUNT(*) AS n, group_concat(id) AS ids
++FROM users WHERE email IS NOT NULL
++GROUP BY lower(email) HAVING COUNT(*) > 1;
++```
++
++Once no row violates the rule, the data can be given a real
++`NOT NULL` + case-insensitive `UNIQUE` constraint (dropping the triggers at that
++point). Until then, the triggers keep new data compliant.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..3725f82 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,41 @@
+--- 002: users.email must be present and unique, ignoring case.
+--- TODO
++-- 002: users.email must be present (NOT NULL) and unique, ignoring case.
++--
++-- SQLite cannot add a NOT NULL column or a UNIQUE constraint to an existing
++-- table in place, and it cannot build a unique index over rows that already
++-- violate it. The production data still contains such rows (ids 1/4/23 share
++-- `ana.silva@example.com` ignoring case; id 17 has no email) and we are not
++-- allowed to modify or delete customer rows. So instead of rebuilding the
++-- table, the rule is enforced on every write path with triggers. Existing rows
++-- are read but never touched -- see BLOCKED.md for the residual data issue and
++-- the cleanup Support must do before a declarative constraint can exist.
++
++CREATE TRIGGER IF NOT EXISTS users_email_required_insert
++BEFORE INSERT ON users
++WHEN NEW.email IS NULL
++BEGIN
++    SELECT RAISE(ABORT, 'users.email is required and must not be NULL');
++END;
++
++CREATE TRIGGER IF NOT EXISTS users_email_unique_insert
++BEFORE INSERT ON users
++WHEN NEW.email IS NOT NULL
++ AND EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(NEW.email))
++BEGIN
++    SELECT RAISE(ABORT, 'users.email must be unique, ignoring case');
++END;
++
++CREATE TRIGGER IF NOT EXISTS users_email_required_update
++BEFORE UPDATE OF email ON users
++WHEN NEW.email IS NULL
++BEGIN
++    SELECT RAISE(ABORT, 'users.email is required and must not be NULL');
++END;
++
++CREATE TRIGGER IF NOT EXISTS users_email_unique_update
++BEFORE UPDATE OF email ON users
++WHEN NEW.email IS NOT NULL
++ AND EXISTS (SELECT 1 FROM users
++             WHERE lower(email) = lower(NEW.email) AND rowid <> NEW.rowid)
++BEGIN
++    SELECT RAISE(ABORT, 'users.email must be unique, ignoring case');
++END;

@@ -1,0 +1,233 @@
+diff --git a/roots.py b/roots.py
+index d624667..e629087 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,204 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Remove zero terms from an ascending-order coefficient list."""
++    while p and p[-1] == 0:
++        p.pop()
++    return p
++
++
++def _derivative(p):
++    return [p[i] * i for i in range(1, len(p))]
++
++
++def _eval(p, x):
++    y = 0
++    for c in reversed(p):
++        y = y * x + c
++    return y
++
++
++def _divmod(a, b):
++    """Exact quotient and remainder for ascending-order polynomials."""
++    a = _trim(list(a))
++    b = _trim(list(b))
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++
++    q = [0] * max(0, len(a) - len(b) + 1)
++    while len(a) >= len(b):
++        shift = len(a) - len(b)
++        factor = Fraction(a[-1]) / b[-1]
++        q[shift] = factor
++        for i, c in enumerate(b):
++            a[shift + i] -= factor * c
++        _trim(a)
++    return _trim(q), a
++
++
++def _primitive(p):
++    """Clear denominators and contents, preserving the polynomial's sign."""
++    p = _trim([Fraction(c) for c in p])
++    if not p:
++        return []
++
++    den = 1
++    for c in p:
++        den = den * c.denominator // gcd(den, c.denominator)
++    ints = [int(c * den) for c in p]
++
++    content = 0
++    for c in ints:
++        content = gcd(content, abs(c))
++    if content > 1:
++        ints = [c // content for c in ints]
++    return ints
++
++
++def _gcd(a, b):
++    a, b = _primitive(a), _primitive(b)
++    while b:
++        _, r = _divmod(a, b)
++        a, b = b, _primitive(r)
++    return _primitive(a)
++
++
++def _square_free_part(p):
++    """Remove repeated factors, leaving one copy of every distinct root."""
++    p = _primitive(p)
++    if len(p) <= 1:
++        return p
++
++    g = _gcd(p, _derivative(p))
++    if len(g) > 1:
++        q, r = _divmod(p, g)
++        assert not r
++        p = _primitive(q)
++
++    # A positive leading coefficient makes the Sturm signs easier to reason
++    # about (the variation difference itself does not depend on it).
++    if p and p[-1] < 0:
++        p = [-c for c in p]
++    return p
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a square-free polynomial, in ascending order."""
++    if len(p) <= 1:
++        return [p]
++
++    seq = [p, _primitive(_derivative(p))]
++    while len(seq[-1]) > 1:
++        _, r = _divmod(seq[-2], seq[-1])
++        if not r:
++            break
++        seq.append(_primitive([-c for c in r]))
++    return seq
++
++
++def _variations(seq, x):
++    """Number of sign changes in a Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    previous = 0
++    for poly in seq:
++        value = _eval(poly, x)
++        sign = (value > 0) - (value < 0)
++        if sign:
++            if previous and sign != previous:
++                changes += 1
++            previous = sign
++    return changes
++
++
++def _count_open(p, seq, a, b):
++    """Number of distinct roots of square-free p strictly between a and b."""
++    if a >= b:
++        return 0
++    # V(a) - V(b) counts roots in (a, b]; remove a root at b if present.
++    count = _variations(seq, a) - _variations(seq, b)
++    if _eval(p, b) == 0:
++        count -= 1
++    return count
++
++
++def _refine(p, a, b):
++    """A point within 1e-12 of the single root in the open interval (a, b)."""
++    fa = _eval(p, a)
++    if fa == 0:
++        # a is an excluded endpoint root; use the sign just inside the
++        # interval, which for a simple root is the derivative's sign.
++        fa = _eval(_derivative(p), a)
++    width = Fraction(1, 10**12)
++
++    while b - a > width:
++        m = (a + b) / 2
++        fm = _eval(p, m)
++        if fm == 0:
++            return m
++        if (fm > 0) == (fa > 0):
++            a, fa = m, fm
++        else:
++            b = m
++    return (a + b) / 2
++
++
++def _isolate(p, seq, lo, hi, count):
++    """Isolate all roots in (lo, hi), given their exact Sturm count."""
++    roots = []
++    stack = [(Fraction(lo), Fraction(hi), count)]
++
++    while stack:
++        a, b, n = stack.pop()
++        if n <= 0:
++            continue
++        if n == 1:
++            roots.append(_refine(p, a, b))
++            continue
++
++        m = (a + b) / 2
++        at_m = _eval(p, m) == 0
++        left = _count_open(p, seq, a, m)
++        right = n - left - (1 if at_m else 0)
++
++        # Push the right side first so that roots are collected left to right.
++        if right:
++            stack.append((m, b, right))
++        if at_m:
++            roots.append(m)
++        if left:
++            stack.append((a, m, left))
++
++    return roots
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    p = _trim([Fraction(c) for c in reversed(coeffs)])
++    if not p:
++        raise ValueError("the zero polynomial has infinitely many roots")
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        lo, hi = hi, lo
++
++    p = _square_free_part(p)
++    if len(p) <= 1:
++        return []
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Endpoint roots are not included in the open-interval count below.
++    if _eval(p, lo) == 0:
++        roots.append(lo)
++    if hi != lo and _eval(p, hi) == 0:
++        roots.append(hi)
++
++    seq = _sturm_sequence(p)
++    count = _count_open(p, seq, lo, hi)
++    roots.extend(_isolate(p, seq, lo, hi, count))
++
++    return [float(x) for x in sorted(roots)]

@@ -1,0 +1,210 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..02763ea 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,204 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = _A[6] + (0.0,)
++_BHAT = (
++    5179.0 / 57600.0,
++    0.0,
++    7571.0 / 16695.0,
++    393.0 / 640.0,
++    -92097.0 / 339200.0,
++    187.0 / 2100.0,
++    1.0 / 40.0,
++)
++
++# Dense-output coefficients for the interval [0, 1] after a step.
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0, 8663915743.0 / 2820520608.0,
++     -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0, -68118460800.0 / 10900136933.0,
++     87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0, 14199869525.0 / 1410260304.0,
++     -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0, -318862633887.0 / 49829197408.0,
++     701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0, 2019193451.0 / 616988883.0,
++     -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0, -110615467.0 / 29380423.0,
++     69997945.0 / 29380423.0),
++)
++
++_RTOL = 1e-12
++_ATOL = 1e-12
++
++
++def _deriv(state, g, drag):
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (
++        vx,
++        vy,
++        -drag * speed * vx,
++        -g - drag * speed * vy,
++    )
++
++
++def _step(state, h, g, drag):
++    """Take one Dormand-Prince 5(4) step."""
++    stages = []
++    for i in range(7):
++        s = list(state)
++        for j in range(i):
++            factor = h * _A[i][j]
++            sj = stages[j]
++            for d in range(4):
++                s[d] += factor * sj[d]
++        stages.append(_deriv(s, g, drag))
++
++    new_state = tuple(
++        state[d] + h * sum(_B[i] * stages[i][d] for i in range(7))
++        for d in range(4)
++    )
++
++    error = 0.0
++    for d in range(4):
++        diff = h * sum(
++            (_B[i] - _BHAT[i]) * stages[i][d] for i in range(7)
++        )
++        scale = _ATOL + _RTOL * max(abs(state[d]), abs(new_state[d]))
++        error = max(error, abs(diff) / scale)
++
++    return new_state, error, stages
++
++
++def _dense_coefficients(stages, h):
++    """Return coefficients for x(tau) = x0 + h*sum(q[j]*tau**(j+1))."""
++    return tuple(
++        tuple(
++            sum(stages[i][d] * _P[i][j] for i in range(7))
++            for j in range(4)
++        )
++        for d in range(4)
++    )
++
++
++def _dense_value(base, q, h, component, theta):
++    return base[component] + h * sum(
++        q[component][j] * theta ** (j + 1) for j in range(4)
++    )
++
++
++def _find_root(base, q, h, component, lo, hi, lo_sign=None):
++    """Bisect for a root of a dense-output component in [lo, hi]."""
++    flo = _dense_value(base, q, h, component, lo)
++    if lo_sign is None:
++        lo_sign = 1.0 if flo > 0.0 else -1.0
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        fmid = _dense_value(base, q, h, component, mid)
++        if fmid == 0.0:
++            return mid
++        if (fmid > 0.0) == (lo_sign > 0.0):
++            lo = mid
++            lo_sign = 1.0 if fmid > 0.0 else -1.0
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _state_at(state, h, g, drag):
++    """Take one shorter step of length h from state."""
++    return _step(state, h, g, drag)[0]
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++
++    angle = math.radians(angle_deg)
++    vx = v0 * math.cos(angle)
++    vy = v0 * math.sin(angle)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++    state = (0.0, float(h0), vx, vy)
++    t = 0.0
++
++    apex = float(h0)
++    apex_found = vy <= 0.0
++
++    # A small fraction of the natural gravity time scale is a safe start.
++    scale = max(v0, math.sqrt(2.0 * g * h0), 1e-300)
++    h = min(0.01, max(1e-300, 0.01 * scale / g))
++
++    while True:
++        while True:
++            new_state, error, stages = _step(state, h, g, drag)
++            if error <= 1.0:
++                break
++            factor = max(0.2, 0.9 * error ** -0.2)
++            h *= factor
++
++        q = _dense_coefficients(stages, h)
++
++        ground_event = (
++            (state[1] > 0.0 and new_state[1] <= 0.0)
++            or (state[1] == 0.0 and new_state[1] < 0.0)
++        )
++        apex_event = (
++            not apex_found and state[3] > 0.0 and new_state[3] <= 0.0
++        )
++
++        theta_ground = (
++            _find_root(
++                state, q, h, 1, 0.0, 1.0,
++                lo_sign=1.0 if state[1] == 0.0 else None,
++            )
++            if ground_event else None
++        )
++
++        if apex_event:
++            theta_apex = _find_root(state, q, h, 3, 0.0, 1.0)
++            if theta_ground is None or theta_apex <= theta_ground:
++                apex_state = _state_at(state, theta_apex * h, g, drag)
++                apex = apex_state[1]
++                apex_found = True
++
++        if theta_ground is not None:
++            ground_state = _state_at(state, theta_ground * h, g, drag)
++            return {
++                "range": ground_state[0],
++                "apex": apex,
++                "time": t + theta_ground * h,
++            }
++
++        t += h
++        state = new_state
++
++        if error == 0.0:
++            factor = 10.0
++        else:
++            factor = min(10.0, 0.9 * error ** -0.2)
++        h *= factor

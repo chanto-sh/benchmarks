@@ -1,0 +1,75 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..756fe2e
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1 @@
++Assertion rewriting now unrolls generator expressions passed to ``all()`` and ``any()`` so that the assertion failure message displays the individual values instead of a generator object.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..8a7838e 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -968,6 +968,15 @@ warn_explicit(
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        # Unroll generator expressions passed to all()/any() so that the
++        # assertion report shows the values instead of a generator repr.
++        if (
++            isinstance(call.func, ast.Name)
++            and call.func.id in ("all", "any")
++            and len(call.args) == 1
++            and isinstance(call.args[0], ast.GeneratorExp)
++        ):
++            call.args[0] = ast.ListComp(call.args[0].elt, call.args[0].generators)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1010,15 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        # Unroll generator expressions passed to all()/any() so that the
++        # assertion report shows the values instead of a generator repr.
++        if (
++            isinstance(call.func, ast.Name)
++            and call.func.id in ("all", "any")
++            and len(call.args) == 1
++            and isinstance(call.args[0], ast.GeneratorExp)
++        ):
++            call.args[0] = ast.ListComp(call.args[0].elt, call.args[0].generators)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index 87dada2..0b6d9da 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -525,6 +525,27 @@ class TestAssertionRewrite(object):
+  +  where False = g(**{'a': 2})"""
+         )
+ 
++    def test_assertion_unrolls_generator(self):
++        """#5103"""
++
++        def f():
++            assert all(x < 2 for x in range(3))
++
++        assert (
++            getmsg(f)
++            == """assert False
++ +  where False = all([True, True, False])"""
++        )
++
++        def f():
++            assert any(x > 2 for x in range(3))
++
++        assert (
++            getmsg(f)
++            == """assert False
++ +  where False = any([False, False, False])"""
++        )
++
+     def test_attribute(self):
+         class X(object):
+             g = 3

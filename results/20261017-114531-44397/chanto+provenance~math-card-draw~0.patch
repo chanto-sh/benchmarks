@@ -1,0 +1,66 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..a86ba44 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,20 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _hypergeometric_at_least(r, b, k, draws):
++    """P(at least k reds when `draws` cards are taken from r red and b blue)."""
++    if k <= 0:
++        return Fraction(1)
++    if draws < 0 or draws > r + b or k > r or k > draws:
++        return Fraction(0)
++
++    total = comb(r + b, draws)
++    favourable = sum(
++        comb(r, i) * comb(b, draws - i)
++        for i in range(k, min(r, draws) + 1)
++    )
++    return Fraction(favourable, total)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +22,39 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    # No deal can contain more than m reds, nor more reds than the deck holds.
++    if k > r or k > m:
++        return Fraction(0)
++
++    deck_size = r + b + g
++
++    if g == 0:
++        return _hypergeometric_at_least(r, b, k, min(m, deck_size))
++
++    # With g > 0 every arrangement of the green positions is equally likely.
++    # If the first green is at position t, the t-1 cards before it form a
++    # uniformly random sample of the r+b non-green cards, so the number of
++    # reds among them is hypergeometric.
++    total_green_arrangements = comb(deck_size, g)
++    result = Fraction(0)
++
++    for t in range(1, min(m, deck_size) + 1):
++        # Choose t as the first green position: the other g-1 greens lie in
++        # the deck_size-t positions after it.
++        ways_to_place_greens = comb(deck_size - t, g - 1)
++        if ways_to_place_greens == 0:
++            continue
++        p_first_green_here = Fraction(ways_to_place_greens, total_green_arrangements)
++        result += p_first_green_here * _hypergeometric_at_least(r, b, k, t - 1)
++
++    # Alternatively no green appears within the first m cards; then the deal
++    # ends after m cards and those m cards are a sample of the non-green cards.
++    if m < deck_size:
++        p_no_green_in_first_m = Fraction(
++            comb(deck_size - m, g), total_green_arrangements
++        )
++        result += p_no_green_in_first_m * _hypergeometric_at_least(r, b, k, m)
++
++    return result

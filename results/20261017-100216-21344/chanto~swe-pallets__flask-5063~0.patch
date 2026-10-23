@@ -1,0 +1,61 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..bf55e51 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -28,6 +28,8 @@ Unreleased
+ -   The ``app.got_first_request`` property is deprecated. :pr:`4997`
+ -   The ``locked_cached_property`` decorator is deprecated. Use a lock inside the
+     decorated function if locking is needed. :issue:`4993`
++-   The ``flask routes`` command shows the subdomain or host for each route when
++    they are used. :pr:`5063`
+ -   Signals are always available. ``blinker>=1.6.2`` is a required dependency. The
+     ``signals_available`` attribute is deprecated. :issue:`5056`
+ -   Signals support ``async`` subscriber functions. :pr:`5049`
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..761f961 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -1018,20 +1018,33 @@ def routes_command(sort: str, all_methods: bool) -> None:
+         for rule in rules
+     ]
+ 
+-    headers = ("Endpoint", "Methods", "Rule")
+-    widths = (
+-        max(len(rule.endpoint) for rule in rules),
+-        max(len(methods) for methods in rule_methods),
+-        max(len(rule.rule) for rule in rules),
+-    )
+-    widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    if current_app.url_map.host_matching:
++        domain_header = "Host"
++        rule_domains = [rule.host or "" for rule in rules]
++    else:
++        domain_header = "Subdomain"
++        rule_domains = [rule.subdomain or "" for rule in rules]
++
++    headers: tuple[str, ...] = ("Endpoint", "Methods", "Rule")
++    rows: list[tuple[str, ...]] = [
++        (rule.endpoint, methods, rule.rule)
++        for rule, methods in zip(rules, rule_methods)
++    ]
++
++    # Only show the subdomain or host column if any route uses one, so the
++    # output for apps that don't use them stays the same.
++    if any(rule_domains):
++        headers = (domain_header,) + headers
++        rows = [(domain,) + values for domain, values in zip(rule_domains, rows)]
++
++    widths = [max(len(value) for value in column) for column in zip(headers, *rows)]
++    row = "  ".join(f"{{{i}:<{width}}}" for i, width in enumerate(widths))
+ 
+     click.echo(row.format(*headers).strip())
+     click.echo(row.format(*("-" * width for width in widths)))
+ 
+-    for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++    for values in rows:
++        click.echo(row.format(*values).rstrip())
+ 
+ 
+ cli = FlaskGroup(

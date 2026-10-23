@@ -1,0 +1,1119 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-15T10:11:00-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-remeasure2.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--seed",
+      "401",
+      "--agents",
+      "chanto,chanto-verify",
+      "--tasks",
+      "swe-pytest-dev__pytest-5413,swe-pytest-dev__pytest-5495,swe-pytest-dev__pytest-5692,swe-pytest-dev__pytest-6116,swe-pytest-dev__pytest-7168,swe-pytest-dev__pytest-7220,swe-pytest-dev__pytest-7373,swe-pytest-dev__pytest-7432,swe-pytest-dev__pytest-7490,swe-pytest-dev__pytest-8365,swe-pytest-dev__pytest-8906,swe-pytest-dev__pytest-9359"
+    ],
+    "bench_commit": "82bc83d0d4a0b75e5959a7ad69aaed01249aa5f3",
+    "bench_dirty": false,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-82bc83d",
+      "sha256": "fcde724868d6cc013a4bc0eca54d2a1fd741c7d2a938099f2f41691f554a60d0"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.0",
+      "chanto-verify": "chanto 0.1.0"
+    },
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 401,
+    "repeat": 1,
+    "tasks": {
+      "swe-pytest-dev__pytest-5413": "c24b0a527a4b5ba708bddaa197a53c62fc54bb9cdd359cc103831bd4bfe1d0fd",
+      "swe-pytest-dev__pytest-5495": "39ecee914412ac6437130d3291e3cf97602ae0df1a5115095cda3773e91e724e",
+      "swe-pytest-dev__pytest-5692": "03c18cc0c059fb1806ffccb636c854ed86fd3c0e1788792763b9085201a5c1a3",
+      "swe-pytest-dev__pytest-6116": "38b85e185f114dce4facf442beb61a118995414b52c1ff8bdf89f54abfbfa9b6",
+      "swe-pytest-dev__pytest-7168": "c63c5203019ef891c3797cf3410013bd6b9be02f0502d29639696d2d32c4a634",
+      "swe-pytest-dev__pytest-7220": "dd3386202b421d0145152345a2e5d37fb449daead33e45983779e5be6500bbe1",
+      "swe-pytest-dev__pytest-7373": "5defd18e73bdb8ce325f36bb9a8e3af343dc49dd9a788c41b9c2474d570051cb",
+      "swe-pytest-dev__pytest-7432": "19a9b04794a213a280fa1a781fe4d25ca8a23372571512debf59543b1e8d0b75",
+      "swe-pytest-dev__pytest-7490": "8087e99a39e377d32604894c47bebd5b1b558d5da7a8817ecf8bda2bde6b1596",
+      "swe-pytest-dev__pytest-8365": "33098ca4fefe55c94e5c66ed0123500199dd2c3b4953e2123a2db7a3ad8f9d02",
+      "swe-pytest-dev__pytest-8906": "836066959d7caa30b996db2ec7819e6929c5bd99deed2b3ba59ec476fdd59ea1",
+      "swe-pytest-dev__pytest-9359": "74169df4df555f28915ea631b7258037da89fbc586a53231d8b2580a453711d3"
+    },
+    "offline_profile_sha256": "f67e33d4c61b892ae046c01b8de6142ba1b0fe26fe781964778165cd02fb15ff"
+  },
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5413",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "....                                                    [100%]\n=================================== FAILURES ===================================\n____________________________ test_excinfo_repr_str _____________________________\n\n    def test_excinfo_repr_str():\n        excinfo = pytest.raises(ValueError, h)\n        assert repr(excinfo) == \"<ExceptionInfo ValueError tblen=4>\"\n>       assert str(excinfo) == \"<ExceptionInfo ValueError tblen=4>\"\nE       AssertionError: assert '' == '<ExceptionInfo ValueError tblen=4>'\nE         + <ExceptionInfo ValueError tblen=4>\n\ntesting/code/test_excinfo.py:339: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-5413-0/.swe-results.xml -\n1 failed, 92 passed in 1.72 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 127,
+        "input": 8171934,
+        "output": 108513,
+        "cached": 7874560
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5413~0~4e4bbbb7",
+      "started_at": "2026-10-15T10:11:25-0700",
+      "ended_at": "2026-10-15T10:31:27-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5413~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5413~0.patch",
+          "sha256": "d5654edaec30b328f8897cac09f66a0d3a496ceb8e6744f0c8f05a1ffce85a8a"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5413~0.check.txt",
+          "sha256": "34aba6e3fd9c1c3eb41fdb8d5d75d0a2fd4bbd04be135e644a4fc1c1ebbbae77"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5413~0.session0.json",
+          "sha256": "6a08a3f3ea29f208aea14a5c631c2ea175cceb2a6a9e44fb1253cad32f430857"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5413",
+      "rep": 0,
+      "passed": false,
+      "seconds": 826.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                    [100%]\n=================================== FAILURES ===================================\n____________________________ test_excinfo_repr_str _____________________________\n\n    def test_excinfo_repr_str():\n        excinfo = pytest.raises(ValueError, h)\n        assert repr(excinfo) == \"<ExceptionInfo ValueError tblen=4>\"\n>       assert str(excinfo) == \"<ExceptionInfo ValueError tblen=4>\"\nE       AssertionError: assert '' == '<ExceptionInfo ValueError tblen=4>'\nE         + <ExceptionInfo ValueError tblen=4>\n\ntesting/code/test_excinfo.py:339: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-5413-0/.swe-results.xml -\n1 failed, 92 passed in 1.36 seconds\n",
+      "tokens": {
+        "in": 1141981,
+        "out": 17168
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 48,
+        "input": 1141981,
+        "output": 17168,
+        "cached": 1114624
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5413~0~2cd99582",
+      "started_at": "2026-10-15T10:32:02-0700",
+      "ended_at": "2026-10-15T10:45:50-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5413~0.out",
+          "sha256": "2b788bf50924e5a7b58ea7abac261a407dc441a91decb7a1d41188dc30c142b8"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5413~0.patch",
+          "sha256": "b74c691a39063c3df26d2f4ff99dc5c9d0febb0f51bdf75deea33feac79e74f5"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5413~0.check.txt",
+          "sha256": "cf3f61d36a24d2508bb60c93ca9d06bf77f50944de9606ff82767a8897ef1ed6"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5413~0.session0.json",
+          "sha256": "79096edc5cf2761d4199723f63de37199c98a2d874438ba749ccb05aca06b436"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-7490",
+      "rep": 0,
+      "passed": true,
+      "seconds": 796.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "00%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:446\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7490-0/src/_pytest/junitxml.py:446: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/stable/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/stable/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7490-0/.swe-results.xml -\n81 passed, 1 warning in 1.99s\n",
+      "tokens": {
+        "in": 2210522,
+        "out": 32447
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 67,
+        "input": 2210522,
+        "output": 32447,
+        "cached": 2151936
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-7490~0~4e65feea",
+      "started_at": "2026-10-15T10:49:55-0700",
+      "ended_at": "2026-10-15T11:03:13-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7490~0.out",
+          "sha256": "2abc5fe75a3424791ca5f44c8de0b48ad3a4166567238fc09a7765b1b75e4462"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7490~0.patch",
+          "sha256": "0e60347593fbe56590f65e321e432db54bcc6846c41caed8b521dce8adbf18c2"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7490~0.check.txt",
+          "sha256": "c32e8868a8acde35e7aacf69814a7910a85cf9b50e217622d205886f1ab592ca"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7490~0.session0.jsonl",
+          "sha256": "e91c8d843d62b87412de3ac639f396bfcbc89910a2e1b4581c0fb829ebd8ec00"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7490~0.session1.json",
+          "sha256": "d2603ed9402fca1d6038940cadc50250f7d419003d2221334976c56fdceb9554"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7490",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "onWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/stable/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/stable/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7490-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_skipping.py::TestXFail::test_dynamic_xfail_set_during_runtest_failed\nFAILED testing/test_skipping.py::TestXFail::test_dynamic_xfail_set_during_runtest_passed_strict\n2 failed, 79 passed, 1 warning in 2.18s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 39,
+        "input": 1208415,
+        "output": 25840,
+        "cached": 1182080
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7490~0~0dc467ec",
+      "started_at": "2026-10-15T11:03:34-0700",
+      "ended_at": "2026-10-15T11:23:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7490~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7490~0.patch",
+          "sha256": "c5cd690da7c08fb1998b6ad4d1d1f495cefb0de967923e54986647cde696247c"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7490~0.check.txt",
+          "sha256": "fd70f1c6c12ea05329c125a1d3ffa671d57c80c3cd0592b042c3881a7a894242"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7490~0.session0.json",
+          "sha256": "1b5cd77913374b613040cfcecc0d9a4b9e484cc0c034714e3590d9654ca7fa8b"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": true,
+      "seconds": 557.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................                  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n55 passed in 0.16s\n",
+      "tokens": {
+        "in": 945789,
+        "out": 21206
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 36,
+        "input": 945789,
+        "output": 21206,
+        "cached": 924544
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-9359~0~fd9296d4",
+      "started_at": "2026-10-15T11:24:05-0700",
+      "ended_at": "2026-10-15T11:33:23-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "6b6c04f45eeef73e1747ba4a2bb19305ffefcc0994115a9972ac5cf87571711c"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "ff0e6dd25c79b83cf682c0bf6c9fb68b492b5a623f01973678f485e87d266c29"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "f0bc2b9327c088af14623cec2243afc93c65f070d3b368ec9bb8c97a3ab8fc61"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-9359~0.session0.json",
+          "sha256": "c042698c9150f2b0155cb7099be662a42598225a8b706294a1495b61924fcfc7"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": true,
+      "seconds": 56.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................                  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n55 passed in 0.16s\n",
+      "tokens": {
+        "in": 267742,
+        "out": 5999
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 20,
+        "input": 267742,
+        "output": 5999,
+        "cached": 254720
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-9359~0~9255ea5b",
+      "started_at": "2026-10-15T11:33:41-0700",
+      "ended_at": "2026-10-15T11:34:38-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "2f4f11490a3594352196d9e6c2867e3396abd76064cceb19f7a12397ae08241a"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "abd127bd4d52d34f43ca92d15dac6637fb820bf16fc6470ed1b50af6fdc09a5b"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "4fc221feaa095ce1bac606d5aa47dbc4f9f7c3ff1f6ed2e88458314a378c4004"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-9359~0.session0.json",
+          "sha256": "6a89271bb5ea6cb9d94f857f3d7394ea78a7ebc1d8ca65bec5ac12ed6e075fed"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 647.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "nch/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7220-0/src/_pytest/junitxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_nodes.py::test_failure_with_changed_cwd - Failed: nomatch...\n1 failed, 11 passed, 1 warning in 0.16s\n",
+      "tokens": {
+        "in": 4730019,
+        "out": 50668
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 81,
+        "input": 4730019,
+        "output": 50668,
+        "cached": 4665344
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7220~0~7b1cc716",
+      "started_at": "2026-10-15T11:34:56-0700",
+      "ended_at": "2026-10-15T11:45:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "c99e1b8aa3293879f42c7480a1e04f5a825d9993f3fe3cb2c9ab6a9c14c91e4f"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "8513270d98e4634170c21a3ef37e2c62615d9f2173d407d3eb2a00cf219babdc"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "b6e4895d4da0cdc36825f80ed9b2bb4b7de56482918fd6dfd41383cdae889db0"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7220~0.session0.jsonl",
+          "sha256": "fddd02e758ecca807984fd019305652532a48c6f98a61c69838b5a1a13736786"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7220~0.session1.json",
+          "sha256": "d089fe0874e7720151b9e0357b6f148fdb7f0e9623a9ff870e0410b67c060f37"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "sure2-1/chanto-verify/swe-pytest-dev__pytest-7220-0/src/_pytest/junitxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_nodes.py::test_failure_with_changed_cwd - Failed: nomatch...\n1 failed, 11 passed, 1 warning in 0.16s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 143,
+        "input": 9103991,
+        "output": 91423,
+        "cached": 8893440
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-7220~0~8a8682f1",
+      "started_at": "2026-10-15T11:46:02-0700",
+      "ended_at": "2026-10-15T12:06:03-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "2191cba02ad7f337ebac444fade4af6d08764add375d03fee13823d95ed818f9"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "f8ad54c2db38379d22ae157932480cc76bdf158e9ad3f8e45cdad6cc2c03926a"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7220~0.session0.jsonl",
+          "sha256": "98d5f9022ea4450a34c6b4ac24e918f632488863960a9d7aada11ade88244d33"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7220~0.session1.json",
+          "sha256": "e5f3f41d322f1786faf821dec316a2f4dc02e1565d36459480376eccd280dfb3"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-8906",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1520.7,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 83%]\n..............                                                           [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-8906-0/.swe-results.xml -\n86 passed in 2.53s\n",
+      "tokens": {
+        "in": 824760,
+        "out": 23661
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 34,
+        "input": 824760,
+        "output": 23661,
+        "cached": 780160
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-8906~0~b0bd497b",
+      "started_at": "2026-10-15T12:06:22-0700",
+      "ended_at": "2026-10-15T12:31:44-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8906~0.out",
+          "sha256": "985151068a9cbfb452a10e7b7491e25606b3b0c0442cedc52245cdd6e7f5b024"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8906~0.patch",
+          "sha256": "3dbbf3cd8c12c34a05ebae4ac9a3c6b4cd0644476dc34e224bba509f531a3f68"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8906~0.check.txt",
+          "sha256": "d18a03fe592982c2031280029e3c11cbd431f2c6591469b5296a0d88be0e7a14"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8906~0.session0.jsonl",
+          "sha256": "a0318574d2af112457a6618ebd0343c36b4f46175c5e5615f75b96be545c9515"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8906~0.session1.json",
+          "sha256": "3cb38912bd3e6698bd812ac8d5ff3c76ffed5d7104589c10d82688a7c4b98bde"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-8906",
+      "rep": 0,
+      "passed": true,
+      "seconds": 180.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 83%]\n..............                                                           [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-8906-0/.swe-results.xml -\n86 passed in 2.33s\n",
+      "tokens": {
+        "in": 433032,
+        "out": 8451
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 24,
+        "input": 433032,
+        "output": 8451,
+        "cached": 413824
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-8906~0~ba4ab35f",
+      "started_at": "2026-10-15T12:32:13-0700",
+      "ended_at": "2026-10-15T12:35:15-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8906~0.out",
+          "sha256": "c18d2d3c1e9d5cff9afc4f94bd811302fd12e38750711b8fec4e82cb852cf34d"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8906~0.patch",
+          "sha256": "ee1ba7ab75018c6356d12a5e897a2adc249b10d07dc4e9af4acc5e530f05e50f"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8906~0.check.txt",
+          "sha256": "37b1c482f328b9a30df92fa172dfb62eb4d17aa2a996c1f9b653712e7ca42541"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8906~0.session0.json",
+          "sha256": "9134ff7ee190f028cea9268433f8a90d8ab977325536ce460070a07e438379b9"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5692",
+      "rep": 0,
+      "passed": true,
+      "seconds": 96.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "......................................................................   [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-5692-0/.swe-results.xml -\n70 passed in 2.32 seconds\n",
+      "tokens": {
+        "in": 486836,
+        "out": 7225
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 26,
+        "input": 486836,
+        "output": 7225,
+        "cached": 465152
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5692~0~32d1dd95",
+      "started_at": "2026-10-15T12:35:35-0700",
+      "ended_at": "2026-10-15T12:37:13-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5692~0.out",
+          "sha256": "8ba260b1b21e21ea8dd153cae174e93d30c7719f3960f47cd95bc0eb4098b256"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5692~0.patch",
+          "sha256": "a253df6b0794a13f7b4d188f921213346d087435f3f69b919a9f69bd21c60dc7"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5692~0.check.txt",
+          "sha256": "e5cbf0ff93669ab891163f7059b43c0bd5330d3b358d97042e0a517a79eb978b"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5692~0.session0.json",
+          "sha256": "25e074a67d1dc6ae8cc8d8e021976322954adc602ec6cb7995e4b18b4db64b41"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5692",
+      "rep": 0,
+      "passed": true,
+      "seconds": 54.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "......................................................................   [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-5692-0/.swe-results.xml -\n70 passed in 2.33 seconds\n",
+      "tokens": {
+        "in": 207986,
+        "out": 5293
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 14,
+        "input": 207986,
+        "output": 5293,
+        "cached": 192384
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5692~0~2c8756da",
+      "started_at": "2026-10-15T12:37:33-0700",
+      "ended_at": "2026-10-15T12:38:28-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5692~0.out",
+          "sha256": "a0887b5a2c08798e0e02708c253e8b6803a0cd808c405de16dbd6cc6c67396af"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5692~0.patch",
+          "sha256": "0028730e2683f83741b21495195137733127c75ae77155b3796ffa2623f38bfc"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5692~0.check.txt",
+          "sha256": "dab60dafb27cc873755dddfa0ea0ede97687e6b892bd5377a7149e7921c1ca3f"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5692~0.session0.json",
+          "sha256": "f10799e5767af28d58f74031c1157f108308e40368af737a8a412ebb9333abc7"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": true,
+      "seconds": 51.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................................  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n71 passed in 3.79s\n",
+      "tokens": {
+        "in": 158829,
+        "out": 3129
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 158829,
+        "output": 3129,
+        "cached": 148480
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-6116~0~f14fce0f",
+      "started_at": "2026-10-15T12:38:48-0700",
+      "ended_at": "2026-10-15T12:39:41-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "c05f530c5294421a44fa59d9855bec3c84acd2b20cddc0055bddc16520c8ab26"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "a3fe674c2efdbe4eea8c4d23dd3777687896197ee4f28242878fd97ef28b5005"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "3c22b1db7c2c6d759f47fe4ce0766632669c79fa77c6f11c93e63865b5fe9e10"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-6116~0.session0.json",
+          "sha256": "c9b7a242817e169648a5f946b0a09449307d46f9ede96f9a41f8d453e87c7136"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": true,
+      "seconds": 812.0,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": ".......................................................................  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n71 passed in 3.53s\n",
+      "tokens": {
+        "in": 391581,
+        "out": 7793
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 29,
+        "input": 391581,
+        "output": 7793,
+        "cached": 375296
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-6116~0~0b647840",
+      "started_at": "2026-10-15T12:40:03-0700",
+      "ended_at": "2026-10-15T12:53:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "7fb2d5988397d4199cb958c0645009bd36cd03a05b572ad70648fb8d824dd85d"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "76076baf11c8aa7c75f9d1ddbc5deec95a0b4ce9236a68f55efc23a84797f337"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "b6e93883a4379afedbc933c6c6d6027200fe4e27916fe2e142751790c4a0413e"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-6116~0.session0.json",
+          "sha256": "1aeaf7f99c20e14144f5a42a2d22436a1908ab08ad1b4a6502fa298cec6eb45b"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": true,
+      "seconds": 452.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................                                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n33 passed in 0.61s\n",
+      "tokens": {
+        "in": 1702185,
+        "out": 29955
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 48,
+        "input": 1702185,
+        "output": 29955,
+        "cached": 1663232
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-8365~0~da230b2e",
+      "started_at": "2026-10-15T12:53:59-0700",
+      "ended_at": "2026-10-15T13:01:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "7aff78b4e4aae1054ddbddc72c3ab71f844ad8734a96663e85fd260268fc1024"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "2d50b957b820168e34b252cde55e2b2f2683e8980e48b738ac35c1a96696b515"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "fe847e512c2db6afcbad57d51962ac6dbbda1c802b32f97b5370aa94aafc9b71"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-8365~0.session0.json",
+          "sha256": "781c77a4a54c151db137f7f4d6dd5fbf85537340fd6a0f326078f815f5dc7530"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": false,
+      "seconds": 334.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "    assert \"pytest-of-unknown\" in str(p)\nE       AssertionError: assert 'pytest-of-unknown' in '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-6'\nE        +  where '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-6' = str(PosixPath('/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-6'))\n\ntesting/test_tmpdir.py:459: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_tmpdir.py::test_tmp_path_factory_handles_invalid_dir_characters\n1 failed, 32 passed in 0.53s\n",
+      "tokens": {
+        "in": 925264,
+        "out": 28824
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 36,
+        "input": 925264,
+        "output": 28824,
+        "cached": 903552
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-8365~0~6e7f9a07",
+      "started_at": "2026-10-15T13:01:52-0700",
+      "ended_at": "2026-10-15T13:07:28-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "b57b63e948510464471ad0aaf7a3bcdeaf9b27d8feddc3be0fa8b1ddbc2782b5"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "e255f85586b72e6198fc4111605fa5fe12ea82b42f6a3b5ff6432971feb4e9eb"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "3d70da17a460a1cd09f3774b1402e9e83b65a55532e7e4277fc026a97e6170ba"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-8365~0.session0.json",
+          "sha256": "497163af2140561c76a4ecd614718bdf4c5a84b8db494b37ca8fee3bc0876f06"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7168",
+      "rep": 0,
+      "passed": true,
+      "seconds": 32.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "            [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:417\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7168-0/src/_pytest/junitxml.py:417: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7168-0/.swe-results.xml -\n11 passed, 1 warning in 0.02s\n",
+      "tokens": {
+        "in": 150866,
+        "out": 3905
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 12,
+        "input": 150866,
+        "output": 3905,
+        "cached": 137856
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7168~0~7957df7f",
+      "started_at": "2026-10-15T13:07:47-0700",
+      "ended_at": "2026-10-15T13:08:20-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7168~0.out",
+          "sha256": "b509be5aae811b46c104ca4b1b9ed7e8251c55303f07491de049a615523e7f37"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7168~0.patch",
+          "sha256": "0c06f9757476728a9607f8b36209d5da5bc7d443fe1c65f93d98dbf6a401b78a"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7168~0.check.txt",
+          "sha256": "13f8e04c3df23805a34f94c633e54b4f297fedb2b4820ec48b4c2be53b496abb"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7168~0.session0.json",
+          "sha256": "25b7be5a02c65211c5684ce977c9cf684cd68de85bf61ab969a05521382e3940"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-7168",
+      "rep": 0,
+      "passed": false,
+      "seconds": 347.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "sure2-1/chanto-verify/swe-pytest-dev__pytest-7168-0/src/_pytest/junitxml.py:417: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7168-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/io/test_saferepr.py::test_broken_getattribute - AssertionError...\n1 failed, 10 passed, 1 warning in 0.06s\n",
+      "tokens": {
+        "in": 1082033,
+        "out": 29877
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 41,
+        "input": 1082033,
+        "output": 29877,
+        "cached": 1062656
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-7168~0~82233b79",
+      "started_at": "2026-10-15T13:08:38-0700",
+      "ended_at": "2026-10-15T13:14:26-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7168~0.out",
+          "sha256": "f0b9093451f9f4347173961d75e0772ce24c78867284848cad3b4f0900170b7d"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7168~0.patch",
+          "sha256": "c4df07090bb84303c87acc8c58b85acaab32fd5450a23a02cb871091fe893588"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7168~0.check.txt",
+          "sha256": "3a04218eea086798310dbdbd537e6681de5ccbbe9830feef4c3540dbed77d12e"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7168~0.session0.json",
+          "sha256": "b2a2e5ec073f225d5dec57a603b05740b38d74733c65b73c56b0cec67ce24b2b"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-7373",
+      "rep": 0,
+      "passed": true,
+      "seconds": 527.7,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "00%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:435\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7373-0/src/_pytest/junitxml.py:435: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7373-0/.swe-results.xml -\n91 passed, 1 warning in 1.80s\n",
+      "tokens": {
+        "in": 158074,
+        "out": 3770
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 18,
+        "input": 158074,
+        "output": 3770,
+        "cached": 142464
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-7373~0~d6aeefff",
+      "started_at": "2026-10-15T13:14:46-0700",
+      "ended_at": "2026-10-15T13:23:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7373~0.out",
+          "sha256": "c843597a60e8f633ff0656076d8e35bee86b3088e6d424bd69b564fa5d610252"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7373~0.patch",
+          "sha256": "c7515d16b91629f33fa2fa80694011a060cde7920c3636336b7bbe69f60f9e91"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7373~0.check.txt",
+          "sha256": "0f7ba102f4304f75dc9fea7f3fb15f345010e7216b37f7f48f8ced708a8b374f"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7373~0.session0.jsonl",
+          "sha256": "06c4b42afab1c0bf2621dee85edef2398b93eb3da6e837ef133c3ac764763df2"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7373~0.session1.json",
+          "sha256": "6c9c9028575f68472b981d2ee92e99b113e560efe2b226de4df2993aab00aebd"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7373",
+      "rep": 0,
+      "passed": true,
+      "seconds": 59.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "            [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:435\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7373-0/src/_pytest/junitxml.py:435: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7373-0/.swe-results.xml -\n91 passed, 1 warning in 2.18s\n",
+      "tokens": {
+        "in": 232826,
+        "out": 4803
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 22,
+        "input": 232826,
+        "output": 4803,
+        "cached": 221312
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7373~0~45d9a7fe",
+      "started_at": "2026-10-15T13:23:57-0700",
+      "ended_at": "2026-10-15T13:24:58-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7373~0.out",
+          "sha256": "9b530d3208add0df4a1d074e6ddf71c831d0e43d1d6d5766f37bd97ed88086ec"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7373~0.patch",
+          "sha256": "7812ebe4709bf01266a8a9c69ee95945ce1c658e5f67f506f660747bf3b74819"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7373~0.check.txt",
+          "sha256": "c4b4063633f7015a483b8ee4812b25168db7dde978f5bf7fa13b8369b97691dd"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7373~0.session0.json",
+          "sha256": "ff534ae26657f349216d14b3389ef43ae8d75b3cfba61af356f168b8b1ea0077"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1152.9,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"- b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Right contains 2 more items, first extra item: \"- b'spam'\"\nE         Full diff:\nE         - [\"b'spam' == b'eggs'\", \"- b'spam'\", \"+ b'eggs'\"]\nE         + [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         +  'Full diff:',...\nE         \nE         ...Full output truncated (3 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.91 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-g86oeug0'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-mm_hnjen'\n",
+      "tokens": {
+        "in": 3792925,
+        "out": 63225
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 83,
+        "input": 3792925,
+        "output": 63225,
+        "cached": 3717760
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5495~0~a350f209",
+      "started_at": "2026-10-15T13:25:19-0700",
+      "ended_at": "2026-10-15T13:44:33-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "a99eace0a35ca238c48ac7e227d84e593fe2ecbe1c01b90302868e399b47f8e1"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "86f45a12ad564ada4af92f4992ce153b2ea10d913f0e54f62afa8ac46f17d6e4"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "90e78c482f0f8e2db0240778681bd8834375a913026d521ff15d85d9c76fda24"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5495~0.session0.jsonl",
+          "sha256": "5e8c02d1bd3b3dae83daa3cbf72426a8dc62f0a66aeb369ce19671d6f97408d7"
+        },
+        "session1": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-5495~0.session1.json",
+          "sha256": "9b23abdb16a802c733b935629aafa1aafd54544b47b3d31e97316a29a7697176"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 287.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "\",\n            \"At index 0 diff: b's' != b'e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"-b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Left contains one more item: \"+ b'eggs'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         -  \"-b'spam'\",\nE         -  \"+b'eggs'\",...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.82 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-4k22ddlh'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-ypves_oc'\n",
+      "tokens": {
+        "in": 1555125,
+        "out": 31210
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 52,
+        "input": 1555125,
+        "output": 31210,
+        "cached": 1528448
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5495~0~98c60e02",
+      "started_at": "2026-10-15T13:44:57-0700",
+      "ended_at": "2026-10-15T13:49:46-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "e9920379d8f2570f267697d62ef7b6f047737cfac42e283a7b8e4fb4a1132b6e"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "2a960dc1bf2bb75d9edfbac0e7f01c5eba081d36f6f4d27e813c838684f0e91c"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "00df1cab5b0cb59d8ddbd631a7f66a2c2febda232f044e3c34354caf6c6efa2a"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-5495~0.session0.json",
+          "sha256": "5d3890aebdcc8f472293be33a4646b476ad3b1bc4fe4eb1a26c521f3969e235c"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 77.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "00%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto-verify/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 1.92s\n",
+      "tokens": {
+        "in": 218008,
+        "out": 10033
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 14,
+        "input": 218008,
+        "output": 10033,
+        "cached": 206208
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-7432~0~3d696ca8",
+      "started_at": "2026-10-15T13:50:09-0700",
+      "ended_at": "2026-10-15T13:51:28-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "f91e681204e3d9c7d3ee2de6198ed1c78bbe530e4d2a6b5973e18ff1467ebbd6"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "af6444be85c02def0e2d3dd334b917de3380b6771d8f3a561a5f7d039d798367"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "4a87b7cda675d5bd511e0a21691b2bb1b885cc359dac834cc4ec1e46cc8a09e0"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto-verify~swe-pytest-dev__pytest-7432~0.session0.json",
+          "sha256": "192b181f81914c81df4fd40caa02fb45b1eedbe9265a1563bdf35899a0729e11"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 49.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "            [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-1/chanto/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 2.16s\n",
+      "tokens": {
+        "in": 217648,
+        "out": 6463
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 217648,
+        "output": 6463,
+        "cached": 205056
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-7432~0~5042d9ba",
+      "started_at": "2026-10-15T13:51:47-0700",
+      "ended_at": "2026-10-15T13:52:38-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "36b16614c62f70e77bf3cf9cead60ced79dea4288e23e0bad980d3aabb39adeb"
+        },
+        "patch": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "b065e5b560085d6776a026a72380f90fd77f7113b78be3c9b4ad5c7c5df3c112"
+        },
+        "check": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "7c07524a62a2221d599cea46c6c8c965d685b126b06993703ffb7e8a1b7acbb6"
+        },
+        "session0": {
+          "file": "20261015-101059-70251/chanto~swe-pytest-dev__pytest-7432~0.session0.json",
+          "sha256": "4ed68c445f92b8681f6d9d7d0e3da27cfc2e5e5ce6d2346ad3c26d23a9bfd1bf"
+        }
+      }
+    }
+  ]
+}

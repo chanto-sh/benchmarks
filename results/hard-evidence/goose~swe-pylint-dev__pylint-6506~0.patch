@@ -1,0 +1,30 @@
+diff --git a/ChangeLog b/ChangeLog
+index 98d71e9..a5a15f2 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -9,6 +9,11 @@ Release date: TBA
+ ..
+   Put new features here and also in 'doc/whatsnew/2.14.rst'
+ 
++* An unrecognized option passed on the command line now prints the usage and
++  a short error message instead of a traceback.
++
++  Closes #6504
++
+ * Added new checker ``comparison-of-constants``.
+ 
+   Closes #6076
+diff --git a/pylint/config/config_initialization.py b/pylint/config/config_initialization.py
+index 24e453a..f688c4c 100644
+--- a/pylint/config/config_initialization.py
++++ b/pylint/config/config_initialization.py
+@@ -81,8 +81,7 @@ def _config_initialization(
+             unrecognized_options.append(opt[1:])
+     if unrecognized_options:
+         msg = ", ".join(unrecognized_options)
+-        linter.add_message("unrecognized-option", line=0, args=msg)
+-        raise _UnrecognizedOptionError(options=unrecognized_options)
++        linter._arg_parser.error(f"Unrecognized option found: {msg}")
+ 
+     # Set the current module to configuration as we don't know where
+     # the --load-plugins key is coming from

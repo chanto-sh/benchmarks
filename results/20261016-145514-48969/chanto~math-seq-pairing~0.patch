@@ -1,0 +1,84 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..585a79d 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,76 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++A key is a single non-negative integer that encodes a finite list of
++non-negative integers.  ``encode``/``decode`` form an exact bijection
++between all finite lists of non-negative ints (the empty list included)
++and all non-negative ints.
++
++Construction
++------------
++The empty list gets key ``0``.  For every list of length ``k >= 1`` the key
++is ``1 + pair(k - 1, payload)``, where ``pair(x, y) = (x+y)(x+y+1)/2 + y``
++is Cantor's pairing function (a bijection ``N x N -> N``).  As ``payload``
++runs over ``N`` for a fixed length, ``pair(k - 1, payload)`` runs over one
++infinite part of ``N`` and different lengths give disjoint parts, so the
++positive keys are exactly the images and the map is a bijection.
++
++The payload of a ``k``-element list is a balanced binary tree of Cantor
++pairings over the elements: a node pairs the payloads of its two halves,
++and a single element is returned as-is.
++
++Because the tree is balanced, pairing only adds ``ceil(log2 k)`` levels of
++doubling, so a key is roughly twice the total bit-length of the list -- it
++grows linearly, not exponentially, with the list length.  The pairing is a
++bijection at every node and the tree shape depends only on ``k``, so the
++whole map is a bijection with an easy inverse.
++
++Assumes Python 3.8+ (``math.isqrt``) so the inverse pairing is exact.
++"""
++
++from math import isqrt
++
++
++def _pair(x, y):
++    """Cantor pairing: a bijection N x N -> N."""
++    s = x + y
++    return s * (s + 1) // 2 + y
++
++
++def _unpair(z):
++    """Inverse of ``_pair``: returns (x, y) with ``_pair(x, y) == z``."""
++    w = (isqrt(8 * z + 1) - 1) // 2
++    y = z - w * (w + 1) // 2
++    return w - y, y
++
++
++def _tree_encode(lst, lo, hi):
++    """Payload for the balanced tree over ``lst[lo:hi]`` (``hi - lo >= 1``)."""
++    if hi - lo == 1:
++        return lst[lo]
++    mid = (lo + hi) // 2
++    return _pair(_tree_encode(lst, lo, mid), _tree_encode(lst, mid, hi))
++
++
++def _tree_decode(k, v):
++    """Inverse of ``_tree_encode`` for a k-element slice (``k >= 1``)."""
++    if k == 1:
++        return [v]
++    k_left = k // 2
++    left, right = _unpair(v)
++    return _tree_decode(k_left, left) + _tree_decode(k - k_left, right)
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    k = len(lst)
++    if k == 0:
++        return 0
++    return 1 + _pair(k - 1, _tree_encode(lst, 0, k))
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++    length, payload = _unpair(n - 1)
++    return _tree_decode(length + 1, payload)

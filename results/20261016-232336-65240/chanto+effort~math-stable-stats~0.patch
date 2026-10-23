@@ -1,0 +1,70 @@
+diff --git a/stats.py b/stats.py
+index add4f59..196fba4 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,59 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var requires a non-empty sequence")
++
++    # Work with differences from the first value so a large common offset
++    # does not cancel away the variation we are trying to measure.
++    x0 = xs[0]
++    offsets = [x - x0 for x in xs]
++
++    if all(math.isfinite(d) for d in offsets):
++        try:
++            mean_offset = math.fsum(offsets) / n
++        except OverflowError:
++            mean_offset = math.inf
++        if math.isfinite(mean_offset):
++            mean = x0 + mean_offset
++            deviations = [d - mean_offset for d in offsets]
++            largest = max(abs(d) for d in deviations)
++            if not math.isfinite(largest):
++                # The variance itself exceeds the float range.
++                return mean, math.inf
++            if largest == 0.0:
++                return mean, 0.0
++            # Scale before summing squares so an intermediate sum cannot
++            # overflow when the final variance is representable.
++            msq = math.fsum((d / largest) ** 2 for d in deviations) / n
++            return mean, (largest * msq) * largest
++
++    # Offset differences overflowed, or their sum did: rescale first.
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0, 0.0
++    scaled = [x / scale for x in xs]
++    mean_scaled = math.fsum(scaled) / n
++    mean = scale * mean_scaled
++    deviations = [y - mean_scaled for y in scaled]
++    largest = max(abs(d) for d in deviations)
++    if largest == 0.0:
++        return mean, 0.0
++    msq = math.fsum((d / largest) ** 2 for d in deviations) / n
++    spread = scale * largest
++    return mean, (spread * msq) * spread
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    values = list(xs)
++    largest = max(values)
++    total = math.fsum(math.exp(x - largest) for x in values)
++    return largest + math.log(total)
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

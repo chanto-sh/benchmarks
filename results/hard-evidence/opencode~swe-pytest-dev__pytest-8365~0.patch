@@ -1,0 +1,51 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..dd822da
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,5 @@
++Fixed issue where the temporary directory created for the :fixture:`tmpdir`,
++:fixture:`tmpdir_factory` and :fixture:`tmp_path_factory` fixtures could not be
++created if the current user name returned by :func:`getpass.getuser` contained
++characters which are not allowed in directory names, for example the backslash
++in a Windows domain account name such as ``contoso\\john_doe``.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..2d270b6 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -112,6 +112,10 @@ class TempPathFactory:
+             from_env = os.environ.get("PYTEST_DEBUG_TEMPROOT")
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+             user = get_user() or "unknown"
++            # getpass.getuser() may return a name with characters which are
++            # illegal in directory names (e.g. "contoso\\john_doe" for domain
++            # accounts on Windows), so sanitize it before using it (#8365).
++            user = _sanitize_user(user)
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+@@ -148,13 +152,23 @@ class TempdirFactory:
+         return py.path.local(self._tmppath_factory.getbasetemp().resolve())
+ 
+ 
++def _sanitize_user(user: str) -> str:
++    """Replace characters which are illegal in directory names with ``_``.
++
++    ``getpass.getuser()`` may return a name containing characters which are
++    not allowed in directory names, for example the backslash in the domain
++    account name ``contoso\\john_doe`` returned on Windows (#8365).
++    """
++    return re.sub(r"[\W]", "_", user)
++
++
+ def get_user() -> Optional[str]:
+     """Return the current user name, or None if getuser() does not work
+     in the current environment (see #1010)."""
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        return _sanitize_user(getpass.getuser())
+     except (ImportError, KeyError):
+         return None
+ 

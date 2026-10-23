@@ -1,0 +1,357 @@
+diff --git a/app/config/__main__.py b/app/config/__main__.py
+index dd68b50..183a75b 100644
+--- a/app/config/__main__.py
++++ b/app/config/__main__.py
+@@ -1,4 +1,4 @@
+-"""python3 -m app.config [--file FILE]: print the effective configuration as JSON."""
++"""python3 -m app.config [--file FILE] [--set KEY=VALUE ...]: print the effective configuration as JSON."""
+ import argparse
+ import json
+ import sys
+@@ -10,9 +10,17 @@ from .loader import load
+ def main(argv=None):
+     ap = argparse.ArgumentParser(prog="app.config")
+     ap.add_argument("--file")
++    ap.add_argument(
++        "--set",
++        dest="overrides",
++        action="append",
++        default=[],
++        metavar="KEY=VALUE",
++        help="override a setting; may be repeated",
++    )
+     args = ap.parse_args(argv)
+     try:
+-        cfg = load(args.file)
++        cfg = load(args.file, overrides=args.overrides)
+     except ConfigError as e:
+         print(f"config error: {e}", file=sys.stderr)
+         return 2
+@@ -20,4 +28,5 @@ def main(argv=None):
+     return 0
+ 
+ 
+-sys.exit(main())
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/app/config/loader.py b/app/config/loader.py
+index 52e4a82..07fa5e2 100644
+--- a/app/config/loader.py
++++ b/app/config/loader.py
+@@ -1,13 +1,106 @@
+ import json
++import os
+ 
+ from .defaults import DEFAULTS
+ from .errors import ConfigError
+ from .merge import deep_merge
+ 
++ENV_PREFIX = "SHOPD__"
++_TRUE = frozenset({"1", "true", "yes", "on"})
++_FALSE = frozenset({"0", "false", "no", "off"})
+ 
+-def load(path=None):
+-    """Effective configuration: the defaults, then the JSON file at `path` (if any)."""
+-    cfg = DEFAULTS
++
++def _setting_parts(name):
++    """The lower-case path components of a dotted setting name."""
++    if not name or any(not part for part in name.split(".")):
++        raise ConfigError(f"invalid setting name: {name!r}")
++    return [part.lower() for part in name.split(".")]
++
++
++def _default_for(parts):
++    """The built-in default for the setting named by `parts`, or a ConfigError."""
++    name = ".".join(parts)
++    node = DEFAULTS
++    for part in parts:
++        if not isinstance(node, dict) or part not in node:
++            raise ConfigError(f"unknown setting: {name}")
++        node = node[part]
++    if isinstance(node, dict):
++        raise ConfigError(f"cannot set section {name}: set a setting inside it instead")
++    return node
++
++
++def _as_text(value):
++    return value if isinstance(value, str) else str(value)
++
++
++def _convert(name, raw, default):
++    """Convert the string `raw` to the type of `default`."""
++    if isinstance(default, bool):
++        token = raw.strip().lower()
++        if token in _TRUE:
++            return True
++        if token in _FALSE:
++            return False
++        raise ConfigError(f"invalid value for {name}: {raw!r} is not a boolean")
++    if isinstance(default, int):
++        try:
++            return int(raw)
++        except (TypeError, ValueError):
++            raise ConfigError(f"invalid value for {name}: {raw!r} is not an integer") from None
++    if isinstance(default, float):
++        try:
++            return float(raw)
++        except (TypeError, ValueError):
++            raise ConfigError(f"invalid value for {name}: {raw!r} is not a number") from None
++    if isinstance(default, list):
++        text = raw.strip()
++        return [] if not text else [item.strip() for item in text.split(",")]
++    if isinstance(default, str):
++        return raw
++    raise ConfigError(f"cannot convert value for {name}")
++
++
++def _set(cfg, parts, raw):
++    name = ".".join(parts)
++    value = _convert(name, _as_text(raw), _default_for(parts))
++    node = cfg
++    for part in parts[:-1]:
++        node = node[part]
++    node[parts[-1]] = value
++
++
++def _env_entries(env):
++    """Yield (setting parts, raw value) for every SHOPD__<KEY>__<SUBKEY>... variable."""
++    for name, value in env.items():
++        if not isinstance(name, str) or not name.upper().startswith(ENV_PREFIX):
++            continue
++        rest = name[len(ENV_PREFIX):]
++        parts = rest.split("__")
++        if not rest or any(not part for part in parts):
++            raise ConfigError(f"invalid environment variable {name!r}: expected SHOPD__<KEY>__<SUBKEY>")
++        yield [part.lower() for part in parts], value
++
++
++def _override_entries(overrides):
++    """Yield (setting parts, raw value) for every 'name=value' override."""
++    for item in overrides:
++        if not isinstance(item, str):
++            raise ConfigError(f"invalid override {item!r}: expected NAME=VALUE")
++        name, sep, raw = item.partition("=")
++        if not sep:
++            raise ConfigError(f"invalid override {item!r}: expected NAME=VALUE")
++        yield _setting_parts(name.strip()), raw
++
++
++def load(path=None, env=None, overrides=()):
++    """Effective configuration.
++
++    Layers, lowest precedence first: the built-in defaults, the JSON file at
++    `path` (if any), `env` (a mapping, defaulting to os.environ) and the
++    `overrides` list of "db.pool.size=20" strings.
++    """
++    cfg = deep_merge(DEFAULTS, {})
+     if path:
+         try:
+             with open(path) as f:
+@@ -17,4 +110,10 @@ def load(path=None):
+         if not isinstance(data, dict):
+             raise ConfigError(f"{path}: top level must be an object")
+         cfg = deep_merge(cfg, data)
+-    return deep_merge(cfg, {})
++    if env is None:
++        env = os.environ
++    for parts, raw in _env_entries(env):
++        _set(cfg, parts, raw)
++    for parts, raw in _override_entries(overrides):
++        _set(cfg, parts, raw)
++    return cfg
+diff --git a/test_config.py b/test_config.py
+index 120de81..96d6eb3 100644
+--- a/test_config.py
++++ b/test_config.py
+@@ -1,11 +1,17 @@
+ import json
+ import os
++import subprocess
++import sys
+ import tempfile
+ import unittest
++from unittest import mock
+ 
++from app.config.defaults import DEFAULTS
+ from app.config.errors import ConfigError
+ from app.config.loader import load
+ 
++ROOT = os.path.dirname(os.path.abspath(__file__))
++
+ 
+ class ConfigTest(unittest.TestCase):
+     def test_defaults(self):
+@@ -29,5 +35,172 @@ class ConfigTest(unittest.TestCase):
+             load("/nonexistent/config.json")
+ 
+ 
++class EnvironmentTest(unittest.TestCase):
++    def test_nested_setting(self):
++        cfg = load(env={"SHOPD__DB__POOL__SIZE": "20"})
++        self.assertEqual(cfg["db"]["pool"]["size"], 20)
++        self.assertIsInstance(cfg["db"]["pool"]["size"], int)
++
++    def test_defaults_to_os_environ(self):
++        with mock.patch.dict(os.environ, {"SHOPD__DB__PORT": "6543"}):
++            self.assertEqual(load()["db"]["port"], 6543)
++
++    def test_types_follow_the_default(self):
++        cfg = load(
++            env={
++                "SHOPD__DB__PORT": "6543",
++                "SHOPD__DB__POOL__TIMEOUT": "0.5",
++                "SHOPD__DB__SSL": "YES",
++                "SHOPD__NAME": "other",
++                "SHOPD__FEATURES": " search, billing ",
++            }
++        )
++        self.assertEqual(cfg["db"]["port"], 6543)
++        self.assertIsInstance(cfg["db"]["port"], int)
++        self.assertEqual(cfg["db"]["pool"]["timeout"], 0.5)
++        self.assertIsInstance(cfg["db"]["pool"]["timeout"], float)
++        self.assertIs(cfg["db"]["ssl"], True)
++        self.assertEqual(cfg["name"], "other")
++        self.assertEqual(cfg["features"], ["search", "billing"])
++
++    def test_bool_variants(self):
++        true_tokens = ["1", "true", "TRUE", "Yes", "on"]
++        false_tokens = ["0", "false", "FALSE", "No", "off"]
++        for token in true_tokens:
++            cfg = load(env={"SHOPD__LOG__JSON": token})
++            self.assertIs(cfg["log"]["json"], True, token)
++        for token in false_tokens:
++            cfg = load(env={"SHOPD__LOG__JSON": token})
++            self.assertIs(cfg["log"]["json"], False, token)
++
++    def test_key_names_are_case_insensitive(self):
++        cfg = load(env={"shopd__Db__HoSt": "case.example"})
++        self.assertEqual(cfg["db"]["host"], "case.example")
++
++    def test_empty_list(self):
++        self.assertEqual(load(env={"SHOPD__FEATURES": ""})["features"], [])
++
++    def test_other_variables_ignored(self):
++        cfg = load(
++            env={
++                "HOME": "/somewhere",
++                "SHOPD_DB_PORT": "1",
++                "OTHER__DB__PORT": "2",
++                "PATH": "/bin",
++            }
++        )
++        self.assertEqual(cfg["db"]["port"], 5432)
++        self.assertEqual(cfg["features"], ["search"])
++
++    def test_defaults_not_mutated(self):
++        load(env={"SHOPD__DB__PORT": "6543", "SHOPD__FEATURES": "a,b"})
++        self.assertEqual(DEFAULTS["db"]["port"], 5432)
++        self.assertEqual(DEFAULTS["features"], ["search"])
++
++
++class OverrideTest(unittest.TestCase):
++    def test_repeated_overrides(self):
++        cfg = load(overrides=["db.pool.size=20", "db.ssl=on"])
++        self.assertEqual(cfg["db"]["pool"]["size"], 20)
++        self.assertIs(cfg["db"]["ssl"], True)
++
++    def test_value_may_contain_equals_sign(self):
++        cfg = load(overrides=["name=a=b"])
++        self.assertEqual(cfg["name"], "a=b")
++
++    def test_precedence(self):
++        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
++            json.dump({"db": {"port": 1111}, "log": {"level": "warn"}}, f)
++        try:
++            cfg = load(
++                f.name,
++                env={"SHOPD__DB__PORT": "2222", "SHOPD__LOG__LEVEL": "debug"},
++                overrides=["db.port=3333"],
++            )
++        finally:
++            os.unlink(f.name)
++        self.assertEqual(cfg["db"]["port"], 3333)
++        self.assertEqual(cfg["log"]["level"], "debug")
++        self.assertEqual(cfg["db"]["host"], "localhost")
++
++
++class ErrorTest(unittest.TestCase):
++    def assert_config_error(self, setting, **kwargs):
++        with self.assertRaises(ConfigError) as ctx:
++            load(**kwargs)
++        self.assertIn(setting, str(ctx.exception))
++
++    def test_unknown_environment_setting(self):
++        self.assert_config_error("db.prot", env={"SHOPD__DB__PROT": "1"})
++
++    def test_unknown_override_setting(self):
++        self.assert_config_error("db.prot", env={}, overrides=["db.prot=1"])
++
++    def test_value_below_a_leaf_setting(self):
++        self.assert_config_error("db.port.size", env={"SHOPD__DB__PORT__SIZE": "1"})
++
++    def test_bad_int(self):
++        self.assert_config_error("db.port", env={"SHOPD__DB__PORT": "abc"})
++
++    def test_float_is_not_an_int(self):
++        self.assert_config_error("db.port", env={"SHOPD__DB__PORT": "5.5"})
++
++    def test_bad_float(self):
++        self.assert_config_error("db.pool.timeout", env={"SHOPD__DB__POOL__TIMEOUT": "fast"})
++
++    def test_bad_bool(self):
++        self.assert_config_error("db.ssl", env={"SHOPD__DB__SSL": "maybe"})
++
++    def test_section_from_environment(self):
++        self.assert_config_error("db", env={"SHOPD__DB": "x"})
++
++    def test_section_from_override(self):
++        self.assert_config_error("db", env={}, overrides=["db=1"])
++
++    def test_bad_override_syntax(self):
++        with self.assertRaises(ConfigError):
++            load(env={}, overrides=["db.port"])
++
++
++class CommandLineTest(unittest.TestCase):
++    def run_cli(self, *args, env=None):
++        child_env = {
++            name: value
++            for name, value in os.environ.items()
++            if not name.upper().startswith("SHOPD__")
++        }
++        if env:
++            child_env.update(env)
++        return subprocess.run(
++            [sys.executable, "-m", "app.config", *args],
++            cwd=ROOT,
++            env=child_env,
++            capture_output=True,
++            text=True,
++        )
++
++    def test_set_is_repeatable(self):
++        result = self.run_cli("--set", "db.port=6543", "--set", "log.level=debug")
++        self.assertEqual(result.returncode, 0, result.stderr)
++        cfg = json.loads(result.stdout)
++        self.assertEqual(cfg["db"]["port"], 6543)
++        self.assertEqual(cfg["log"]["level"], "debug")
++
++    def test_environment_is_used(self):
++        result = self.run_cli(env={"SHOPD__DB__HOST": "env.example"})
++        self.assertEqual(result.returncode, 0, result.stderr)
++        self.assertEqual(json.loads(result.stdout)["db"]["host"], "env.example")
++
++    def test_file_error_exits_2(self):
++        result = self.run_cli("--file", "/nonexistent/config.json")
++        self.assertEqual(result.returncode, 2)
++        self.assertIn("config error", result.stderr)
++
++    def test_bad_override_exits_2_and_names_setting(self):
++        result = self.run_cli("--set", "db.prot=1")
++        self.assertEqual(result.returncode, 2)
++        self.assertIn("db.prot", result.stderr)
++
++
+ if __name__ == "__main__":
+     unittest.main()

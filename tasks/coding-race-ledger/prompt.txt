@@ -1,0 +1,3 @@
+Our payment worker runs 8 threads against one `Ledger` (ledger.py) and it's misbehaving under load: the books stop balancing (the ledger total drifts away from deposits minus withdrawals), occasionally an account ends up with a negative balance even though withdrawals are supposed to refuse that, and every so often the whole worker just hangs and has to be killed. test_ledger.py's concurrency test fails too.
+
+Please fix ledger.py so it's safe to use from many threads at once, keeping the same API and the behaviour described in the docstrings.

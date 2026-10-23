@@ -1,0 +1,15 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..5906658 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,10 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    # Normalize the path so that files discovered relatively (e.g. through
++    # ``.`` or ``./src``) and paths using either separator are matched
++    # consistently against the configured patterns.
++    element = os.path.normpath(element.replace("\\", "/"))
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list

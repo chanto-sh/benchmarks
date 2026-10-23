@@ -1,0 +1,34 @@
+diff --git a/mission.py b/mission.py
+index 229a044..6cd09f8 100644
+--- a/mission.py
++++ b/mission.py
+@@ -2,7 +2,7 @@
+ import math
+ 
+ MU_EARTH = 398600.4418  # km^3 / s^2
+-R_EARTH = 6378137.0     # equatorial radius
++R_EARTH = 6378.137      # equatorial radius, km
+ 
+ 
+ def circular_speed(alt_km):
+@@ -22,16 +22,16 @@ def hohmann_dv(alt1_km, alt2_km):
+ 
+ def plane_change_dv(speed_kms, angle_deg):
+     """Delta-v (km/s) to rotate the orbital plane by angle_deg at the given speed."""
+-    return 2 * speed_kms * math.sin(angle_deg / 2)
++    return 2 * speed_kms * abs(math.sin(math.radians(angle_deg) / 2))
+ 
+ 
+ def orbit_period(perigee_alt_km, apogee_alt_km, steps_per_orbit=4000):
+     """Orbital period in seconds, found by integrating the orbit (so that
+     perturbations can be added to accel() later)."""
+-    rp = R_EARTH + perigee_alt_km * 1000.0  # metres
+-    ra = R_EARTH + apogee_alt_km * 1000.0
++    rp = (R_EARTH + perigee_alt_km) * 1000.0  # metres
++    ra = (R_EARTH + apogee_alt_km) * 1000.0
+     a = (rp + ra) / 2
+-    mu = MU_EARTH
++    mu = MU_EARTH * 1e9  # m^3 / s^2
+     vp = math.sqrt(mu * (2 / rp - 1 / a))
+     dt = 2 * math.pi * math.sqrt(a ** 3 / mu) / steps_per_orbit
+ 

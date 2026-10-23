@@ -1,0 +1,54 @@
+diff --git a/pylint/config/config_initialization.py b/pylint/config/config_initialization.py
+index 24e453a..66e5f87 100644
+--- a/pylint/config/config_initialization.py
++++ b/pylint/config/config_initialization.py
+@@ -80,8 +80,6 @@ def _config_initialization(
+         elif opt.startswith("-"):
+             unrecognized_options.append(opt[1:])
+     if unrecognized_options:
+-        msg = ", ".join(unrecognized_options)
+-        linter.add_message("unrecognized-option", line=0, args=msg)
+         raise _UnrecognizedOptionError(options=unrecognized_options)
+ 
+     # Set the current module to configuration as we don't know where
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index 778e644..2d8c8dc 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -13,7 +13,10 @@ from typing import Any
+ 
+ from pylint import config
+ from pylint.config.config_initialization import _config_initialization
+-from pylint.config.exceptions import ArgumentPreprocessingError
++from pylint.config.exceptions import (
++    ArgumentPreprocessingError,
++    _UnrecognizedOptionError,
++)
+ from pylint.config.utils import _preprocess_options
+ from pylint.constants import full_version
+ from pylint.lint.base_options import _make_run_options
+@@ -132,9 +135,21 @@ group are mutually exclusive.",
+         linter.disable("I")
+         linter.enable("c-extension-no-member")
+ 
+-        args = _config_initialization(
+-            linter, args, reporter, config_file=self._rcfile, verbose_mode=self.verbose
+-        )
++        try:
++            args = _config_initialization(
++                linter,
++                args,
++                reporter,
++                config_file=self._rcfile,
++                verbose_mode=self.verbose,
++            )
++        except _UnrecognizedOptionError as exc:
++            unrecognized_options_message = ", ".join(exc.options)
++            linter.add_message(
++                "unrecognized-option", args=unrecognized_options_message, line=0
++            )
++            print(linter.help())
++            sys.exit(32)
+ 
+         if linter.config.jobs < 0:
+             print(

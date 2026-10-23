@@ -1,0 +1,44 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..289e1af 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,7 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    element = os.path.normpath(element)
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list
+diff --git a/tests/lint/unittest_expand_modules.py b/tests/lint/unittest_expand_modules.py
+index 15f72d0..0194e87 100644
+--- a/tests/lint/unittest_expand_modules.py
++++ b/tests/lint/unittest_expand_modules.py
+@@ -10,7 +10,11 @@ from pathlib import Path
+ import pytest
+ 
+ from pylint.checkers import BaseChecker
+-from pylint.lint.expand_modules import _is_in_ignore_list_re, expand_modules
++from pylint.lint.expand_modules import (
++    _is_ignored_file,
++    _is_in_ignore_list_re,
++    expand_modules,
++)
+ from pylint.testutils import CheckerTestCase, set_config
+ from pylint.typing import MessageDefinitionTuple
+ 
+@@ -26,6 +30,14 @@ def test__is_in_ignore_list_re_match() -> None:
+     assert _is_in_ignore_list_re("src/tests/whatever.xml", patterns)
+ 
+ 
++def test_is_ignored_file_normalizes_path_before_matching() -> None:
++    """Paths with redundant components or mixed separators should be matched."""
++    ignored_path = Path("src", "gen", "module.py")
++    patterns = [re.compile(f"^{re.escape(str(ignored_path))}$")]
++    path_with_parent_reference = str(Path("src", "gen", "..", "gen", "module.py"))
++    assert _is_ignored_file(path_with_parent_reference, [], [], patterns)
++
++
+ TEST_DIRECTORY = Path(__file__).parent.parent
+ INIT_PATH = str(TEST_DIRECTORY / "lint/__init__.py")
+ EXPAND_MODULES = str(TEST_DIRECTORY / "lint/unittest_expand_modules.py")

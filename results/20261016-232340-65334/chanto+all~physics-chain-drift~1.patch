@@ -1,0 +1,26 @@
+diff --git a/chain.py b/chain.py
+index fd8adf8..86fef1b 100644
+--- a/chain.py
++++ b/chain.py
+@@ -32,9 +32,17 @@ def energy(x, v, masses, k, beta):
+ def simulate(x0, v0, masses, k, beta, dt, steps):
+     """Velocity Verlet; returns (x, v) after `steps` steps."""
+     x, v = list(x0), list(v0)
+-    m = masses[0]
++
++    def acceleration(x):
++        return [f / m for f, m in zip(forces(x, k, beta), masses)]
++
++    a = acceleration(x)
+     for _ in range(steps):
+-        a = [f / m for f in forces(x, k, beta)]
+-        x = [xi + vi * dt + 0.5 * ai * dt * dt for xi, vi, ai in zip(x, v, a)]
+-        v = [vi + ai * dt for vi, ai in zip(v, a)]
++        # Half kick with the current acceleration.
++        v = [vi + 0.5 * ai * dt for vi, ai in zip(v, a)]
++        # Drift.
++        x = [xi + vi * dt for xi, vi in zip(x, v)]
++        # Recompute acceleration at the new positions, then half kick.
++        a = acceleration(x)
++        v = [vi + 0.5 * ai * dt for vi, ai in zip(v, a)]
+     return x, v

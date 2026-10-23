@@ -1,0 +1,226 @@
+diff --git a/roots.py b/roots.py
+index d624667..ffd362f 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,10 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++
++
++_TOLERANCE = Fraction(1, 10**10)
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +14,167 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(poly):
++    """Drop leading zero coefficients (highest degree first)."""
++    i = 0
++    while i < len(poly) and poly[i] == 0:
++        i += 1
++    return list(poly[i:])
++
++
++def _divmod(a, b):
++    """Polynomial division over the rationals; coefficients highest first."""
++    a = _trim(a)
++    b = _trim(b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++
++    quotient = [Fraction(0)] * (len(a) - len(b) + 1)
++    remainder = list(a)
++    while len(remainder) >= len(b):
++        factor = Fraction(remainder[0]) / Fraction(b[0])
++        shift = len(a) - len(remainder)
++        quotient[shift] = factor
++        for i in range(len(b)):
++            remainder[i] -= factor * b[i]
++        remainder = _trim(remainder)
++    return quotient, remainder
++
++
++def _derivative(poly):
++    poly = _trim(poly)
++    degree = len(poly) - 1
++    return [poly[i] * (degree - i) for i in range(degree)]
++
++
++def _gcd(a, b):
++    a = _trim(a)
++    b = _trim(b)
++    while b:
++        _, remainder = _divmod(a, b)
++        a, b = b, _trim(remainder)
++    return a
++
++
++def _square_free(poly):
++    """Return a monic polynomial with the same distinct roots as poly."""
++    if len(poly) <= 1:
++        return poly
++    common = _gcd(poly, _derivative(poly))
++    quotient, _ = _divmod(poly, common)
++    quotient = _trim(quotient)
++    leading = quotient[0]
++    return [c / leading for c in quotient]
++
++
++def _divide_by_linear(poly, root):
++    quotient, _ = _divmod(poly, [Fraction(1), -root])
++    return _trim(quotient)
++
++
++def _sturm_sequence(poly):
++    """Sturm sequence for a square-free polynomial."""
++    poly = _trim(poly)
++    if len(poly) <= 1:
++        return [poly] if poly else []
++
++    sequence = [poly, _derivative(poly)]
++    while len(sequence[-1]) > 1:
++        _, remainder = _divmod(sequence[-2], sequence[-1])
++        remainder = _trim(remainder)
++        if not remainder:
++            break
++        sequence.append([-c for c in remainder])
++    return sequence
++
++
++def _sign_variations(sequence, x):
++    previous = 0
++    changes = 0
++    for poly in sequence:
++        value = evaluate(poly, x)
++        if value == 0:
++            continue
++        sign = 1 if value > 0 else -1
++        if previous and sign != previous:
++            changes += 1
++        previous = sign
++    return changes
++
++
++def _refine_root(sequence, a, b):
++    """Refine the single root in (a, b] to within the requested tolerance."""
++    poly = sequence[0]
++    while b - a > _TOLERANCE:
++        middle = (a + b) / 2
++        if evaluate(poly, middle) == 0:
++            return middle
++        if _sign_variations(sequence, a) > _sign_variations(sequence, middle):
++            b = middle
++        else:
++            a = middle
++    return (a + b) / 2
++
++
++def _isolate(sequence, a, b, count, roots):
++    """Isolate ``count`` distinct roots in (a, b]."""
++    if count <= 0:
++        return
++    if count == 1:
++        roots.append(_refine_root(sequence, a, b))
++        return
++    if b - a <= _TOLERANCE:
++        # The roots are closer than the required output resolution.  Spread
++        # the approximations over the tiny interval so they remain distinct,
++        # while every one is still well within 1e-9 of every enclosed root.
++        width = b - a
++        for i in range(1, count + 1):
++            roots.append(a + width * Fraction(i, count + 1))
++        return
++
++    middle = (a + b) / 2
++    left_count = _sign_variations(sequence, a) - _sign_variations(sequence, middle)
++    _isolate(sequence, a, middle, left_count, roots)
++    _isolate(sequence, middle, b, count - left_count, roots)
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    poly = _trim([Fraction(c) for c in coeffs])
++    if len(poly) <= 1:
++        return []
++
++    lo, hi = Fraction(lo), Fraction(hi)
++    if lo > hi:
++        return []
++
++    square_free = _square_free(poly)
++    if lo == hi:
++        return [float(lo)] if evaluate(square_free, lo) == 0 else []
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++
++    # Endpoint roots are exact and are excluded before the Sturm count so the
++    # remaining polynomial has no roots at either end of the interval.
++    if evaluate(square_free, lo) == 0:
++        roots.append(lo)
++        square_free = _divide_by_linear(square_free, lo)
++    if evaluate(square_free, hi) == 0:
++        roots.append(hi)
++        square_free = _divide_by_linear(square_free, hi)
++
++    if len(square_free) > 1:
++        sequence = _sturm_sequence(square_free)
++        count = (
++            _sign_variations(sequence, lo)
++            - _sign_variations(sequence, hi)
++        )
++        _isolate(sequence, lo, hi, count, roots)
++
++    roots.sort()
++    return [float(root) for root in roots]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..1d93c59 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,23 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_repeated_irrational_root(self):
++        # (x^2 - 2)^2, only sqrt(2) lies in [0, 2]
++        self.assertRoots(real_roots([1, 0, -4, 0, 4], 0, 2), [math.sqrt(2)])
++
++    def test_close_roots(self):
++        # (x - 1)(x - 1.000001), scaled to integer coefficients
++        got = real_roots([1000000, -2000001, 1000001], 0, 2)
++        self.assertRoots(got, [1, 1.000001])
++
++    def test_roots_at_both_boundaries(self):
++        # x(x + 2)(x - 3) = x^3 - x^2 - 6x
++        self.assertRoots(real_roots([1, -1, -6, 0], -2, 3), [-2, 0, 3])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

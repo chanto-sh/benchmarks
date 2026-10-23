@@ -1,0 +1,12 @@
+diff --git a/billing/parse.py b/billing/parse.py
+index ee1fff2..2505b75 100644
+--- a/billing/parse.py
++++ b/billing/parse.py
+@@ -18,6 +18,6 @@ def load(path):
+             inv = invoices.get(number)
+             if inv is None:
+                 inv = invoices[number] = Invoice(number, norm(row["customer"]), row["invoice_currency"].strip().upper())
+-            currency = norm(row["currency"]) if row["currency"].strip() else inv.currency
++            currency = row["currency"].strip().upper() if row["currency"].strip() else inv.currency
+             inv.lines.append(Line(row["description"].strip(), Decimal(row["amount"].strip()), currency))
+     return list(invoices.values())

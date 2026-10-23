@@ -1,0 +1,90 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..edb0bea 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,83 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(x):
++    """sin(x) / x, with a series near zero."""
++    if abs(x) < 1e-8:
++        x2 = x * x
++        return 1.0 - x2 / 6.0 + x2 * x2 / 120.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with a series near zero."""
++    if abs(x) < 1e-8:
++        x2 = x * x
++        return 1.0 + x2 / 6.0 + x2 * x2 / 120.0
++    return math.sinh(x) / x
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    a = k - m * omega * omega
++    b = c * omega
++    return abs(F0) / math.hypot(a, b)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    # Steady state: x_ss(t) = C cos(omega t) + S sin(omega t).
++    a = k - m * omega * omega
++    b = c * omega
++    scale = math.hypot(a, b)
++    C = F0 * (a / scale) / scale
++    S = F0 * (b / scale) / scale
++
++    wt = omega * t
++    steady = C * math.cos(wt) + S * math.sin(wt)
++
++    # Homogeneous part with the initial conditions left over after
++    # subtracting the steady state.
++    X0 = x0 - C
++    V0 = v0 - omega * S
++
++    beta = 0.5 * c / m
++    disc = c * c - 4.0 * m * k
++
++    if disc < 0.0:
++        # Underdamped: roots -beta +/- i omega_d.
++        omega_d = math.sqrt(-disc) / (2.0 * m)
++        phase = omega_d * t
++        transient = math.exp(-beta * t) * (
++            X0 * math.cos(phase)
++            + (V0 + beta * X0) * t * _sinc(phase)
++        )
++    elif disc == 0.0:
++        # Critically damped: repeated root -beta.
++        transient = math.exp(-beta * t) * (X0 + (V0 + beta * X0) * t)
++    else:
++        # Overdamped: roots -beta +/- q.
++        q = math.sqrt(disc) / (2.0 * m)
++        phase = q * t
++        if abs(phase) < 1.0:
++            transient = math.exp(-beta * t) * (
++                X0 * math.cosh(phase)
++                + (V0 + beta * X0) * t * _sinhc(phase)
++            )
++        else:
++            # Avoid overflow in cosh/sinh when q*t is large.  Compute the
++            # slow root as -omega0^2/(beta+q) to avoid cancellation in beta-q.
++            omega0_sq = k / m
++            e1 = math.exp(-omega0_sq * t / (beta + q))
++            e2 = math.exp(-(beta + q) * t)
++            transient = 0.5 * (
++                e1 * (X0 + (V0 + beta * X0) / q)
++                + e2 * (X0 - (V0 + beta * X0) / q)
++            )
++
++    return steady + transient

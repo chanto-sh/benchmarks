@@ -1,0 +1,133 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..df4b675 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,6 +1,6 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+-const { fmt } = require("./format");
++const { parseCents, fmt } = require("./money");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+@@ -9,7 +9,7 @@ function checkout(cart) {
+   let discount = 0;
+   let taxable = 0;
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
++    const line = parseCents(item.price) * item.qty;
+     const d = discountFor(line, item.discountPct || 0);
+     subtotal += line;
+     discount += d;
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..66a8076 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,9 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++const { percentCents } = require("./money");
++
++// Per-line percentage discounts: pct percent of the line total in cents,
++// rounded half up to the cent.
++function discountFor(lineCents, pct) {
++  return percentCents(lineCents, pct);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..f542ca2 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -1,6 +1,3 @@
+-// Money as a plain "1234.50" string for receipts and the API.
+-function fmt(amount) {
+-  return amount.toFixed(2);
+-}
++const { fmt } = require("./money");
+ 
+ module.exports = { fmt };
+diff --git a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..ec714c8
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,61 @@
++// Money helpers. Amounts are integer cents; percentages are exact decimal fractions.
++
++// Parse a decimal amount ("19.99") into integer cents, rounding half up if it
++// carries more than two decimal places.
++function parseCents(value) {
++  const match = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(String(value).trim());
++  if (!match || (match[2] === "" && !match[3])) {
++    throw new TypeError(`invalid amount: ${value}`);
++  }
++  const sign = match[1] === "-" ? -1 : 1;
++  const whole = match[2] || "0";
++  let fraction = match[3] || "";
++  let carry = 0;
++  if (fraction.length > 2) {
++    carry = fraction[2] >= "5" ? 1 : 0;
++    fraction = fraction.slice(0, 2);
++  }
++  return sign * (Number(whole) * 100 + Number(fraction.padEnd(2, "0") || "0") + carry);
++}
++
++// Divide integers rounding halves away from zero.
++function roundHalfUp(numerator, denominator) {
++  if (denominator < 0) {
++    numerator = -numerator;
++    denominator = -denominator;
++  }
++  const sign = numerator < 0 ? -1 : 1;
++  const magnitude = Math.abs(numerator);
++  const quotient = Math.floor(magnitude / denominator);
++  const remainder = magnitude % denominator;
++  return sign * (quotient + (remainder * 2 >= denominator ? 1 : 0));
++}
++
++// Convert a percentage to an exact [numerator, denominator] pair.
++function percentFraction(pct) {
++  const match = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(String(pct).trim());
++  if (!match || (match[2] === "" && !match[3])) {
++    throw new TypeError(`invalid percentage: ${pct}`);
++  }
++  const sign = match[1] === "-" ? -1 : 1;
++  const whole = match[2] || "0";
++  const fraction = match[3] || "";
++  const denominator = 10 ** fraction.length;
++  const numerator = sign * Number(whole + fraction);
++  return [numerator, denominator];
++}
++
++// pct percent of an integer-cent amount, rounded half up to the cent.
++function percentCents(cents, pct) {
++  const [numerator, denominator] = percentFraction(pct);
++  return roundHalfUp(cents * numerator, denominator * 100);
++}
++
++// Format integer cents as a receipt string ("55.18").
++function fmt(cents) {
++  const sign = cents < 0 ? "-" : "";
++  const magnitude = Math.abs(cents);
++  return `${sign}${Math.floor(magnitude / 100)}.${String(magnitude % 100).padStart(2, "0")}`;
++}
++
++module.exports = { parseCents, roundHalfUp, percentCents, fmt };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..86b6c43 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,9 @@
++const { percentCents } = require("./money");
++
+ // Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++// Rounded half up to the cent once for the whole cart.
++function taxFor(amountCents, rate) {
++  return percentCents(amountCents, rate);
+ }
+ 
+ module.exports = { taxFor };

@@ -1,0 +1,1228 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-15T10:11:00-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-remeasure2.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--seed",
+      "400",
+      "--agents",
+      "chanto,chanto-verify",
+      "--tasks",
+      "swe-pallets__flask-4045,swe-pallets__flask-4992,swe-pallets__flask-5063,swe-psf__requests-3362,swe-pylint-dev__pylint-5859,swe-pylint-dev__pylint-6506,swe-pylint-dev__pylint-7080,swe-pylint-dev__pylint-7228,swe-pylint-dev__pylint-7993,swe-pytest-dev__pytest-11143,swe-pytest-dev__pytest-5103,swe-pytest-dev__pytest-5221,swe-pytest-dev__pytest-5227"
+    ],
+    "bench_commit": "82bc83d0d4a0b75e5959a7ad69aaed01249aa5f3",
+    "bench_dirty": false,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-82bc83d",
+      "sha256": "fcde724868d6cc013a4bc0eca54d2a1fd741c7d2a938099f2f41691f554a60d0"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.0",
+      "chanto-verify": "chanto 0.1.0"
+    },
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 400,
+    "repeat": 1,
+    "tasks": {
+      "swe-pallets__flask-4045": "0fd436ca6329495bc4c29b7b6c37acc84ff7bf1ab067e9cc6740d6c6ddd8d916",
+      "swe-pallets__flask-4992": "5687a801e31d1a09c7b2871a857e3cf0bda2a724455d372bffc975047ae98f8b",
+      "swe-pallets__flask-5063": "ee0d656706aef14d18c9cb75965c6f8cab2aaa49d68427db83830b8740404e36",
+      "swe-psf__requests-3362": "0e0baabc74fc6f587dd7fc5906a77d5f1a10e6ac60eaacb233d533899d54fb20",
+      "swe-pylint-dev__pylint-5859": "19ab5c9f7bf0625b2d080d3c7aa0c84d79c101070447bd8539b3547563bab026",
+      "swe-pylint-dev__pylint-6506": "6ba714e0101b95362746caa3f4999273005a39ad3067cc426777f56154b72b0c",
+      "swe-pylint-dev__pylint-7080": "4140df3bcf45f5dc399c5fd8c4c3fed489ded8741177e25fd8ee5ce5ac6e4986",
+      "swe-pylint-dev__pylint-7228": "991a23189436ee8cfaeb5a4bd00813b554c712d896adaf7aae638f217d68e5d0",
+      "swe-pylint-dev__pylint-7993": "f222cbea801661a37193abc7ee0db9756403bc09f5ca53efbc57e24b35b639c4",
+      "swe-pytest-dev__pytest-11143": "8a9e030ae74443c6a57350075b6a66fa30f01a6ea1652db9d731aed08f3d4cc6",
+      "swe-pytest-dev__pytest-5103": "a6638f378118447c612a6c4f4d8931b01f4213ac50a96c33791a0879b03d2bfa",
+      "swe-pytest-dev__pytest-5221": "13d4a9bce2fde1f47c234778414004ed076ee27ab4679d0383150692876c6cc1",
+      "swe-pytest-dev__pytest-5227": "fd973e306d147be7ce429cff44b6437d10195e490e88cb0f7b60cac75321ee81"
+    },
+    "offline_profile_sha256": "93826c13f2efa7d3657158819dc6d90b3c8b40759aa0a5606758eba7ed1f246e"
+  },
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 186.2,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "nal[t.Callable] = None,\n        **options: t.Any,\n    ) -> None:\n        \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:368: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n1 failed, 51 passed in 0.39s\n",
+      "tokens": {
+        "in": 653645,
+        "out": 14912
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 36,
+        "input": 653645,
+        "output": 14912,
+        "cached": 613504
+      },
+      "meter_label": "chanto-verify~swe-pallets__flask-4045~0~9053a7d3",
+      "started_at": "2026-10-15T10:11:22-0700",
+      "ended_at": "2026-10-15T10:14:29-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4045~0.out",
+          "sha256": "29b033d642ad06ad4269a1a5d5835a4b77c015b6299a27f7ae25a3596f5101a2"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4045~0.patch",
+          "sha256": "14bcaa2ac613a89fa2b5895150d242a1db7f4346a9ed78e7d4ef345d38026ab0"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "93792b4dc79f9b714afd80ef2fdd7ad2d6e4371008cffd7fa735b33d0f78b5a4"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4045~0.session0.jsonl",
+          "sha256": "7adb4c11d6890b57aef81172e07772c83bd6573c36bd29c9d974df72a4958b72"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4045~0.session1.json",
+          "sha256": "6c2c50cc6dbed679d01c9ace970ca8f50a889825af95303a74972adf17943000"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 220.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "t.Optional[t.Callable] = None,\n        **options: t.Any,\n    ) -> None:\n        \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:370: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n1 failed, 51 passed in 0.38s\n",
+      "tokens": {
+        "in": 522244,
+        "out": 12127
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 25,
+        "input": 522244,
+        "output": 12127,
+        "cached": 501888
+      },
+      "meter_label": "chanto~swe-pallets__flask-4045~0~df4ca7be",
+      "started_at": "2026-10-15T10:14:46-0700",
+      "ended_at": "2026-10-15T10:18:27-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4045~0.out",
+          "sha256": "fb2792ba27d9bc0f6043f816c544015f5c5b4b595ccdf902f0db106514685c74"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4045~0.patch",
+          "sha256": "22d457a93a81909bb14eea4446c7655840c5213c1d35e4b75545aede55f22db0"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "3d96e3124884e409ede0ee2663c9bc93292d3f44165a86f91ba6228e2f1cc231"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4045~0.session0.json",
+          "sha256": "7503078f2f8531b65ce8e6a1b5dbe932fefe1ed2c36eb67813c6314fef03248b"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-6506",
+      "rep": 0,
+      "passed": true,
+      "seconds": 367.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........                                                                 [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pylint-dev__pylint-6506-0/.swe-results.xml -\n8 passed in 0.18s\n",
+      "tokens": {
+        "in": 2088533,
+        "out": 35268
+      },
+      "tampered": [
+        "tests/config/test_config.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 55,
+        "input": 2088533,
+        "output": 35268,
+        "cached": 2046720
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-6506~0~da5d118f",
+      "started_at": "2026-10-15T10:18:52-0700",
+      "ended_at": "2026-10-15T10:25:02-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-6506~0.out",
+          "sha256": "605b09f27fc52e4f7068ca44a6b78f005ba1066d0eb583d0da99aa35b1e10555"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-6506~0.patch",
+          "sha256": "8526b32c5d9c5066b8de7aeda5d848599c6acbabf93fb549a17feb90b2889c0f"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-6506~0.check.txt",
+          "sha256": "0320913cbb2231b100401fa6046fd2ad316edb159a21278f1e18c387cb868f61"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-6506~0.session0.json",
+          "sha256": "8775715c40bec61413ca256cc254cb99642e53c9bad2761be404979fba32ba39"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-6506",
+      "rep": 0,
+      "passed": true,
+      "seconds": 711.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........                                                                 [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pylint-dev__pylint-6506-0/.swe-results.xml -\n8 passed in 0.18s\n",
+      "tokens": {
+        "in": 1413906,
+        "out": 18403
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 39,
+        "input": 1413906,
+        "output": 18403,
+        "cached": 1363840
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-6506~0~3eef87ab",
+      "started_at": "2026-10-15T10:25:27-0700",
+      "ended_at": "2026-10-15T10:37:21-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-6506~0.out",
+          "sha256": "65a8274976bb7ca5e2e38e844a9ce727bdd961482f6dc690fe2592ca6a979bc3"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-6506~0.patch",
+          "sha256": "f38dda6b9c7c3fbef5e606d4e4c4b2ac0500dc28d9b0267a5ff82f57b709d9f4"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-6506~0.check.txt",
+          "sha256": "528df832a382edce25786c4384b6788f0db2083068564192f3faf331f2b5eec6"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-6506~0.session0.json",
+          "sha256": "7ceb42ebeb33b12de310c5c7ce939db7ccd038d71704aa11cca9201f47210578"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-11143",
+      "rep": 0,
+      "passed": true,
+      "seconds": 65.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 62%]\n............................................                             [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pytest-dev__pytest-11143-0/.swe-results.xml -\n116 passed in 5.38s\n",
+      "tokens": {
+        "in": 246046,
+        "out": 5755
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 19,
+        "input": 246046,
+        "output": 5755,
+        "cached": 232064
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-11143~0~155784b4",
+      "started_at": "2026-10-15T10:37:43-0700",
+      "ended_at": "2026-10-15T10:38:50-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-11143~0.out",
+          "sha256": "f15804b0dd0affa68a0a9509aa37ca425f26706e99a23a28c25a8a29d3a4e4b5"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-11143~0.patch",
+          "sha256": "5ec8ea44942a9aabf53427526bca60a8993d76735b39a636c9d7823a3d26448a"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-11143~0.check.txt",
+          "sha256": "f808ab00cb886276b0db8a6db562e2b49793bb66ee120e48896b08d2deaab7ec"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-11143~0.session0.json",
+          "sha256": "b715d3ff0a9e5cd830df982f3481d06b045e9f5456e96adcf36551a48a290135"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-11143",
+      "rep": 0,
+      "passed": true,
+      "seconds": 53.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 62%]\n............................................                             [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pytest-dev__pytest-11143-0/.swe-results.xml -\n116 passed in 4.70s\n",
+      "tokens": {
+        "in": 264327,
+        "out": 5207
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 21,
+        "input": 264327,
+        "output": 5207,
+        "cached": 250752
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-11143~0~c9f6ff83",
+      "started_at": "2026-10-15T10:39:15-0700",
+      "ended_at": "2026-10-15T10:40:10-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-11143~0.out",
+          "sha256": "dfa40febab7294bd82a2f278a1ac0017374182edfff1f8b294df6d9d98f40ada"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-11143~0.patch",
+          "sha256": "da7474add50344ac9a184ba6edb82a7ac0e00d3b5df2b8941e84de9bda584563"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-11143~0.check.txt",
+          "sha256": "6475e34d679346107ff9839efefb1bf9b0cd147f26615fe06003e8c8af27ef2e"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-11143~0.session0.json",
+          "sha256": "5d33f5b14efc5d76c475e73435d9be48872a3e6bb1529f8dd90227d8e00257d1"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1205.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "       AssertionError: assert 'Host' in 'Domain  Endpoint  Methods  Rule\\n------  --------  -------  ----\\na       a         GET      /a\\nb       b         GET      /b\\n'\nE        +  where 'Domain  Endpoint  Methods  Rule\\n------  --------  -------  ----\\na       a         GET      /a\\nb       b         GET      /b\\n' = <Result okay>.output\n\ntests/test_cli.py:504: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\n2 failed, 55 passed in 0.24s\n",
+      "tokens": {
+        "in": 5404771,
+        "out": 87383
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 103,
+        "input": 5404771,
+        "output": 87383,
+        "cached": 5249280
+      },
+      "meter_label": "chanto-verify~swe-pallets__flask-5063~0~581c6dbe",
+      "started_at": "2026-10-15T10:40:31-0700",
+      "ended_at": "2026-10-15T11:00:38-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-5063~0.out",
+          "sha256": "83eedb0065f2351b15266cd7df6e3e5beaae5961c9bd015c7e3dd69c7f779409"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-5063~0.patch",
+          "sha256": "acf177144c3cd95048e8337e407029d5dbad4b1ea9b367f7d0af30361be6d2d0"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "71547788fabaac1f2584f940923e12cb00ce59cdd7c059a765a21fa0aebac463"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-5063~0.session0.jsonl",
+          "sha256": "70e8a05e4337e74dff76b69c673e01858ab1c2f84d0b13d247db0dd130e82f50"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-5063~0.session1.json",
+          "sha256": "444fa938b5782e86a508cb5b40248277c0b96c61125ce508877fd665326eb5fe"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 639.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "utput\nE       AssertionError: assert 'Host' in 'Domain  Endpoint  Methods  Rule\\n------  --------  -------  ----\\na       a         GET      /a\\nb       b         GET      /b\\n'\nE        +  where 'Domain  Endpoint  Methods  Rule\\n------  --------  -------  ----\\na       a         GET      /a\\nb       b         GET      /b\\n' = <Result okay>.output\n\ntests/test_cli.py:504: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\n2 failed, 55 passed in 0.27s\n",
+      "tokens": {
+        "in": 3575583,
+        "out": 65826
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 75,
+        "input": 3575583,
+        "output": 65826,
+        "cached": 3538560
+      },
+      "meter_label": "chanto~swe-pallets__flask-5063~0~e46522b3",
+      "started_at": "2026-10-15T11:00:54-0700",
+      "ended_at": "2026-10-15T11:11:34-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-5063~0.out",
+          "sha256": "e8323e2630cff8af591a24cd133c6c4c90f1a6e973ec877279c6fc6c01b6ac6d"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-5063~0.patch",
+          "sha256": "9e912bbf7e6f06df674839418ab73171d8967b617591b1e086ff4e5319fe3ea8"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "f80e1fe8b6839af7b8fe97bddd9c60efcc9c269fe10e1109c5af08cc0b7fc8cf"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-5063~0.session0.json",
+          "sha256": "b0a89dc76c9db09331a8101195a58304d5f0bada369e7cf0c12b956504f2d615"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1345.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................................................        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n65 passed in 4.20 seconds\n",
+      "tokens": {
+        "in": 5390095,
+        "out": 82949
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 83,
+        "input": 5390095,
+        "output": 82949,
+        "cached": 5262336
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5103~0~ff6dba00",
+      "started_at": "2026-10-15T11:11:52-0700",
+      "ended_at": "2026-10-15T11:34:19-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "91fa6642e075e463aba2f47f8bdeafbf0e1441537559a83c69cedb2e7394a73e"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "19a7573032f814112f1da417bd2d39f756eaee68db534cf3bf5a8c5946623c4d"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "49687813f93d537a0f1b55ec085cbef48bd6be689f1ee84b09df7a8e9afe5656"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5103~0.session0.json",
+          "sha256": "5b36bca31a9a58d5ca3ad1d6ead2f3dc25d6a979228259dcea7cc04ee59cb97f"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": true,
+      "seconds": 595.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................................................        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n65 passed in 4.00 seconds\n",
+      "tokens": {
+        "in": 4371070,
+        "out": 64049
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 73,
+        "input": 4371070,
+        "output": 64049,
+        "cached": 4322816
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5103~0~d6e77bc8",
+      "started_at": "2026-10-15T11:34:44-0700",
+      "ended_at": "2026-10-15T11:44:40-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "50b37fe46c2a527089479dee4326879dc0751223dd6402271c8f3191795d787c"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "5b439f2ae98248733f3090672f6c132ceadc0a48505aeeb4fb91df19caee1639"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "519daeb83b4c9158ba76782695f7786ceabed65f1a2098ffa5caac03a205c09d"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5103~0.session0.json",
+          "sha256": "d06dcc6c57ffe5f7ca75e0205009c071208712649639b18d2a764ece8f525186"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": true,
+      "seconds": 462.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n121 passed in 21.42s\n",
+      "tokens": {
+        "in": 3926803,
+        "out": 38256
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 75,
+        "input": 3926803,
+        "output": 38256,
+        "cached": 3870720
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-7080~0~b1ca2277",
+      "started_at": "2026-10-15T11:45:07-0700",
+      "ended_at": "2026-10-15T11:52:51-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "a84a387a39f369d9f5f1f527ac022bb6180c3e65affbc79af4ad4594927e5b6a"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "af64a7633ca49e237bd628e5b97ff91f57d05a82cbc975f3db5f2006c17e64ae"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "44fcb52c6e1c85450d242106c72f28237b3b5cf8af1952427a2af5467f121259"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7080~0.session0.json",
+          "sha256": "b8c2c0f58a41617c4de2050662ac4a201d8ffe386a51c399f5d0014ab152cdd8"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": false,
+      "seconds": 940.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": " output status 0, got 20. Below pylint output: \nE         ************* Module failing\nE         ignored_subdirectory/failing.py:1:0: C0114: Missing module docstring (missing-module-docstring)\nE         ignored_subdirectory/failing.py:1:0: W0611: Unused import re (unused-import)\nE         \nE         -----------------------------------\nE         Your code has been rated at 0.00/10\nE         \nE         \nE       assert 20 == 0\n\ntests/test_self.py:146: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_self.py::TestRunTC::test_ignore_path_recursive_current_dir\n1 failed, 120 passed in 20.77s\n",
+      "tokens": {
+        "in": 8285786,
+        "out": 79885
+      },
+      "tampered": [
+        "tests/lint/unittest_lint.py"
+      ],
+      "false_done": true,
+      "usage": {
+        "requests": 127,
+        "input": 8285786,
+        "output": 79885,
+        "cached": 8145152
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7080~0~e8446320",
+      "started_at": "2026-10-15T11:53:39-0700",
+      "ended_at": "2026-10-15T12:09:21-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "1a892aca1b8786bfc9d63f26c43ca5d301f8ea93081564ffe880a530216974fd"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "733709cf0eb02d538e2f841fd84893b24d2e7a3cb75bfbb025628480ca1a14c6"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "df43dc29cf61682919a49b3df15b4f767adb9f8fe0f6855c0475591fe7ddf08b"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7080~0.session0.json",
+          "sha256": "17d5adfa8edc6311e35314bb755931ff2d8d276ac5ba9e2f32d962911c305d91"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-psf__requests-3362",
+      "rep": 0,
+      "passed": false,
+      "seconds": 355.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "s::test_invalid_url[InvalidSchema-localhost:3128]\n  ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-psf__requests-3362-0/requests/models.py:170: DeprecationWarning: Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3, and in 3.10 it will stop working\n    if isinstance(hook, collections.Callable):\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-psf__requests-3362-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_requests.py::TestRequests::test_response_decode_unicode - a...\n1 failed, 75 passed, 3 warnings in 0.56s\n",
+      "tokens": {
+        "in": 1565650,
+        "out": 34938
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 54,
+        "input": 1565650,
+        "output": 34938,
+        "cached": 1540864
+      },
+      "meter_label": "chanto~swe-psf__requests-3362~0~ffeed95e",
+      "started_at": "2026-10-15T12:09:59-0700",
+      "ended_at": "2026-10-15T12:15:56-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-psf__requests-3362~0.out",
+          "sha256": "924cfd9f269ad928ea269cc1aac0f603a462282884c072a3f727509188152dd5"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-psf__requests-3362~0.patch",
+          "sha256": "4bd575be3b9bd9cc6218e12b1330ac5bb0d2cb472256fd3179b9f48db2109a11"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-psf__requests-3362~0.check.txt",
+          "sha256": "2730191bfe67dcdd9532f507a8d0870acaae71c8f28680f652133ebe427b7866"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-psf__requests-3362~0.session0.json",
+          "sha256": "ad9012fadf6cccf5e1b15400dbed8c77785efd0a30ec4608eff58a377398fe4c"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-psf__requests-3362",
+      "rep": 0,
+      "passed": false,
+      "seconds": 840.0,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "d_url[InvalidSchema-localhost:3128]\n  ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-psf__requests-3362-0/requests/models.py:170: DeprecationWarning: Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3, and in 3.10 it will stop working\n    if isinstance(hook, collections.Callable):\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-psf__requests-3362-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_requests.py::TestRequests::test_response_decode_unicode - a...\n1 failed, 75 passed, 3 warnings in 0.60s\n",
+      "tokens": {
+        "in": 351385,
+        "out": 12352
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 26,
+        "input": 351385,
+        "output": 12352,
+        "cached": 336256
+      },
+      "meter_label": "chanto-verify~swe-psf__requests-3362~0~367f669e",
+      "started_at": "2026-10-15T12:16:10-0700",
+      "ended_at": "2026-10-15T12:30:11-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-psf__requests-3362~0.out",
+          "sha256": "855d9345f5491297db2ad52d66b13b1fb67f762bdbf6d72d5e402be4fddf8928"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-psf__requests-3362~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-psf__requests-3362~0.check.txt",
+          "sha256": "3c19ef6900e152ec7da9b30b9d229b712e4223302018a4c27eb4722d275531fd"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-psf__requests-3362~0.session0.json",
+          "sha256": "67e9c76a1c7be8a1c53c4981de3a4a32d8cb4371183a747a094beeb1f2214da1"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5221",
+      "rep": 0,
+      "passed": true,
+      "seconds": 482.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 41%]\n........................................................................ [ 83%]\n............................                                             [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pytest-dev__pytest-5221-0/.swe-results.xml -\n172 passed in 8.42 seconds\n",
+      "tokens": {
+        "in": 3887182,
+        "out": 56178
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 82,
+        "input": 3887182,
+        "output": 56178,
+        "cached": 3842688
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5221~0~5bd47cd8",
+      "started_at": "2026-10-15T12:30:31-0700",
+      "ended_at": "2026-10-15T12:38:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5221~0.out",
+          "sha256": "05164734b3192318c3897db3bfd463d67aefbcf06018fbaf1042e3645b1b99a0"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5221~0.patch",
+          "sha256": "62c4c0b688d6c135abad9fc8e2c09a35b546739492d7b9929c3211ed94d744de"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5221~0.check.txt",
+          "sha256": "aa864cde571209607efde1a84e8bcffb98c5885f5d2d8e4a0a3ca5da39a88ae5"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5221~0.session0.json",
+          "sha256": "310ef5511c7e64e6acdd3c8f7871de68dda803cb01502ed61b56e2aad32040e2"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5221",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1267.6,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "ry directory path object\n    which is unique to each test function invocation,\n    created as a sub directory of the base temporary\n    directory.  The returned object is a :class:`pathlib.Path`\n    object.\n    \n    .. note::\n    \n        in python < 3.6 this is a pathlib2.Path\n\n------------------------ fixtures defined from conftest ------------------------\narg1 [function]\n    Hello World in conftest.py\n\n----------- fixtures defined from test_show_fixtures_with_same_name ------------\narg1 [function]\n    Hi from test module\n\n========================= no tests ran in 0.02 seconds =========================\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pytest-dev__pytest-5221-0/.swe-results.xml -\n9 failed, 163 passed in 12.33 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 108,
+        "input": 5371402,
+        "output": 118884,
+        "cached": 5151744
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5221~0~9d37b2d0",
+      "started_at": "2026-10-15T12:39:01-0700",
+      "ended_at": "2026-10-15T13:00:10-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5221~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5221~0.patch",
+          "sha256": "658017b80fc723a84f0e597666e5843f5e7341d165fd90d7f4c8341bd1e7bd22"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5221~0.check.txt",
+          "sha256": "9055460a4ab2e5c610e04f021a514c2f867680f76abf4618d99f841f87b211f4"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5221~0.session0.json",
+          "sha256": "0cf4894fa11e7a984f33aac8cce5243e36f07e3dc62094797771f4ee93b60220"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-7228",
+      "rep": 0,
+      "passed": false,
+      "seconds": 937.3,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "pylint [options]\\npylint: error: argument --bad-names-rgxs: Invalid regex pattern '(foo{1': missing ), unterminated subpattern at position 0\\n\" = CaptureResult(out='', err=\"usage: pylint [options]\\npylint: error: argument --bad-names-rgxs: Invalid regex pattern '(foo{1': missing ), unterminated subpattern at position 0\\n\").err\n\ntests/config/test_config.py:138: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pylint-dev__pylint-7228-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/config/test_config.py::test_regex_error - assert 'Error in provi...\nFAILED tests/config/test_config.py::test_csv_regex_error - assert 'Error in p...\n2 failed, 10 passed in 0.32s\n",
+      "tokens": {
+        "in": 2387043,
+        "out": 26251
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 58,
+        "input": 2387043,
+        "output": 26251,
+        "cached": 2305792
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-7228~0~b1a7a773",
+      "started_at": "2026-10-15T13:00:52-0700",
+      "ended_at": "2026-10-15T13:16:30-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7228~0.out",
+          "sha256": "fb7a08d2519d256bb05da30c86a07717482a7cd69b9ddd1383e3a1cd53b0146e"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7228~0.patch",
+          "sha256": "bdaa579744addbd6c3931c9f65eb1df5753ffb69c40d351e38dcd2f4deee903f"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7228~0.check.txt",
+          "sha256": "41d3baff7dbb38af1bcabfb3ad7fe948b60330b3e48923058e0e9680a017c04a"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7228~0.session0.jsonl",
+          "sha256": "89a63a86e55ec8d26207b33f036b33470757b83a4a0ad6a7b482e4df99a2fb69"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7228~0.session1.json",
+          "sha256": "89304d5ce4dd1b6f313e064d29ff7fbe4ebf2b61f181507b50f83e412aba0c88"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7228",
+      "rep": 0,
+      "passed": false,
+      "seconds": 74.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "int [options]\\npylint: error: argument --bad-names-rgxs: Invalid regular expression '(foo{1': missing ), unterminated subpattern at position 0\\n\" = CaptureResult(out='', err=\"usage: pylint [options]\\npylint: error: argument --bad-names-rgxs: Invalid regular expression '(foo{1': missing ), unterminated subpattern at position 0\\n\").err\n\ntests/config/test_config.py:138: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pylint-dev__pylint-7228-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/config/test_config.py::test_regex_error - assert 'Error in provi...\nFAILED tests/config/test_config.py::test_csv_regex_error - assert 'Error in p...\n2 failed, 10 passed in 0.31s\n",
+      "tokens": {
+        "in": 848360,
+        "out": 7717
+      },
+      "tampered": [
+        "tests/config/unittest_config.py"
+      ],
+      "false_done": true,
+      "usage": {
+        "requests": 27,
+        "input": 848360,
+        "output": 7717,
+        "cached": 811392
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7228~0~f7718e5f",
+      "started_at": "2026-10-15T13:16:59-0700",
+      "ended_at": "2026-10-15T13:18:15-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7228~0.out",
+          "sha256": "05254e66dcdfe72029b757bbbcfbe59c0160a54a887a698fe2ce07a24d1624bb"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7228~0.patch",
+          "sha256": "14d8f0a546fa8bba34093273ab35a38dd0ecedb2a22430458d5c18f40645d797"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7228~0.check.txt",
+          "sha256": "8b763195e2d3ed6b6ec2c8464494203e205e20ce2702d96767f52f9a14409d08"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7228~0.session0.json",
+          "sha256": "518559cddc0274fca877e97900a67cb3deba17c34590b1a090995db7a4e56658"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pallets__flask-4992",
+      "rep": 0,
+      "passed": true,
+      "seconds": 46.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...................                                                      [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pallets__flask-4992-0/.swe-results.xml -\n19 passed in 0.04s\n",
+      "tokens": {
+        "in": 215480,
+        "out": 4798
+      },
+      "tampered": [
+        "tests/test_config.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 21,
+        "input": 215480,
+        "output": 4798,
+        "cached": 203648
+      },
+      "meter_label": "chanto~swe-pallets__flask-4992~0~ff6a2033",
+      "started_at": "2026-10-15T13:18:26-0700",
+      "ended_at": "2026-10-15T13:19:13-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4992~0.out",
+          "sha256": "e09099e558e398b7daa628ed0753bc67eb622457afa4254cd617706c8ffb8a84"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4992~0.patch",
+          "sha256": "83ac43a1e779f3b6ec07d246ac5260799d9e7021d5e7a65d0ea541f535b40ef0"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4992~0.check.txt",
+          "sha256": "00840b0ee3a43e5ebc434436d08f78a96deb87bcd37816bde52287a5f35a0ab3"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pallets__flask-4992~0.session0.json",
+          "sha256": "c17bab1beb7a34b288da90a43b2db125e88e788e0e8a236f3da5f0e2e5d609ee"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pallets__flask-4992",
+      "rep": 0,
+      "passed": true,
+      "seconds": 118.3,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "...................                                                      [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pallets__flask-4992-0/.swe-results.xml -\n19 passed in 0.04s\n",
+      "tokens": {
+        "in": 393720,
+        "out": 9905
+      },
+      "tampered": [
+        "tests/test_config.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 27,
+        "input": 393720,
+        "output": 9905,
+        "cached": 361856
+      },
+      "meter_label": "chanto-verify~swe-pallets__flask-4992~0~6ff6e1fd",
+      "started_at": "2026-10-15T13:19:22-0700",
+      "ended_at": "2026-10-15T13:21:21-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4992~0.out",
+          "sha256": "572c431a04fb79b2a3447ad1c4a017178e2137c91382c67872c6c0a3da70e9bb"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4992~0.patch",
+          "sha256": "4f05bab04f9cfa2a4c7d01d7a8ca7c0f2ba200cef3b280d62f0634199938b191"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4992~0.check.txt",
+          "sha256": "a88cde5f9ee97fd15a48ef3fe49ac4a5d9f566c32d07fd1e1ba915aa7d1f6635"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4992~0.session0.jsonl",
+          "sha256": "403aa4eeb11c0ece6758c2a5896904a9fe48e0006f6e3d439b4024b821d0bf7b"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pallets__flask-4992~0.session1.json",
+          "sha256": "6bbbb0a94fdc1da68c00e5f161cc1f579bb0f82946470e65f2570f9959af7a4a"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": true,
+      "seconds": 568.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "..................................                                       [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n34 passed in 1.48 seconds\n",
+      "tokens": {
+        "in": 1453439,
+        "out": 25240
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 58,
+        "input": 1453439,
+        "output": 25240,
+        "cached": 1411840
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5227~0~3b7ea6ae",
+      "started_at": "2026-10-15T13:21:39-0700",
+      "ended_at": "2026-10-15T13:31:09-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "2f500bd118bcd585dcea2a7c3bf969069716af6375652a3415db7d07f804c016"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "10bd8a4c59b356de1cc6bc728d7a754a0584238059b0975931ecda6dc3dfc318"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "984db1bcf683cfd9ccd0fdd2e2477e50053e1487226ad0dbb4fd89cca093a16d"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5227~0.session0.jsonl",
+          "sha256": "254f2fd2e9cdded100933fcc0c5c6e09d7771b5a810c53aa358dac46e9a0b568"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pytest-dev__pytest-5227~0.session1.json",
+          "sha256": "29305bac1df9f00572b15363b0838946b0f71ad44d4c61279b1ad91e62c58345"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": true,
+      "seconds": 245.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "..................................                                       [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n34 passed in 1.48 seconds\n",
+      "tokens": {
+        "in": 879284,
+        "out": 14026
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 44,
+        "input": 879284,
+        "output": 14026,
+        "cached": 856576
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5227~0~6ab44465",
+      "started_at": "2026-10-15T13:31:37-0700",
+      "ended_at": "2026-10-15T13:35:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "e8c504509760c629a067ca727b676c84c80351678dfc0f90b953ea09e7e02d0f"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "ff0ba436ed83ae70b1f619f143f84262dc4ac7f78624674bb4eca09f0525f8ff"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "b34c9f35bd93bc9c5a926ad1b5227daf1dde8830fa62780d298781c2b9822001"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pytest-dev__pytest-5227~0.session0.json",
+          "sha256": "8f28a131e57210226365c014ae69841e37c0e341b5e9c74c9fba1c54a8643104"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 524.0,
+      "exit_code": 3,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.14s\n",
+      "tokens": {
+        "in": 2961126,
+        "out": 41838
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 65,
+        "input": 2961126,
+        "output": 41838,
+        "cached": 2878080
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-7993~0~b14ec1bc",
+      "started_at": "2026-10-15T13:36:12-0700",
+      "ended_at": "2026-10-15T13:44:57-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "24f47a061d94c243fddfb8de183eaa5fba429e8112c31a98b1236bbcf846f95a"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "24250b3c1aa77bd29cdfc5f0372c61be0b7252ebdd0997f0bdaa81df6248bba1"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "71cd6623907ea3e41efd7fca04aabf9c650bd3363a4da60c20e149d5b1e5da8e"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7993~0.session0.jsonl",
+          "sha256": "22a2f60cd1bded49e35b9fef8f9e545b6b84aeff690c0b1128dc67256e5641ee"
+        },
+        "session1": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-7993~0.session1.json",
+          "sha256": "1e947fb8703a6e51fffb700cc9c665039b27de4763b69443cddc068480dc8459"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 223.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.14s\n",
+      "tokens": {
+        "in": 420506,
+        "out": 14303
+      },
+      "tampered": [
+        "tests/reporters/unittest_reporting.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 23,
+        "input": 420506,
+        "output": 14303,
+        "cached": 404992
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-7993~0~61596047",
+      "started_at": "2026-10-15T13:45:23-0700",
+      "ended_at": "2026-10-15T13:49:08-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "a5dca640977d5d488996fb81cbf9642e117a463ea0b01c1b5620f8b93b30943e"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "fd9de0529f43bc5a9c033bcc0a41846284693f5f865f284afa3a532110619cda"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "e58f99703764bb9ada89d9f7a6e29298979eb5ad21649595522c828113cd3ea8"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-7993~0.session0.json",
+          "sha256": "30bdb23ec442c7968979440f89b9ba7c84c313429792b989c2d1c20ffc3d87a8"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": true,
+      "seconds": 53.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto-verify/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n11 passed in 0.03s\n",
+      "tokens": {
+        "in": 92220,
+        "out": 2558
+      },
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 10,
+        "input": 92220,
+        "output": 2558,
+        "cached": 82304
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-5859~0~25727d57",
+      "started_at": "2026-10-15T13:49:36-0700",
+      "ended_at": "2026-10-15T13:50:31-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "2ed355a770a3c1400301c5cd2d791a22c4a961f64be10bb1d8dd9b4e4fca2815"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "80ec54dc036bcab9fd5118dbfc575d16ad8e7ccecd40f97eb23d7ddac6ddc21d"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "8d17a0607587ff59a30989335268656e72a432f9738c349e6951f69eb9cc4ba7"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto-verify~swe-pylint-dev__pylint-5859~0.session0.json",
+          "sha256": "6e4fc4a72ee45c85ed6afee843edc665b45619782225715a3b886634da4d2317"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": true,
+      "seconds": 92.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-remeasure2-0/chanto/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n11 passed in 0.03s\n",
+      "tokens": {
+        "in": 301762,
+        "out": 9160
+      },
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 20,
+        "input": 301762,
+        "output": 9160,
+        "cached": 288000
+      },
+      "meter_label": "chanto~swe-pylint-dev__pylint-5859~0~2db0b3f0",
+      "started_at": "2026-10-15T13:50:57-0700",
+      "ended_at": "2026-10-15T13:52:31-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "1d64130484afae578f2b6a69521c28fdab54aad55c8d2f9d320dd04735430de2"
+        },
+        "patch": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "e42713d5b31eeca7062b2e0fe96e4dd07014b0720088da24b03562eae7a17b8a"
+        },
+        "check": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "18ed5f876cb0576a62d5f15d3de4f6592faa1911607d9bccbbd1102ef2a8042a"
+        },
+        "session0": {
+          "file": "20261015-101059-70248/chanto~swe-pylint-dev__pylint-5859~0.session0.json",
+          "sha256": "59f685f31707ddba54417d1c4b764aa88140a8a9a2e69e3d3374cc71e56ae128"
+        }
+      }
+    }
+  ]
+}

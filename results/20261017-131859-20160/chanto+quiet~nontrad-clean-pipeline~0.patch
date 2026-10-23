@@ -1,0 +1,169 @@
+diff --git a/clean.py b/clean.py
+new file mode 100644
+index 0000000..2478530
+--- /dev/null
++++ b/clean.py
+@@ -0,0 +1,163 @@
++#!/usr/bin/env python3
++"""Clean a raw customer export.
++
++Usage: python3 clean.py <input.csv> <output.csv>
++"""
++
++import csv
++import os
++import re
++import sys
++from datetime import date
++from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
++
++FIELDS = ["customer_id", "name", "email", "signup_date", "country", "spend"]
++
++ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
++EU_DATE_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
++MONTH_DATE_RE = re.compile(r"^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})$")
++
++MONTHS = {
++    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
++    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
++}
++
++ALIASES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "country_aliases.csv")
++
++
++def load_country_aliases(path):
++    aliases = {}
++    with open(path, newline="", encoding="utf-8-sig") as handle:
++        reader = csv.DictReader(handle)
++        for row in reader:
++            alias = (row.get("alias") or "").strip().lower()
++            code = (row.get("code") or "").strip()
++            if alias and code:
++                aliases[alias] = code
++    return aliases
++
++
++def parse_date(raw):
++    match = ISO_DATE_RE.match(raw)
++    if match:
++        year, month, day = (int(part) for part in match.groups())
++    else:
++        match = EU_DATE_RE.match(raw)
++        if match:
++            day, month, year = (int(part) for part in match.groups())
++        else:
++            match = MONTH_DATE_RE.match(raw)
++            if not match:
++                return None
++            month_name, day, year = match.groups()
++            month = MONTHS.get(month_name.lower())
++            if month is None:
++                return None
++            day, year = int(day), int(year)
++    try:
++        return date(year, month, day)
++    except ValueError:
++        return None
++
++
++def clean_email(raw):
++    email = raw.lower()
++    if email.count("@") != 1:
++        return None
++    local, domain = email.split("@")
++    if not local:
++        return None
++    if "." not in domain or domain.startswith(".") or domain.endswith("."):
++        return None
++    return email
++
++
++def parse_spend(raw):
++    text = raw.replace("$", "").replace(",", "").strip()
++    if text == "":
++        return Decimal("0.00")
++    try:
++        value = Decimal(text)
++        if not value.is_finite():
++            return None
++        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
++    except InvalidOperation:
++        return None
++
++
++def clean_row(row, aliases):
++    customer_id_raw, name, email_raw, date_raw, country_raw, spend_raw = row
++
++    if not re.fullmatch(r"[0-9]+", customer_id_raw):
++        return None
++    customer_id = int(customer_id_raw)
++
++    signup_date = parse_date(date_raw)
++    if signup_date is None:
++        return None
++
++    email = clean_email(email_raw)
++    if email is None:
++        return None
++
++    spend = parse_spend(spend_raw)
++    if spend is None:
++        return None
++
++    cleaned_name = " ".join(name.split())
++    country = aliases.get(country_raw.lower(), "")
++
++    return {
++        "customer_id": customer_id,
++        "name": cleaned_name,
++        "email": email,
++        "signup_date": signup_date,
++        "country": country,
++        "spend": spend,
++    }
++
++
++def main(argv):
++    if len(argv) != 3:
++        print("Usage: python3 clean.py <input.csv> <output.csv>", file=sys.stderr)
++        return 2
++
++    input_path, output_path = argv[1], argv[2]
++    aliases = load_country_aliases(ALIASES_PATH)
++
++    best = {}
++    with open(input_path, newline="", encoding="utf-8-sig") as handle:
++        reader = csv.reader(handle)
++        next(reader, None)  # header
++        for row in reader:
++            if len(row) != len(FIELDS):
++                continue
++            row = [field.strip() for field in row]
++            record = clean_row(row, aliases)
++            if record is None:
++                continue
++            existing = best.get(record["customer_id"])
++            # On a date tie the later row in the file wins, so use >=.
++            if existing is None or record["signup_date"] >= existing["signup_date"]:
++                best[record["customer_id"]] = record
++
++    records = sorted(best.values(), key=lambda record: record["customer_id"])
++
++    with open(output_path, "w", newline="", encoding="utf-8") as handle:
++        writer = csv.writer(handle, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
++        writer.writerow(FIELDS)
++        for record in records:
++            writer.writerow([
++                str(record["customer_id"]),
++                record["name"],
++                record["email"],
++                record["signup_date"].isoformat(),
++                record["country"],
++                f'{record["spend"]:.2f}',
++            ])
++
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv))

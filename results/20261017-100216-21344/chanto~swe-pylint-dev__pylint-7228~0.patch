@@ -1,0 +1,72 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..86ca240
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,5 @@
++Fix a crash when a configuration option of type ``regexp`` contains an invalid
++regular expression. Pylint now emits a user-friendly error message instead of a
++traceback.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..f4f3341 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,21 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regexp_transformer(value: str) -> Pattern[str]:
++    """Transforms a string into a regex pattern."""
++    try:
++        return re.compile(value)
++    except re.error as e:
++        raise argparse.ArgumentTypeError(
++            f"Invalid regular expression: {value!r}. Error: {e}"
++        ) from e
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regexp_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -111,13 +121,18 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions paths."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(
+-            re.compile(
+-                str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+-                + "|"
+-                + pathlib.PureWindowsPath(pattern).as_posix()
++        try:
++            patterns.append(
++                re.compile(
++                    str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
++                    + "|"
++                    + pathlib.PureWindowsPath(pattern).as_posix()
++                )
+             )
+-        )
++        except re.error as e:
++            raise argparse.ArgumentTypeError(
++                f"Invalid regular expression: {pattern!r}. Error: {e}"
++            ) from e
+     return patterns
+ 
+ 
+@@ -130,7 +145,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regexp_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,

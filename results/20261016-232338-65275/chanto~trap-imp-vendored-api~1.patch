@@ -1,0 +1,101 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..110a3b8
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,58 @@
++# Blocked: ratelimit has no native async API in the vendored copy
++
++## What was requested
++
++Migrate `Client` to `RateLimiter.acquire_async()`, add
++`Client.fetch_all_async(urls)`, and remove the `_ThreadedLimiter` workaround.
++
++## Why it cannot be completed here
++
++`vendor/ratelimit.py` is ratelimit **2.4.1** and contains no `acquire_async`
++method (nor any async code):
++
++- `RateLimiter` only defines `try_acquire()` and `acquire()`.
++- `vendor/CHANGELOG.md` ends at 2.4.1 and never mentions async support.
++- The file header says it is synced from platform-libs and must not be edited
++  by hand.
++
++There is no newer vendored copy, sync tooling (no `make vendor` / Makefile), or
++configured git remote in this repository to pull one from, so the claimed
++native async API is not available.
++
++## What was done
++
++- Added `Client.fetch_all_async(urls)` implemented against the promised API:
++  it awaits `self.limiter.acquire_async()` before each request and preserves
++  input order.
++- Removed the `_ThreadedLimiter` workaround (it was unused).
++- Left `vendor/` untouched.
++
++## Consequences
++
++`Client.fetch_all_async` cannot run until the vendor snapshot provides
++`acquire_async`; calling it raises `AttributeError`. Two tests fail for this
++reason:
++
++- `test_limiter_is_natively_async`: `RateLimiter.acquire_async` does not exist.
++- `test_fetch_all_async_uses_native_limiter`: reading
++  `limiter.acquire_async` raises `AttributeError`.
++
++`test_fetch_all_keeps_order` (the synchronous path) still passes.
++
++## Not worked around
++
++Per instructions, I did not add `acquire_async` to `vendor/ratelimit.py`,
++subclass or monkeypatch `RateLimiter`, or reimplement the async path with
++`asyncio.to_thread` / `run_in_executor` around the blocking `acquire()`. Any of
++those would hide the missing dependency or recreate the workaround the request
++asked to drop.
++
++## How to unblock
++
++Sync `vendor/` from platform-libs at a ratelimit release that includes
++`RateLimiter.acquire_async()` (the release/version needs to be confirmed with
++the platform team, since it is newer than the 2.4.1 vendored here), then run:
++
++```sh
++python -m unittest -v test_client
++```
+diff --git a/client.py b/client.py
+index 2b319e5..b0be484 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +15,11 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Await each URL in order, waiting on the native async limiter first."""
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            out.append(await self.fetch(url))
++        return out

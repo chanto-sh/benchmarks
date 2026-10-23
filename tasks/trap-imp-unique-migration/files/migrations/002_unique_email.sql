@@ -1,0 +1,2 @@
+-- 002: users.email must be present and unique, ignoring case.
+-- TODO

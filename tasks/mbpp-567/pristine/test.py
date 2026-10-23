@@ -1,0 +1,28 @@
+from solution import *
+import numpy as np
+from math import inf
+
+def is_floats(x) -> bool:
+    # check if it is float; List[float]; Tuple[float]
+    if isinstance(x, float):
+        return True
+    if isinstance(x, (list, tuple)):
+        return all(isinstance(i, float) for i in x)
+    if isinstance(x, np.ndarray):
+        return x.dtype == np.float64 or x.dtype == np.float32
+    return False
+
+
+def assertion(out, exp, atol):
+    if atol == 0 and is_floats(exp):
+        atol = 1e-6
+    if out != exp and atol != 0:
+        assert np.allclose(out, exp, rtol=1e-07, atol=atol)
+    else:
+        assert out == exp, f"out: {out}, exp: {exp}"
+
+
+inputs = [[[1, 2, 4, 6, 8, 10, 12, 14, 16, 17]], [[1, 2, 4, 6, 8, 10, 12, 14, 20, 17]], [[1, 2, 4, 6, 8, 10, 15, 14, 20]], [[]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12]], [[9, 4, 7, 3, 1, 6, 8, 2, 5]], [[2, 2, 3, 4, 1, 1, 3, 4]], [[10, 8, 5, 7, 2, 4, 9, 6, 3, 1]], [[2, 3, 4, 1, 4, 1, 3, 4]], [[92.95564823643227, -98.33857708861429, -2.290411094930974, -82.09915106558478, -60.68800671675019, -60.68800671675019]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12, 6]], [[9, 4, 7, 3, 1, 6, 8, 2, 5, 8]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12, 13, 6, 10]], [[9, 4, 7, 3, 1, 5, 8, 2, 5]], [['AwjEwVgE', '', 'iTVHG', 'USyZK', 'EPA']], [[2, 2, 10, 3, 4, 1, 1, 3, 4]], [[9, 4, 7, 7, 3, 1, 6, 8, 2, 5, 2, 7]], [['AwjEwVgE', '', 'iTVHG', 'EPA']], [['AwjEwVgE', 'iiTVHG', 'EPA']], [[9, 4, 9, 7, 7, 3, 1, 6, 8, 2, 5, 2, 7]], [[2, 2, 10, 3, 4, 1, 1, 3, 3, 4]], [[2, 2, 10, 4, 1, 1, 3, 4]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12, 6, 6, 12]], [[2, 2, 10, 3, 5, 1, 1, 3, 4]], [['AwjEwVgE', 'AwjEwVgE', 'iiGTVHG', 'iTVHG']], [[2, 2, 10, 3, 4, 1, 3, 3, 4]], [['AwjEwVgE', 'iTVHG', 'USyZK', 'EPA', 'USyZK']], [[2, 2, 10, 3, 5, 1, 1, 3, 4, 2]], [['AwjEwVgE', '', 'iTVHG', 'EPA', 'EPA', 'EPA', '']], [['AwjEwVgE', 'iiGTVHG', 'AwjEwVgE', 'iTVHG']], [[2, 2, 10, 3, 4, 1, 1, 3, 3, 9, 4]], [['', 'iTVHG', 'EPA']], [[1, 2, 4, 5, 4, 6, 8, 10, 10, 12, 12]], [['AwjEwVgE', '', 'USyZK', 'EPA']], [[2, 8, 2, 10, 3, 4, 1, 1, 3, 3, 4, 2, 1]], [[2, 10, 4, 1, 1, 3, 4]], [[2, 11, 2, 10, 2, 3, 4, 9, 1, 3, 3, 4]], [['iiTVHG']], [[9, 4, 7, 3, 6, 8, 2, 5, 8, 9]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12, 6, 6, 12, 4]], [[2, 10, 3, 5, 1, 1, 3, 4, 2]], [[1, 4, 4, 6, 8, 10, 10, 12, 12, 10, 6, 12, 5]], [[10, 4, 1, 1, 4]], [[2, 3, 1, 4, 1, 3]], [[9, 4, 7, 7, 3, 1, 6, 8, 13, 5, 2, 7]], [[2, 10, 3, 4, 1, 1, 11, 4]], [['AwjEwVgE', '', 'iTVHG', 'EPA', 'EPA', 'EPA', 'PEPA', '']], [[10, 8, 5, 4, 2, 4, 9, 6, 3, 1]], [[2, 10, 5, 3, 5, 1, 1, 3, 4, 2]], [[9, 4, 7, 3, 1, 6, 8, 5, 8]], [['iiTVHG', 'iiTVHG']], [['AwjEwVgE', 'AwjEwVVgE', '', 'iTVHG', 'USyZK', 'EPA']], [[2, 10, 3, 5, 1, 1, 3, 4, 3]], [['AwjEwVgE', '', 'iTVHG', 'EPA', 'EPA', 'EPA', 'PEPA', '', 'EPA']], [['iiTVTHG', 'iiTVHG']], [[2, 2, 1, 4, 1, 3]], [['EPA', 'AwjEwVgE', 'EPA', 'AwjEwVgE']], [[10, 4, 1, 1, 4, 4]], [[1, 2, 4, 6, 8, 10, 10, 7, 12, 12, 6, 12, 2]], [['PEPA', 'iiTVHG']], [[2, 3, 4, 1, 4, 1, 1, 4, 2, 1]], [['AwjEwVgE', 'iTVHG', 'iTVHG']], [[10, 4, 1, 1, 4, 4, 10]], [[1, 2, 4, 5, 4, 6, 8, 10, 10, 6, 12]], [['AwjEwVgE', 'iiGTVHG', 'AwjVEwVgE', 'iTVHG', 'AwjEwVgE']], [[10, 4, 1, 4, 4, 10]], [[1, 3, 4, 6, 8, 10, 10, 12, 12, 6]], [['iiTVHG', 'iiTVTHG']], [[2, 3, 4, 1, 4, 1, 0, 4, 2, 1]], [[9, 4, 9, 7, 7, 3, 1, 6, 8, 2, 5, 2, 7, 6]], [['AwjEwVgE', 'iiTVHG']], [['AwjEwVgE', 'iTVHG', 'yUSyZK', 'EPA', 'USyZK']], [['iiTVTHG', 'iiTVHG', 'iiTVTHG']], [['AwjEwVgE', '', 'AwjEwVgyUSyZKE', 'iTVHG', 'USyZK', 'EPA', 'AwjEwVVgE']], [[2, 2, 2, 3, 4, 1, 1, 3, 4, 4]], [['AwjEwVgE', 'iiGTVHG', '', 'AwjVEwVgE', 'iTVHG', 'AwjEwVgE', 'iiGTVHG']], [[9, 4, 7, 3, 1, 6, 8, 8]], [['EPA', 'AwjEwVgE', 'EPA', 'EPA']], [[9, 4, 9, 7, 7, 3, 1, 6, 8, 2, 5, 2, 7, 8]], [[2, 11, 2, 10, 3, 4, 9, 1, 3, 5, 3, 4, 4]], [[2, 2, 10, 3, 5, 3, 1, 1, 3, 4, 3]], [[2, 3, 4, 1, 4, 1, 1, 4, 5, 1]], [[2, 10, 3, 5, 1, 1, 11, 3, 4]], [[2, 3, 8, 2, 1, 4, 1, 3]], [[2, 10, 5, 3, 5, 1, 1, 3, 4, 1]], [[10, 4, 1, 2, 4, 7, 10]], [['iiTG']], [['AwjEwVgE', 'AwjEwVVgE', '', 'iTVHG', 'UySyZK', 'EPA']], [[9, 4, 7, 3, 1, 6, 8, 2, 5, 2, 7, 9, 7]], [[1, 2, 4, 6, 8, 10, 10, 7, 12, 12, 6, 12, 2, 12]], [[1, 6, 2, 4, 4, 6, 8, 10, 10, 12, 12, 6, 4]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 6]], [[2, 3, 4, 1, 4, 1, 0, 5, 2, 1]], [[2, 10, 5, 1, 1, 11, 3, 4, 5]], [[10, 4, 1, 1, 2, 4, 10]], [[2, 11, 10, 3, 5, 1, 1, 3, 4]], [[2, 2, 10, 3, 5, 6, 1, 1, 3, 4, 3]], [[1, 2, 4, 4, 6, 8, 10, 10, 12, 12, 6, 6, 12, 10]], [[9, 4, 7, 3, 1, 6, 8, 5, 5, 8]], [[2, 11, 10, 3, 5, 1, 1, 3, 4, 10]], [[2, 2, 10, 2, 5, 6, 1, 1, 3, 3]], [[10, 4, 11, 1, 1, 4, 4, 10]], [[2, 10, 3, 5, 1, 11, 3, 4]], [[2, 10, 4, 7, 1, 1, 3, 4, 4]], [[10, 4, 11, 1, 2, 4, 4, 10]], [[9, 4, 7, 1, 5, 8, 2, 5, 1]], [[1, 4, 6, 8, 10, 12, 12, 10, 6, 12, 5, 12]], [['AwjEwVgE', 'iTVHG', 'USyZK', 'EPA', 'AwAwjEwVgyUSyZKEwVgE', 'USyZK']]]
+results = [True, False, False, True, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, True, False, False, False, False, False, False, False, False, False, False, False, False, True, False, False, False, False, False, False, False, False, True, False, True, False, False, False, False, False, True, False, False, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
+for i, (inp, exp) in enumerate(zip(inputs, results)):
+    assertion(issort_list(*inp), exp, 0)

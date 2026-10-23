@@ -1,0 +1,30 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..997eb8b
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1,3 @@
++``pytest --fixtures`` now displays the scope of each fixture. The scope is
++shown for fixtures which are not function-scoped, for example
++``some_fixture -- module scoped``.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..594af6b 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1342,11 +1342,12 @@ def _showfixtures_main(config, session):
+                 currentmodule = module
+         if verbose <= 0 and argname[0] == "_":
+             continue
++        tw.write(argname, green=True)
++        if fixturedef.scope != "function":
++            tw.write(" -- %s scoped" % fixturedef.scope, cyan=True)
+         if verbose > 0:
+-            funcargspec = "%s -- %s" % (argname, bestrel)
+-        else:
+-            funcargspec = argname
+-        tw.line(funcargspec, green=True)
++            tw.write(" -- %s" % bestrel)
++        tw.line()
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""
+         if doc:

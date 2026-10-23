@@ -1,0 +1,431 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "poly-rust-bowling",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "trikes_followed_by_only_last_bonus_with_non_strike_points\n    points_scored_in_the_roll_after_a_spare_are_counted_twice_as_a_bonus\n    points_scored_in_the_two_rolls_after_a_strike_are_counted_twice_as_a_bonus\n    second_bonus_ball_after_a_final_strike_cannot_score_an_invalid_number_of_pins_even_if_first_is_strike\n    strikes_with_the_two_roll_bonus_do_not_get_a_bonus_roll\n    ten_frames_without_a_strike_or_spare\n    the_two_balls_after_a_final_strike_can_be_a_strike_and_non_strike\n    the_two_balls_after_a_final_strike_cannot_be_a_non_strike_followed_by_a_strike\n    the_two_balls_after_a_final_strike_cannot_score_an_invalid_number_of_pins\n\ntest result: FAILED. 9 passed; 22 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `--test bowling`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 403885,
+        "output": 19069,
+        "cached": 147456
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-rust-bowling",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "  let roll2 = self.rolls().get(start_idx + 1).unwrap();\n    |                     ^^^^^^^^^^^^                            - temporary value is freed at the end of this statement\n    |                     |\n    |                     creates a temporary value which is freed while still in use\n...\n279 |         } else if roll1 + roll2 == 10 {\n    |                           ----- borrow later used here\n    |\nhelp: consider using a `let` binding to create a longer lived value\n    |\n275 ~         let binding = self.rolls();\n276 ~         let roll2 = binding.get(start_idx + 1).unwrap();\n    |\n\nFor more information about this error, try `rustc --explain E0716`.\nerror: could not compile `bowling` (lib test) due to 4 previous errors\nerror: could not compile `bowling` (lib) due to 4 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 25,
+        "input": 742476,
+        "output": 21995,
+        "cached": 171008
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-rust-accumulate",
+      "rep": 0,
+      "passed": true,
+      "seconds": 164.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 12 tests\n............\ntest result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "tokens": {
+        "in": 122664,
+        "out": 2177
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 136275,
+        "output": 8730,
+        "cached": 60416
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-rust-accumulate",
+      "rep": 0,
+      "passed": true,
+      "seconds": 228.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 12 tests\n............\ntest result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "tokens": {
+        "in": 36327,
+        "out": 1591
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 6,
+        "input": 42167,
+        "output": 4596,
+        "cached": 17408
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "trap-py-csvline",
+      "rep": 0,
+      "passed": true,
+      "seconds": 10.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 27785,
+        "out": 811
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 5,
+        "input": 27785,
+        "output": 811,
+        "cached": 9504
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "trap-py-csvline",
+      "rep": 0,
+      "passed": true,
+      "seconds": 19.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\nhidden ok\n",
+      "tokens": {
+        "in": 47788,
+        "out": 1307
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 8,
+        "input": 47788,
+        "output": 1307,
+        "cached": 19008
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-go-tree-building",
+      "rep": 0,
+      "passed": true,
+      "seconds": 62.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \ttree\t(cached)\n",
+      "tokens": {
+        "in": 238061,
+        "out": 6395
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 11,
+        "input": 238061,
+        "output": 6395,
+        "cached": 180048
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-tree-building",
+      "rep": 0,
+      "passed": true,
+      "seconds": 73.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \ttree\t0.171s\n",
+      "tokens": {
+        "in": 311063,
+        "out": 7252
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 311063,
+        "output": 7252,
+        "cached": 232320
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-trinary",
+      "rep": 0,
+      "passed": true,
+      "seconds": 163.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \ttrinary\t0.173s\n",
+      "tokens": {
+        "in": 229505,
+        "out": 7445
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 24,
+        "input": 229505,
+        "output": 7445,
+        "cached": 68112
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-go-trinary",
+      "rep": 0,
+      "passed": true,
+      "seconds": 59.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \ttrinary\t(cached)\n",
+      "tokens": {
+        "in": 138902,
+        "out": 5036
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 138902,
+        "output": 5036,
+        "cached": 109824
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-python-scale-generator",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "\"mMMMmMM\"), expected)\nAssertionError: Lists differ: ['e', 'F', 'G', 'A', 'B', 'C', 'D', 'E'] != ['E', 'F', 'G', 'A', 'B', 'C', 'D', 'E']\n\nFirst differing element 0:\n'e'\n'E'\n\n- ['e', 'F', 'G', 'A', 'B', 'C', 'D', 'E']\n?   ^\n\n+ ['E', 'F', 'G', 'A', 'B', 'C', 'D', 'E']\n?   ^\n\n\n----------------------------------------------------------------------\nRan 17 tests in 0.002s\n\nFAILED (failures=6, errors=3)\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 23,
+        "input": 605277,
+        "output": 21407,
+        "cached": 293888
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-python-scale-generator",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "#', 'C', 'C#', 'D#', 'F', 'G'] != ['G', 'Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G']\n\nFirst differing element 1:\n'G#'\n'Ab'\n\n- ['G', 'G#', 'A#', 'C', 'C#', 'D#', 'F', 'G']\n?        ^^    ^^         ^^    ^^\n\n+ ['G', 'Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G']\n?        ^^    ^^         ^^    ^^\n\n\n----------------------------------------------------------------------\nRan 17 tests in 0.001s\n\nFAILED (failures=2)\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 21,
+        "input": 303891,
+        "output": 29106,
+        "cached": 86016
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-go-octal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 27.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \toctal\t(cached)\n",
+      "tokens": {
+        "in": 31802,
+        "out": 1093
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 5,
+        "input": 31802,
+        "output": 1093,
+        "cached": 26400
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-octal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 27.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \toctal\t0.164s\n",
+      "tokens": {
+        "in": 54669,
+        "out": 1655
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 8,
+        "input": 54669,
+        "output": 1655,
+        "cached": 42768
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-python-grep",
+      "rep": 0,
+      "passed": true,
+      "seconds": 373.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 25 tests in 0.004s\n\nOK\n",
+      "tokens": {
+        "in": 863986,
+        "out": 10858
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 32,
+        "input": 863986,
+        "output": 10858,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-python-grep",
+      "rep": 0,
+      "passed": true,
+      "seconds": 85.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 25 tests in 0.004s\n\nOK\n",
+      "tokens": {
+        "in": 115637,
+        "out": 2627
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 10,
+        "input": 115637,
+        "output": 2627,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-python-go-counting",
+      "rep": 0,
+      "passed": true,
+      "seconds": 316.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 11 tests in 0.000s\n\nOK\n",
+      "tokens": {
+        "in": 330667,
+        "out": 8551
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 20,
+        "input": 338384,
+        "output": 15592,
+        "cached": 212992
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-python-go-counting",
+      "rep": 0,
+      "passed": true,
+      "seconds": 179.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 11 tests in 0.000s\n\nOK\n",
+      "tokens": {
+        "in": 184742,
+        "out": 3946
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 191333,
+        "output": 8987,
+        "cached": 71008
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-rust-variable-length-quantity",
+      "rep": 0,
+      "passed": true,
+      "seconds": 52.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 26 tests\n..........................\ntest result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "tokens": {
+        "in": 174620,
+        "out": 4673
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 174620,
+        "output": 4673,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-rust-variable-length-quantity",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "\n\n---- two_multi_byte_values stdout ----\n\nthread 'two_multi_byte_values' (1494662) panicked at tests/variable-length-quantity.rs:136:5:\nassertion `left == right` failed\n  left: [1, 128, 128, 72, 232, 214]\n right: [129, 128, 0, 200, 232, 86]\n\n\nfailures:\n    arbitrary_double_byte\n    arbitrary_quadruple_byte\n    arbitrary_quintuple_byte\n    arbitrary_triple_byte\n    largest_double_byte\n    largest_quadruple_byte\n    largest_triple_byte\n    many_multi_byte_values\n    maximum_32_bit_integer_input\n    smallest_double_byte\n    smallest_quadruple_byte\n    smallest_quintuple_byte\n    smallest_triple_byte\n    two_multi_byte_values\n\ntest result: FAILED. 12 passed; 14 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `--test variable-length-quantity`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 227167,
+        "output": 10669,
+        "cached": 0
+      }
+    }
+  ]
+}

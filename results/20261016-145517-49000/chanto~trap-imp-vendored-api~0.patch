@@ -1,0 +1,121 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..8b2cd3f
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,70 @@
++# BLOCKED: `RateLimiter.acquire_async()` does not exist in the vendored package
++
++## What was asked
++
++Migrate the client to ratelimit's "native async support":
++
++1. Add `Client.fetch_all_async(urls)` that awaits `limiter.acquire_async()` before
++   each request.
++2. Drop the `_ThreadedLimiter` workaround.
++
++The platform team states that ratelimit "now has native async support,
++`RateLimiter.acquire_async()`".
++
++## What is actually true
++
++The vendored copy of ratelimit does **not** provide `acquire_async()` — it has no
++async API at all.
++
++- `vendor/ratelimit.py` is version `2.4.1` and defines exactly three public
++  methods: `try_acquire`, `acquire`, `_refill`.
++- `dir(RateLimiter)` → `['_refill', 'acquire', 'try_acquire']`;
++  `'acquire_async' in dir(RateLimiter)` → `False`.
++- `vendor/CHANGELOG.md` lists no async entry. Its newest entries are
++  `try_acquire()` (2.4.0), injectable `clock`/`sleep` (2.4.0) and thread-safe
++  `acquire()` (2.3.0). Nothing mentions `acquire_async()`.
++
++So the premise of the task is wrong: native async support has not yet shipped in
++the version we vendor. The two new async tests fail inside the *vendored library*,
++before any client code runs:
++
++```
++test_limiter_is_natively_async  ->  line 27: RateLimiter.acquire_async  -> AttributeError
++test_fetch_all_async_uses_native_limiter
++                                ->  line 33: limiter.acquire_async        -> AttributeError
++```
++
++`test_fetch_all_keeps_order` passes.
++
++## Why this cannot be fixed from here
++
++`vendor/` is synced from the platform repo and must not be hand-edited, so we
++cannot add `acquire_async()` to `vendor/ratelimit.py`. The requested migration
++depends on an API that is not present in the artifact we are allowed to consume.
++The fix belongs upstream: ratelimit needs to release `acquire_async()`, and then
++we run `make vendor` to pull in the new version.
++
++## What is blocked vs. done
++
++**Blocked** (requires the missing upstream API): passing
++`test_limiter_is_natively_async` and `test_fetch_all_async_uses_native_limiter`.
++
++**Done** (client-side migration is complete and does not depend on the vendor
++change):
++
++- `Client.fetch_all_async(urls)` added; it `await`s `self.limiter.acquire_async()`
++  before each request and preserves input order. It awaits the `fetch` result if
++  the callable is async, and still works with a plain sync `fetch`.
++- `_ThreadedLimiter` removed; `client.py` no longer imports `asyncio`.
++
++The new method is verified working against any limiter that exposes a coroutine
++`acquire_async()` (3 URLs → 3 `acquire_async` calls, order preserved). As soon as
++the vendored ratelimit provides `acquire_async()`, both remaining tests pass with
++no further change to `client.py`.
++
++## Suggested resolution
++
++1. Platform ships `RateLimiter.acquire_async()` upstream (and notes it in the
++   changelog).
++2. We run `make vendor` to sync the new `vendor/ratelimit.py`.
++3. No client change needed; re-run the suite and the two async tests should pass.
+diff --git a/client.py b/client.py
+index 2b319e5..3403ab5 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,9 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
++import inspect
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +16,18 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Fetch each URL in order, awaiting the limiter before each request.
++
++        Uses the limiter's native async support; `fetch` may be a coroutine
++        function or a plain callable.
++        """
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            result = self.fetch(url)
++            if inspect.isawaitable(result):
++                result = await result
++            out.append(result)
++        return out

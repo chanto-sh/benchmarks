@@ -1,0 +1,56 @@
+diff --git a/changelog/7432.bugfix.rst b/changelog/7432.bugfix.rst
+new file mode 100644
+index 0000000..d48458d
+--- /dev/null
++++ b/changelog/7432.bugfix.rst
+@@ -0,0 +1,3 @@
++Skipped tests marked with ``pytest.mark.skip``/``skipif`` now report the
++location of the test itself instead of the location within ``_pytest/skipping.py``
++when ``--runxfail`` is also given.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 7bd975e..e0878ff 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -270,13 +270,13 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):
+         else:
+             rep.longrepr = "Unexpected success"
+         rep.outcome = "failed"
+-    elif item.config.option.runxfail:
+-        pass  # don't interfere
+-    elif call.excinfo and isinstance(call.excinfo.value, xfail.Exception):
++    elif not item.config.option.runxfail and call.excinfo and isinstance(
++        call.excinfo.value, xfail.Exception
++    ):
+         assert call.excinfo.value.msg is not None
+         rep.wasxfail = "reason: " + call.excinfo.value.msg
+         rep.outcome = "skipped"
+-    elif not rep.skipped and xfailed:
++    elif not item.config.option.runxfail and not rep.skipped and xfailed:
+         if call.excinfo:
+             raises = xfailed.raises
+             if raises is not None and not isinstance(call.excinfo.value, raises):
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index 0b1c0b4..133fe97 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -648,6 +648,20 @@ class TestSkip:
+         result = testdir.runpytest("-rs")
+         result.stdout.fnmatch_lines(["*unconditional skip*", "*1 skipped*"])
+ 
++    def test_skip_location_with_runxfail(self, testdir):
++        testdir.makepyfile(
++            test_skip_location="""
++            import pytest
++            @pytest.mark.skip
++            def test_skip_location() -> None:
++                assert 0
++        """
++        )
++        result = testdir.runpytest("-rs", "--runxfail")
++        result.stdout.fnmatch_lines(
++            ["SKIPPED [[]1[]] *test_skip_location.py:2: unconditional skip"]
++        )
++
+ 
+ class TestSkipif:
+     def test_skipif_conditional(self, testdir):

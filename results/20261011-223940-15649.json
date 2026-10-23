@@ -1,0 +1,744 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "                                   ^^^^^^^^^^^^^^^^ not found in this scope\n\nerror[E0277]: can't compare `&str` with `str`\n  --> src/lib.rs:44:31\n   |\n44 |             if expanded_codon == codon {\n   |                               ^^ no implementation for `&str == str`\n   |\n   = help: the trait `PartialEq<str>` is not implemented for `&str`\n   = note: required for `&&str` to implement `PartialEq<&str>`\nhelp: consider dereferencing here\n   |\n44 |             if *expanded_codon == codon {\n   |                +\n\nSome errors have detailed explanations: E0277, E0282, E0425.\nFor more information about an error, try `rustc --explain E0277`.\nerror: could not compile `nucleotide_codons` (lib test) due to 5 previous errors\nerror: could not compile `nucleotide_codons` (lib) due to 5 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 21,
+        "input": 357447,
+        "output": 10709,
+        "cached": 3072
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "previous iteration of loop\n    |\nnote: `into_iter` takes ownership of the receiver `self`, which moves `possibilities`\n   --> ~/.rustup/toolchains/1.93-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/collect.rs:310:18\n    |\n310 |     fn into_iter(self) -> Self::IntoIter;\n    |                  ^^^^\nhelp: consider iterating over a slice of the `Vec<char>`'s content to avoid moving into the `for` loop\n    |\n 80 |             for p in &possibilities {\n    |                      +\n\nSome errors have detailed explanations: E0308, E0382.\nFor more information about an error, try `rustc --explain E0308`.\nerror: could not compile `nucleotide_codons` (lib) due to 2 previous errors\nerror: could not compile `nucleotide_codons` (lib test) due to 2 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 1,
+        "input": 3651,
+        "output": 1554,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "a crate named `itertools`, use `cargo add itertools` to add it to your `Cargo.toml` and import it in your code\n  |\n1 + extern crate itertools;\n  |\n\nerror[E0282]: type annotations needed for `Vec<_>`\n  --> src/lib.rs:12:9\n   |\n12 |     let mut result = Vec::new();\n   |         ^^^^^^^^^^   ---------- type must be known at this point\n   |\nhelp: consider giving `result` an explicit type, where the type for type parameter `T` is specified\n   |\n12 |     let mut result: Vec<T> = Vec::new();\n   |                   ++++++++\n\nSome errors have detailed explanations: E0282, E0432.\nFor more information about an error, try `rustc --explain E0282`.\nerror: could not compile `nucleotide_codons` (lib) due to 2 previous errors\nerror: could not compile `nucleotide_codons` (lib test) due to 2 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 29,
+        "input": 857888,
+        "output": 12177,
+        "cached": 438272
+      }
+    },
+    {
+      "agent": "goose",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 11.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "e\"), (\"TCT\", \"serine\"), (\"TCC\", \"serine\"), (\"TCA\", \"serine\"), (\"TCG\", \"serine\"), (\"AGT\", \"serine\"), (\"AGC\", \"serine\"), (\"TAA\", \"stop codon\"), (\"TAG\", \"stop codon\"), (\"TGA\", \"stop codon\"), (\"ACT\", \"threonine\"), (\"ACC\", \"threonine\"), (\"ACA\", \"threonine\"), (\"ACG\", \"threonine\"), (\"TGG\", \"tryptophan\"), (\"TAT\", \"tyrosine\"), (\"TAC\", \"tyrosine\"), (\"GTT\", \"valine\"), (\"GTC\", \"valine\"), (\"GTA\", \"valine\"), (\"GTG\", \"valine\")]\n\n\nfailures:\n    arginine_name\n    cysteine_tgt\n    cysteine_tgy\n    empty_is_invalid\n    isoleucine\n    methionine\n    stop\n    too_long_is_invalid\n    too_short_is_invalid\n    valine\n    x_is_not_shorthand_so_is_invalid\n\ntest result: FAILED. 0 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `--test nucleotide-codons`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 6318,
+        "output": 64,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "claude",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "e\"), (\"TCT\", \"serine\"), (\"TCC\", \"serine\"), (\"TCA\", \"serine\"), (\"TCG\", \"serine\"), (\"AGT\", \"serine\"), (\"AGC\", \"serine\"), (\"TAA\", \"stop codon\"), (\"TAG\", \"stop codon\"), (\"TGA\", \"stop codon\"), (\"ACT\", \"threonine\"), (\"ACC\", \"threonine\"), (\"ACA\", \"threonine\"), (\"ACG\", \"threonine\"), (\"TGG\", \"tryptophan\"), (\"TAT\", \"tyrosine\"), (\"TAC\", \"tyrosine\"), (\"GTT\", \"valine\"), (\"GTC\", \"valine\"), (\"GTA\", \"valine\"), (\"GTG\", \"valine\")]\n\n\nfailures:\n    arginine_name\n    cysteine_tgt\n    cysteine_tgy\n    empty_is_invalid\n    isoleucine\n    methionine\n    stop\n    too_long_is_invalid\n    too_short_is_invalid\n    valine\n    x_is_not_shorthand_so_is_invalid\n\ntest result: FAILED. 0 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `--test nucleotide-codons`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 12,
+        "input": 202405,
+        "output": 1332,
+        "cached": 124416
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "har]`, found `Vec<char>`\n   |                      |\n   |                      arguments to this function are incorrect\n   |\n   = note: expected reference `&[char]`\n                 found struct `Vec<char>`\nnote: function defined here\n  --> src/lib.rs:43:4\n   |\n43 | fn all_combinations(chars: &[char], idx: usize, result: &mut Vec<char>) -> Vec<String> {\n   |    ^^^^^^^^^^^^^^^^ --------------\nhelp: consider borrowing here\n   |\n68 |         let result = all_combinations(&codon.chars().collect::<Vec<_>>(), 0, &mut Vec::new());\n   |                                       +\n\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `nucleotide_codons` (lib test) due to 1 previous error\nerror: could not compile `nucleotide_codons` (lib) due to 1 previous error\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 24,
+        "input": 410696,
+        "output": 21375,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 23.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "e\"), (\"TCT\", \"serine\"), (\"TCC\", \"serine\"), (\"TCA\", \"serine\"), (\"TCG\", \"serine\"), (\"AGT\", \"serine\"), (\"AGC\", \"serine\"), (\"TAA\", \"stop codon\"), (\"TAG\", \"stop codon\"), (\"TGA\", \"stop codon\"), (\"ACT\", \"threonine\"), (\"ACC\", \"threonine\"), (\"ACA\", \"threonine\"), (\"ACG\", \"threonine\"), (\"TGG\", \"tryptophan\"), (\"TAT\", \"tyrosine\"), (\"TAC\", \"tyrosine\"), (\"GTT\", \"valine\"), (\"GTC\", \"valine\"), (\"GTA\", \"valine\"), (\"GTG\", \"valine\")]\n\n\nfailures:\n    arginine_name\n    cysteine_tgt\n    cysteine_tgy\n    empty_is_invalid\n    isoleucine\n    methionine\n    stop\n    too_long_is_invalid\n    too_short_is_invalid\n    valine\n    x_is_not_shorthand_so_is_invalid\n\ntest result: FAILED. 0 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\nerror: test failed, to rerun pass `--test nucleotide-codons`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 2,
+        "input": 30660,
+        "output": 324,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "codex",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 9.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "e\"), (\"TCT\", \"serine\"), (\"TCC\", \"serine\"), (\"TCA\", \"serine\"), (\"TCG\", \"serine\"), (\"AGT\", \"serine\"), (\"AGC\", \"serine\"), (\"TAA\", \"stop codon\"), (\"TAG\", \"stop codon\"), (\"TGA\", \"stop codon\"), (\"ACT\", \"threonine\"), (\"ACC\", \"threonine\"), (\"ACA\", \"threonine\"), (\"ACG\", \"threonine\"), (\"TGG\", \"tryptophan\"), (\"TAT\", \"tyrosine\"), (\"TAC\", \"tyrosine\"), (\"GTT\", \"valine\"), (\"GTC\", \"valine\"), (\"GTA\", \"valine\"), (\"GTG\", \"valine\")]\n\n\nfailures:\n    arginine_name\n    cysteine_tgt\n    cysteine_tgy\n    empty_is_invalid\n    isoleucine\n    methionine\n    stop\n    too_long_is_invalid\n    too_short_is_invalid\n    valine\n    x_is_not_shorthand_so_is_invalid\n\ntest result: FAILED. 0 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `--test nucleotide-codons`\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "pi",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 269.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "error[E0521]: borrowed data escapes outside of function\n  --> src/lib.rs:69:5\n   |\n64 | pub fn parse<'a>(pairs: Vec<(&'a str, &'a str)>) -> CodonsInfo<'a> {\n   |              --  ----- `pairs` is a reference that is only valid in the function body\n   |              |\n   |              lifetime `'a` defined here\n...\n69 |     CodonsInfo::new(codons)\n   |     ^^^^^^^^^^^^^^^^^^^^^^^\n   |     |\n   |     `pairs` escapes the function body here\n   |     argument requires that `'a` must outlive `'static`\n\nFor more information about this error, try `rustc --explain E0521`.\nerror: could not compile `nucleotide_codons` (lib) due to 1 previous error\nerror: could not compile `nucleotide_codons` (lib test) due to 1 previous error\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 11,
+        "input": 89057,
+        "output": 23472,
+        "cached": 45056
+      }
+    },
+    {
+      "agent": "opencode",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 200.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "rror> {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `FromIterator` which provides `from_iter` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use std::iter::FromIterator;\n    |\nhelp: there is an associated function `from_str` with a similar name\n    |\n109 -             result.push(String::from(String::from_iter(current.iter().copied())));\n109 +             result.push(String::from(String::from_str(current.iter().copied())));\n    |\n\nFor more information about this error, try `rustc --explain E0599`.\nerror: could not compile `nucleotide_codons` (lib test) due to 1 previous error\nerror: could not compile `nucleotide_codons` (lib) due to 1 previous error\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 14,
+        "input": 256641,
+        "output": 10487,
+        "cached": 23808
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "poly-rust-nucleotide-codons",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "nto_iter(self) -> Self::IntoIter;\n    |                  ^^^^\nhelp: consider iterating over a slice of the `Vec<char>`'s content to avoid moving into the `for` loop\n    |\n 38 |             for c in &chars {\n    |                      +\n\nerror: lifetime may not live long enough\n   --> src/lib.rs:135:26\n    |\n104 | pub fn parse<'a>(pairs: Vec<(&'a str, &'a str)>) -> CodonsInfo<'a> {\n    |              -- lifetime `'a` defined here\n...\n135 |     CodonsInfo { codons, shorthand }\n    |                          ^^^^^^^^^ this usage requires that `'a` must outlive `'static`\n\nFor more information about this error, try `rustc --explain E0382`.\nerror: could not compile `nucleotide_codons` (lib) due to 2 previous errors\nerror: could not compile `nucleotide_codons` (lib test) due to 2 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 417526,
+        "output": 10877,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": false,
+      "seconds": 29.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# hexadecimal [hexadecimal.test]\n./hexadecimal.go:33:16: undefined: MaxInt64\nFAIL\thexadecimal [build failed]\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 2241,
+        "output": 1150,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 147.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.191s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 12,
+        "input": 220988,
+        "output": 3421,
+        "cached": 99328
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 260.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.194s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 19,
+        "input": 460273,
+        "output": 4995,
+        "cached": 224768
+      }
+    },
+    {
+      "agent": "opencode",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 178.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.241s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 13,
+        "input": 123528,
+        "output": 7612,
+        "cached": 41472
+      }
+    },
+    {
+      "agent": "goose",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": false,
+      "seconds": 9.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# hexadecimal [hexadecimal.test]\n./hexadecimal_test.go:38:15: ParseHex(test.in) (no value) used as value\n./hexadecimal_test.go:38:24: not enough arguments in call to ParseHex\n\thave (string)\n\twant (string, int64, string)\n./hexadecimal_test.go:75:8: undefined: HandleErrors\n./hexadecimal_test.go:94:13: not enough arguments in call to ParseHex\n\thave (string)\n\twant (string, int64, string)\nFAIL\thexadecimal [build failed]\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 6304,
+        "output": 65,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": false,
+      "seconds": 37.3,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "--- FAIL: TestParseHex (0.00s)\n    hexadecimal_test.go:45: ParseHex(\"8000000000000000\"): expected an error, but error is nil\n--- FAIL: TestHandleErrors (0.00s)\n    hexadecimal_test.go:82: For ParseHex(\"8000000000000000\"), HandleErrors reports \"none\", want \"range\"\nFAIL\nFAIL\thexadecimal\t0.264s\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 4,
+        "input": 32199,
+        "output": 1066,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "claude",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 63.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.179s\n",
+      "tokens": {
+        "in": 109411,
+        "out": 1766
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 6,
+        "input": 109411,
+        "output": 1766,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "codex",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": false,
+      "seconds": 7.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# hexadecimal [hexadecimal.test]\n./hexadecimal_test.go:38:15: ParseHex(test.in) (no value) used as value\n./hexadecimal_test.go:38:24: not enough arguments in call to ParseHex\n\thave (string)\n\twant (string, int64, string)\n./hexadecimal_test.go:75:8: undefined: HandleErrors\n./hexadecimal_test.go:94:13: not enough arguments in call to ParseHex\n\thave (string)\n\twant (string, int64, string)\nFAIL\thexadecimal [build failed]\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 8900,
+        "output": 52,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 518.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.169s\n",
+      "tokens": {
+        "in": 439857,
+        "out": 27510
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 32,
+        "input": 439857,
+        "output": 27510,
+        "cached": 86016
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 201.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t(cached)\n",
+      "tokens": {
+        "in": 135740,
+        "out": 6539
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 135740,
+        "output": 6539,
+        "cached": 24576
+      }
+    },
+    {
+      "agent": "pi",
+      "task": "poly-go-hexadecimal",
+      "rep": 0,
+      "passed": true,
+      "seconds": 109.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \thexadecimal\t0.187s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 10,
+        "input": 50882,
+        "output": 4559,
+        "cached": 6656
+      }
+    },
+    {
+      "agent": "claude",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 64.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 53.595583\nhidden: no throw for \"1hh\"\n",
+      "tokens": {
+        "in": 266634,
+        "out": 4996
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 13,
+        "input": 266634,
+        "output": 4996,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 43.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 46.586917\n.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)\n    at Module.require (node:internal/modules/cjs/loader:1463:12)\n    at require (node:internal/modules/helpers:147:16)\n    at [eval]:2:30\n\nNode.js v22.22.1\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 970,
+        "output": 1168,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "codex",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 21.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 53.567584\n\n    at [eval]:4:22\n    at runScriptInThisContext (node:internal/vm:209:10)\n    at node:internal/process/execution:446:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:444:60)\n    at evalFunction (node:internal/process/execution:279:30)\n    at evalTypeScript (node:internal/process/execution:291:3)\n    at node:internal/main/eval_string:74:3\n\nNode.js v22.22.1\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "# fail 4\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 55.882375\nhidden: NaN != 180\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 13,
+        "input": 110949,
+        "output": 20374,
+        "cached": 30208
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 55.197166\n\n    at [eval]:4:22\n    at runScriptInThisContext (node:internal/vm:209:10)\n    at node:internal/process/execution:446:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:444:60)\n    at evalFunction (node:internal/process/execution:279:30)\n    at evalTypeScript (node:internal/process/execution:291:3)\n    at node:internal/main/eval_string:74:3\n\nNode.js v22.22.1\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 30,
+        "input": 952413,
+        "output": 12015,
+        "cached": 470016
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": true,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 49.683125\nhidden ok\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 43,
+        "input": 535419,
+        "output": 13366,
+        "cached": 65536
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": true,
+      "seconds": 102.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 54.717334\nhidden ok\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 18,
+        "input": 368948,
+        "output": 6491,
+        "cached": 235488
+      }
+    },
+    {
+      "agent": "opencode",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 299.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 46.118541\nhidden: 300 != 30\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 22,
+        "input": 336256,
+        "output": 12739,
+        "cached": 40704
+      }
+    },
+    {
+      "agent": "goose",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 3.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 45.518792\n\n    at [eval]:4:22\n    at runScriptInThisContext (node:internal/vm:209:10)\n    at node:internal/process/execution:446:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:444:60)\n    at evalFunction (node:internal/process/execution:279:30)\n    at evalTypeScript (node:internal/process/execution:291:3)\n    at node:internal/main/eval_string:74:3\n\nNode.js v22.22.1\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 2,
+        "input": 14630,
+        "output": 210,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": false,
+      "seconds": 5.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 48.371416\n\n    at [eval]:4:22\n    at runScriptInThisContext (node:internal/vm:209:10)\n    at node:internal/process/execution:446:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:444:60)\n    at evalFunction (node:internal/process/execution:279:30)\n    at evalTypeScript (node:internal/process/execution:291:3)\n    at node:internal/main/eval_string:74:3\n\nNode.js v22.22.1\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 4,
+        "input": 32209,
+        "output": 306,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "pi",
+      "task": "trap-js-duration",
+      "rep": 0,
+      "passed": true,
+      "seconds": 156.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 46.906958\nhidden ok\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 97381,
+        "output": 5518,
+        "cached": 12288
+      }
+    },
+    {
+      "agent": "claude",
+      "task": "poly-go-food-chain",
+      "rep": 0,
+      "passed": true,
+      "seconds": 63.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tfoodchain\t0.153s\n",
+      "tokens": {
+        "in": 225773,
+        "out": 4693
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 13,
+        "input": 280685,
+        "output": 4693,
+        "cached": 54912
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "poly-go-food-chain",
+      "rep": 0,
+      "passed": true,
+      "seconds": 464.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tfoodchain\t0.157s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 34,
+        "input": 1365436,
+        "output": 22424,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "poly-go-food-chain",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1.0,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "sting.go:2123 +0x1a0\ntesting.tRunner.func1()\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2126 +0x2c8\npanic({0x102937978?, 0x10290c400?})\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120\nfoodchain.Verse(...)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/crush/poly-go-food-chain-0/food_chain.go:4\nfoodchain.TestVerse.func1(0x96b0c6ee488?)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/crush/poly-go-food-chain-0/food_chain_test.go:90 +0x30\ntesting.tRunner(0x96b0c6ee488, 0x96b0c6564b0)\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4\ncreated by testing.(*T).Run in goroutine 6\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8\nFAIL\tfoodchain\t0.238s\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 1,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "poly-go-food-chain",
+      "rep": 0,
+      "passed": false,
+      "seconds": 3.9,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "ing.go:2123 +0x1a0\ntesting.tRunner.func1()\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2126 +0x2c8\npanic({0x10230f978?, 0x1022e4400?})\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120\nfoodchain.Verse(...)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/kilo/poly-go-food-chain-0/food_chain.go:4\nfoodchain.TestVerse.func1(0x788c29edc488?)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/kilo/poly-go-food-chain-0/food_chain_test.go:90 +0x30\ntesting.tRunner(0x788c29edc488, 0x788c29e8e470)\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4\ncreated by testing.(*T).Run in goroutine 34\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8\nFAIL\tfoodchain\t0.263s\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 1,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "goose",
+      "task": "poly-go-food-chain",
+      "rep": 0,
+      "passed": false,
+      "seconds": 0.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ng.go:2123 +0x1a0\ntesting.tRunner.func1()\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2126 +0x2c8\npanic({0x102d6f978?, 0x102d44400?})\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120\nfoodchain.Verse(...)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/goose/poly-go-food-chain-0/food_chain.go:4\nfoodchain.TestVerse.func1(0x275b94fbc488?)\n\t~/.local/share/chanto-bench/runs/2026-10-11/work-qw-3/goose/poly-go-food-chain-0/food_chain_test.go:90 +0x30\ntesting.tRunner(0x275b94fbc488, 0x275b94ea44b0)\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4\ncreated by testing.(*T).Run in goroutine 6\n\t/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8\nFAIL\tfoodchain\t0.236s\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 2,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      }
+    }
+  ],
+  "aborted": "out of budget"
+}

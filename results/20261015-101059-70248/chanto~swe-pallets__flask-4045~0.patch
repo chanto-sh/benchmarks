@@ -1,0 +1,30 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index d546dca..0a61aff 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -15,6 +15,8 @@ Unreleased
+ -   Fix some types that weren't available in Python 3.6.0. :issue:`4040`
+ -   Improve typing for ``send_file``, ``send_from_directory``, and
+     ``get_send_file_max_age``. :issue:`4044`, :pr:`4026`
++-   ``Blueprint`` names may not contain dots, as each dot is significant
++    for nested blueprints. :issue:`4053`
+ 
+ 
+ Version 2.0.0
+diff --git a/src/flask/blueprints.py b/src/flask/blueprints.py
+index 5fb84d8..733c04c 100644
+--- a/src/flask/blueprints.py
++++ b/src/flask/blueprints.py
+@@ -181,6 +181,12 @@ class Blueprint(Scaffold):
+         root_path: t.Optional[str] = None,
+         cli_group: t.Optional[str] = _sentinel,  # type: ignore
+     ):
++        if not name:
++            raise ValueError("'name' may not be empty.")
++
++        if "." in name:
++            raise ValueError("'name' may not contain a dot '.' character.")
++
+         super().__init__(
+             import_name=import_name,
+             static_folder=static_folder,

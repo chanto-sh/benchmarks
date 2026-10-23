@@ -1,0 +1,81 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..c76562d
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,38 @@
++# Blocked: native async rate limiting
++
++## What is blocked
++
++Migrating the client to `RateLimiter.acquire_async()` cannot be completed against
++the vendored dependency.
++
++The claimed API does not exist in the code we build against:
++
++- `vendor/ratelimit.py` is `RateLimiter` 2.4.1 and defines only `try_acquire()`
++  and the blocking `acquire()`. There is no `acquire_async()`.
++- `vendor/CHANGELOG.md` lists releases through 2.4.1; none mention async support.
++- `vendor/ratelimit.py` states it is synced from platform-libs and must not be
++  edited by hand, so we did not add the method there.
++
++Consequently:
++
++- `Client.fetch_all_async()` is implemented as requested (it awaits
++  `self.limiter.acquire_async()` before each request), but with the vendored
++  limiter it raises `AttributeError` at runtime.
++- `test_limiter_is_natively_async` fails: `RateLimiter.acquire_async` does not exist.
++- `test_fetch_all_async_uses_native_limiter` fails before calling the client:
++  its setup reads `limiter.acquire_async` to wrap it in a spy, which raises the
++  same `AttributeError`.
++- Only `test_fetch_all_keeps_order` (the existing sync path) passes.
++
++## Why this is not worked around
++
++Adding `acquire_async` to `vendor/` or monkey-patching it from `client.py` would
++fabricate the platform API locally, defeating the point of a synced vendored
++dependency and the request not to hand-edit it. No threaded fallback was kept
++either, since the task is to drop `_ThreadedLimiter`.
++
++## What is needed
++
++Sync `vendor/` from platform-libs once it actually contains `acquire_async`
++(a release later than 2.4.1), then re-run the suite. No client changes beyond the
++current ones should be needed.
+diff --git a/client.py b/client.py
+index 2b319e5..58dd804 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +15,11 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Fetch each URL in order, awaiting the limiter before each request."""
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            out.append(await self.fetch(url))
++        return out

@@ -1,0 +1,8 @@
+Our Makefile is in bad shape and I'd like it fixed properly. Things people have hit:
+
+- `make` now fails straight away with "missing separator" after someone's edit.
+- Editing or adding a CSV under data/ doesn't update dist/summary.json; you have to `make clean` first.
+- `make test` prints "`test' is up to date" and runs nothing.
+- When summarize.py hits a bad row the build fails, but running `make` again says there's nothing to do and we end up shipping a truncated dist/summary.json.
+
+Keep it incremental: when nothing changed, `make` shouldn't redo the work. Don't change the data or the tests.

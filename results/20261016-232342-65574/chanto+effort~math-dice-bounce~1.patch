@@ -1,0 +1,52 @@
+diff --git a/game.py b/game.py
+index 768dec9..99da223 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,46 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # E[i] is the expected number of remaining turns from square i (0 <= i < n).
++    # A roll d either finishes (i + d == n), moves forward (i + d < n), or
++    # bounces back by the excess (i + d > n -> 2n - i - d).
++    # Solve the linear system E = 1 + (1/k) * sum(E[next]) exactly.
++    size = n
++    A = [[Fraction(0) for _ in range(size)] for _ in range(size)]
++    b = [Fraction(k) for _ in range(size)]
++
++    for i in range(size):
++        A[i][i] = Fraction(k)
++        for d in range(1, k + 1):
++            target = i + d
++            if target == n:
++                continue
++            if target > n:
++                target = 2 * n - target
++            A[i][target] -= 1
++
++    # Gaussian elimination with exact fraction arithmetic.
++    for col in range(size):
++        pivot = next(r for r in range(col, size) if A[r][col] != 0)
++        if pivot != col:
++            A[col], A[pivot] = A[pivot], A[col]
++            b[col], b[pivot] = b[pivot], b[col]
++
++        pivot_value = A[col][col]
++        for r in range(col + 1, size):
++            if A[r][col] == 0:
++                continue
++            factor = A[r][col] / pivot_value
++            for c in range(col, size):
++                A[r][c] -= factor * A[col][c]
++            b[r] -= factor * b[col]
++
++    # Back substitution.
++    x = [Fraction(0) for _ in range(size)]
++    for i in range(size - 1, -1, -1):
++        total = b[i]
++        for j in range(i + 1, size):
++            total -= A[i][j] * x[j]
++        x[i] = total / A[i][i]
++
++    return x[0]

@@ -1,0 +1,264 @@
+diff --git a/roots.py b/roots.py
+index d624667..273c341 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,206 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(poly):
++    """Drop leading zero coefficients.  The zero polynomial is ``[]``."""
++    poly = list(poly)
++    while poly and poly[0] == 0:
++        poly.pop(0)
++    return poly
++
++
++def _primitive(poly):
++    """Clear denominators, then divide by the integer content.
++
++    This is a positive scaling of the polynomial, so it changes no signs and
++    keeps the exact Sturm computations from growing unnecessarily.
++    """
++    poly = _trim(poly)
++    if not poly:
++        return []
++
++    denominator = 1
++    for coefficient in poly:
++        coefficient = Fraction(coefficient)
++        denominator = denominator * coefficient.denominator // gcd(
++            denominator, coefficient.denominator
++        )
++
++    integers = []
++    for coefficient in poly:
++        coefficient = Fraction(coefficient)
++        integers.append(coefficient.numerator * (denominator // coefficient.denominator))
++
++    content = 0
++    for coefficient in integers:
++        content = gcd(content, abs(coefficient))
++    if content > 1:
++        integers = [coefficient // content for coefficient in integers]
++    return integers
++
++
++def _evaluate_exact(coeffs, x):
++    y = Fraction(0)
++    for c in coeffs:
++        y = y * x + c
++    return y
++
++
++def _derivative(poly):
++    degree = len(poly) - 1
++    return _trim([poly[i] * (degree - i) for i in range(degree)])
++
++
++def _divmod_poly(a, b):
++    """Polynomial division over the rationals, highest degree first."""
++    a = _trim(a)
++    b = _trim(b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++
++    degree_diff = len(a) - len(b)
++    quotient = [Fraction(0)] * (degree_diff + 1)
++    while a and len(a) >= len(b):
++        shift = len(a) - len(b)
++        factor = Fraction(a[0], b[0])
++        quotient[degree_diff - shift] = factor
++        for i in range(len(b)):
++            a[i] -= factor * b[i]
++        while a and a[0] == 0:
++            a.pop(0)
++    return _trim(quotient), a
++
++
++def _poly_gcd(a, b):
++    a = _primitive(a)
++    b = _primitive(b)
++    while b:
++        _, remainder = _divmod_poly(a, b)
++        a, b = b, _primitive(remainder)
++    if a:
++        leading = a[0]
++        a = [Fraction(c, leading) for c in a]
++    return a
++
++
++def _square_free_part(poly):
++    """polynomial divided by gcd(polynomial, derivative)."""
++    poly = _trim(poly)
++    if len(poly) <= 1:
++        return poly
++    common = _poly_gcd(poly, _derivative(poly))
++    quotient, remainder = _divmod_poly(poly, common)
++    assert not remainder
++    return _primitive(quotient)
++
++
++def _sturm_sequence(poly):
++    """Sturm sequence for a square-free polynomial."""
++    poly = _primitive(poly)
++    if not poly:
++        return []
++
++    sequence = [poly]
++    derivative = _primitive(_derivative(poly))
++    if not derivative:
++        return sequence
++    sequence.append(derivative)
++
++    while len(sequence[-1]) > 1:
++        _, remainder = _divmod_poly(sequence[-2], sequence[-1])
++        remainder = _primitive([-c for c in remainder])
++        if not remainder:
++            break
++        sequence.append(remainder)
++    return sequence
++
++
++def _variations(sequence, x):
++    """Number of sign changes in a Sturm sequence at x."""
++    previous = 0
++    changes = 0
++    for poly in sequence:
++        value = _evaluate_exact(poly, x)
++        if value == 0:
++            continue
++        sign = 1 if value > 0 else -1
++        if previous and sign != previous:
++            changes += 1
++        previous = sign
++    return changes
++
++
++def _root_count_open(poly, sequence, a, b):
++    """Number of distinct roots strictly between a and b."""
++    # V(a) - V(b) counts roots in (a, b], with V evaluated from the right
++    # at a root.  Remove b itself if it is a root.
++    count = _variations(sequence, a) - _variations(sequence, b)
++    if _evaluate_exact(poly, b) == 0:
++        count -= 1
++    return count
++
++
++def _refine_root(poly, sequence, a, b):
++    """Refine a bracket containing exactly one root (endpoints excluded)."""
++    # A 1e-12 bracket is enough to give a float well inside the required
++    # 1e-9 absolute accuracy.
++    tolerance = Fraction(1, 10**12)
++    while b - a > tolerance:
++        midpoint = (a + b) / 2
++        if _evaluate_exact(poly, midpoint) == 0:
++            return midpoint
++        if _root_count_open(poly, sequence, a, midpoint) > 0:
++            b = midpoint
++        else:
++            a = midpoint
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    poly = _trim([Fraction(c) for c in coeffs])
++    if len(poly) <= 1:
++        return []
++
++    lo = Fraction(lo)
++    hi = Fraction(hi)
++    if lo > hi:
++        lo, hi = hi, lo
++    if lo == hi:
++        return [float(lo)] if _evaluate_exact(poly, lo) == 0 else []
++
++    square_free = _square_free_part(poly)
++    sequence = _sturm_sequence(square_free)
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if _evaluate_exact(square_free, lo) == 0:
++        roots.append(lo)
++    if _evaluate_exact(square_free, hi) == 0:
++        roots.append(hi)
++
++    # Isolate the roots strictly inside (lo, hi).  Split intervals until each
++    # contains at most one root; repeated splitting also separates roots that
++    # are arbitrarily close together.
++    stack = [(lo, hi)]
++    while stack:
++        a, b = stack.pop()
++        count = _root_count_open(square_free, sequence, a, b)
++        if count == 0:
++            continue
++        if count == 1:
++            roots.append(_refine_root(square_free, sequence, a, b))
++            continue
++
++        midpoint = (a + b) / 2
++        if _evaluate_exact(square_free, midpoint) == 0:
++            roots.append(midpoint)
++        stack.append((a, midpoint))
++        stack.append((midpoint, b))
++
++    roots.sort()
++    return [float(root) for root in roots]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..c2909f4 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,24 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_repeated_irrational_root(self):
++        # (x^2 - 2)^2 = x^4 - 4x^2 + 4
++        self.assertRoots(
++            real_roots([1, 0, -4, 0, 4], -2, 2), [-math.sqrt(2), math.sqrt(2)]
++        )
++
++    def test_close_roots(self):
++        # (10^6 x - 1)(10^6 x - 2) = 10^12 x^2 - 3*10^6 x + 2
++        self.assertRoots(real_roots([10**12, -3 * 10**6, 2], -1, 1), [1e-6, 2e-6])
++
++    def test_roots_on_boundaries(self):
++        # (x - 1)(x - 2), with the interval equal to the two roots.
++        self.assertRoots(real_roots([1, -3, 2], 1, 2), [1, 2])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,117 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..4a63563 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,43 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses a fourth-order symplectic composition of kick-drift-kick
++    (velocity Verlet) substeps (Yoshida / Forest-Ruth).  Symplectic
++    integrators have bounded energy error over long integrations instead of
++    secular drift, and the pairwise forces conserve total momentum.
++    """
++    n = len(masses)
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++    if steps <= 0:
++        return pos, vel
++
++    # Composition weights: w1 + w0 + w1 = 1, giving a net advance of dt.
++    w1 = 1.0 / (2.0 - 2.0 ** (1.0 / 3.0))
++    w0 = 1.0 - 2.0 * w1
++    substeps = (w1 * dt, w0 * dt, w1 * dt)
++
++    acc = accelerations(masses, pos, G)
++    for _ in range(steps):
++        for h in substeps:
++            half_h = 0.5 * h
++
++            # Half kick with the acceleration at the current positions.
++            for i in range(n):
++                vel[i][0] += half_h * acc[i][0]
++                vel[i][1] += half_h * acc[i][1]
++
++            # Full drift.
++            for i in range(n):
++                pos[i][0] += h * vel[i][0]
++                pos[i][1] += h * vel[i][1]
++
++            # Re-evaluate forces and apply the second half kick.
++            acc = accelerations(masses, pos, G)
++            for i in range(n):
++                vel[i][0] += half_h * acc[i][0]
++                vel[i][1] += half_h * acc[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..c7c881c 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -1,3 +1,4 @@
++import copy
+ import math
+ import unittest
+ 
+@@ -17,6 +18,57 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_two_body_energy(self):
++        # Equal masses, semi-major axis 1, eccentricity 0.8, starting at apoapsis.
++        mass = [1.0, 1.0]
++        eccentricity = 0.8
++        r = 1.0 + eccentricity
++        speed = math.sqrt(2.0 * (2.0 / r - 1.0)) / 2.0
++        pos = [[-r / 2.0, 0.0], [r / 2.0, 0.0]]
++        vel = [[0.0, -speed], [0.0, speed]]
++        e0 = energy(mass, pos, vel)
++        p, q = simulate(mass, pos, vel, 0.001, 20000)
++        self.assertLess(abs(energy(mass, p, q) - e0) / abs(e0), 1e-6)
++
++    def test_figure_eight_energy(self):
++        # Chenciner-Montgomery figure-eight initial conditions.
++        x, y = 0.97000436, 0.24308753
++        vx, vy = 0.466203685, 0.43236573
++        mass = [1.0, 1.0, 1.0]
++        pos = [[x, -y], [-x, y], [0.0, 0.0]]
++        vel = [[vx, vy], [vx, vy], [-2 * vx, -2 * vy]]
++        e0 = energy(mass, pos, vel)
++        p, q = simulate(mass, pos, vel, 0.001, 20000)
++        self.assertLess(abs(energy(mass, p, q) - e0) / abs(e0), 1e-8)
++
++    def test_momentum_conserved_and_inputs_unchanged(self):
++        mass = [1.0, 2.0, 3.0]
++        pos = [[-2.0, 0.0], [2.0, 0.0], [0.0, 3.0]]
++        vel = [[0.1, -0.2], [-0.3, 0.2], [0.2, 0.1]]
++        mass0 = copy.deepcopy(mass)
++        pos0 = copy.deepcopy(pos)
++        vel0 = copy.deepcopy(vel)
++
++        p, q = simulate(mass, pos, vel, 0.001, 1000)
++
++        before = [
++            sum(m * v[0] for m, v in zip(mass, vel)),
++            sum(m * v[1] for m, v in zip(mass, vel)),
++        ]
++        after = [
++            sum(m * v[0] for m, v in zip(mass, q)),
++            sum(m * v[1] for m, v in zip(mass, q)),
++        ]
++        for b, a in zip(before, after):
++            self.assertAlmostEqual(a, b, delta=1e-12)
++
++        self.assertEqual(mass, mass0)
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        self.assertEqual(len(p), 3)
++        self.assertTrue(all(len(xy) == 2 for xy in p))
++        self.assertTrue(all(len(xy) == 2 for xy in q))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

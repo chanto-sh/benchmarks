@@ -1,0 +1,21 @@
+diff --git a/changelog/5413.bugfix.rst b/changelog/5413.bugfix.rst
+new file mode 100644
+index 0000000..4a141e3
+--- /dev/null
++++ b/changelog/5413.bugfix.rst
+@@ -0,0 +1 @@
++``str()`` on an :class:`~_pytest._code.ExceptionInfo` returned by ``pytest.raises`` now includes the full exception message instead of truncating it at the first newline.
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index c4ed961..142a1d5 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -954,6 +954,9 @@ class ReprFileLocation(TerminalRepr):
+         tw.write(self.path, bold=True, red=True)
+         tw.line(":{}: {}".format(self.lineno, msg))
+ 
++    def __str__(self):
++        return "{}:{}: {}".format(self.path, self.lineno, self.message)
++
+ 
+ class ReprLocals(TerminalRepr):
+     def __init__(self, lines):

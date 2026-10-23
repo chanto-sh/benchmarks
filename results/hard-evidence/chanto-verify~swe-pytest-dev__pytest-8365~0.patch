@@ -1,0 +1,25 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..845c0ae
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed creation of the ``tmpdir``/``tmp_path`` base directory when the user name
++(as reported by ``getpass.getuser()``) contains characters which are not valid
++in file names, such as the domain separator in a Windows domain user
++(``contoso\john_doe``).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..2666bcd 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -112,6 +112,10 @@ class TempPathFactory:
+             from_env = os.environ.get("PYTEST_DEBUG_TEMPROOT")
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+             user = get_user() or "unknown"
++            # The username may contain characters which are invalid in file
++            # names (e.g. a Windows domain user ``contoso\john_doe``), so
++            # sanitize it before using it as a directory name (#8365).
++            user = re.sub(r"[\W]", "_", user)
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")

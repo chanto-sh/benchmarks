@@ -1,0 +1,185 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..311a25e 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,170 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5,),
++    (3.0 / 40, 9.0 / 40),
++    (44.0 / 45, -56.0 / 15, 32.0 / 9),
++    (19372.0 / 6561, -25360.0 / 2187, 64448.0 / 6561, -212.0 / 729),
++    (9017.0 / 3168, -355.0 / 33, 46732.0 / 5247, 49.0 / 176,
++     -5103.0 / 18656),
++    (35.0 / 384, 0.0, 500.0 / 1113, 125.0 / 192,
++     -2187.0 / 6784, 11.0 / 84),
++)
++_B5 = (35.0 / 384, 0.0, 500.0 / 1113, 125.0 / 192,
++       -2187.0 / 6784, 11.0 / 84, 0.0)
++_B4 = (5179.0 / 57600, 0.0, 7571.0 / 16695, 393.0 / 640,
++       -92097.0 / 339200, 187.0 / 2100, 1.0 / 40)
++
++
++def _radial_acceleration(accel, r):
++    """Radial acceleration for a central force, evaluated on the x axis."""
++    ax, _ = accel(r, 0.0)
++    return ax
++
++
++class _StepRejected(Exception):
++    """A trial step left the physically admissible radial domain."""
++
++
++def _rk45_step(r, u, h2, accel, dt):
++    """One Dormand-Prince step for r'' = f(r) + h^2 / r^3."""
++    def deriv(rr, uu):
++        if rr <= 0.0:
++            raise _StepRejected
++        return uu, _radial_acceleration(accel, rr) + h2 / (rr * rr * rr)
++
++    k1 = deriv(r, u)
++    ks = [k1]
++    for i in range(1, 7):
++        rr = r
++        uu = u
++        for j in range(i):
++            rr += dt * _A[i][j] * ks[j][0]
++            uu += dt * _A[i][j] * ks[j][1]
++        ks.append(deriv(rr, uu))
++
++    r5 = r + dt * sum(b * k[0] for b, k in zip(_B5, ks))
++    u5 = u + dt * sum(b * k[1] for b, k in zip(_B5, ks))
++    if r5 <= 0.0:
++        raise _StepRejected
++    r4 = r + dt * sum(b * k[0] for b, k in zip(_B4, ks))
++    u4 = u + dt * sum(b * k[1] for b, k in zip(_B4, ks))
++    return r5, u5, r5 - r4, u5 - u4
++
++
++def _event_fraction(r0, u0, dt, h2, accel):
++    """Locate u = 0 within an accepted step by bisection.
++
++    Each trial uses a fresh Dormand-Prince step from the start of the
++    bracketing step, so the event location is not limited by the order of an
++    interpolation polynomial.
++    """
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        _, u_mid, _, _ = _rk45_step(r0, u0, h2, accel, mid * dt)
++        if u_mid < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    theta = 0.5 * (lo + hi)
++    r_event, _, _, _ = _rk45_step(r0, u0, h2, accel, theta * dt)
++    return theta, r_event
++
++
++def _initial_step(r, u, h2, accel):
++    """A conservative starting step for the radial ODE."""
++    q = _radial_acceleration(accel, r) + h2 / (r * r * r)
++    times = []
++    if u != 0.0:
++        times.append(abs(r / u))
++    if q != 0.0:
++        times.append(math.sqrt(abs(r / q)))
++    scale = min(times) if times else r
++    return max(1e-12 * abs(r), 1e-3 * scale)
++
++
++def _to_periapsis(r, u, h2, accel, rtol, atol_r, atol_u, max_steps=1000000):
++    """Integrate until u changes sign from negative to positive.
++
++    Returns (r_at_event, elapsed_time).
++    """
++    dt = _initial_step(r, u, h2, accel)
++    t = 0.0
++    for _ in range(max_steps):
++        try:
++            r_new, u_new, er, eu = _rk45_step(r, u, h2, accel, dt)
++        except _StepRejected:
++            dt *= 0.2
++            continue
++
++        sr = atol_r + rtol * max(abs(r), abs(r_new))
++        su = atol_u + rtol * max(abs(u), abs(u_new))
++        err = math.sqrt((er / sr) ** 2 + (eu / su) ** 2)
++
++        if err <= 1.0:
++            if u < 0.0 <= u_new:
++                theta, r_event = _event_fraction(r, u, dt, h2, accel)
++                return r_event, t + theta * dt
++            t += dt
++            r, u = r_new, u_new
++
++        if err == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, max(0.2, 0.9 * err ** -0.2))
++        dt *= factor
++
++    raise ValueError("could not find a periapsis (unbound orbit?)")
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``accel(x, y)`` must describe a central force.  The orbit is reduced to
++    its radial motion using the conserved angular momentum, and the time
++    between periapsides is found with an adaptive Dormand-Prince integrator.
++    """
++    x0, y0 = r0
++    vx0, vy0 = v0
++
++    r = math.hypot(x0, y0)
++    if r == 0.0:
++        raise ValueError("starting position cannot be the origin")
++
++    h = x0 * vy0 - y0 * vx0
++    h2 = h * h
++    vr = (x0 * vx0 + y0 * vy0) / r
++
++    # Characteristic scales for the adaptive error control.
++    q0 = _radial_acceleration(accel, r) + h2 / (r * r * r)
++    r_scale = max(abs(r), 1e-300)
++    v_scale = max(abs(vr), abs(h) / r, math.sqrt(abs(q0) * r), 1e-300)
++    rtol = 1e-13
++    atol_r = 1e-15 * r_scale
++    atol_u = 1e-15 * v_scale
++
++    if h == 0.0:
++        raise ValueError("radial period is undefined for zero angular momentum")
++
++    # A circular orbit has no radial turning points; its radial period is the
++    # usual orbital period.
++    near_circular = (abs(vr) <= 1e-12 * v_scale
++                     and abs(q0) <= 1e-12 * max(
++                         abs(_radial_acceleration(accel, r)),
++                         abs(h2 / (r * r * r)), 1e-300))
++    if near_circular:
++        return 2.0 * math.pi * r * r / abs(h)
++
++    # If we start at periapsis, the first event is at t = 0 and one full
++    # radial period is the time to the next one.  Otherwise, move to the
++    # first periapsis and then time the following complete oscillation.
++    at_periapsis = (abs(vr) <= 1e-12 * v_scale and q0 > 0.0)
++    if not at_periapsis:
++        r, _ = _to_periapsis(r, vr, h2, accel, rtol, atol_r, atol_u)
++
++    _, period = _to_periapsis(r, 0.0, h2, accel, rtol, atol_r, atol_u)
++    return period

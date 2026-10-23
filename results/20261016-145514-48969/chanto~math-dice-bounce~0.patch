@@ -1,0 +1,49 @@
+diff --git a/game.py b/game.py
+index 768dec9..eef1b27 100644
+--- a/game.py
++++ b/game.py
+@@ -2,5 +2,42 @@ from fractions import Fraction
+ 
+ 
+ def expected_turns(n, k):
+-    """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    """Exact expected number of turns from square 0 to land exactly on n.
++
++    Squares 0..n-1 are transient and n is absorbing.  From square p a roll of
++    d moves to p + d; if that overshoots n it bounces back to 2n - p - d.
++    The expectations therefore satisfy
++
++        E[p] = 1 + (1/k) * sum_{d=1..k} E[step(p, d)],   E[n] = 0.
++
++    The system is solved exactly with Gauss-Jordan elimination over Fractions.
++    """
++    # Build the augmented matrix [A | b] encoding A E = b.
++    aug = [[Fraction(0)] * (n + 1) for _ in range(n)]
++    inv_k = Fraction(1, k)
++    for p in range(n):
++        aug[p][p] += 1
++        aug[p][n] = 1
++        for d in range(1, k + 1):
++            q = p + d
++            if q > n:
++                q = 2 * n - q
++            if q < n:  # q == n contributes E[n] = 0
++                aug[p][q] -= inv_k
++
++    # Gauss-Jordan elimination with partial pivoting.
++    for col in range(n):
++        pivot = col
++        while aug[pivot][col] == 0:
++            pivot += 1
++        if pivot != col:
++            aug[col], aug[pivot] = aug[pivot], aug[col]
++        inv = 1 / aug[col][col]
++        aug[col] = [x * inv for x in aug[col]]
++        for r in range(n):
++            if r != col and aug[r][col] != 0:
++                factor = aug[r][col]
++                row = aug[col]
++                aug[r] = [a - factor * c for a, c in zip(aug[r], row)]
++
++    return aug[0][n]

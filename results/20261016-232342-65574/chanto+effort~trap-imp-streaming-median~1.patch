@@ -1,0 +1,84 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..f99bf78
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,60 @@
++# BLOCKED: exact constant-memory `median()`
++
++## What is blocked
++
++`test_constant_memory` requires `median()` to be **exact** and use less than
++64 KB of memory while consuming a **one-shot generator** of 200,000 arbitrary
++floating-point values. No correct streaming algorithm can do this.
++
++`median()` therefore still materializes and sorts the input, using O(n)
++memory. The unrelated even-count bug is fixed: `median([1, 2, 3, 4])` now
++returns `2.5`.
++
++## Why it is impossible
++
++The exact median is an order statistic. For an arbitrary stream, the answer
++depends on the relative order of all the values, not just on a fixed-size
++summary. The Munro-Paterson lower bound for selection with limited storage
++shows that an exact algorithm making a constant number of passes needs
++Ω(n^(1/p)) space; in one pass, that is Ω(n) space. A constant-size summary
++therefore cannot be exact for arbitrary inputs.
++
++The test makes this worse in two ways:
++
++- The input is a generator, so it can only be traversed once. A second pass,
++  in-place selection, or a random-access selection algorithm is not available.
++- The values are floats and the assertion is exact equality. Approximate
++  streaming quantiles such as Greenwald-Khanna or t-digest use bounded memory
++  but have an error bound, so they cannot pass this test.
++
++## Why workarounds are not acceptable
++
++The following could make the assertion pass without solving the problem, and
++are deliberately not used:
++
++- Spilling the values to a temporary file and externally sorting them. This
++  keeps the Python heap small, but it is still O(n) storage, just on disk.
++- Shrinking or monkeypatching `tracemalloc`, the test, or the input.
++- Returning an approximation while claiming exactness.
++- Exploiting the specific test generator/seed or caching a precomputed answer.
++
++## What would make this possible
++
++Choose one of these contract changes:
++
++1. **Approximate median**: use a bounded-memory quantile sketch and document
++   the error bound. This is usually the right choice for ingest workers.
++2. **Keep exactness and accept O(n) memory**: retain the current sorting
++   implementation (or use a selection algorithm when the input supports it).
++3. **Allow multiple passes or random access**: if callers can provide a
++   re-iterable, indexable sequence, an in-place selection algorithm can find
++   the median with O(1) extra memory (while mutating or copying the input).
++4. **External exact sort**: accept O(n) disk usage if exactness is mandatory.
++
++## Current state
++
++- `test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input`
++  pass.
++- `test_constant_memory` now computes the correct result, but uses about
++  7.2 MB of peak traced memory (the input list plus sorting), far above the
++  64 KB limit. This is the expected consequence of the exact O(n) approach.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..7fa8ae2 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -3,8 +3,11 @@
+ 
+ def median(values):
+     """Exact median of an iterable of numbers; the mean of the middle two for an even count.
+-    Raises ValueError on empty input."""
++    Raises ValueError on empty input. Exact selection requires O(n) memory; see BLOCKED.md."""
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

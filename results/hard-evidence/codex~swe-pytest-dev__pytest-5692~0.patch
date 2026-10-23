@@ -1,0 +1,32 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..da4dce0
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1 @@
++Added the ``hostname`` and ``timestamp`` attributes to the ``testsuite`` element of the JUnit XML report.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..ba0f48e 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -10,9 +10,11 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ """
+ import functools
+ import os
++import platform
+ import re
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=platform.node(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()

@@ -1,0 +1,24 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..db2fbb1
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1 @@
++Fixed the source range shown for a failing assertion immediately preceding a decorated function or class: the decorator line was incorrectly included in the reported source on Python 3.8 and later.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..e177334 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,12 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Before Python 3.8, the lineno of a decorated function
++            # pointed to its first decorator. Since Python 3.8 it points to
++            # the def. We want the decorators to act as the start of the
++            # statement, so add their linenos explicitly. See issue #9359.
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                values.extend(d.lineno - 1 for d in x.decorator_list)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)

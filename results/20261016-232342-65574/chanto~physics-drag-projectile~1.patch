@@ -1,0 +1,237 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..728e0ef 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,230 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++# The table is printed to four significant figures, so keep the integration
++# error well below that.
++_REL_TOL = 1e-10
++_ABS_TOL = 1e-12
++_MAX_STEP = 0.05
++_MIN_STEP = 1e-12
++
++
++def _rhs(state, g, drag):
++    """Derivatives of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -drag * speed * vx, -g - drag * speed * vy)
++
++
++def _combine(state, h, ks, coeffs):
++    """Linear combination of Runge-Kutta stages."""
++    return tuple(
++        state[i] + h * sum(c * k[i] for c, k in zip(coeffs, ks))
++        for i in range(4)
++    )
++
++
++def _stage(state, h, ks, coeffs, g, drag):
++    """Evaluate the right-hand side at a Dormand-Prince stage."""
++    return _rhs(_combine(state, h, ks, coeffs), g, drag)
++
++
++def _dopri5_step(state, h, g, drag):
++    """One Dormand-Prince 5(4) step, returning the 5th-order state and error."""
++    k1 = _rhs(state, g, drag)
++    k2 = _stage(state, h, [k1], [1.0 / 5.0], g, drag)
++    k3 = _stage(state, h, [k1, k2], [3.0 / 40.0, 9.0 / 40.0], g, drag)
++    k4 = _stage(
++        state, h, [k1, k2, k3], [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0], g, drag
++    )
++    k5 = _stage(
++        state,
++        h,
++        [k1, k2, k3, k4],
++        [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
++        g,
++        drag,
++    )
++    k6 = _stage(
++        state,
++        h,
++        [k1, k2, k3, k4, k5],
++        [
++            9017.0 / 3168.0,
++            -355.0 / 33.0,
++            46732.0 / 5247.0,
++            49.0 / 176.0,
++            -5103.0 / 18656.0,
++        ],
++        g,
++        drag,
++    )
++    fifth = _combine(
++        state,
++        h,
++        [k1, k3, k4, k5, k6],
++        [35.0 / 384.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0],
++    )
++    k7 = _rhs(fifth, g, drag)
++    fourth = _combine(
++        state,
++        h,
++        [k1, k3, k4, k5, k6, k7],
++        [
++            5179.0 / 57600.0,
++            7571.0 / 16695.0,
++            393.0 / 640.0,
++            -92097.0 / 339200.0,
++            187.0 / 2100.0,
++            1.0 / 40.0,
++        ],
++    )
++
++    err = 0.0
++    for a, b in zip(fifth, fourth):
++        scale = _ABS_TOL + _REL_TOL * max(abs(a), abs(b))
++        err = max(err, abs(a - b) / scale)
++    return fifth, err
++
++
++def _initial_step(state, g, drag):
++    """Choose a conservative first step from the local time scale."""
++    speed = math.hypot(state[2], state[3])
++    acceleration = abs(g) + drag * speed * speed
++    if acceleration > 0.0 and speed > 0.0:
++        h = 0.1 * speed / acceleration
++    else:
++        h = _MAX_STEP
++    return min(_MAX_STEP, max(1e-8, h))
++
++
++def _hermite(s, p0, v0, p1, v1, h):
++    """Cubic Hermite interpolant of a position on [0, 1]."""
++    s2 = s * s
++    s3 = s2 * s
++    return (
++        (2.0 * s3 - 3.0 * s2 + 1.0) * p0
++        + (s3 - 2.0 * s2 + s) * h * v0
++        + (-2.0 * s3 + 3.0 * s2) * p1
++        + (s3 - s2) * h * v1
++    )
++
++
++def _hermite_derivative(s, p0, v0, p1, v1, h):
++    """Derivative with respect to s of the cubic Hermite interpolant."""
++    s2 = s * s
++    return (
++        (6.0 * s2 - 6.0 * s) * p0
++        + (3.0 * s2 - 4.0 * s + 1.0) * h * v0
++        + (-6.0 * s2 + 6.0 * s) * p1
++        + (3.0 * s2 - 2.0 * s) * h * v1
++    )
++
++
++def _locate_root(f, lo, hi, increasing_to_decreasing=True):
++    """Bisect for a root of f in [lo, hi].
++
++    The caller guarantees f(lo) and f(hi) have opposite signs (or f(hi) == 0).
++    """
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        value = f(mid)
++        if value == 0.0:
++            return mid
++        if (value > 0.0) == increasing_to_decreasing:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _integrate(vx0, vy0, h0, g, drag):
++    state = (0.0, h0, vx0, vy0)
++
++    # Launched from ground level without upward motion: it is already down.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": h0, "time": 0.0}
++
++    t = 0.0
++    h = _initial_step(state, g, drag)
++    apex = h0
++    apex_found = vy0 <= 0.0
++
++    while True:
++        new_state, err = _dopri5_step(state, h, g, drag)
++
++        if err > 1.0 and h > _MIN_STEP:
++            h *= max(0.1, min(0.5, 0.9 * err ** -0.2))
++            continue
++
++        old_state = state
++        old_t = t
++        state = new_state
++        t += h
++
++        # Apex: first time the vertical velocity reaches zero.
++        if not apex_found and old_state[3] > 0.0 and state[3] <= 0.0:
++            def slope(s):
++                return _hermite_derivative(
++                    s, old_state[1], old_state[3], state[1], state[3], h
++                )
++
++            s = _locate_root(slope, 0.0, 1.0)
++            apex = max(
++                apex,
++                _hermite(s, old_state[1], old_state[3], state[1], state[3], h),
++            )
++            apex_found = True
++
++        # Landing: first crossing of y = 0 after launch.
++        if old_state[1] > 0.0 and state[1] <= 0.0:
++            def height(s):
++                return _hermite(
++                    s, old_state[1], old_state[3], state[1], state[3], h
++                )
++
++            s = _locate_root(height, 0.0, 1.0)
++            range_ = _hermite(
++                s, old_state[0], old_state[2], state[0], state[2], h
++            )
++            return {
++                "range": range_,
++                "apex": max(apex, state[1]),
++                "time": old_t + s * h,
++            }
++
++        apex = max(apex, state[1])
++
++        factor = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * err ** -0.2))
++        h = min(_MAX_STEP, h * factor)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg`` with quadratic drag ``F = -k |v| v``.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    if k == 0.0:
++        # Exact vacuum solution (also avoids any numerical event error here).
++        if h0 == 0.0 and vy <= 0.0:
++            return {"range": 0.0, "apex": h0, "time": 0.0}
++        t = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++        apex = h0 + (vy * vy) / (2.0 * g) if vy > 0.0 else h0
++        return {"range": vx * t, "apex": apex, "time": t}
++
++    return _integrate(vx, vy, h0, g, k / mass)

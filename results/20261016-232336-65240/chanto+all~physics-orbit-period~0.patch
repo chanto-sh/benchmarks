@@ -1,0 +1,201 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..a23c786 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,186 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = _A[6]
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _derivs(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _radial_dot(state):
++    """Derivative of r^2 / 2; zero at a radial turning point."""
++    x, y, vx, vy = state
++    return x * vx + y * vy
++
++
++def _radial_dot_derivative(state, deriv):
++    """Time derivative of _radial_dot."""
++    x, y, vx, vy = state
++    _, _, ax, ay = deriv
++    return vx * vx + vy * vy + x * ax + y * ay
++
++
++def _dopri_step(state, deriv, h, accel):
++    """One Dormand-Prince 5(4) step. Returns (state5, deriv5, error)."""
++    k = [deriv]
++    for stage in range(1, 7):
++        a = _A[stage]
++        ys = tuple(
++            state[i] + h * sum(a[j] * k[j][i] for j in range(stage))
++            for i in range(4)
++        )
++        k.append(_derivs(ys, accel))
++
++    y5 = tuple(
++        state[i] + h * sum(_B5[j] * k[j][i] for j in range(6))
++        for i in range(4)
++    )
++    y4 = tuple(
++        state[i] + h * sum(_B4[j] * k[j][i] for j in range(7))
++        for i in range(4)
++    )
++    # The last stage is the derivative at the fifth-order solution (FSAL).
++    deriv5 = k[6]
++    error = tuple(y5[i] - y4[i] for i in range(4))
++    return y5, deriv5, error
++
++
++def _hermite_value(v0, d0, v1, d1, h, theta):
++    """Cubic Hermite interpolation on [0, h], with theta in [0, 1]."""
++    t2 = theta * theta
++    t3 = t2 * theta
++    return ((2.0 * t3 - 3.0 * t2 + 1.0) * v0
++            + (t3 - 2.0 * t2 + theta) * h * d0
++            + (-2.0 * t3 + 3.0 * t2) * v1
++            + (t3 - t2) * h * d1)
++
++
++def _event_fraction(v0, d0, v1, d1, h):
++    """Locate the bracketed root of a function given by Hermite data."""
++    lo = 0.0
++    hi = 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if _hermite_value(v0, d0, v1, d1, h, mid) < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The orbit is integrated in Cartesian coordinates, so ``accel`` may be
++    any central force law.  Closest approaches are located where the radial
++    velocity changes from inward to outward.
++    """
++    x, y = float(r0[0]), float(r0[1])
++    vx, vy = float(v0[0]), float(v0[1])
++
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("initial position must not be the origin")
++    if not all(math.isfinite(q) for q in (x, y, vx, vy)):
++        raise ValueError("initial conditions must be finite")
++
++    state = (x, y, vx, vy)
++    deriv = _derivs(state, accel)
++    g = _radial_dot(state)
++    dg = _radial_dot_derivative(state, deriv)
++
++    speed2 = vx * vx + vy * vy
++    accel_size = math.hypot(deriv[2], deriv[3])
++
++    # A circular orbit has no distinct closest approach.  Its natural period
++    # is the angular period; radial oscillations vanish in this limit.
++    g_tol = 1e-13 * (r * math.sqrt(speed2) + r * r * accel_size)
++    dg_tol = 1e-13 * (speed2 + r * accel_size)
++    angular_momentum = x * vy - y * vx
++    if (abs(g) <= g_tol and abs(dg) <= dg_tol
++            and abs(angular_momentum) > 0.0):
++        return 2.0 * math.pi * r * r / abs(angular_momentum)
++
++    # The initial point may itself be a closest approach.  Only treat it as
++    # one when the estimated time to the turning point is negligible.
++    first_event = 0.0 if (dg > 0.0 and abs(g) <= 1e-12 * dg) else None
++
++    # Initial step based on the shortest local dynamical time scale.
++    time_scales = []
++    if speed2 > 0.0:
++        time_scales.append(r / math.sqrt(speed2))
++    if accel_size > 0.0:
++        time_scales.append(math.sqrt(r / accel_size))
++    h = 0.01 * min(time_scales) if time_scales else 0.01
++    h = max(h, 1e-12)
++
++    rtol = 1e-13
++    atol = 1e-15
++    max_steps = 200000
++    prev_g = g
++    prev_dg = dg
++    t = 0.0
++
++    for _ in range(max_steps):
++        next_state, next_deriv, error = _dopri_step(
++            state, deriv, h, accel)
++
++        # Error norm, scaled per component.
++        err2 = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(state[i]), abs(next_state[i]))
++            err2 += (error[i] / scale) ** 2
++        err = math.sqrt(err2 / 4.0)
++
++        if not math.isfinite(err):
++            h *= 0.2
++            continue
++
++        if err <= 1.0:
++            next_t = t + h
++            next_g = _radial_dot(next_state)
++            next_dg = _radial_dot_derivative(next_state, next_deriv)
++
++            # Inward-to-outward crossing: a local minimum of the radius.
++            if prev_g < 0.0 <= next_g:
++                theta = _event_fraction(prev_g, prev_dg, next_g, next_dg, h)
++                event_t = t + theta * h
++                if first_event is None:
++                    first_event = event_t
++                else:
++                    return event_t - first_event
++
++            prev_g = next_g
++            prev_dg = next_dg
++            state = next_state
++            deriv = next_deriv
++            t = next_t
++
++            if err == 0.0:
++                factor = 5.0
++            else:
++                factor = 0.9 * err ** (-0.2)
++            factor = min(5.0, max(0.2, factor))
++            h *= factor
++        else:
++            h *= min(0.9, max(0.2, 0.9 * err ** (-0.2)))
++
++    raise RuntimeError("orbit integration did not find two closest approaches")

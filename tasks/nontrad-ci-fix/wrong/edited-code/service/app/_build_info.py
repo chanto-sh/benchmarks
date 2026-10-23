@@ -1,0 +1,2 @@
+COMMIT = 'local'
+BUILD = 'ci'

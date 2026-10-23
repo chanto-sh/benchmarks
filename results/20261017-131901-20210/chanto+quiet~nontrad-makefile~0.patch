@@ -1,0 +1,35 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..4a288bb 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,18 +1,24 @@
+ # Builds dist/summary.json from the per-store sales exports in data/.
+ PY ?= python3
+-DATA := $(wildcard data/*.csv)
++DATA := $(sort $(wildcard data/*.csv))
+ OUT := dist
++SUMMARY := $(OUT)/summary.json
++
++.PHONY: all build test clean
++.DELETE_ON_ERROR:
+ 
+ all: build
+ 
+-build: $(OUT)/summary.json
++build: $(SUMMARY)
+ 
+-$(OUT)/summary.json: scripts/summarize.py
+-	mkdir -p $(OUT)
+-	$(PY) scripts/summarize.py $(DATA) > $@
++# The data/ directory is a prerequisite too, so removing a CSV triggers a rebuild.
++$(SUMMARY): scripts/summarize.py $(DATA) $(wildcard data)
++	@mkdir -p $(OUT)
++	@tmp=$@.tmp; trap 'rm -f "$$tmp"' EXIT; \
++	$(PY) scripts/summarize.py $(DATA) > "$$tmp" && mv "$$tmp" $@
+ 
+ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)

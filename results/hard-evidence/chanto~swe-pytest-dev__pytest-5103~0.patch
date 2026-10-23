@@ -1,0 +1,154 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..760bb56
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,2 @@
++``assert`` now unpacks ``all()`` and ``any()`` calls over comprehensions, so the
++failure message shows the offending element instead of an opaque generator object.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..4245099 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -605,6 +605,18 @@ def set_location(node, lineno, col_offset):
+     return node
+ 
+ 
++def _target_names(target):
++    """Return the names bound by a comprehension ``target`` expression."""
++    if isinstance(target, ast.Name):
++        return [target.id]
++    if isinstance(target, (ast.Tuple, ast.List)):
++        names = []
++        for elt in target.elts:
++            names.extend(_target_names(elt))
++        return names
++    return []
++
++
+ class AssertionRewriter(ast.NodeVisitor):
+     """Assertion rewriting implementation.
+ 
+@@ -964,10 +976,112 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _maybe_visit_all_any(self, call):
++        """Unroll ``all``/``any`` calls over a comprehension, if possible.
++
++        Returns the result of visiting *call* if it is an ``all``/``any``
++        call taking a single comprehension, otherwise ``None`` so that the
++        caller falls back to the normal handling.
++        """
++        if not (
++            isinstance(call.func, ast.Name)
++            and call.func.id in ("all", "any")
++            and len(call.args) == 1
++            and not call.keywords
++        ):
++            return None
++        comp = call.args[0]
++        if not isinstance(comp, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
++            return None
++        # Unrolling is only implemented for a single ``for`` clause; more
++        # complex comprehensions are left to the default handling.
++        if len(comp.generators) != 1:
++            return None
++        if getattr(comp.generators[0], "is_async", 0):
++            return None
++        return self._unroll_all_any(call.func.id == "all", comp)
++
++    def _unroll_all_any(self, is_all, comp):
++        """Rewrite ``all``/``any`` over a comprehension into a loop.
++
++        This allows the failure report to point at the element which made
++        the call fail (``all``) or at the last examined element (``any``),
++        reusing the explanation of the element expression itself.
++        """
++        gen = comp.generators[0]
++        res_var = self.variable()
++        iter_var = self.variable()
++        seen_var = self.variable()
++        # Evaluate the iterable before initializing the target below, so that
++        # ``all(x for x in x)`` still iterates over the outer ``x``.
++        self.statements.append(ast.Assign([ast.Name(iter_var, ast.Store())], gen.iter))
++        self.statements.append(
++            ast.Assign([ast.Name(res_var, ast.Store())], _NameConstant(is_all))
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(seen_var, ast.Store())], _NameConstant(False))
++        )
++
++        # Visit the element expression into a fresh statement list so that the
++        # generated assignments become part of the loop body.  A nested format
++        # context is used so that the element explanation can be selected at
++        # failure time (only when an element was actually examined).
++        outer_statements = self.statements
++        body = []
++        self.statements = body
++        before_variables = list(self.variables)
++        self.push_format_context()
++        elt_res, elt_expl = self.visit(comp.elt)
++        elt_format = self.pop_format_context(ast.Str(elt_expl))
++        new_variables = [n for n in self.variables if n not in before_variables]
++        self.statements = outer_statements
++
++        body.insert(
++            0, ast.Assign([ast.Name(seen_var, ast.Store())], _NameConstant(True))
++        )
++        decision = ast.UnaryOp(ast.Not(), elt_res) if is_all else elt_res
++        body.append(
++            ast.If(
++                decision,
++                [
++                    ast.Assign(
++                        [ast.Name(res_var, ast.Store())], _NameConstant(not is_all)
++                    ),
++                    ast.Break(),
++                ],
++                [],
++            )
++        )
++
++        # Initialize the temporary variables and the loop target so that the
++        # failure explanation can still be built for an empty iterable.
++        for name in new_variables:
++            self.statements.append(
++                ast.Assign([ast.Name(name, ast.Store())], _NameConstant(None))
++            )
++        for name in _target_names(gen.target):
++            self.statements.append(
++                ast.Assign([ast.Name(name, ast.Store())], _NameConstant(None))
++            )
++
++        loop_body = list(body)
++        for cond in reversed(gen.ifs):
++            loop_body = [ast.If(cond, loop_body, [])]
++        self.statements.append(
++            ast.For(gen.target, ast.Name(iter_var, ast.Load()), loop_body, [])
++        )
++        explanation = self.explanation_param(
++            ast.IfExp(ast.Name(seen_var, ast.Load()), elt_format, ast.Str("False"))
++        )
++        return ast.Name(res_var, ast.Load()), explanation
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        res = self._maybe_visit_all_any(call)
++        if res is not None:
++            return res
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1115,9 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        res = self._maybe_visit_all_any(call)
++        if res is not None:
++            return res
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

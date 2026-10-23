@@ -1,0 +1,26 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..5ec33ca
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed source extraction for statements preceding a decorated function or
++class so that the decorator line is no longer incorrectly included in the
++rendered source (e.g. when displaying a failing ``assert`` before a
++decorated nested function).
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..08d8a1f 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,11 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Before Python 3.8, the lineno of a decorated function
++            # pointed to the decorator rather than the def.
++            # Emulate this behavior for consistency.
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                values.extend(d.lineno - 1 for d in x.decorator_list)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)

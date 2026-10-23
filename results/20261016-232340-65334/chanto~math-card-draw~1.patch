@@ -1,0 +1,74 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..5c2f42d 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _multinomial(n, reds, blues, greens):
++    """Number of sequences with the given colour counts."""
++    if reds < 0 or blues < 0 or greens < 0:
++        return 0
++    return comb(n, reds) * comb(n - reds, blues)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,55 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)
++    if m <= 0:
++        return Fraction(0)
++
++    total = _multinomial(n, r, b, g)
++
++    # counts[x] = number of length-i prefixes containing x reds, no greens.
++    counts = [0] * (r + 1)
++    counts[0] = 1
++
++    favourable = 0
++    for i in range(m):
++        # The next card is green: the deal stops here.
++        if g:
++            remaining = n - i - 1
++            for x in range(k, min(i, r) + 1):
++                if counts[x]:
++                    blues_used = i - x
++                    if blues_used <= b:
++                        rest = _multinomial(
++                            remaining, r - x, b - blues_used, g - 1
++                        )
++                        favourable += counts[x] * rest
++
++        # The next card is red or blue: the prefix continues.
++        next_counts = [0] * (r + 1)
++        for x in range(min(i, r) + 1):
++            if not counts[x]:
++                continue
++            blues_used = i - x
++            if x < r:
++                next_counts[x + 1] += counts[x]
++            if blues_used < b:
++                next_counts[x] += counts[x]
++        counts = next_counts
++
++    # m cards were dealt without a green: the deal stops on the limit.
++    remaining = n - m
++    for x in range(k, min(m, r) + 1):
++        if counts[x]:
++            blues_used = m - x
++            if blues_used <= b:
++                rest = _multinomial(remaining, r - x, b - blues_used, g)
++                favourable += counts[x] * rest
++
++    return Fraction(favourable, total)

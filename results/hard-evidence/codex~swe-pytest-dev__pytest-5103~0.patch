@@ -1,0 +1,298 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..52ba580
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,3 @@
++Improve the assertion report for ``all()`` and ``any()`` calls over
++comprehensions by unrolling them, so that the offending elements are shown
++instead of the opaque generator object.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..3f5cd23 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -549,6 +549,25 @@ def _call_reprcompare(ops, results, expls, each_obj):
+     return expl
+ 
+ 
++def _is_all_any_call(node):
++    """Return True if *node* is an ``all``/``any`` call over a comprehension.
++
++    Such calls can be unrolled by the assertion rewriter so that the failing
++    element is reported instead of the opaque generator/comprehension object.
++    """
++    return (
++        isinstance(node, ast.Call)
++        and isinstance(node.func, ast.Name)
++        and node.func.id in ("all", "any")
++        and len(node.args) == 1
++        and not node.keywords
++        and isinstance(node.args[0], (ast.GeneratorExp, ast.ListComp, ast.SetComp))
++        and not any(
++            getattr(generator, "is_async", 0) for generator in node.args[0].generators
++        )
++    )
++
++
+ unary_map = {ast.Not: "not %s", ast.Invert: "~%s", ast.USub: "-%s", ast.UAdd: "+%s"}
+ 
+ binop_map = {
+@@ -833,6 +852,12 @@ class AssertionRewriter(ast.NodeVisitor):
+                 lineno=assert_.lineno,
+             )
+ 
++        if _is_all_any_call(assert_.test):
++            return self._visit_all_any_assert(assert_)
++
++        return self._visit_assert(assert_)
++
++    def _visit_assert(self, assert_):
+         self.statements = []
+         self.variables = []
+         self.variable_counter = itertools.count()
+@@ -878,6 +903,115 @@ class AssertionRewriter(ast.NodeVisitor):
+             set_location(stmt, assert_.lineno, assert_.col_offset)
+         return self.statements
+ 
++    def _visit_all_any_assert(self, assert_):
++        """Rewrite ``assert all(...)``/``assert any(...)`` over a comprehension.
++
++        The comprehension is unrolled into the equivalent nested ``for``/``if``
++        statements so that the individual elements (and their reports) are
++        visible, instead of the opaque generator/comprehension object.
++        """
++        call = assert_.test
++        comp = call.args[0]
++
++        if call.func.id == "any":
++            return self._visit_any_assert(assert_)
++
++        inner = ast.Assert(comp.elt, assert_.msg)
++        inner.lineno = assert_.lineno
++        inner.col_offset = assert_.col_offset
++        body = self._visit_assert(inner)
++
++        for generator in reversed(comp.generators):
++            for cond in reversed(generator.ifs):
++                body = [ast.If(cond, body, [])]
++            body = [ast.For(generator.target, generator.iter, body, [])]
++        for stmt in body:
++            set_location(stmt, assert_.lineno, assert_.col_offset)
++        return body
++
++    def _visit_any_assert(self, assert_):
++        """Rewrite ``assert any(...)`` over a comprehension.
++
++        The comprehension is unrolled into nested ``for``/``if`` statements.
++        Each element is evaluated (short-circuiting on the first truthy one)
++        and its explanation collected, so that the failing ``any`` call can
++        report all the elements that were falsy.
++        """
++        comp = assert_.test.args[0]
++
++        self.statements = []
++        self.variables = []
++        self.variable_counter = itertools.count()
++        self.stack = []
++        self.on_failure = []
++        self.push_format_context()
++
++        expl_list = self.assign(ast.List([], ast.Load()))
++        app = ast.Attribute(expl_list, "append", ast.Load())
++        found = self.variable()
++        self.statements.append(
++            ast.Assign([ast.Name(found, ast.Store())], _NameConstant(False))
++        )
++
++        outer_statements = self.statements
++        outer_failure = self.on_failure
++        self.statements = elem_statements = []
++        self.on_failure = elem_failure = []
++        self.push_format_context()
++        res, expl = self.visit(comp.elt)
++        expl_name = self.pop_format_context(ast.Str(expl))
++        self.statements = outer_statements
++        self.on_failure = outer_failure
++        body = elem_statements + elem_failure + [
++            ast.Assign([ast.Name(found, ast.Store())], res),
++            ast.Expr(ast_Call(app, [expl_name], [])),
++            ast.If(ast.Name(found, ast.Load()), [ast.Break()], []),
++        ]
++        for generator in reversed(comp.generators):
++            for cond in reversed(generator.ifs):
++                body = [ast.If(cond, body, [])]
++            body = [
++                ast.If(ast.UnaryOp(ast.Not(), ast.Name(found, ast.Load())), body, [])
++            ]
++            body = [ast.For(generator.target, generator.iter, body, [])]
++        self.statements.extend(body)
++
++        self.statements.append(
++            ast.If(
++                ast.UnaryOp(ast.Not(), ast.Name(found, ast.Load())),
++                self._build_any_failure(expl_list),
++                [],
++            )
++        )
++        if self.variables:
++            variables = [ast.Name(name, ast.Store()) for name in self.variables]
++            self.statements.append(ast.Assign(variables, _NameConstant(None)))
++        for stmt in self.statements:
++            set_location(stmt, assert_.lineno, assert_.col_offset)
++        return self.statements
++
++    def _build_any_failure(self, expl_list):
++        self.on_failure = []
++        self.push_format_context()
++        expl_expr = self.pop_format_context(
++            ast.IfExp(
++                expl_list,
++                self.helper("_format_boolop", expl_list, ast.Num(1)),
++                ast.Str("False"),
++            )
++        )
++        explanation = self.explanation_param(expl_expr)
++        template = ast.BinOp(ast.Str(""), ast.Add(), ast.Str("assert " + explanation))
++        msg = self.pop_format_context(template)
++        fmt = self.helper("_format_explanation", msg)
++        exc = ast_Call(ast.Name("AssertionError", ast.Load()), [fmt], [])
++        body = self.on_failure
++        if sys.version_info[0] >= 3:
++            body.append(ast.Raise(exc, None))
++        else:
++            body.append(ast.Raise(exc, None, None))
++        return body
++
+     def warn_about_none_ast(self, node, module_path, lineno):
+         """
+         Returns an AST issuing a warning if the value of node is `None`.
+diff --git a/testing/test_assertrewrite_unroll.py b/testing/test_assertrewrite_unroll.py
+new file mode 100644
+index 0000000..4167982
+--- /dev/null
++++ b/testing/test_assertrewrite_unroll.py
+@@ -0,0 +1,124 @@
++# -*- coding: utf-8 -*-
++"""Tests for unrolling ``all``/``any`` calls over comprehensions (#5103)."""
++from __future__ import absolute_import
++from __future__ import division
++from __future__ import print_function
++
++import ast
++import sys
++
++import _pytest._code
++from _pytest.assertion.rewrite import rewrite_asserts
++
++
++def run_and_getmsg(f, extra_ns=None):
++    """Rewrite the assertions in *f*, run it and return the failure message.
++
++    Returns ``None`` if no assertion error is raised.
++    """
++    src = "\n".join(_pytest._code.Code(f).source().lines)
++    tree = ast.parse(src)
++    rewrite_asserts(tree)
++    code = compile(tree, "<test>", "exec")
++    ns = {}
++    if extra_ns is not None:
++        ns.update(extra_ns)
++    exec(code, ns)
++    func = ns[f.__name__]
++    try:
++        func()
++    except AssertionError:
++        return str(sys.exc_info()[1])
++    return None
++
++
++def is_even(number):
++    return number % 2 == 0
++
++
++def test_all_with_generator():
++    def f():
++        assert all(is_even(number) for number in [1, 2, 3])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) == (
++        "assert False\n +  where False = is_even(1)"
++    )
++
++
++def test_all_with_list_comprehension():
++    def f():
++        assert all([is_even(number) for number in [1, 2, 3]])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) == (
++        "assert False\n +  where False = is_even(1)"
++    )
++
++
++def test_all_with_condition():
++    def f():
++        assert all(is_even(number) for number in range(10) if number > 3)
++
++    assert run_and_getmsg(f, {"is_even": is_even}) == (
++        "assert False\n +  where False = is_even(5)"
++    )
++
++
++def test_all_short_circuits():
++    calls = []
++
++    def predicate(number):
++        calls.append(number)
++        return False
++
++    def f():
++        assert all(predicate(number) for number in [1, 2, 3])
++
++    run_and_getmsg(f, {"predicate": predicate})
++    assert calls == [1]
++
++
++def test_all_passing():
++    def f():
++        assert all(is_even(number) for number in [2, 4, 6])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) is None
++
++
++def test_all_empty():
++    def f():
++        assert all(is_even(number) for number in [])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) is None
++
++
++def test_any_with_generator():
++    def f():
++        assert any(is_even(number) for number in [1, 3, 5])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) == (
++        "assert (False or False or False)\n"
++        " +  where False = is_even(1)\n"
++        " +  and   False = is_even(3)\n"
++        " +  and   False = is_even(5)"
++    )
++
++
++def test_any_passing():
++    def f():
++        assert any(is_even(number) for number in [1, 2, 3])
++
++    assert run_and_getmsg(f, {"is_even": is_even}) is None
++
++
++def test_any_short_circuits():
++    calls = []
++
++    def predicate(number):
++        calls.append(number)
++        return number == 2
++
++    def f():
++        assert any(predicate(number) for number in [1, 2, 3])
++
++    assert run_and_getmsg(f, {"predicate": predicate}) is None
++    assert calls == [1, 2]

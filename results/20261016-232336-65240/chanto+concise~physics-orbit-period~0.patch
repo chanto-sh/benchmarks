@@ -1,0 +1,218 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..a70fd25 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,203 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) error coefficients (the seventh stage is the FSAL stage).
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
++def _rk45_step(y, h, f):
++    """One Dormand-Prince step; returns (fifth-order state, error state)."""
++    k1 = f(y)
++    k2 = f((y[0] + h * (1.0 / 5.0) * k1[0],
++            y[1] + h * (1.0 / 5.0) * k1[1]))
++    k3 = f((y[0] + h * (3.0 / 40.0 * k1[0] + 9.0 / 40.0 * k2[0]),
++            y[1] + h * (3.0 / 40.0 * k1[1] + 9.0 / 40.0 * k2[1])))
++    k4 = f((y[0] + h * (44.0 / 45.0 * k1[0] - 56.0 / 15.0 * k2[0]
++                        + 32.0 / 9.0 * k3[0]),
++            y[1] + h * (44.0 / 45.0 * k1[1] - 56.0 / 15.0 * k2[1]
++                        + 32.0 / 9.0 * k3[1])))
++    k5 = f((y[0] + h * (19372.0 / 6561.0 * k1[0]
++                        - 25360.0 / 2187.0 * k2[0]
++                        + 64448.0 / 6561.0 * k3[0]
++                        - 212.0 / 729.0 * k4[0]),
++            y[1] + h * (19372.0 / 6561.0 * k1[1]
++                        - 25360.0 / 2187.0 * k2[1]
++                        + 64448.0 / 6561.0 * k3[1]
++                        - 212.0 / 729.0 * k4[1])))
++    k6 = f((y[0] + h * (9017.0 / 3168.0 * k1[0]
++                        - 355.0 / 33.0 * k2[0]
++                        + 46732.0 / 5247.0 * k3[0]
++                        + 49.0 / 176.0 * k4[0]
++                        - 5103.0 / 18656.0 * k5[0]),
++            y[1] + h * (9017.0 / 3168.0 * k1[1]
++                        - 355.0 / 33.0 * k2[1]
++                        + 46732.0 / 5247.0 * k3[1]
++                        + 49.0 / 176.0 * k4[1]
++                        - 5103.0 / 18656.0 * k5[1])))
++    y5 = (y[0] + h * (35.0 / 384.0 * k1[0] + 500.0 / 1113.0 * k3[0]
++                      + 125.0 / 192.0 * k4[0]
++                      - 2187.0 / 6784.0 * k5[0]
++                      + 11.0 / 84.0 * k6[0]),
++          y[1] + h * (35.0 / 384.0 * k1[1] + 500.0 / 1113.0 * k3[1]
++                      + 125.0 / 192.0 * k4[1]
++                      - 2187.0 / 6784.0 * k5[1]
++                      + 11.0 / 84.0 * k6[1]))
++    k7 = f(y5)
++    ks = (k1, k2, k3, k4, k5, k6, k7)
++    y4 = (y[0] + h * sum(b * k[0] for b, k in zip(_B4, ks)),
++          y[1] + h * sum(b * k[1] for b, k in zip(_B4, ks)))
++    return y5, (y5[0] - y4[0], y5[1] - y4[1])
++
++
++def _hermite_roots(r0, vr0, r1, vr1, h):
++    """Upward zero crossings of dr/dt on one Hermite-interpolated step."""
++    # r(s) is a cubic Hermite interpolant, s in [0, 1].  Its derivative is
++    # quadratic in s: A*s^2 + B*s + C.
++    a = 6.0 * r0 + 3.0 * h * vr0 - 6.0 * r1 + 3.0 * h * vr1
++    b = -6.0 * r0 - 4.0 * h * vr0 + 6.0 * r1 - 2.0 * h * vr1
++    c = h * vr0
++
++    scale = max(abs(a), abs(b), abs(c))
++    if scale == 0.0:
++        return []
++    atol = 1e-14 * scale
++
++    roots = []
++    if abs(a) <= atol:
++        if abs(b) > atol:
++            roots.append(-c / b)
++    else:
++        disc = b * b - 4.0 * a * c
++        if disc >= 0.0:
++            sq = math.sqrt(disc)
++            q = -0.5 * (b + math.copysign(sq, b))
++            if q != 0.0:
++                roots.extend((q / a, c / q))
++            else:
++                roots.append(0.0)
++            roots.sort()
++
++    result = []
++    for s in roots:
++        if -1e-12 <= s <= 1.0 + 1e-12:
++            s = min(1.0, max(0.0, s))
++            # Upward crossing: derivative of dr/dt with respect to s is > 0.
++            if 2.0 * a * s + b > 0.0:
++                result.append(s)
++    return sorted(set(result))
++
++
++def _hermite_value(r0, vr0, r1, vr1, h, s):
++    s2 = s * s
++    s3 = s2 * s
++    return ((2.0 * s3 - 3.0 * s2 + 1.0) * r0
++            + (s3 - 2.0 * s2 + s) * h * vr0
++            + (-2.0 * s3 + 3.0 * s2) * r1
++            + (s3 - s2) * h * vr1)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``r0`` and ``v0`` are the initial position and velocity, and ``accel(x, y)``
++    returns the (central) acceleration vector.  The initial point may be
++    anywhere on the orbit.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("radial_period is undefined at the origin")
++    speed = math.hypot(vx, vy)
++
++    # Specific angular momentum is conserved for a central force.
++    angular = x * vy - y * vx
++    angular2 = angular * angular
++    vr = (x * vx + y * vy) / r
++
++    def radial_accel(radius):
++        # At (radius, 0) the acceleration's x component is its radial part.
++        ax, _ = accel(radius, 0.0)
++        return ax + angular2 / (radius * radius * radius)
++
++    a_force = accel(r, 0.0)[0]
++    centripetal = angular2 / (r * r * r)
++    a0 = a_force + centripetal
++    a_scale = abs(a_force) + abs(centripetal)
++    v_scale = max(speed, math.sqrt(a_scale * r) if a_scale > 0.0 else 0.0)
++    vr_eps = 1e-12 * v_scale if v_scale > 0.0 else 0.0
++
++    events = []
++    if abs(vr) <= vr_eps:
++        if abs(a0) <= 1e-12 * a_scale:
++            # Circular orbit: every point has the same radius.  Use the
++            # azimuthal period as the natural limiting value.
++            if angular == 0.0:
++                raise ValueError("orbit has no radial or angular motion")
++            return 2.0 * math.pi * r * r / abs(angular)
++        if a0 > 0.0:
++            events.append(0.0)
++
++    t = 0.0
++    state = (r, vr)
++    last_event = events[0] if events else None
++
++    # A first guess for the step size based on the local radial timescales.
++    scales = []
++    if abs(vr) > 0.0:
++        scales.append(r / abs(vr))
++    if abs(a0) > 0.0:
++        scales.append(math.sqrt(r / abs(a0)))
++    step = 1e-2 * min(scales) if scales else 1e-2
++    step = max(step, 1e-14)
++    min_step = 1e-14 * max(1.0, abs(t))
++
++    rtol = 1e-12
++    atol_r = 1e-14 * max(r, 1e-300)
++    atol_v = 1e-14 * v_scale if v_scale > 0.0 else 1e-300
++    max_steps = 1_000_000
++
++    def deriv(s):
++        return (s[1], radial_accel(s[0]))
++
++    for _ in range(max_steps):
++        trial, error = _rk45_step(state, step, deriv)
++
++        scale_r = atol_r + rtol * max(abs(state[0]), abs(trial[0]))
++        scale_v = atol_v + rtol * max(abs(state[1]), abs(trial[1]))
++        err = max(abs(error[0]) / scale_r, abs(error[1]) / scale_v)
++
++        if not math.isfinite(err) or err > 1.0:
++            factor = max(0.1, 0.5 * err ** -0.2) if math.isfinite(err) else 0.2
++            step *= factor
++            if step < min_step:
++                raise RuntimeError("step size underflow in radial_period")
++            continue
++
++        roots = _hermite_roots(state[0], state[1], trial[0], trial[1], step)
++        if roots and last_event is not None and abs(t - last_event) <= 1e-12 * max(1.0, abs(t)):
++            # The interval starts at a turning point already recorded.
++            roots = [s for s in roots if s > 1e-12]
++        if roots:
++            s = roots[0]
++            event_time = t + s * step
++            events.append(event_time)
++            last_event = event_time
++            if len(events) == 2:
++                return events[1] - events[0]
++            # Continue from the turning point rather than stepping past it.
++            state = (_hermite_value(state[0], state[1], trial[0], trial[1],
++                                    step, s), 0.0)
++            t = event_time
++            step = max(0.5 * step * max(s, 1e-3), min_step)
++            min_step = 1e-14 * max(1.0, abs(t))
++            continue
++
++        state = trial
++        t += step
++        factor = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * err ** -0.2))
++        step *= factor
++        min_step = 1e-14 * max(1.0, abs(t))
++
++    raise RuntimeError("could not find two successive closest approaches")

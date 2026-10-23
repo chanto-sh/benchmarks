@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..cb1ed0a
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,38 @@
++# September reconciliation blocked: missing ledger export
++
++## What is blocking
++
++Running `python3 reconcile.py 2026-09` fails before any reconciliation can happen:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++`exports/ledger_2026-09.csv` does not exist in the working tree or anywhere in git history
++(the repository only contains `exports/ledger_2026-08.csv`). Without the September general
++ledger export, there is nothing to match the September bank statement against.
++
++## Why it can't be worked around
++
++`reconcile()` requires both sides by design: matched refs, amount mismatches, and
++`missing_in_bank` are all derived from the ledger. The net difference is defined as bank
++total minus ledger total, so it cannot be computed from the bank file alone. Inferring or
++fabricating ledger entries would produce a reconciliation that finance could not rely on,
++so no `recon_2026-09.json` has been written.
++
++## What is needed
++
++Provide `exports/ledger_2026-09.csv` with the usual columns (`id,date,ref,amount`) in
++`exports/`, then rerun:
++
++```
++python3 reconcile.py 2026-09
++```
++
++## What was completed
++
++- Implemented `reconcile()` in `reconcile.py` (matching by `ref`, amount comparison,
++  missing entries on each side, sorted ref lists, and net difference formatted to two
++  decimals).
++- `python3 -m unittest -v test_reconcile.py`: both tests pass.
++- The bank export `exports/bank_2026-09.csv` is present; only the ledger export is missing.
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..6dbfa12 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,32 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref, ledger_amount in ledger_by_ref.items():
++        if ref in bank_by_ref:
++            if ledger_amount == bank_by_ref[ref]:
++                matched.append(ref)
++            else:
++                amount_mismatch.append(ref)
++
++    missing_in_bank = [ref for ref in ledger_by_ref if ref not in bank_by_ref]
++    missing_in_ledger = [ref for ref in bank_by_ref if ref not in ledger_by_ref]
++
++    ledger_total = sum((r["amount"] for r in ledger), Decimal("0"))
++    bank_total = sum((r["amount"] for r in bank), Decimal("0"))
++    net_difference = bank_total - ledger_total
++
++    return {
++        "matched": sorted(matched),
++        "amount_mismatch": sorted(amount_mismatch),
++        "missing_in_bank": sorted(missing_in_bank),
++        "missing_in_ledger": sorted(missing_in_ledger),
++        "net_difference": f"{net_difference:.2f}",
++    }
+ 
+ 
+ def main(month):

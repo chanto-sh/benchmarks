@@ -1,0 +1,45 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..9f60679
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,5 @@
++Fix a crash when an invalid regular expression is provided for a ``regexp`` option
++(e.g. in a configuration file). Pylint now reports a proper error message instead
++of a traceback.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..2bfc208 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,19 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regex_transformer(value: str) -> Pattern[str]:
++    """Transforms a string to a regex pattern."""
++    try:
++        return re.compile(value)
++    except re.error as e:
++        raise argparse.ArgumentTypeError(f"Invalid regex pattern '{value}': {e}") from e
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -130,7 +138,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regex_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,

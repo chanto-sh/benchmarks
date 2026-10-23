@@ -1,0 +1,146 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..431a6ce 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -28,6 +28,49 @@ def energy(masses, positions, velocities, G=1.0):
+     return ke + pe
+ 
+ 
++_CBRT2 = 2.0 ** (1.0 / 3.0)
++_YOSHIDA_W1 = 1.0 / (2.0 - _CBRT2)
++_YOSHIDA_W0 = -_CBRT2 * _YOSHIDA_W1
++
++
++def _verlet_step(masses, positions, velocities, acc, dt, G):
++    """One velocity Verlet step; returns the acceleration at the new positions."""
++    n = len(masses)
++    half_dt = 0.5 * dt
++    for i in range(n):
++        velocities[i][0] += half_dt * acc[i][0]
++        velocities[i][1] += half_dt * acc[i][1]
++        positions[i][0] += dt * velocities[i][0]
++        positions[i][1] += dt * velocities[i][1]
++    acc = accelerations(masses, positions, G)
++    for i in range(n):
++        velocities[i][0] += half_dt * acc[i][0]
++        velocities[i][1] += half_dt * acc[i][1]
++    return acc
++
++
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses a fourth-order symplectic integrator: Yoshida's three-substep
++    composition of velocity Verlet (kick-drift-kick leapfrog).  Being symplectic
++    and time-reversible, its energy error oscillates within a bound instead of
++    drifting secularly, even over very long runs.  Each substep is symmetric, so
++    total momentum is conserved.  The input lists are not modified.
++    """
++    if steps < 0:
++        raise ValueError("steps must be non-negative")
++
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++    n = len(masses)
++
++    if steps == 0 or n == 0:
++        return pos, vel
++
++    acc = accelerations(masses, pos, G)
++    for _ in range(steps):
++        for weight in (_YOSHIDA_W1, _YOSHIDA_W0, _YOSHIDA_W1):
++            acc = _verlet_step(masses, pos, vel, acc, weight * dt, G)
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..ee51f09 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -1,9 +1,16 @@
++import copy
+ import math
+ import unittest
+ 
+ from nbody import energy, simulate
+ 
+ 
++def momentum(masses, velocities):
++    return [
++        sum(m * v[k] for m, v in zip(masses, velocities)) for k in (0, 1)
++    ]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +24,68 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_inputs_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[0.0, 0.0], [1.0, 0.0]]
++        vel = [[0.0, 0.1], [0.0, -0.1]]
++        pos0, vel0 = copy.deepcopy(pos), copy.deepcopy(vel)
++        simulate(m, pos, vel, 0.001, 100)
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++
++    def test_momentum_conserved(self):
++        # unequal masses, circular orbit plus a common drift velocity
++        m = [1.0, 2.5]
++        r = 1.0
++        total = sum(m)
++        v_rel = math.sqrt(total / r)
++        pos = [[-m[1] / total * r, 0.0], [m[0] / total * r, 0.0]]
++        vel = [
++            [0.3, -m[1] / total * v_rel - 0.2],
++            [0.3, m[0] / total * v_rel - 0.2],
++        ]
++        p0 = momentum(m, vel)
++        _, q = simulate(m, pos, vel, 0.01, 20000)
++        p1 = momentum(m, q)
++        for a, b in zip(p0, p1):
++            self.assertLess(abs(a - b), 1e-10)
++
++    def test_eccentric_orbit_energy_stays_bounded(self):
++        # e = 0.5 two-body orbit; sample the energy over many orbits
++        m = [0.5, 0.5]
++        a, e = 1.0, 0.5
++        rp = a * (1.0 - e)
++        vp = math.sqrt((1.0 + e) / (a * (1.0 - e)))
++        pos = [[-rp, 0.0], [rp, 0.0]]
++        vel = [[0.0, -vp / 2.0], [0.0, vp / 2.0]]
++        e0 = energy(m, pos, vel)
++        p, q = copy.deepcopy(pos), copy.deepcopy(vel)
++        max_err = 0.0
++        for _ in range(400):
++            p, q = simulate(m, p, q, 0.01, 100)
++            max_err = max(max_err, abs(energy(m, p, q) - e0) / abs(e0))
++        self.assertLess(max_err, 1e-7)
++
++    def test_figure_eight_three_body(self):
++        # Chenciner-Montgomery figure-eight solution
++        m = [1.0, 1.0, 1.0]
++        pos = [
++            [0.97000436, -0.24308753],
++            [-0.97000436, 0.24308753],
++            [0.0, 0.0],
++        ]
++        vel = [
++            [0.466203685, 0.43236573],
++            [0.466203685, 0.43236573],
++            [-0.93240737, -0.86473146],
++        ]
++        e0 = energy(m, pos, vel)
++        p0 = momentum(m, vel)
++        p, q = simulate(m, pos, vel, 0.005, 30000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-7)
++        for a, b in zip(p0, momentum(m, q)):
++            self.assertLess(abs(a - b), 1e-10)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

@@ -1,0 +1,254 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..5d7f044 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,247 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++from math import cos, hypot, inf, isfinite, radians, sin, sqrt
++
++# Dormand-Prince 5(4) coefficients.
++_C = (0.0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1.0, 1.0)
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B = (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0)
++_E = (
++    71 / 57600,
++    0.0,
++    -71 / 16695,
++    71 / 1920,
++    -17253 / 339200,
++    22 / 525,
++    -1 / 40,
++)
++
++
++def _quintic_coefficients(y0, d0, dd0, y1, d1, dd1, h):
++    """Coefficients of the quintic matching y, y', y'' at both ends.
++
++    The polynomial is in s in [0, 1], with the supplied derivatives taken
++    with respect to time.
++    """
++    a0 = y0
++    a1 = h * d0
++    a2 = 0.5 * h * h * dd0
++
++    delta0 = y1 - a0 - a1 - a2
++    delta1 = h * d1 - a1 - 2.0 * a2
++    delta2 = h * h * dd1 - 2.0 * a2
++
++    e1 = delta1 - 3.0 * delta0
++    e2 = 0.5 * delta2 - 3.0 * delta0
++    a5 = e2 - 3.0 * e1
++    a4 = e1 - 2.0 * a5
++    a3 = delta0 - a4 - a5
++    return a0, a1, a2, a3, a4, a5
++
++
++def _poly(coeff, s):
++    return coeff[0] + s * (
++        coeff[1] + s * (coeff[2] + s * (coeff[3] + s * (coeff[4] + s * coeff[5])))
++    )
++
++
++def _poly_derivative(coeff, s):
++    return coeff[1] + s * (
++        2.0 * coeff[2]
++        + s * (3.0 * coeff[3] + s * (4.0 * coeff[4] + 5.0 * s * coeff[5]))
++    )
++
++
++def _bisect_root(func, lo, hi, f_lo):
++    """Find a root of func in [lo, hi], given func(lo) == f_lo."""
++    if f_lo == 0.0:
++        return lo
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        f_mid = func(mid)
++        if (f_mid > 0.0) == (f_lo > 0.0):
++            lo, f_lo = mid, f_mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _vacuum_flight(v0, angle_deg, g, h0):
++    theta = radians(angle_deg)
++    vx = v0 * cos(theta)
++    vy = v0 * sin(theta)
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    discriminant = vy * vy + 2.0 * g * h0
++    t = (vy + sqrt(max(0.0, discriminant))) / g
++    apex = h0 + (vy * vy / (2.0 * g) if vy > 0.0 else 0.0)
++    return {"range": abs(vx) * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg``.  Quadratic drag is F = -k |v| v, so the
++    equations of motion are
++
++        x' = vx,             y' = vy
++        vx' = -(k/m) |v| vx, vy' = -g - (k/m) |v| vy.
++
++    With no drag the solution is evaluated in closed form.  Otherwise the
++    trajectory is integrated with an adaptive Dormand-Prince 5(4) method;
++    the two events (apex and return to y = 0) are located with a quintic
++    Hermite interpolant built from the step endpoint data.
++    """
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++
++    if k == 0.0:
++        return _vacuum_flight(v0, angle_deg, g, h0)
++
++    theta = radians(angle_deg)
++    vx0 = v0 * cos(theta)
++    vy0 = v0 * sin(theta)
++
++    # Starting on the ground and not moving upwards: there is no flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++
++    def acceleration(x, y, vx, vy):
++        speed = hypot(vx, vy)
++        factor = drag * speed
++        return vx, vy, -factor * vx, -g - factor * vy
++
++    def rhs(t, state):
++        return acceleration(state[0], state[1], state[2], state[3])
++
++    def dopri_step(t, state, h):
++        k1 = rhs(t, state)
++        stages = [k1]
++        for stage in range(1, 7):
++            y_stage = [
++                state[i] + h * sum(_A[stage][j] * stages[j][i] for j in range(stage))
++                for i in range(4)
++            ]
++            stages.append(rhs(t + _C[stage] * h, y_stage))
++
++        y_new = [
++            state[i] + h * sum(_B[j] * stages[j][i] for j in range(7))
++            for i in range(4)
++        ]
++        error = [
++            h * sum(_E[j] * stages[j][i] for j in range(7)) for i in range(4)
++        ]
++        return y_new, error, k1, stages[6]
++
++    # Initial flight-time estimates keep the first step well inside the
++    # trajectory, so launch and landing cannot be confused on the first step.
++    if vy0 > 0.0:
++        t_apex = vy0 / g
++    else:
++        t_apex = inf
++    t_fall = (vy0 + sqrt(max(0.0, vy0 * vy0 + 2.0 * g * h0))) / g
++    if v0 > 0.0:
++        t_drag = 1.0 / (drag * v0)
++    else:
++        t_drag = inf
++    scales = [x for x in (t_apex, t_fall, t_drag) if x > 0.0 and isfinite(x)]
++    h = 0.01 * min(scales) if scales else 1e-3
++    h = min(h, 0.01)
++
++    rtol = 1e-11
++    atol = 1e-12
++    safety = 0.9
++
++    t = 0.0
++    state = [0.0, h0, vx0, vy0]
++    apex = h0
++
++    while True:
++        speed = hypot(state[2], state[3])
++        # Keep the ratio h * (drag rate) small enough that the dense output
++        # is far more accurate than the requested 0.01%.
++        if drag * speed > 0.0:
++            h = min(h, 0.25 / (drag * speed))
++        if not isfinite(h) or h <= 0.0:
++            raise RuntimeError("failed to advance projectile integration")
++
++        y_new, error, k1, k7 = dopri_step(t, state, h)
++
++        scale = [
++            atol + rtol * max(abs(state[i]), abs(y_new[i])) for i in range(4)
++        ]
++        err_norm = sqrt(sum((error[i] / scale[i]) ** 2 for i in range(4)) / 4.0)
++
++        if err_norm <= 1.0:
++            t_old, state_old = t, state
++            t += h
++            state = y_new
++
++            # Quintic interpolants for each state component over this step.
++            acc_old = k1[2:]
++            acc_new = k7[2:]
++
++            # Locate the apex (vy = 0), equivalently the maximum of y(s).
++            if state_old[3] > 0.0 and state[3] <= 0.0:
++                y_coeff = _quintic_coefficients(
++                    state_old[1], state_old[3], acc_old[1],
++                    state[1], state[3], acc_new[1], h,
++                )
++                s = _bisect_root(
++                    lambda s: _poly_derivative(y_coeff, s),
++                    0.0, 1.0, _poly_derivative(y_coeff, 0.0),
++                )
++                apex = max(apex, _poly(y_coeff, s))
++
++            # Locate the return to y = 0.
++            if state_old[1] > 0.0 and state[1] <= 0.0:
++                y_coeff = _quintic_coefficients(
++                    state_old[1], state_old[3], acc_old[1],
++                    state[1], state[3], acc_new[1], h,
++                )
++                s = _bisect_root(
++                    lambda s: _poly(y_coeff, s),
++                    0.0, 1.0, _poly(y_coeff, 0.0),
++                )
++                x_coeff = _quintic_coefficients(
++                    state_old[0], state_old[2], acc_old[0],
++                    state[0], state[2], acc_new[0], h,
++                )
++                return {
++                    "range": abs(_poly(x_coeff, s)),
++                    "apex": apex,
++                    "time": t_old + s * h,
++                }
++
++            if err_norm == 0.0:
++                factor = 5.0
++            else:
++                factor = min(5.0, max(0.2, safety * err_norm ** (-0.2)))
++            h *= factor
++        else:
++            if err_norm == 0.0:
++                factor = 0.2
++            else:
++                factor = min(1.0, max(0.1, safety * err_norm ** (-0.2)))
++            h *= factor

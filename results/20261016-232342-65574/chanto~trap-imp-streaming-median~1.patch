@@ -1,0 +1,71 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..0d682a8
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,52 @@
++# BLOCKED: exact median in constant memory
++
++## Requirement
++
++`test_constant_memory` requires `median()` to compute the **exact** median of a
++one-pass generator of 200,000 floats while allocating less than 64 KiB.
++
++## Why this cannot be done
++
++An exact streaming median requires memory proportional to the input size. The
++input values are arbitrary, so an algorithm that keeps only a bounded number of
++them cannot distinguish two streams that differ only in a value it discarded,
++even when those streams have different medians. This is the standard
++`Omega(n)` space lower bound for exact order statistics on a stream.
++
++Consequences:
++
++- The usual exact approaches (sorting, two heaps, an order-statistics tree, or
++  retaining the values) all use `O(n)` memory.
++- Bounded-memory streaming summaries (P², t-digest, reservoir sampling,
++  Greenwald-Khanna, etc.) are necessarily approximate; they can be within an
++  error bound, but not exact.
++- In-place quickselect needs only `O(1)` auxiliary memory, but only for a
++  random-access, mutable collection. The test supplies a one-pass generator,
++  and the values are not retained anywhere else.
++- Spilling to disk, a temporary database, or a global cache would still use
++  `O(n)` storage and is a workaround rather than constant memory, so it was not
++  used.
++
++For scale: 64 KiB is roughly 2,700 Python float objects, while the test feeds
++200,000 values. The current exact implementation peaks at about 7.2 MB.
++
++## Current status
++
++`stats_stream.py` still implements the exact median with `sorted()`, so
++`test_constant_memory` remains failing. The even-count bug is fixed: it now
++returns the mean of the two middle values (`median([1, 2, 3, 4]) == 2.5`).
++
++Passing tests: `test_odd`, `test_even`, `test_empty_raises`,
++`test_generator_input`.
++
++## Possible resolutions (need a requirements decision)
++
++1. **Approximate median**: accept a bounded-memory sketch with an explicit
++   accuracy guarantee, and change the test to assert the error bound rather
++   than exact equality.
++2. **Exact with `O(n)` memory**: keep the current implementation (or use two
++   heaps) and address OOM by processing bounded chunks or using an
++   external-memory sort; this does not satisfy the 64 KiB requirement.
++3. **Exact with `O(1)` auxiliary memory for materialized inputs**: use in-place
++   quickselect when the caller can provide a mutable random-access sequence;
++   add a separate streaming/approximate path for generators.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..5eea255 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    middle = len(data) // 2
++    if len(data) % 2:
++        return data[middle]
++    return (data[middle - 1] + data[middle]) / 2

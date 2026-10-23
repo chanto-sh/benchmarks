@@ -1,0 +1,30 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..c83903d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3,16 +3,22 @@ PY ?= python3
+ DATA := $(wildcard data/*.csv)
+ OUT := dist
+ 
++.PHONY: all build test clean
++
+ all: build
+ 
+ build: $(OUT)/summary.json
+ 
+-$(OUT)/summary.json: scripts/summarize.py
++# Depend on the data files too, so edits/additions under data/ retrigger the
++# build (the wildcard is re-expanded on every make invocation). Write via a
++# temporary file so a failed run never leaves a truncated summary.json in place.
++$(OUT)/summary.json: $(DATA) scripts/summarize.py
+ 	mkdir -p $(OUT)
+-	$(PY) scripts/summarize.py $(DATA) > $@
++	$(PY) scripts/summarize.py $(DATA) > $@.tmp || { rm -f $@.tmp; exit 1; }
++	mv $@.tmp $@
+ 
+ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)

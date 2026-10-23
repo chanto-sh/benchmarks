@@ -1,0 +1,27 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..975dee8
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed ``tmpdir``, ``tmpdir_factory`` and ``tmp_path_factory`` failing to create the base temporary directory when the current user name contains characters which are not allowed in directory names, such as the domain separator returned by ``getpass.getuser()`` on Windows when connected through SSH.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..788b647 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -113,7 +113,14 @@ class TempPathFactory:
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+             user = get_user() or "unknown"
+             # use a sub-directory in the temproot to speed-up
+-            # make_numbered_dir() call
++            # make_numbered_dir() call.
++            # The user name may contain characters which are illegal in a
++            # directory name. For example, on Windows connected through SSH,
++            # ``getpass.getuser()`` returns a domain-qualified name such as
++            # ``contoso\john_doe``, where the backslash is not allowed in a
++            # directory name (#8365). Replace such characters to obtain a
++            # valid directory name.
++            user = re.sub(r"[^\w]", "_", user)
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+             rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(

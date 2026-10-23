@@ -1,0 +1,36 @@
+diff --git a/changelog/5413.bugfix.rst b/changelog/5413.bugfix.rst
+new file mode 100644
+index 0000000..aaa51f8
+--- /dev/null
++++ b/changelog/5413.bugfix.rst
+@@ -0,0 +1 @@
++Improve the ``repr`` of ``ExceptionInfo`` to include the representation of the wrapped exception, making it easier to identify which exception was captured.
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index c4ed961..9162ac8 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -447,7 +447,10 @@ class ExceptionInfo:
+     def __repr__(self):
+         if self._excinfo is None:
+             return "<ExceptionInfo for raises contextmanager>"
+-        return "<ExceptionInfo %s tblen=%d>" % (self.typename, len(self.traceback))
++        return "<ExceptionInfo %s tblen=%d>" % (
++            saferepr(self._excinfo[1]),
++            len(self.traceback),
++        )
+ 
+     def exconly(self, tryshort=False):
+         """ return the exception as a string
+diff --git a/testing/code/test_excinfo.py b/testing/code/test_excinfo.py
+index 3eac94a..26a9c5b 100644
+--- a/testing/code/test_excinfo.py
++++ b/testing/code/test_excinfo.py
+@@ -336,7 +336,7 @@ def test_excinfo_exconly():
+ def test_excinfo_repr():
+     excinfo = pytest.raises(ValueError, h)
+     s = repr(excinfo)
+-    assert s == "<ExceptionInfo ValueError tblen=4>"
++    assert s == "<ExceptionInfo ValueError() tblen=4>"
+ 
+ 
+ def test_excinfo_str():

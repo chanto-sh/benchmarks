@@ -1,0 +1,69 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "chanto",
+      "task": "poly-python-dot-dsl",
+      "rep": 0,
+      "passed": true,
+      "seconds": 25.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 12 tests in 0.000s\n\nOK\n",
+      "tokens": {
+        "in": 63702,
+        "out": 2318
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 7,
+        "input": 63702,
+        "output": 2318,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "or XorStream<'a, I>\n88 | | where\n89 | |     I: Iterator<Item = u8>,\n   | |___________________________^ conflicting implementation for `XorStream<'_, _>`\n\nerror[E0621]: explicit lifetime required in the type of `key`\n  --> src/lib.rs:14:9\n   |\n14 | /         Xorcism {\n15 | |             key: key.as_ref(),\n16 | |             pos: 0,\n17 | |         }\n   | |_________^ lifetime `'a` required\n   |\nhelp: add explicit lifetime `'a` to the type of `key`\n   |\n10 |     pub fn new<Key>(key: &'a Key) -> Xorcism<'a>\n   |                           ++\n\nSome errors have detailed explanations: E0119, E0621.\nFor more information about an error, try `rustc --explain E0119`.\nerror: could not compile `xorcism` (lib test) due to 2 previous errors\nerror: could not compile `xorcism` (lib) due to 2 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 28,
+        "input": 919163,
+        "output": 30382,
+        "cached": 196944
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "poly-go-beer-song",
+      "rep": 0,
+      "passed": true,
+      "seconds": 338.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tbeer\t0.238s\n",
+      "tokens": {
+        "in": 259863,
+        "out": 24100
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 259863,
+        "output": 24100,
+        "cached": 136704
+      }
+    }
+  ]
+}

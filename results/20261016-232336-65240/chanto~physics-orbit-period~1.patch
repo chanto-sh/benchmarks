@@ -1,0 +1,161 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..079ba5e 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,146 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B5 = (35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0)
++_B4 = (5179 / 57600, 0, 7571 / 16695, 393 / 640,
++       -92097 / 339200, 187 / 2100, 1 / 40)
++
++
++def _derivs(state, h, accel):
++    """Radial motion plus the polar angle, for a central force.
++
++    h is the conserved specific angular momentum.  Using it explicitly
++    reduces the planar orbit to (r, rdot, theta), which makes periapsis
++    events simple zero crossings of rdot and avoids drift in h.
++    """
++    r, vr, theta = state
++    c, s = math.cos(theta), math.sin(theta)
++    ax, ay = accel(r * c, r * s)
++    ar = ax * c + ay * s
++    return (vr, ar + h * h / (r * r * r), h / (r * r))
++
++
++def _stage(state, dt, coeffs, ks):
++    return tuple(state[i] + dt * sum(
++        coeffs[j] * ks[j][i] for j in range(len(coeffs)))
++        for i in range(3))
++
++
++def _rk_step(state, dt, h, accel):
++    """One Dormand-Prince 5(4) step: fifth-order result and error."""
++    k1 = _derivs(state, h, accel)
++    k2 = _derivs(_stage(state, dt, _A[1], (k1,)), h, accel)
++    k3 = _derivs(_stage(state, dt, _A[2], (k1, k2)), h, accel)
++    k4 = _derivs(_stage(state, dt, _A[3], (k1, k2, k3)), h, accel)
++    k5 = _derivs(_stage(state, dt, _A[4], (k1, k2, k3, k4)), h, accel)
++    k6 = _derivs(_stage(state, dt, _A[5], (k1, k2, k3, k4, k5)), h, accel)
++    k7 = _derivs(_stage(state, dt, _A[6],
++                        (k1, k2, k3, k4, k5, k6)), h, accel)
++
++    k = (k1, k2, k3, k4, k5, k6, k7)
++    y5 = _stage(state, dt, _B5, k)
++    y4 = _stage(state, dt, _B4, k)
++    return y5, tuple(y5[i] - y4[i] for i in range(3))
++
++
++def _error_norm(err, old, new, atol, rtol):
++    total = 0.0
++    for i in range(3):
++        scale = atol[i] + rtol * max(abs(old[i]), abs(new[i]))
++        total += (err[i] / scale) ** 2
++    return math.sqrt(total / 3)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The force is assumed to be central, but its radial dependence can be
++    arbitrary.  The radial equation of motion is integrated with an
++    adaptive Dormand-Prince 5(4) method; periapses are found as
++    negative-to-positive crossings of the radial velocity.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++    vr = (x * vx + y * vy) / r
++    theta = math.atan2(y, x)
++    h = x * vy - y * vx  # conserved specific angular momentum
++
++    if h == 0.0:
++        raise ValueError("radial_period requires nonzero angular momentum")
++
++    # A circular orbit has no isolated periapsis; use its angular period.
++    speed = math.hypot(vx, vy)
++    ax, ay = accel(x, y)
++    ar = (ax * x + ay * y) / r
++    centripetal = h * h / (r * r * r)
++    balance_scale = max(abs(ar), centripetal, 1e-300)
++    if (abs(vr) <= 1e-11 * max(speed, 1e-300) and
++            abs(ar + centripetal) <= 1e-10 * balance_scale):
++        return 2.0 * math.pi * r * r / abs(h)
++
++    state = (r, vr, theta)
++    rtol = 1e-13
++    accel_size = math.hypot(ax, ay)
++    v_scale = max(speed, abs(vr), math.sqrt(r * accel_size), 1e-300)
++    atol = (1e-15 * r, 1e-15 * v_scale, 1e-15)
++
++    # Start with a small fraction of the local dynamical time.
++    if accel_size > 0.0:
++        dt = 1e-3 * min(r / max(speed, 1e-300),
++                         math.sqrt(r / accel_size))
++    else:
++        dt = 1e-3 * r / max(speed, 1e-300)
++    dt = max(dt, 1e-12)
++
++    t = 0.0
++    events = []
++    while len(events) < 2:
++        # Take an accepted step.
++        while True:
++            new_state, err = _rk_step(state, dt, h, accel)
++            err_norm = _error_norm(err, state, new_state, atol, rtol)
++            if err_norm <= 1.0 or dt <= 1e-15 * max(1.0, abs(t)):
++                break
++            dt *= max(0.1, 0.9 * err_norm ** -0.2)
++
++        old_vr = state[1]
++        new_vr = new_state[1]
++        if old_vr < 0.0 <= new_vr:
++            # Locate the zero of rdot inside this step by bisection,
++            # re-integrating from the start of the accepted step.
++            lo, hi = 0.0, dt
++            event_state = new_state
++            if new_vr > 0.0:
++                for _ in range(55):
++                    mid = 0.5 * (lo + hi)
++                    trial, _ = _rk_step(state, mid, h, accel)
++                    if trial[1] < 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                        event_state = trial
++            t += hi
++            state = event_state
++            events.append(t)
++        else:
++            t += dt
++            state = new_state
++
++        # Accepted-step size adjustment for the next step.
++        factor = 5.0 if err_norm == 0.0 else 0.9 * err_norm ** -0.2
++        dt *= min(5.0, max(0.2, factor))
++
++    return events[1] - events[0]

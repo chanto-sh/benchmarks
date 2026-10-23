@@ -1,0 +1,39 @@
+diff --git a/changelog/7168.bugfix.rst b/changelog/7168.bugfix.rst
+new file mode 100644
+index 0000000..11b111c
+--- /dev/null
++++ b/changelog/7168.bugfix.rst
+@@ -0,0 +1,2 @@
++Fixed an internal error when an object raised in both ``__repr__`` and
++``__getattribute__`` while pytest was building a failure representation.
+diff --git a/src/_pytest/_io/saferepr.py b/src/_pytest/_io/saferepr.py
+index 23af4d0..8ec32b3 100644
+--- a/src/_pytest/_io/saferepr.py
++++ b/src/_pytest/_io/saferepr.py
+@@ -1,5 +1,6 @@
+ import pprint
+ import reprlib
++from inspect import isclass
+ from typing import Any
+ 
+ 
+@@ -19,8 +20,18 @@ def _format_repr_exception(exc: BaseException, obj: Any) -> str:
+         raise
+     except BaseException as exc:
+         exc_info = "unpresentable exception ({})".format(_try_repr_or_str(exc))
++    try:
++        if isclass(obj):
++            class_name = obj.__name__
++        else:
++            class_name = obj.__class__.__name__
++    except (KeyboardInterrupt, SystemExit):
++        raise
++    except BaseException:
++        # Just some fallback.
++        class_name = _try_repr_or_str(type(obj))
+     return "<[{} raised in repr()] {} object at 0x{:x}>".format(
+-        exc_info, obj.__class__.__name__, id(obj)
++        exc_info, class_name, id(obj)
+     )
+ 
+ 

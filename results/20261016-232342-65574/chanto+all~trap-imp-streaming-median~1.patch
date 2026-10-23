@@ -1,0 +1,71 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..31f6e83
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,52 @@
++# BLOCKED: exact streaming median in constant memory
++
++## Requirement
++
++`test_constant_memory` requires `median()` to compute the **exact** median of an
++arbitrary 200,000-element stream of floats while using **O(1) memory** (peak under
++64 KB), and `median()` must still accept a one-shot iterable/generator.
++
++## Why this is impossible
++
++An exact median of arbitrary data cannot be computed in constant memory.
++
++- The median is an order statistic. To know the value separating the lower and
++  upper halves, an algorithm must retain enough information to identify the
++  element at rank `n // 2` (or the two elements at ranks `n//2 - 1` and `n//2`).
++- A constant-memory streaming algorithm has only a fixed number of states. But
++  the input can be in any of `n!` orderings, and for distinct inputs the median
++  can be any of the `n` values. Distinguishing those outcomes while reading the
++  stream once requires at least `Ω(n)` bits of state (in the comparison/streaming
++  model, selection has an `Ω(n)` space lower bound for exact answers when the
++  input cannot be revisited and values are arbitrary).
++- Concretely for this test, every one of the 200,000 `float` values may be the
++  median. A constant-memory implementation must discard some inputs, and an
++  adversary can place the true median among the discarded values. Any bound well
++  below 64 KB is far smaller than the ~1.6 MB needed just to hold 200k 8-byte
++  floats, let alone the more than that Python objects require.
++- Approximate streaming algorithms (P², t-digest, reservoir sampling, fixed-size
++  histograms) use bounded memory but do not produce the exact value. The test
++  compares with `assertEqual`, so approximation fails.
++- `tracemalloc` measures allocations inside `median()`, so we also cannot hide an
++  O(n) buffer outside the traced region or pre-read the generator without
++  violating the spirit and the generator-input requirement.
++
++## What would unblock this
++
++Choose one of:
++
++1. **Relax exactness**: accept an approximate quantile (e.g. P² or t-digest)
++   with a documented error bound, and update the test to compare within tolerance.
++2. **Relax the memory bound**: allow O(n) memory (the current `sorted()` approach)
++   or an on-disk/external-memory selection algorithm.
++3. **Change the input contract**: allow multiple passes over a rewindable source
++   or values from a known small domain, enabling counting/bucket selection.
++
++## What was done instead
++
++- Fixed the reported correctness bug: for an even number of values `median()` now
++  returns the mean of the two middle values (`median([1, 2, 3, 4]) == 2.5`).
++- Left `median()` exact and O(n) in memory, because that is the only way to satisfy
++  the exactness and one-shot-iterable requirements.
++- `test_constant_memory` therefore still fails on the memory bound (and its exact
++  value check), by design; the other four tests pass.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

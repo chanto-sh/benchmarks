@@ -1,0 +1,69 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..e80ff4d 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,62 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++from math import isqrt
++
++
++def _pair(a, b):
++    """Bijection from pairs of non-negative ints to non-negative ints."""
++    s = a + b
++    return s * (s + 1) // 2 + b
++
++
++def _unpair(n):
++    """Inverse of _pair."""
++    w = (isqrt(8 * n + 1) - 1) // 2
++    # Correct any off-by-one from integer square root rounding.
++    while (w + 1) * (w + 2) // 2 <= n:
++        w += 1
++    while w * (w + 1) // 2 > n:
++        w -= 1
++    b = n - w * (w + 1) // 2
++    return w - b, b
++
++
++def _encode_tuple(values, lo, hi):
++    """Encode exactly hi - lo non-negative ints as one non-negative int."""
++    size = hi - lo
++    if size == 0:
++        return 0
++    if size == 1:
++        return values[lo]
++    mid = lo + size // 2
++    return _pair(_encode_tuple(values, lo, mid), _encode_tuple(values, mid, hi))
++
++
++def _decode_tuple(size, code):
++    """Decode code into exactly size non-negative ints."""
++    if size == 0:
++        return []
++    if size == 1:
++        return [code]
++    left_size = size // 2
++    left_code, right_code = _unpair(code)
++    return (_decode_tuple(left_size, left_code)
++            + _decode_tuple(size - left_size, right_code))
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    size = len(lst)
++    if size == 0:
++        return 0
++    return 1 + _pair(size - 1, _encode_tuple(lst, 0, size))
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("key must be non-negative")
++    if n == 0:
++        return []
++    length_minus_one, code = _unpair(n - 1)
++    return _decode_tuple(length_minus_one + 1, code)

@@ -1,0 +1,41 @@
+diff --git a/changelog/11143.bugfix.rst b/changelog/11143.bugfix.rst
+new file mode 100644
+index 0000000..62fe4c8
+--- /dev/null
++++ b/changelog/11143.bugfix.rst
+@@ -0,0 +1,2 @@
++Fix ``TypeError`` when the first expression in a test module is a non-string
++constant, which was mistaken for a docstring while rewriting asserts.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 157903f..9bf79f1 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -676,6 +676,7 @@ class AssertionRewriter(ast.NodeVisitor):
+                 expect_docstring
+                 and isinstance(item, ast.Expr)
+                 and isinstance(item.value, ast.Constant)
++                and isinstance(item.value.value, str)
+             ):
+                 doc = item.value.value
+                 if self.is_rewrite_disabled(doc):
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index d018032..c95c5c2 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -141,6 +141,16 @@ class TestAssertionRewrite:
+         assert isinstance(m.body[1], ast.Assert)
+         assert m.body[1].msg is None
+ 
++    def test_rewrite_first_expr_number_literal(self) -> None:
++        """A non-string literal as the first expression is not a docstring (#11143)."""
++        s = """123\nassert 1"""
++        m = rewrite(s)
++        assert isinstance(m.body[0], ast.Import)
++        assert isinstance(m.body[1], ast.Import)
++        assert isinstance(m.body[2], ast.Expr)
++        assert isinstance(m.body[2].value, ast.Constant)
++        assert m.body[2].value.value == 123
++
+     def test_dont_rewrite_plugin(self, pytester: Pytester) -> None:
+         contents = {
+             "conftest.py": "pytest_plugins = 'plugin'; import plugin",

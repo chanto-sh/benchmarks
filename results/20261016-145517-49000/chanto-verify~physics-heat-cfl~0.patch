@@ -1,0 +1,49 @@
+diff --git a/heat.py b/heat.py
+index d670542..79c42ce 100644
+--- a/heat.py
++++ b/heat.py
+@@ -6,13 +6,39 @@ def solve(u0, alpha, length, t_end):
+ 
+     u0: initial temperatures at nx equally spaced points from 0 to length
+         (both ends included; the end values are held fixed).
++
++    Uses the explicit (forward-time, centred-space) scheme. For stability the
++    time step must satisfy the CFL condition r = alpha*dt/dx**2 <= 0.5, so dt
++    is chosen from the grid spacing and diffusivity rather than being fixed.
+     """
+     nx = len(u0)
+     dx = length / (nx - 1)
+-    dt = 1e-3
+-    steps = int(t_end / dt)
++
++    # No interior points or no diffusion: nothing to advance.
++    if nx < 3 or alpha <= 0.0 or t_end <= 0.0:
++        return list(u0)
++
++    # Stay comfortably inside the stability limit r <= 0.5.
++    r_target = 0.4
++    dt = r_target * dx * dx / alpha
++
++    def step(u, h):
++        r = alpha * h / (dx * dx)
++        return (
++            [u[0]]
++            + [u[i] + r * (u[i - 1] - 2.0 * u[i] + u[i + 1]) for i in range(1, nx - 1)]
++            + [u[-1]]
++        )
++
++    # Take full steps then a final partial step so we land exactly on t_end.
++    # The partial step has h < dt, hence an even smaller (still stable) r.
++    n_full = int(t_end / dt)
+     u = list(u0)
+-    for _ in range(steps):
+-        r = alpha * dt / (dx * dx)
+-        u = [u[0]] + [u[i] + r * (u[i - 1] - 2 * u[i] + u[i + 1]) for i in range(1, nx - 1)] + [u[-1]]
++    for _ in range(n_full):
++        u = step(u, dt)
++
++    remainder = t_end - n_full * dt
++    if remainder > 0.0:
++        u = step(u, remainder)
++
+     return u

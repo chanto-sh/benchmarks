@@ -1,0 +1,63 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..21564b2 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,57 @@
+ MOD = 1_000_000_007
+ 
++# States are indexed by (previous letter is A, number of C's mod 3).
++# state = 3 * last_is_a + c_count_mod_3
++_STATE_COUNT = 6
++
++
++def _mat_mul(a, b):
++    result = [[0] * _STATE_COUNT for _ in range(_STATE_COUNT)]
++    for i in range(_STATE_COUNT):
++        row = result[i]
++        for k in range(_STATE_COUNT):
++            if a[i][k]:
++                factor = a[i][k]
++                other = b[k]
++                for j in range(_STATE_COUNT):
++                    row[j] = (row[j] + factor * other[j]) % MOD
++    return result
++
++
++def _mat_pow(matrix, exponent):
++    result = [[int(i == j) for j in range(_STATE_COUNT)]
++              for i in range(_STATE_COUNT)]
++    while exponent:
++        if exponent & 1:
++            result = _mat_mul(result, matrix)
++        matrix = _mat_mul(matrix, matrix)
++        exponent >>= 1
++    return result
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("code length must be non-negative")
++
++    # transition[to][from] is the number of ways to move between states.
++    transition = [[0] * _STATE_COUNT for _ in range(_STATE_COUNT)]
++    for last_is_a in (0, 1):
++        for c_mod in range(3):
++            source = 3 * last_is_a + c_mod
++
++            # Append B: the previous letter becomes non-A.
++            transition[c_mod][source] += 1
++
++            # Append C: the previous letter becomes non-A and C count advances.
++            transition[(c_mod + 1) % 3][source] += 1
++
++            # Append A: only allowed when the previous letter is not A.
++            if not last_is_a:
++                transition[3 + c_mod][source] += 1
++
++    powered = _mat_pow(transition, n)
++
++    # The initial state is non-A with zero C's (state 0). Valid final states
++    # have a C count divisible by 3, with either possible previous letter.
++    return (powered[0][0] + powered[3][0]) % MOD

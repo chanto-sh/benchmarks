@@ -1,0 +1,204 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..6bdb7c1 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,189 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``accel(x, y)`` is any central force law.  Only the radial component of
++    the force is needed, so the planar motion is reduced to the second-order
++    radial equation
++
++        r'' = h**2 / r**3 + a_r(r),
++
++    where ``h = r0 x v0`` is the conserved angular momentum.  The equation is
++    integrated with an adaptive Dormand-Prince 5(4) method, and the instants
++    at which ``r'`` changes from negative to positive are located by
++    bisection.
++
++    The orbit is assumed to be bound.  A circular orbit has no distinguished
++    closest approach; in that case the orbital (angular) period is returned.
++    """
++    x, y = r0
++    vx, vy = v0
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    h = x * vy - y * vx
++    vr = (x * vx + y * vy) / r
++    vt = abs(h) / r
++    if vt == 0.0:
++        raise ValueError("radial_period requires a non-radial orbit")
++
++    def radial_accel(radius):
++        # On the positive x axis the radial unit vector is (1, 0).
++        ax, _ = accel(radius, 0.0)
++        return ax
++
++    def rhs(state):
++        radius, radial_velocity = state
++        if radius <= 0.0:
++            raise ValueError("orbit reached the origin")
++        return (radial_velocity,
++                h * h / (radius * radius * radius)
++                + radial_accel(radius))
++
++    def fixed_step(state, step):
++        """One fifth-order Dormand-Prince step, returned with its stages."""
++        k1 = rhs(state)
++        k2 = rhs((state[0] + step * _A[1][0] * k1[0],
++                  state[1] + step * _A[1][0] * k1[1]))
++        k3 = rhs((state[0] + step * (_A[2][0] * k1[0] + _A[2][1] * k2[0]),
++                  state[1] + step * (_A[2][0] * k1[1] + _A[2][1] * k2[1])))
++        k4 = rhs((state[0] + step * (_A[3][0] * k1[0] + _A[3][1] * k2[0]
++                                     + _A[3][2] * k3[0]),
++                  state[1] + step * (_A[3][0] * k1[1] + _A[3][1] * k2[1]
++                                     + _A[3][2] * k3[1])))
++        k5 = rhs((state[0] + step * (_A[4][0] * k1[0] + _A[4][1] * k2[0]
++                                     + _A[4][2] * k3[0] + _A[4][3] * k4[0]),
++                  state[1] + step * (_A[4][0] * k1[1] + _A[4][1] * k2[1]
++                                     + _A[4][2] * k3[1] + _A[4][3] * k4[1])))
++        k6 = rhs((state[0] + step * (_A[5][0] * k1[0] + _A[5][1] * k2[0]
++                                     + _A[5][2] * k3[0] + _A[5][3] * k4[0]
++                                     + _A[5][4] * k5[0]),
++                  state[1] + step * (_A[5][0] * k1[1] + _A[5][1] * k2[1]
++                                     + _A[5][2] * k3[1] + _A[5][3] * k4[1]
++                                     + _A[5][4] * k5[1])))
++        k7 = rhs((state[0] + step * (_A[6][0] * k1[0] + _A[6][2] * k3[0]
++                                     + _A[6][3] * k4[0] + _A[6][4] * k5[0]
++                                     + _A[6][5] * k6[0]),
++                  state[1] + step * (_A[6][0] * k1[1] + _A[6][2] * k3[1]
++                                     + _A[6][3] * k4[1] + _A[6][4] * k5[1]
++                                     + _A[6][5] * k6[1])))
++
++        stages = (k1, k2, k3, k4, k5, k6, k7)
++        return ((state[0] + step * sum(b * k[0]
++                                       for b, k in zip(_B5, stages)),
++                 state[1] + step * sum(b * k[1]
++                                       for b, k in zip(_B5, stages))),
++                stages)
++
++    def solve_step(state, step):
++        result, stages = fixed_step(state, step)
++        error = [0.0, 0.0]
++        for b5, b4, k in zip(_B5, _B4, stages):
++            error[0] += (b5 - b4) * k[0]
++            error[1] += (b5 - b4) * k[1]
++        return result, (step * error[0], step * error[1])
++
++    def locate_turning_point(state, step, rising):
++        """Bisect for r' = 0 inside an accepted step."""
++        lo = 0.0
++        hi = step
++        for _ in range(60):
++            mid = 0.5 * (lo + hi)
++            trial, _ = fixed_step(state, mid)
++            if (trial[1] < 0.0) == rising:
++                lo = mid
++            else:
++                hi = mid
++            if hi - lo <= 1e-13 * max(1e-300, hi, abs(t)):
++                break
++        return hi, fixed_step(state, hi)[0]
++
++    # Detect an initial turning point, or an initially circular orbit.
++    angular_rate = h * h / (r * r * r)
++    initial_force = radial_accel(r)
++    initial_radial_accel = angular_rate + initial_force
++    speed_scale = vt + abs(vr)
++    accel_scale = abs(initial_force) + angular_rate
++    at_turning_point = abs(vr) <= 1e-12 * max(1e-300, speed_scale)
++    if (at_turning_point
++            and abs(initial_radial_accel)
++            <= 1e-12 * max(1e-300, accel_scale)):
++        return 2.0 * math.pi * r / vt
++
++    t = 0.0
++    state = (r, vr)
++    if at_turning_point and initial_radial_accel > 0.0:
++        first_periapsis = 0.0
++    else:
++        first_periapsis = None
++
++    # Start small, then let the error controller choose the step size.
++    scale = r / max(speed_scale, math.sqrt(abs(initial_radial_accel) * r),
++                    1e-300)
++    step = 1e-2 * scale
++    if not math.isfinite(step) or step <= 0.0:
++        step = 1e-3 * max(1.0, r)
++
++    rtol = 1e-13
++    atol = 1e-15
++    while True:
++        try:
++            candidate, error = solve_step(state, step)
++        except (ArithmeticError, ValueError):
++            # A trial step left the physical branch of the radial equation.
++            step *= 0.25
++            if step <= 1e-15 * max(1.0, abs(t), state[0]):
++                raise ValueError("failed to advance the orbit") from None
++            continue
++        scaled_error = max(
++            abs(error[0]) / (
++                atol + rtol * max(abs(state[0]), abs(candidate[0]))),
++            abs(error[1]) / (
++                atol + rtol * max(abs(state[1]), abs(candidate[1]))),
++        )
++        if scaled_error <= 1.0:
++            rising_event = state[1] < 0.0 and candidate[1] >= 0.0
++            falling_event = state[1] > 0.0 and candidate[1] <= 0.0
++            if rising_event or falling_event:
++                event_step, event_state = locate_turning_point(
++                    state, step, rising_event)
++                t += event_step
++                state = event_state
++                if rising_event:
++                    if first_periapsis is None:
++                        first_periapsis = t
++                    else:
++                        return t - first_periapsis
++            else:
++                t += step
++                state = candidate
++            if scaled_error == 0.0:
++                factor = 5.0
++            else:
++                factor = min(5.0, max(0.2, 0.9 * scaled_error ** -0.2))
++            step *= factor
++        else:
++            factor = min(1.0, max(0.1, 0.9 * scaled_error ** -0.2))
++            step *= factor

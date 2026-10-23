@@ -1,0 +1,48 @@
+diff --git a/game.py b/game.py
+index 768dec9..48a83a1 100644
+--- a/game.py
++++ b/game.py
+@@ -2,5 +2,41 @@ from fractions import Fraction
+ 
+ 
+ def expected_turns(n, k):
+-    """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    """Exact expected number of turns from square 0 to land exactly on n.
++
++    States 0..n-1 are transient; square n is absorbing. From square i a roll
++    r in 1..k moves to i+r, or, when that overshoots n, bounces back to
++    2*n - i - r. Solving the resulting linear system exactly (no floats)
++    via Gaussian elimination over Fraction gives E[0].
++    """
++    if not (1 <= k <= n <= 60):
++        raise ValueError("require 1 <= k <= n <= 60")
++
++    # Unknowns x[i] = expected turns from square i, for i in 0..n-1.
++    # Equation: x[i] - (1/k) * sum_r x[next(i, r)] = 1, where x[n] = 0.
++    size = n
++    matrix = [[Fraction(0) for _ in range(size + 1)] for _ in range(size)]
++    for i in range(size):
++        matrix[i][i] += Fraction(1)
++        for r in range(1, k + 1):
++            step = i + r
++            nxt = step if step <= n else 2 * n - step
++            if nxt != n:  # n is absorbing, contributes nothing
++                matrix[i][nxt] -= Fraction(1, k)
++        matrix[i][size] = Fraction(1)
++
++    # Forward elimination with partial pivoting.
++    for col in range(size):
++        pivot = next(row for row in range(col, size) if matrix[row][col] != 0)
++        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++        pivot_val = matrix[col][col]
++        matrix[col] = [value / pivot_val for value in matrix[col]]
++        for row in range(size):
++            if row != col and matrix[row][col] != 0:
++                factor = matrix[row][col]
++                matrix[row] = [
++                    value - factor * piv
++                    for value, piv in zip(matrix[row], matrix[col])
++                ]
++
++    return matrix[0][size]

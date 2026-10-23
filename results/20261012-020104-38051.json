@@ -1,0 +1,63 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "opencode",
+      "task": "poly-python-dot-dsl",
+      "rep": 0,
+      "passed": true,
+      "seconds": 17.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 12 tests in 0.000s\n\nOK\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 6,
+        "input": 58834,
+        "output": 1232,
+        "cached": 33264
+      }
+    },
+    {
+      "agent": "opencode",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "^^^^^^^^^^^^^^^^^ expected `Iter<'_, u8>`, found `Map<Iter<'_, u8>, {closure@...}>`\n   |\n   = note: expected struct `std::slice::Iter<'_, _>`\n              found struct `Map<std::slice::Iter<'_, _>, {closure@src/lib.rs:65:35: 65:38}>`\n\nerror[E0308]: mismatched types\n  --> src/lib.rs:80:19\n   |\n80 |             data: data.chars().map(|c| c as u8),\n   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Chars<'_>`, found `Map<Chars<'_>, {closure@lib.rs:80:36}>`\n   |\n   = note: expected struct `Chars<'_>`\n              found struct `Map<Chars<'_>, {closure@src/lib.rs:80:36: 80:39}>`\n\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `xorcism` (lib) due to 2 previous errors\nerror: could not compile `xorcism` (lib test) due to 2 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 22,
+        "input": 873550,
+        "output": 19586,
+        "cached": 210144
+      }
+    },
+    {
+      "agent": "opencode",
+      "task": "poly-go-beer-song",
+      "rep": 0,
+      "passed": true,
+      "seconds": 41.0,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ok  \tbeer\t0.165s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 9,
+        "input": 150155,
+        "output": 3793,
+        "cached": 125664
+      }
+    }
+  ]
+}

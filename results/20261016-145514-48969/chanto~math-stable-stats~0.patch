@@ -1,0 +1,55 @@
+diff --git a/stats.py b/stats.py
+index add4f59..6377649 100644
+--- a/stats.py
++++ b/stats.py
+@@ -3,19 +3,41 @@ import math
+ 
+ 
+ def mean_var(xs):
+-    """(mean, population variance) of a non-empty sequence of floats."""
++    """(mean, population variance) of a non-empty sequence of floats.
++
++    Uses a shifted two-pass algorithm so that a large common offset (e.g.
++    timestamps, absolute pressures) does not destroy the variance through
++    catastrophic cancellation.
++    """
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    ref = xs[0]
++    mean_d = math.fsum(x - ref for x in xs) / n
++    mean = ref + mean_d
++    m2 = math.fsum((x - ref - mean_d) ** 2 for x in xs)
++    return mean, m2 / n
+ 
+ 
+ def logsumexp(xs):
+-    """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    """log(sum(exp(x) for x in xs)) for a non-empty sequence.
++
++    Shifts by the maximum so that no term overflows or underflows; the
++    compensation-based ``fsum`` keeps the sum accurately rounded.
++    """
++    m = max(xs)
++    if m == -math.inf:
++        return -math.inf
++    if m == math.inf:
++        return math.inf
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+-    """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    """log(1 + exp(x)).
++
++    The ``log1p``/``exp(-|x|)`` form avoids overflow for large x and keeps
++    full relative accuracy for very negative x (where ``1 + exp(x)`` would
++    otherwise round to 1 and yield 0).
++    """
++    if x > 0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

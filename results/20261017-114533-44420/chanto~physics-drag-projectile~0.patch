@@ -1,0 +1,179 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..5f2c312 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,172 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (
++        9017.0 / 3168.0,
++        -355.0 / 33.0,
++        46732.0 / 5247.0,
++        49.0 / 176.0,
++        -5103.0 / 18656.0,
++    ),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0)
++_E = (
++    71.0 / 57600.0,
++    0.0,
++    -71.0 / 16695.0,
++    71.0 / 1920.0,
++    -17253.0 / 339200.0,
++    22.0 / 525.0,
++    -1.0 / 40.0,
++)
++
++_RTOL = 1.0e-11
++_ATOL = 1.0e-13
++
++
++def _deriv(state, g, drag):
++    """Time derivative of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -drag * speed * vx, -g - drag * speed * vy)
++
++
++def _add_scaled(base, h, coeffs, stages):
++    """Return base + h * sum(coeffs[i] * stages[i])."""
++    return tuple(
++        base[j] + h * sum(c * stage[j] for c, stage in zip(coeffs, stages))
++        for j in range(4)
++    )
++
++
++def _step(state, h, g, drag):
++    """Take one Dormand-Prince 5(4) step.
++
++    Returns the fifth-order solution, its error estimate and the derivative at
++    the endpoint (which can be reused as the first stage of the next step).
++    """
++    stages = [_deriv(state, g, drag)]
++    for coeffs in _A[1:]:
++        stages.append(_deriv(_add_scaled(state, h, coeffs, stages), g, drag))
++
++    new_state = _add_scaled(state, h, _B, stages[:6])
++    endpoint_stage = _deriv(new_state, g, drag)
++    stages.append(endpoint_stage)
++    error = tuple(
++        h * sum(c * stage[j] for c, stage in zip(_E, stages))
++        for j in range(4)
++    )
++    return new_state, error, endpoint_stage
++
++
++def _step_size(h, error_norm):
++    """Choose the next step size from the current error norm."""
++    if error_norm == 0.0:
++        return h * 5.0
++    factor = 0.9 * error_norm ** -0.2
++    return h * min(5.0, max(0.2, factor))
++
++
++def _refine_event(state, h, index, g, drag):
++    """Locate a sign change of state[index] on [0, h] by bisection."""
++    lo = 0.0
++    hi = h
++    # Every event handled here starts on the positive side of the crossing.
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        mid_state = _step(state, mid, g, drag)[0]
++        if mid_state[index] > 0.0:
++            lo = mid
++        else:
++            hi = mid
++
++    tau = 0.5 * (lo + hi)
++    return tau, _step(state, tau, g, drag)[0]
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from (0, h0) with speed v0 at an elevation
++    angle of angle_deg.  Quadratic drag is F = -k |v| v.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++
++    v0 = float(v0)
++    g = float(g)
++    h0 = float(h0)
++    drag = float(k) / float(mass)
++
++    theta = math.radians(angle_deg)
++    vx0 = v0 * math.cos(theta)
++    vy0 = v0 * math.sin(theta)
++    # Suppress the round-off horizontal component of an exactly vertical launch.
++    if abs(vx0) < 1.0e-15 * max(1.0, abs(v0)):
++        vx0 = 0.0
++
++    # An object already on the ground and not moving upward has zero flight.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    state = (0.0, h0, vx0, vy0)
++    t = 0.0
++    apex = h0
++    apex_found = vy0 <= 0.0
++
++    # A vacuum estimate of the duration is a safe scale for the first step.
++    disc = max(0.0, vy0 * vy0 + 2.0 * g * h0)
++    t_est = (vy0 + math.sqrt(disc)) / g if g > 0.0 else 0.01
++    h = min(0.01, max(1.0e-6, t_est / 200.0))
++
++    while True:
++        new_state, error, _ = _step(state, h, g, drag)
++
++        error_norm = max(
++            abs(error[i]) / (_ATOL + _RTOL * max(abs(state[i]), abs(new_state[i])))
++            for i in range(4)
++        )
++        if error_norm > 1.0:
++            h = _step_size(h, error_norm)
++            continue
++
++        events = []
++
++        if not apex_found and state[3] > 0.0 and new_state[3] <= 0.0:
++            tau, event_state = _refine_event(state, h, 3, g, drag)
++            events.append((tau, "apex", event_state))
++
++        if state[1] > 0.0 and new_state[1] <= 0.0:
++            tau, event_state = _refine_event(state, h, 1, g, drag)
++            events.append((tau, "ground", event_state))
++
++        if events:
++            tau, kind, event_state = min(events, key=lambda item: item[0])
++            t += tau
++
++            if kind == "ground":
++                return {
++                    "range": event_state[0],
++                    "apex": apex,
++                    "time": t,
++                }
++
++            apex = max(apex, event_state[1])
++            apex_found = True
++            state = event_state
++        else:
++            state = new_state
++            t += h
++
++        h = _step_size(h, error_norm)

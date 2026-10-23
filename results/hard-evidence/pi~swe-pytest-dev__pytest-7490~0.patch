@@ -1,0 +1,23 @@
+diff --git a/changelog/7490.bugfix.rst b/changelog/7490.bugfix.rst
+new file mode 100644
+index 0000000..66e5cdd
+--- /dev/null
++++ b/changelog/7490.bugfix.rst
+@@ -0,0 +1 @@
++Fixed a regression where dynamically adding an ``xfail`` marker to a test during its execution (for example using ``request.node.add_marker``) was ignored, causing the test failure to be reported as a normal failure instead of an expected failure.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 335e109..d38983d 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -256,6 +256,11 @@ def pytest_runtest_call(item: Item) -> Generator[None, None, None]:
+ 
+     yield
+ 
++    # The test run may have added an xfail mark dynamically.
++    xfailed = item._store.get(xfailed_key, None)
++    if xfailed is None:
++        item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)
++
+ 
+ @hookimpl(hookwrapper=True)
+ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):

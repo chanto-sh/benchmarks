@@ -1,0 +1,196 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..9d910e0 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,181 @@ def newtonian(gm):
+     return accel
+ 
+ 
++def _hermite_root(u0, u1, du0, du1, dt):
++    """Root in [0, 1] of the cubic Hermite interpolant of u on a step."""
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        s = 0.5 * (lo + hi)
++        s2 = s * s
++        s3 = s2 * s
++        val = ((2.0 * s3 - 3.0 * s2 + 1.0) * u0
++               + (s3 - 2.0 * s2 + s) * dt * du0
++               + (-2.0 * s3 + 3.0 * s2) * u1
++               + (s3 - s2) * dt * du1)
++        if val < 0.0:
++            lo = s
++        else:
++            hi = s
++    return 0.5 * (lo + hi)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``accel`` describes a central force, so angular momentum
++    ``h = x*vy - y*vx`` is conserved and the radial coordinate obeys
++
++        r'' = h^2/r^3 + a_r(r),
++
++    with ``a_r(r)`` the radial component of the acceleration.  This
++    one-dimensional problem is integrated with an adaptive
++    Dormand-Prince Runge-Kutta pair.  Closest approaches are the zeros
++    of the radial velocity where it changes from negative to positive.
++    """
++    x0, y0 = r0
++    vx0, vy0 = v0
++    r = math.hypot(x0, y0)
++    if not r > 0.0:
++        raise ValueError("initial position must not be at the origin")
++
++    speed = math.hypot(vx0, vy0)
++    u = (x0 * vx0 + y0 * vy0) / r       # radial velocity dr/dt
++    h = x0 * vy0 - y0 * vx0             # specific angular momentum
++    if h == 0.0:
++        raise ValueError("purely radial orbits are not supported")
++    h2 = h * h
++
++    def radial_accel(rad):
++        # For a central force the radial component at (rad, 0) is ax.
++        return accel(rad, 0.0)[0]
++
++    def radial_force(rad):
++        # d(u)/dt, i.e. the radial acceleration including the
++        # centrifugal term.
++        return h2 / (rad * rad * rad) + radial_accel(rad)
++
++    ar0 = radial_accel(r)
++    a0 = h2 / (r * r * r) + ar0
++
++    # A circular orbit never has a preferred closest approach.  Its
++    # radial period is the limit approached by nearby eccentric orbits,
++    # i.e. the period of linear radial oscillations about r.
++    eps_v = 1e-12 * max(1.0, speed)
++    eps_a = 1e-12 * max(1.0, abs(h2 / (r * r * r)) + abs(ar0))
++    if abs(u) <= eps_v and abs(a0) <= eps_a:
++        step = 1e-5 * r
++        ar_prime = (radial_accel(r + step) - radial_accel(r - step)) / (2.0 * step)
++        f_prime = -3.0 * h2 / (r * r * r * r) + ar_prime
++        if f_prime >= 0.0:
++            raise ValueError("circular orbit is not radially stable")
++        return 2.0 * math.pi / math.sqrt(-f_prime)
++
++    # If we start exactly at periapsis, t = 0 is the first closest
++    # approach.  A merely small radial velocity is left to the event
++    # finder so that its timing is not biased.
++    first = None
++    armed = False   # true while r is decreasing, so a zero of u that
++                    # follows is a periapsis rather than an apoapsis
++    if u == 0.0:
++        if a0 > 0.0:
++            first = 0.0
++    elif u < 0.0:
++        armed = True
++
++    rtol = 1e-11
++    atol = 1e-12
++    t = 0.0
++    # Include the acceleration timescale so a slow start still gets a
++    # sensible first step.
++    v_scale = max(speed, math.sqrt(abs(ar0) * r), 1e-12)
++    dt = 1e-3 * r / v_scale
++    max_steps = 200000
++
++    # Dormand-Prince 5(4) coefficients.
++    a21 = 1.0 / 5.0
++    a31, a32 = 3.0 / 40.0, 9.0 / 40.0
++    a41, a42, a43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++    a51, a52, a53, a54 = (19372.0 / 6561.0, -25360.0 / 2187.0,
++                          64448.0 / 6561.0, -212.0 / 729.0)
++    a61, a62, a63, a64, a65 = (9017.0 / 3168.0, -355.0 / 33.0,
++                               46732.0 / 5247.0, 49.0 / 176.0,
++                               -5103.0 / 18656.0)
++    a71, a73, a74, a75, a76 = (35.0 / 384.0, 500.0 / 1113.0,
++                               125.0 / 192.0, -2187.0 / 6784.0,
++                               11.0 / 84.0)
++    b41, b43, b44, b45, b46, b47 = (5179.0 / 57600.0, 7571.0 / 16695.0,
++                                    393.0 / 640.0, -92097.0 / 339200.0,
++                                    187.0 / 2100.0, 1.0 / 40.0)
++
++    for _ in range(max_steps):
++        # Do not let a step skip a periapsis passage.
++        local_speed = math.hypot(u, h / r)
++        if local_speed > 0.0:
++            dt = min(dt, 0.005 * 2.0 * math.pi * r / local_speed)
++
++        k1r, k1u = u, radial_force(r)
++
++        k2r = u + dt * (a21 * k1u)
++        k2u = radial_force(r + dt * (a21 * k1r))
++
++        k3r = u + dt * (a31 * k1u + a32 * k2u)
++        k3u = radial_force(r + dt * (a31 * k1r + a32 * k2r))
++
++        k4r = u + dt * (a41 * k1u + a42 * k2u + a43 * k3u)
++        k4u = radial_force(r + dt * (a41 * k1r + a42 * k2r + a43 * k3r))
++
++        k5r = u + dt * (a51 * k1u + a52 * k2u + a53 * k3u + a54 * k4u)
++        k5u = radial_force(r + dt * (a51 * k1r + a52 * k2r + a53 * k3r
++                                     + a54 * k4r))
++
++        k6r = u + dt * (a61 * k1u + a62 * k2u + a63 * k3u + a64 * k4u
++                        + a65 * k5u)
++        k6u = radial_force(r + dt * (a61 * k1r + a62 * k2r + a63 * k3r
++                                     + a64 * k4r + a65 * k5r))
++
++        r5 = r + dt * (a71 * k1r + a73 * k3r + a74 * k4r + a75 * k5r
++                       + a76 * k6r)
++        u5 = u + dt * (a71 * k1u + a73 * k3u + a74 * k4u + a75 * k5u
++                       + a76 * k6u)
++        k7u = radial_force(r5)
++
++        r4 = r + dt * (b41 * k1r + b43 * k3r + b44 * k4r + b45 * k5r
++                       + b46 * k6r + b47 * (u5))
++        u4 = u + dt * (b41 * k1u + b43 * k3u + b44 * k4u + b45 * k5u
++                       + b46 * k6u + b47 * k7u)
++
++        scale_r = atol + rtol * max(abs(r), abs(r5))
++        scale_u = atol + rtol * max(abs(u), abs(u5))
++        err = max(abs(r5 - r4) / scale_r, abs(u5 - u4) / scale_u)
++
++        if not (err <= 1.0 and r5 > 0.0 and math.isfinite(r5)
++                and math.isfinite(u5)):
++            if err > 1.0 and math.isfinite(err):
++                dt *= max(0.2, 0.9 * err ** -0.2)
++            else:
++                dt *= 0.5
++            continue
++
++        r_old, u_old = r, u
++        t_old = t
++        r, u = r5, u5
++        t += dt
++
++        if armed and u >= 0.0:
++            s = _hermite_root(u_old, u, k1u, k7u, dt)
++            event_time = t_old + s * dt
++            if first is None:
++                first = event_time
++            else:
++                return event_time - first
++            armed = False
++        elif u < 0.0:
++            armed = True
++
++        # Grow the step for the next attempt; rejections shrink it.
++        if err > 0.0:
++            dt *= min(5.0, max(0.2, 0.9 * err ** -0.2))
++        else:
++            dt *= 5.0
++
++    raise ValueError("could not find two successive closest approaches")

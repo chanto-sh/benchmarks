@@ -1,0 +1,58 @@
+diff --git a/changelog/8906.improvement.rst b/changelog/8906.improvement.rst
+new file mode 100644
+index 0000000..970f4cb
+--- /dev/null
++++ b/changelog/8906.improvement.rst
+@@ -0,0 +1 @@
++The error message when :func:`pytest.skip` is used at module level now suggests passing ``allow_module_level=True`` if the intention is to skip the entire module.
+diff --git a/doc/en/how-to/skipping.rst b/doc/en/how-to/skipping.rst
+index 1565700..092eef7 100644
+--- a/doc/en/how-to/skipping.rst
++++ b/doc/en/how-to/skipping.rst
+@@ -74,6 +74,27 @@ It is also possible to skip the whole module using
+     if not sys.platform.startswith("win"):
+         pytest.skip("skipping windows-only tests", allow_module_level=True)
+ 
++This is also the recommended way to skip a test module which cannot even be
++imported on the current interpreter, for example because it uses syntax only
++available in newer Python versions:
++
++.. code-block:: python
++
++    import sys
++    import pytest
++
++    if sys.version_info < (3, 8):
++        pytest.skip("Requires Python >= 3.8", allow_module_level=True)
++
++    # The module is not imported on older Python versions,
++    # so the rest of the file may use newer syntax.
++    from pos_only import foo
++
++Note that the ``pytestmark = pytest.mark.skip(...)`` and
++``pytestmark = pytest.mark.skipif(...)`` alternatives are not suitable in this
++case, because the module is still imported (and thus must be parseable) before
++the marker is evaluated.
++
+ 
+ **Reference**: :ref:`pytest.mark.skip ref`
+ 
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 79dfb73..8e8d2f3 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -608,10 +608,10 @@ class Module(nodes.File, PyCollector):
+             if e.allow_module_level:
+                 raise
+             raise self.CollectError(
+-                "Using pytest.skip outside of a test is not allowed. "
+-                "To decorate a test function, use the @pytest.mark.skip "
+-                "or @pytest.mark.skipif decorators instead, and to skip a "
+-                "module use `pytestmark = pytest.mark.{skip,skipif}."
++                "Using pytest.skip outside of a test will skip the entire module. "
++                "If that's your intention, pass `allow_module_level=True`. "
++                "If you want to skip a specific test or an entire class, "
++                "use the @pytest.mark.skip or @pytest.mark.skipif decorators."
+             ) from e
+         self.config.pluginmanager.consider_module(mod)
+         return mod

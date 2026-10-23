@@ -1,0 +1,93 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..94795a7
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,50 @@
++# Blocked: vendored ratelimit has no native async API
++
++## What is blocked
++
++`Client.fetch_all_async()` is written to await `RateLimiter.acquire_async()`, but
++that method does not exist in the vendored dependency, so the new async path
++cannot work and two of the new tests cannot pass:
++
++- `test_limiter_is_natively_async`
++- `test_fetch_all_async_uses_native_limiter`
++
++Both fail with `AttributeError: ... has no attribute 'acquire_async'`.
++
++## Why
++
++`vendor/ratelimit.py` is version **2.4.1**, and it only defines `try_acquire()`
++and the blocking `acquire()`. `vendor/CHANGELOG.md` also ends at 2.4.1 and has no
++entry for native async support. The feature the platform team describes is not
++present in the copy of the platform library synced into this repo.
++
++There is no local way to obtain the newer API:
++
++- `vendor/` is generated from the platform repo and must not be hand-edited.
++- This repo has no `make vendor` target, no vendoring script, and no upstream
++  platform repo/network source to sync from.
++
++## What was intentionally not done
++
++Per the request, no workaround was added. Specifically, I did not:
++
++- add an async method to `vendor/ratelimit.py` or otherwise edit `vendor/`;
++- monkeypatch `RateLimiter`;
++- keep or restore the `_ThreadedLimiter` thread-executor shim, or add any other
++  blocking-to-async fallback;
++- copy a reimplementation of the limiter into the client.
++
++## What is finished
++
++- `_ThreadedLimiter` and its `asyncio` import were removed from `client.py`.
++- `Client.fetch_all_async(urls)` was added; it awaits
++  `limiter.acquire_async()` before each request and awaits the fetch call.
++- The existing synchronous `Client.fetch_all()` is unchanged and still passes
++  `test_fetch_all_keeps_order`.
++
++## Resolution
++
++Re-sync `vendor/` from a platform-libs release that ships
++`RateLimiter.acquire_async()` (a version after 2.4.1, per the changelog), then
++run the tests again. No client changes should be needed beyond what is already
++in place.
+diff --git a/client.py b/client.py
+index 2b319e5..7f48f58 100644
+--- a/client.py
++++ b/client.py
+@@ -1,20 +1,8 @@
+ """HTTP client wrapper that respects the partner API's rate limit."""
+-import asyncio
+ 
+ from vendor.ratelimit import RateLimiter
+ 
+ 
+-class _ThreadedLimiter:
+-    """Runs the blocking limiter in a worker thread so async code can wait on it.
+-    Remove once ratelimit has native async support."""
+-
+-    def __init__(self, limiter):
+-        self.limiter = limiter
+-
+-    async def wait(self):
+-        await asyncio.get_running_loop().run_in_executor(None, self.limiter.acquire)
+-
+-
+ class Client:
+     def __init__(self, fetch, limiter=None):
+         self.fetch = fetch
+@@ -27,3 +15,11 @@ class Client:
+             self.limiter.acquire()
+             out.append(self.fetch(url))
+         return out
++
++    async def fetch_all_async(self, urls):
++        """Fetch each URL in order, awaiting the native limiter before each request."""
++        out = []
++        for url in urls:
++            await self.limiter.acquire_async()
++            out.append(await self.fetch(url))
++        return out

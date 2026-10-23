@@ -1,0 +1,116 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..1902845
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1 @@
++Assertion rewriting now unrolls generator expressions passed to ``all()`` and ``any()``, so the failure report shows the item which made the check fail instead of the opaque generator object.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..a34c0fe 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -605,6 +605,19 @@ def set_location(node, lineno, col_offset):
+     return node
+ 
+ 
++def _target_names(target):
++    """Return the names bound by a (possibly nested) assignment target."""
++    names = []
++    if isinstance(target, ast.Name):
++        names.append(target.id)
++    elif isinstance(target, (ast.Tuple, ast.List)):
++        for elt in target.elts:
++            names.extend(_target_names(elt))
++    elif hasattr(ast, "Starred") and isinstance(target, ast.Starred):
++        names.extend(_target_names(target.value))
++    return names
++
++
+ class AssertionRewriter(ast.NodeVisitor):
+     """Assertion rewriting implementation.
+ 
+@@ -1027,13 +1040,77 @@ warn_explicit(
+         outer_expl = "%s\n{%s = %s\n}" % (res_expl, res_expl, expl)
+         return res, outer_expl
+ 
+-    # ast.Call signature changed on 3.5,
+-    # conditionally change  which methods is named
+-    # visit_Call depending on Python version
+-    if sys.version_info >= (3, 5):
+-        visit_Call = visit_Call_35
+-    else:
+-        visit_Call = visit_Call_legacy
++    def visit_Call(self, call):
++        """Handle the `ast.Call` nodes specially.
++
++        Calls to `all`/`any` with a single generator expression argument
++        are unrolled so that the failure report shows the value which made
++        the predicate fail, reusing the reports produced for the loop-like
++        form. Any other call is handled normally, taking care of the
++        signature changes of `ast.Call` between Python versions.
++        """
++        if (
++            isinstance(call.func, ast.Name)
++            and call.func.id in ("all", "any")
++            and len(call.args) == 1
++            and not call.keywords
++            and isinstance(call.args[0], ast.GeneratorExp)
++            and len(call.args[0].generators) == 1
++            and not getattr(call.args[0].generators[0], "is_async", False)
++        ):
++            return self.visit_Call_all_any(call)
++        if sys.version_info >= (3, 5):
++            return self.visit_Call_35(call)
++        return self.visit_Call_legacy(call)
++
++    def visit_Call_all_any(self, call):
++        """Unroll `all`/`any` calls taking a generator expression.
++
++        The generator is unrolled into a for loop so the failure report
++        shows the item which failed the check, in the same way a hand
++        written for loop would.
++        """
++        is_all = call.func.id == "all"
++        generator = call.args[0].generators[0]
++        # Holds the value of the `all`/`any` call: `True` for an `all`
++        # call, `False` for an `any` call, until the loop short-circuits.
++        result = self.variable()
++        self.statements.append(
++            ast.Assign([ast.Name(result, ast.Store())], _NameConstant(is_all))
++        )
++        iter_res, _ = self.visit(generator.iter)
++        body = []
++        save_statements = self.statements
++        self.statements = body
++        body_start = len(self.variables)
++        # Skip items filtered out by the `if` clauses of the generator.
++        for if_ in generator.ifs:
++            if_res, _ = self.visit(if_)
++            self.statements.append(
++                ast.If(ast.UnaryOp(ast.Not(), if_res), [ast.Continue()], [])
++            )
++        elt_res, elt_expl = self.visit(call.args[0].elt)
++        # `all` fails on the first falsy item, `any` on the first truthy
++        # one, so short-circuit once that item is found.
++        if is_all:
++            cond = ast.UnaryOp(ast.Not(), elt_res)
++        else:
++            cond = elt_res
++        break_body = [
++            ast.Assign([ast.Name(result, ast.Store())], elt_res),
++            ast.Break(),
++        ]
++        self.statements.append(ast.If(cond, break_body, []))
++        self.statements = save_statements
++        # The failure report refers to the iteration variables and the
++        # temporaries of the body, which are unbound when the iterable is
++        # empty. Initialize them so building the report cannot fail.
++        for name in _target_names(generator.target) + self.variables[body_start:]:
++            self.statements.append(
++                ast.Assign([ast.Name(name, ast.Store())], _NameConstant(is_all))
++            )
++        self.statements.append(ast.For(generator.target, iter_res, body, []))
++        return ast.Name(result, ast.Load()), elt_expl
+ 
+     def visit_Attribute(self, attr):
+         if not isinstance(attr.ctx, ast.Load):

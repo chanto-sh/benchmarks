@@ -1,0 +1,57 @@
+diff --git a/doc/whatsnew/fragments/5663.bugfix b/doc/whatsnew/fragments/5663.bugfix
+new file mode 100644
+index 0000000..4081b16
+--- /dev/null
++++ b/doc/whatsnew/fragments/5663.bugfix
+@@ -0,0 +1,4 @@
++Fix a false warning and incorrect output when using escaped braces (``{{`` and
++``}}``) in the ``--msg-template`` option.
++
++Closes #5663
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..6e4d4cd 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -175,7 +175,10 @@ class TextReporter(BaseReporter):
+         self._template = template
+ 
+         # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
++        # Escaped braces (``{{`` and ``}}``) are literals and must not be treated as
++        # format fields, so remove them before looking for unrecognized arguments.
++        template_without_escaped_braces = template.replace("{{", "").replace("}}", "")
++        arguments = re.findall(r"\{(.+?)(:.*)?\}", template_without_escaped_braces)
+         for argument in arguments:
+             if argument[0] not in MESSAGE_FIELDS:
+                 warnings.warn(
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..e8822af 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -113,6 +113,26 @@ def test_template_option_non_existing(linter) -> None:
+     assert out_lines[2] == "my_mod:2::()"
+ 
+ 
++def test_template_option_with_escaped_braces(linter) -> None:
++    """Test the msg-template option with escaped braces.
++
++    Escaped braces are literals and must not be mistaken for arguments.
++    """
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    with warnings.catch_warnings(record=True) as caught:
++        warnings.simplefilter("always")
++        linter.set_current_module("my_mod")
++    assert not caught
++
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[1] == '{ "Category": "convention" }'
++
++
+ def test_deprecation_set_output(recwarn):
+     """TODO remove in 3.0."""
+     reporter = BaseReporter()

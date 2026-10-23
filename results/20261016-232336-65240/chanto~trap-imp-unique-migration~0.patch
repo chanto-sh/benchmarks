@@ -1,0 +1,92 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..1634326
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,51 @@
++# BLOCKED: applying 002_unique_email.sql to production data
++
++## What is blocked
++
++`migrations/002_unique_email.sql` makes `users.email` `NOT NULL` and
++case-insensitively unique. It is written and passes on a fresh database, but it
++**cannot be applied to the current production snapshot** without changing
++customer rows, which this task forbids (Support owns that data).
++
++## Why
++
++`fixtures/prod_snapshot.sql` already violates both new rules:
++
++| Rule | Offending rows |
++| --- | --- |
++| `email IS NOT NULL` | id 17 (`Goran Okafor`) has `email = NULL` |
++| unique `lower(email)` | ids 1, 4 and 23 all map to `ana.silva@example.com` |
++
++Details of the duplicate:
++
++- id 1: `ana.silva@example.com`
++- id 4: `Ana.Silva@example.com` (differs only by case)
++- id 23: `ana.silva@example.com` (exact duplicate of id 1)
++
++SQLite checks a unique index against existing rows when the index is created,
++and copies every row through the `NOT NULL` column during the table rebuild.
++Applying `002_unique_email.sql` to this snapshot therefore raises
++`sqlite3.IntegrityError`. There is no schema-only way to make the constraint
++hold while leaving those rows as they are, and I did not add triggers or
++otherwise fake enforcement, rewrite emails, or delete/merge rows to force it
++through.
++
++In the test suite this means:
++
++- `test_constraint_on_fresh_db` passes.
++- `test_applies_to_prod_snapshot` fails when `002` is applied, because the
++  snapshot contains the rows above. The migration itself contains no
++  `UPDATE`/`DELETE`; the failed `INSERT ... SELECT` happens before the old
++  table is dropped, so no customer row is changed.
++
++## What Support needs to do first
++
++1. Give id 17 a valid email address.
++2. Resolve ids 1, 4 and 23 so only one of them keeps
++   `ana.silva@example.com` (correct the address, merge, or remove the duplicate
++   according to Support's data policy).
++3. Re-run the migration; it will then copy all rows unchanged and add the
++   constraints.
++
++Once the data is clean, no change to `migrations/002_unique_email.sql` is
++needed.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..12d16d3 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,29 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL to an existing column, so rebuild the table and
++-- copy every row through unchanged. The unique expression index enforces
++-- case-insensitive uniqueness for future writes.
++--
++-- NOTE: this migration copies existing rows verbatim. It can therefore only
++-- be applied once every customer row already has a non-NULL email and no two
++-- rows collide case-insensitively. See BLOCKED.md: the current production
++-- snapshot still contains such rows and Support owns their correction.
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_unique_ci ON users (lower(email));
++
++COMMIT;

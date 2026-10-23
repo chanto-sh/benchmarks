@@ -1,0 +1,108 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..903759e 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -11,7 +11,7 @@
+ from __future__ import annotations
+ 
+ import os
+-import re
++import string
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
+@@ -175,15 +175,43 @@ class TextReporter(BaseReporter):
+         self._template = template
+ 
+         # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
+-                warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
+-                    "Are you sure it is supported on the current version of pylint?"
+-                )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
+-        self._fixed_template = template
++        formatter = string.Formatter()
++        unknown_arguments: list[str] = []
++        for _, field_name, _, _ in formatter.parse(template):
++            if field_name is not None and field_name not in MESSAGE_FIELDS:
++                unknown_arguments.append(field_name)
++
++        if not unknown_arguments:
++            self._fixed_template = template
++            return
++
++        for argument in unknown_arguments:
++            warnings.warn(
++                f"Don't recognize the argument '{argument}' in the --msg-template. "
++                "Are you sure it is supported on the current version of pylint?"
++            )
++
++        # Reconstruct the template, removing the unrecognized arguments while
++        # preserving escaped braces (e.g. ``{{`` and ``}}``).
++        fixed_template = []
++        for (
++            literal_text,
++            field_name,
++            format_spec,
++            conversion,
++        ) in formatter.parse(template):
++            # ``Formatter.parse()`` unescapes braces in the literal text, so
++            # escape them again to keep them literal in the resulting template.
++            fixed_template.append(literal_text.replace("{", "{{").replace("}", "}}"))
++            if field_name is None or field_name in unknown_arguments:
++                continue
++            field = "{" + field_name
++            if conversion:
++                field += "!" + conversion
++            if format_spec:
++                field += ":" + format_spec
++            fixed_template.append(field + "}")
++        self._fixed_template = "".join(fixed_template)
+ 
+     def write_message(self, msg: Message) -> None:
+         """Convenience method to write a formatted message with class default
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..0a6046e 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -113,6 +113,37 @@ def test_template_option_non_existing(linter) -> None:
+     assert out_lines[2] == "my_mod:2::()"
+ 
+ 
++def test_template_option_with_custom_braces(linter) -> None:
++    """Test the msg-template option with escaped custom braces."""
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    linter.set_current_module("my_module")
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[1] == '{ "Category": "convention" }'
++
++
++def test_template_option_with_custom_braces_and_unknown(linter) -> None:
++    """Test that escape custom braces are kept when an unknown argument is removed."""
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = (
++        '{{ "Category": "{category}", "Unknown": "{unknown}" }}'
++    )
++    linter.open()
++    with pytest.warns(UserWarning) as records:
++        linter.set_current_module("my_module")
++        assert len(records) == 1
++        assert "Don't recognize the argument 'unknown'" in records[0].message.args[0]
++    linter.add_message("C0301", line=1, args=(1, 2))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[1] == '{ "Category": "convention", "Unknown": "" }'
++
++
+ def test_deprecation_set_output(recwarn):
+     """TODO remove in 3.0."""
+     reporter = BaseReporter()

@@ -1,0 +1,141 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..4563586 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,134 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++from decimal import Decimal, localcontext
++
++
++def _forcing_terms(m, k, c, omega):
++    """Return k - m*w**2 and c*w, accurately near undamped resonance."""
++    stiffness = k - m * omega * omega
++    scale = abs(k) + abs(m * omega * omega)
++    if scale != 0.0 and abs(stiffness) <= 1.0e-6 * scale:
++        with localcontext() as ctx:
++            ctx.prec = 50
++            M = Decimal.from_float(m)
++            K = Decimal.from_float(k)
++            W = Decimal.from_float(omega)
++            stiffness = float(K - M * W * W)
++    return stiffness, c * omega
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return (C, D) such that C cos(wt) + D sin(wt) is the steady state."""
++    if F0 == 0.0:
++        return 0.0, 0.0
++
++    stiffness, damping = _forcing_terms(m, k, c, omega)
++    magnitude = math.hypot(stiffness, damping)
++    if magnitude == 0.0:
++        raise ValueError(
++            "an undamped oscillator driven exactly at resonance has no "
++            "steady-state amplitude"
++        )
++
++    scale = F0 / magnitude
++    return scale * (stiffness / magnitude), scale * (damping / magnitude)
++
++
++def _discriminant(m, k, c, p, q):
++    """Return p**2 - 4*q, computed accurately near critical damping.
++
++    p = c/m and q = k/m are the coefficients of x'' + p x' + q x = 0.
++    When the roots are nearly repeated, the subtraction in p**2 - 4*q loses
++    significant digits.  Recompute it in higher precision in that case.
++    """
++    disc = p * p - 4.0 * q
++    scale = p * p + abs(4.0 * q)
++    if scale != 0.0 and abs(disc) <= 1.0e-6 * scale:
++        with localcontext() as ctx:
++            ctx.prec = 50
++            M = Decimal.from_float(m)
++            K = Decimal.from_float(k)
++            C = Decimal.from_float(c)
++            disc = float((C * C - Decimal(4) * M * K) / (M * M))
++    return disc
++
++
++def _sinc(x):
++    """sin(x)/x, evaluated accurately near x = 0."""
++    if x == 0.0:
++        return 1.0
++    if abs(x) < 1.0e-4:
++        x2 = x * x
++        return 1.0 - x2 / 6.0 + x2 * x2 / 120.0 - x2 * x2 * x2 / 5040.0
++    return math.sin(x) / x
++
++
++def _exp_decay_average(x):
++    """(1 - exp(-x))/x, evaluated accurately near x = 0."""
++    if x == 0.0:
++        return 1.0
++    if abs(x) < 1.0e-4:
++        return 1.0 - x / 2.0 + x * x / 6.0 - x * x * x / 24.0
++    return -math.expm1(-x) / x
++
++
++def _homogeneous(m, k, c, x_initial, v_initial, t):
++    """Solution of m x'' + c x' + k x = 0 with the given initial values."""
++    p = c / m
++    q = k / m
++    disc = _discriminant(m, k, c, p, q)
++
++    if disc < 0.0:
++        # Underdamped: repeated-root-free trigonometric form.
++        alpha = -0.5 * p
++        beta = 0.5 * math.sqrt(-disc)
++        y = beta * t
++        return math.exp(alpha * t) * (
++            x_initial * math.cos(y)
++            + (v_initial - alpha * x_initial) * t * _sinc(y)
++        )
++
++    if disc == 0.0:
++        # Critically damped: the beta -> 0 limit of the underdamped form.
++        root = -0.5 * p
++        return math.exp(root * t) * (
++            x_initial + (v_initial - root * x_initial) * t
++        )
++
++    # Overdamped.  Use the slow root and the decay between the two roots;
++    # this avoids forming two huge exponentials that can overflow separately
++    # and then cancel.
++    root_separation = math.sqrt(disc)
++    slow_root = -2.0 * q / (p + root_separation)
++    x = root_separation * t
++    return math.exp(slow_root * t) * (
++        x_initial
++        + (v_initial - slow_root * x_initial) * t * _exp_decay_average(x)
++    )
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    if F0 == 0.0:
++        return 0.0
++    magnitude = math.hypot(*_forcing_terms(m, k, c, omega))
++    if magnitude == 0.0:
++        raise ValueError(
++            "an undamped oscillator driven exactly at resonance has no "
++            "steady-state amplitude"
++        )
++    return abs(F0) / magnitude
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    c_coeff, d_coeff = _steady_state_coefficients(m, k, c, F0, omega)
++
++    # Subtract the steady state first so that the homogeneous part carries
++    # the initial conditions.
++    x_h = x0 - c_coeff
++    v_h = v0 - d_coeff * omega
++
++    steady = c_coeff * math.cos(omega * t) + d_coeff * math.sin(omega * t)
++    return steady + _homogeneous(m, k, c, x_h, v_h, t)

@@ -1,0 +1,74 @@
+diff --git a/changelog/7490.bugfix.rst b/changelog/7490.bugfix.rst
+new file mode 100644
+index 0000000..68ba69a
+--- /dev/null
++++ b/changelog/7490.bugfix.rst
+@@ -0,0 +1 @@
++An ``xfail`` marker added dynamically to a test item during the test run (for example via ``request.node.add_marker``) is now taken into account again, restoring the behavior of pytest 5.x.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 335e109..e7223f0 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -254,7 +254,14 @@ def pytest_runtest_call(item: Item) -> Generator[None, None, None]:
+         if xfailed and not xfailed.run:
+             xfail("[NOTRUN] " + xfailed.reason)
+ 
+-    yield
++    try:
++        yield
++    finally:
++        # The xfail mark may have been added dynamically during the test (e.g.
++        # via ``request.node.add_marker``), so re-evaluate it now that the test
++        # has run.
++        if item._store.get(xfailed_key, None) is None:
++            item._store[xfailed_key] = evaluate_xfail_marks(item)
+ 
+ 
+ @hookimpl(hookwrapper=True)
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index 8fceb37..a9ad240 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -1188,6 +1188,42 @@ def test_mark_xfail_item(testdir):
+     assert xfailed
+ 
+ 
++def test_xfail_marker_added_dynamically(testdir):
++    """An xfail mark added dynamically during the test run is respected (#7490)."""
++    testdir.makepyfile(
++        """
++        import pytest
++
++        def test_xfail_dynamic(request):
++            request.node.add_marker(pytest.mark.xfail(reason="dynamic"))
++            assert 0
++        """
++    )
++    result = testdir.runpytest("-rx")
++    result.stdout.fnmatch_lines(
++        [
++            "XFAIL*test_xfail_dynamic",
++            "  dynamic",
++            "*1 xfailed*",
++        ]
++    )
++
++
++def test_xpass_marker_added_dynamically(testdir):
++    """An xfail mark added dynamically to a passing test is reported as xpassed."""
++    testdir.makepyfile(
++        """
++        import pytest
++
++        def test_xpass_dynamic(request):
++            request.node.add_marker(pytest.mark.xfail(reason="dynamic"))
++            assert 1
++        """
++    )
++    result = testdir.runpytest("-rx")
++    result.stdout.fnmatch_lines(["*1 xpassed*"])
++
++
+ def test_summary_list_after_errors(testdir):
+     """Ensure the list of errors/fails/xfails/skips appears after tracebacks in terminal reporting."""
+     testdir.makepyfile(

@@ -1,0 +1,90 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..a283a6f 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,82 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The encoding is built on a bit-efficient bijection ``pair(a, b)`` between
++pairs of non-negative integers and non-negative integers.  A non-empty list
++is represented recursively as ``1 + pair(head, key(tail))``, and the empty
++list is represented by ``0``.
++"""
++
++
++def _bits(n):
++    """Return (length, value) of the canonical bit string for *n*.
++
++    ``0`` is the empty string.  For n >= 1, the string has length L and
++    value v, where n = 2**L + v - 1 and 0 <= v < 2**L.
++    """
++    if n == 0:
++        return 0, 0
++    length = (n + 1).bit_length() - 1
++    return length, n - ((1 << length) - 1)
++
++
++def _unbits(length, value):
++    """Inverse of :func:`_bits`."""
++    if length == 0:
++        return 0
++    return (1 << length) + value - 1
++
++
++def _block_start(m):
++    """First key in the block of pairs whose bit lengths sum to *m*."""
++    return ((m - 1) << m) + 1
++
++
++def _pair(a, b):
++    """Bijection from N x N to N.
++
++    If the canonical bit strings of a and b have lengths ``la`` and ``lb``
++    and values ``va`` and ``vb``, all pairs in the same ``la + lb`` block
++    are ranked by ``(la, va, vb)``.
++    """
++    la, va = _bits(a)
++    lb, vb = _bits(b)
++    m = la + lb
++    return _block_start(m) + (la << m) + (va << lb) + vb
++
++
++def _unpair(n):
++    """Inverse of :func:`_pair`: return (a, b) with _pair(a, b) == n."""
++    # Find the block m with _block_start(m) <= n < _block_start(m + 1).
++    lo, hi = 0, n.bit_length() + 1
++    while lo < hi:
++        mid = (lo + hi + 1) // 2
++        if _block_start(mid) <= n:
++            lo = mid
++        else:
++            hi = mid - 1
++
++    m = lo
++    offset = n - _block_start(m)
++    la = offset >> m
++    lb = m - la
++    remaining = offset & ((1 << m) - 1)
++    va = remaining >> lb
++    vb = remaining & ((1 << lb) - 1)
++    return _unbits(la, va), _unbits(lb, vb)
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = 0
++    for value in reversed(lst):
++        n = 1 + _pair(value, n)
++    return n
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    lst = []
++    while n:
++        value, n = _unpair(n - 1)
++        lst.append(value)
++    return lst

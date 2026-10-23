@@ -1,0 +1,39 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..58eab18
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,5 @@
++`tmpdir`, `tmpdir_factory` and `tmp_path_factory` now fall back to a generic
++``unknown`` user name if the current user name contains characters which are not
++valid in a path component, fixing a crash when creating the base temporary
++directory (e.g. when the user name is a Windows domain user such as
++``domain\user``).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..1a40c8e 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -150,13 +150,21 @@ class TempdirFactory:
+ 
+ def get_user() -> Optional[str]:
+     """Return the current user name, or None if getuser() does not work
+-    in the current environment (see #1010)."""
++    in the current environment (see #1010).
++    It also returns None if the user name contains characters which are
++    not allowed in directory names (see #8365)."""
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        user = getpass.getuser()
+     except (ImportError, KeyError):
+         return None
++    # A user name might contain characters which are not valid in a path
++    # component (e.g. a Windows domain user is reported as ``domain\user``),
++    # in which case we fall back to a generic name (#8365).
++    if re.fullmatch(r"\w+", user) is None:
++        return None
++    return user
+ 
+ 
+ def pytest_configure(config: Config) -> None:

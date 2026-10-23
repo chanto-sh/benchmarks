@@ -1,0 +1,85 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..cec84a8
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,66 @@
++# Blocked: exact streaming median in constant memory
++
++## Requirement
++
++`test_constant_memory` requires `median()` to compute the **exact** median of a
++single-pass iterable of 200,000 arbitrary floats while its peak traced memory
++stays below 64 KiB.
++
++## Why this cannot be implemented
++
++The API accepts an arbitrary iterable, including a one-shot generator. To return
++the exact median of an arbitrary sequence, the function must identify the
++middle order statistic (or the two middle statistics) of the complete input.
++For a single-pass, comparison-based streaming algorithm over arbitrary numbers,
++doing that exactly requires Ω(n) memory.
++
++Intuitively, the algorithm must retain enough information to distinguish every
++possible rank ordering among the values it has seen. Approximate streaming
++medians (P², t-digest, stochastic averaging, etc.) use constant memory, but they
++cannot guarantee exact equality with the sorted median. Conversely, exact
++selection with O(1) auxiliary memory is possible only with assumptions this API
++does not provide, such as:
++
++- a re-readable input and multiple passes over a bounded, fixed-width value
++  domain, or
++- a small, bounded integer domain for a histogram.
++
++Neither applies here: the input is a one-shot generator of unbounded floating
++point values.
++
++Finite IEEE-754 representation does not make a practical O(1) solution
++possible. An exact histogram would need on the order of 2^64 counters, and a
++single pass cannot revisit the generator. For the supplied feed, the current
++exact implementation peaks at about 7 MiB, far above the 64 KiB limit.
++
++## Rejected workarounds
++
++These would make the test pass without satisfying the requirement, so they were
++not used:
++
++- Spilling values to disk or an external sort: still stores O(n) state and
++  violates the workers' streaming-memory constraint.
++- Hiding an O(n) allocation from `tracemalloc` via a non-Python allocation:
++  still O(n) memory, just unmeasured.
++- Resetting or otherwise manipulating `tracemalloc`: falsifies the test.
++- Hard-coding the test seed/distribution or using an approximation: does not
++  produce an exact median for arbitrary input.
++- Consuming the generator into a list to enable multiple passes: already O(n)
++  memory.
++
++## What needs to change
++
++At least one requirement must be relaxed:
++
++1. Allow O(n) memory for exact median (current implementation).
++2. Allow an approximate median with a documented error bound and O(1) memory.
++3. Provide a bounded integer value domain (and accept an exact histogram).
++4. Provide a re-readable input and accept multiple passes for exact selection
++   over a fixed-width value domain.
++
++## Status of the rest of the task
++
++The even-count bug is fixed: `median([1, 2, 3, 4])` now returns `2.5`.
++`test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input` pass.
++`test_constant_memory` remains failing because it requires the impossible
++combination described above.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..5eea255 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    middle = len(data) // 2
++    if len(data) % 2:
++        return data[middle]
++    return (data[middle - 1] + data[middle]) / 2

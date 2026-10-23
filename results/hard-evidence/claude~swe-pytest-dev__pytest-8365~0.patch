@@ -1,0 +1,41 @@
+diff --git a/changelog/8360.bugfix.rst b/changelog/8360.bugfix.rst
+new file mode 100644
+index 0000000..da256f4
+--- /dev/null
++++ b/changelog/8360.bugfix.rst
+@@ -0,0 +1,5 @@
++Fixed creation of the base temporary directory used by the ``tmpdir``,
++``tmpdir_factory`` and ``tmp_path_factory`` fixtures when the user name returned
++by ``getpass.getuser()`` contains characters which are not allowed in directory
++names (for example the ``DOMAIN\user`` form on Windows). Such characters are now
++replaced by underscores.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..82a463c 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -112,6 +112,12 @@ class TempPathFactory:
+             from_env = os.environ.get("PYTEST_DEBUG_TEMPROOT")
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+             user = get_user() or "unknown"
++            # The user name returned by getpass.getuser() may contain
++            # characters which are not valid in a directory name (for example
++            # the domain prefix of "DOMAIN\user" returned by some Windows
++            # setups), or path separators which would silently turn the base
++            # directory into a nested path (#8360). Replace them to be safe.
++            user = re.sub(r"\W", "_", user)
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+@@ -154,7 +160,11 @@ def get_user() -> Optional[str]:
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        # The user name may contain characters which are not valid in a
++        # directory name (e.g. the domain prefix in "DOMAIN\user" returned on
++        # some Windows setups), so replace them to avoid creating an invalid
++        # base temp directory (#8360).
++        return re.sub(r"\W", "_", getpass.getuser())
+     except (ImportError, KeyError):
+         return None
+ 

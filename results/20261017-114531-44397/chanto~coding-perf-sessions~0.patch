@@ -1,0 +1,89 @@
+diff --git a/sessions.py b/sessions.py
+index fc368a1..bcb3346 100644
+--- a/sessions.py
++++ b/sessions.py
+@@ -1,5 +1,7 @@
+ """Web analytics: group page views into visits ("sessions")."""
+ 
++from collections import Counter
++
+ 
+ def sessionize(events, gap=1800):
+     """Group (user, ts, page) events into sessions.
+@@ -9,17 +11,34 @@ def sessionize(events, gap=1800):
+     Events may arrive in any order. Events with equal timestamps keep their
+     input order. Returns dicts {user, start, end, pages} sorted by (user, start).
+     """
++    ordered = sorted(events, key=lambda e: e[1])
+     sessions = []
+-    for user, ts, page in sorted(events, key=lambda e: e[1]):
+-        match = None
+-        for s in sessions:
+-            if s["user"] == user and ts - s["end"] <= gap:
+-                match = s
+-        if match is None:
+-            sessions.append({"user": user, "start": ts, "end": ts, "pages": [page]})
+-        else:
+-            match["end"] = ts
+-            match["pages"].append(page)
++    active = {}
++    try:
++        for user, ts, page in ordered:
++            # Once a user starts a new session, older sessions can never be
++            # matched again, so only the most recent one needs tracking.
++            match = active.get(user)
++            if match is not None and ts - match["end"] <= gap:
++                match["end"] = ts
++                match["pages"].append(page)
++            else:
++                match = {"user": user, "start": ts, "end": ts, "pages": [page]}
++                active[user] = match
++                sessions.append(match)
++    except TypeError:
++        # Unhashable users: fall back to the reference scan.
++        sessions = []
++        for user, ts, page in ordered:
++            match = None
++            for s in sessions:
++                if s["user"] == user and ts - s["end"] <= gap:
++                    match = s
++            if match is None:
++                sessions.append({"user": user, "start": ts, "end": ts, "pages": [page]})
++            else:
++                match["end"] = ts
++                match["pages"].append(page)
+     sessions.sort(key=lambda s: (s["user"], s["start"]))
+     return sessions
+ 
+@@ -27,17 +46,23 @@ def sessionize(events, gap=1800):
+ def top_landing_pages(sessions, n=10):
+     """The n most common first pages of sessions as (page, count), ties by page name."""
+     landings = [s["pages"][0] for s in sessions]
+-    uniq = []
+-    for p in landings:
+-        if p not in uniq:
+-            uniq.append(p)
+-    ranked = sorted(uniq, key=lambda p: (-landings.count(p), p))
+-    return [(p, landings.count(p)) for p in ranked[:n]]
++    try:
++        counts = Counter(landings)
++    except TypeError:
++        # Unhashable pages: fall back to the reference counting.
++        uniq = []
++        for p in landings:
++            if p not in uniq:
++                uniq.append(p)
++        ranked = sorted(uniq, key=lambda p: (-landings.count(p), p))
++        return [(p, landings.count(p)) for p in ranked[:n]]
++    ranked = sorted(counts, key=lambda p: (-counts[p], p))
++    return [(p, counts[p]) for p in ranked[:n]]
+ 
+ 
+ def bounce_rate(sessions):
+     """Share of sessions with a single page view (0.0 for no sessions)."""
+     if not sessions:
+         return 0.0
+-    bounces = [s for s in sessions if len(s["pages"]) == 1]
+-    return len(bounces) / len(sessions)
++    bounces = sum(1 for s in sessions if len(s["pages"]) == 1)
++    return bounces / len(sessions)

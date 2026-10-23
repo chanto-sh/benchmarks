@@ -1,0 +1,30 @@
+#!/bin/sh
+# Cheap checks before a commit. Enable once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# Skip a single run with `git commit --no-verify`.
+set -eu
+status=0
+
+# No leftover merge conflict markers in what's being committed.
+if git diff --cached --diff-filter=ACM -U0 | grep -nE '^\+(<<<<<<< |>>>>>>> |\|\|\|\|\|\|\| )'; then
+    echo "error: staged changes contain git conflict markers" >&2
+    status=1
+fi
+
+# The runner and scripts still parse.
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.py' ':(exclude)tasks/**' ':(exclude)results/**'); do
+    python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' "$f" || status=1
+done
+
+# gitleaks over the staged changes, when it's installed (same config as CI).
+if command -v gitleaks >/dev/null 2>&1; then
+    if ! gitleaks git --pre-commit --staged --config .gitleaks.toml --redact --no-banner . >/dev/null 2>&1; then
+        gitleaks git --pre-commit --staged --config .gitleaks.toml --redact --no-banner . >&2 || true
+        echo "error: gitleaks found a secret in the staged changes" >&2
+        status=1
+    fi
+fi
+
+exit "$status"

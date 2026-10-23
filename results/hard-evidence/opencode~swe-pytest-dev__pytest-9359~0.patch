@@ -1,0 +1,29 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..687e8d4
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed the source of an assertion error including the decorators of the following
++statement when the statement being reported was followed by a decorated function
++or class (regression introduced in Python 3.8 due to the change in how the
++``lineno`` of decorated definitions is reported).
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..7e18b0f 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,7 +149,13 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
+-            values.append(x.lineno - 1)
++            # The statement can start with a decorated def/class.
++            # See #9359.
++            value = x.lineno
++            for decorator in getattr(x, "decorator_list", ()):
++                if decorator.lineno < value:
++                    value = decorator.lineno
++            values.append(value - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+                 if val:

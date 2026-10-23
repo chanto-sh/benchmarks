@@ -1,0 +1,64 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..f413e10 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb, factorial
++
++
++def _falling(n, j):
++    """Number of ways to draw j ordered distinct cards from n: n! / (n-j)!."""
++    if j < 0 or j > n:
++        return 0
++    return factorial(n) // factorial(n - j)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,45 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)
++    if m <= 0:
++        return Fraction(0)
++
++    total_arrangements = factorial(n)
++    favourable = 0
++
++    # The first green is at position t (1-based), so the t-1 cards before it
++    # are red/blue only. Count ordered colour patterns matching this.
++    for t in range(1, m + 1):
++        prefix = t - 1
++        for a in range(k, min(r, prefix) + 1):
++            c = prefix - a
++            if c > b:
++                continue
++            favourable += (
++                comb(prefix, a)
++                * _falling(r, a)
++                * _falling(b, c)
++                * g
++                * factorial(n - t)
++            )
++
++    # No green among the first m cards: the deal stops after m cards.
++    for a in range(k, min(r, m) + 1):
++        c = m - a
++        if c > b:
++            continue
++        favourable += (
++            comb(m, a)
++            * _falling(r, a)
++            * _falling(b, c)
++            * factorial(n - m)
++        )
++
++    return Fraction(favourable, total_arrangements)

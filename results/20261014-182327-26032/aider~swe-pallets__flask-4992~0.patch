@@ -1,0 +1,2470 @@
+diff --git a/.aider.chat.history.md b/.aider.chat.history.md
+new file mode 100644
+index 0000000..498f841
+--- /dev/null
++++ b/.aider.chat.history.md
+@@ -0,0 +1,1163 @@
++
++# aider chat started at 2026-10-15 00:25:08
++
++> ~/.local/bin/aider --model openai/bench-model --yes-always --no-auto-commits --no-check-update --analytics-disable --no-show-model-warnings --no-pretty --no-stream --no-gitignore --message Add a file mode parameter to flask.Config.from_file()
++Python 3.11 introduced native TOML support with the `tomllib` package. This could work nicely with the `flask.Config.from_file()` method as an easy way to load TOML config files:
++
++```python
++app.config.from_file("config.toml", tomllib.load)
++```
++
++However, `tomllib.load()` takes an object readable in binary mode, while `flask.Config.from_file()` opens a file in text mode, resulting in this error:
++
++```
++TypeError: File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`
++```
++
++We can get around this with a more verbose expression, like loading from a file opened with the built-in `open()` function and passing the `dict` to `app.Config.from_mapping()`:
++
++```python
++# We have to repeat the path joining that from_file() does
++with open(os.path.join(app.config.root_path, "config.toml"), "rb") as file:
++    app.config.from_mapping(tomllib.load(file))
++```
++
++But adding a file mode parameter to `flask.Config.from_file()` would enable the use of a simpler expression. E.g.:
++
++```python
++app.config.from_file("config.toml", tomllib.load, mode="b")
++```
++
++Fix the issue in this repository. Run the relevant tests. .github/ISSUE_TEMPLATE/bug-report.md .github/ISSUE_TEMPLATE/feature-request.md .github/SECURITY.md .github/pull_request_template.md CODE_OF_CONDUCT.md docs/conf.py examples/celery/README.md examples/celery/make_celery.py examples/celery/pyproject.toml examples/celery/requirements.txt examples/celery/src/task_app/__init__.py examples/celery/src/task_app/tasks.py examples/celery/src/task_app/views.py examples/javascript/js_example/__init__.py examples/javascript/js_example/views.py examples/javascript/pyproject.toml examples/javascript/tests/conftest.py examples/javascript/tests/test_js_example.py examples/tutorial/flaskr/__init__.py examples/tutorial/flaskr/auth.py examples/tutorial/flaskr/blog.py examples/tutorial/flaskr/db.py examples/tutorial/pyproject.toml examples/tutorial/tests/conftest.py examples/tutorial/tests/test_auth.py examples/tutorial/tests/test_blog.py examples/tutorial/tests/test_db.py examples/tutorial/tests/test_factory.py pyproject.toml requirements/build.txt requirements/dev.txt requirements/docs.txt requirements/tests-pallets-min.txt requirements/tests.txt requirements/typing.txt src/flask/__init__.py src/flask/__main__.py src/flask/app.py src/flask/blueprints.py src/flask/cli.py src/flask/config.py src/flask/ctx.py src/flask/debughelpers.py src/flask/globals.py src/flask/helpers.py src/flask/json/__init__.py src/flask/json/provider.py src/flask/json/tag.py src/flask/logging.py src/flask/scaffold.py src/flask/sessions.py src/flask/signals.py src/flask/templating.py src/flask/testing.py src/flask/typing.py src/flask/views.py src/flask/wrappers.py  
++> Warning: it's best to only add files that need changes to the chat.  
++> https://aider.chat/docs/troubleshooting/edit-errors.html  
++> Aider v0.86.2  
++> Model: openai/bench-model with whole edit format  
++> Git repo: .git with 248 files  
++> Repo-map: using 1024 tokens, auto refresh  
++> Added .github/ISSUE_TEMPLATE/bug-report.md to the chat.  
++> Added .github/ISSUE_TEMPLATE/feature-request.md to the chat.  
++> Added .github/SECURITY.md to the chat.  
++> Added .github/pull_request_template.md to the chat.  
++> Added CODE_OF_CONDUCT.md to the chat.  
++> Added docs/conf.py to the chat.  
++> Added examples/celery/README.md to the chat.  
++> Added examples/celery/make_celery.py to the chat.  
++> Added examples/celery/pyproject.toml to the chat.  
++> Added examples/celery/requirements.txt to the chat.  
++> Added examples/celery/src/task_app/__init__.py to the chat.  
++> Added examples/celery/src/task_app/tasks.py to the chat.  
++> Added examples/celery/src/task_app/views.py to the chat.  
++> Added examples/javascript/js_example/__init__.py to the chat.  
++> Added examples/javascript/js_example/views.py to the chat.  
++> Added examples/javascript/pyproject.toml to the chat.  
++> Added examples/javascript/tests/conftest.py to the chat.  
++> Added examples/javascript/tests/test_js_example.py to the chat.  
++> Added examples/tutorial/flaskr/__init__.py to the chat.  
++> Added examples/tutorial/flaskr/auth.py to the chat.  
++> Added examples/tutorial/flaskr/blog.py to the chat.  
++> Added examples/tutorial/flaskr/db.py to the chat.  
++> Added examples/tutorial/pyproject.toml to the chat.  
++> Added examples/tutorial/tests/conftest.py to the chat.  
++> Added examples/tutorial/tests/test_auth.py to the chat.  
++> Added examples/tutorial/tests/test_blog.py to the chat.  
++> Added examples/tutorial/tests/test_db.py to the chat.  
++> Added examples/tutorial/tests/test_factory.py to the chat.  
++> Added pyproject.toml to the chat.  
++> Added requirements/build.txt to the chat.  
++> Added requirements/dev.txt to the chat.  
++> Added requirements/docs.txt to the chat.  
++> Added requirements/tests-pallets-min.txt to the chat.  
++> Added requirements/tests.txt to the chat.  
++> Added requirements/typing.txt to the chat.  
++> Added src/flask/__init__.py to the chat.  
++> Added src/flask/__main__.py to the chat.  
++> Added src/flask/app.py to the chat.  
++> Added src/flask/blueprints.py to the chat.  
++> Added src/flask/cli.py to the chat.  
++> Added src/flask/config.py to the chat.  
++> Added src/flask/ctx.py to the chat.  
++> Added src/flask/debughelpers.py to the chat.  
++> Added src/flask/globals.py to the chat.  
++> Added src/flask/helpers.py to the chat.  
++> Added src/flask/json/__init__.py to the chat.  
++> Added src/flask/json/provider.py to the chat.  
++> Added src/flask/json/tag.py to the chat.  
++> Added src/flask/logging.py to the chat.  
++> Added src/flask/scaffold.py to the chat.  
++> Added src/flask/sessions.py to the chat.  
++> Added src/flask/signals.py to the chat.  
++> Added src/flask/templating.py to the chat.  
++> Added src/flask/testing.py to the chat.  
++> Added src/flask/typing.py to the chat.  
++> Added src/flask/views.py to the chat.  
++> Added src/flask/wrappers.py to the chat.  
++
++#### Add a file mode parameter to flask.Config.from_file()  
++#### Python 3.11 introduced native TOML support with the `tomllib` package. This could work nicely with the `flask.Config.from_file()` method as an easy way to load TOML config files:  
++####   
++#### ```python  
++#### app.config.from_file("config.toml", tomllib.load)  
++#### ```  
++####   
++#### However, `tomllib.load()` takes an object readable in binary mode, while `flask.Config.from_file()` opens a file in text mode, resulting in this error:  
++####   
++#### ```  
++#### TypeError: File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`  
++#### ```  
++####   
++#### We can get around this with a more verbose expression, like loading from a file opened with the built-in `open()` function and passing the `dict` to `app.Config.from_mapping()`:  
++####   
++#### ```python  
++#### # We have to repeat the path joining that from_file() does  
++#### with open(os.path.join(app.config.root_path, "config.toml"), "rb") as file:  
++####     app.config.from_mapping(tomllib.load(file))  
++#### ```  
++####   
++#### But adding a file mode parameter to `flask.Config.from_file()` would enable the use of a simpler expression. E.g.:  
++####   
++#### ```python  
++#### app.config.from_file("config.toml", tomllib.load, mode="b")  
++#### ```  
++####   
++#### Fix the issue in this repository. Run the relevant tests.  
++> Initial repo scan can be slow in larger repos, but only happens once.  
++
++I'll add a `text` parameter to `from_file()`. This is the cleanest way to support binary readers like `tomllib.load`: when `text=False`, the file is opened in binary mode.
++
++Here's my reasoning:
++- A boolean `text` parameter (default `True`) keeps the existing text-mode behavior, so it's fully backward compatible.
++- `app.config.from_file("config.toml", tomllib.load, text=False)` reads the TOML file in binary mode, which `tomllib.load` requires.
++
++src/flask/config.py
++````
++import errno
++import json
++import os
++import types
++import typing as t
++
++from werkzeug.utils import import_string
++
++
++class ConfigAttribute:
++    """Makes an attribute forward to the config"""
++
++    def __init__(self, name: str, get_converter: t.Optional[t.Callable] = None) -> None:
++        self.__name__ = name
++        self.get_converter = get_converter
++
++    def __get__(self, obj: t.Any, owner: t.Any = None) -> t.Any:
++        if obj is None:
++            return self
++        rv = obj.config[self.__name__]
++        if self.get_converter is not None:
++            rv = self.get_converter(rv)
++        return rv
++
++    def __set__(self, obj: t.Any, value: t.Any) -> None:
++        obj.config[self.__name__] = value
++
++
++class Config(dict):
++    """Works exactly like a dict but provides ways to fill it from files
++    or special dictionaries.  There are two common patterns to populate the
++    config.
++
++    Either you can fill the config from a config file::
++
++        app.config.from_pyfile('yourconfig.cfg')
++
++    Or alternatively you can define the configuration options in the
++    module that calls :meth:`from_object` or provide an import path to
++    a module that should be loaded.  It is also possible to tell it to
++    use the same module and with that provide the configuration values
++    just before the call::
++
++        DEBUG = True
++        SECRET_KEY = 'development key'
++        app.config.from_object(__name__)
++
++    In both cases (loading from any Python file or loading from modules),
++    only uppercase keys are added to the config.  This makes it possible to use
++    lowercase values in the config file for temporary values that are not added
++    to the config or to define the config keys in the same file that implements
++    the application.
++
++    Probably the most interesting way to load configurations is from an
++    environment variable pointing to a file::
++
++        app.config.from_envvar('YOURAPPLICATION_SETTINGS')
++
++    In this case before launching the application you have to set this
++    environment variable to the file you want to use.  On Linux and OS X
++    use the export statement::
++
++        export YOURAPPLICATION_SETTINGS='/path/to/config/file'
++
++    On windows use `set` instead.
++
++    :param root_path: path to which files are read relative from.  When the
++                      config object is created by the application, this is
++                      the application's :attr:`~flask.Flask.root_path`.
++    :param defaults: an optional dictionary of default values
++    """
++
++    def __init__(self, root_path: str, defaults: t.Optional[dict] = None) -> None:
++        super().__init__(defaults or {})
++        self.root_path = root_path
++
++    def from_envvar(self, variable_name: str, silent: bool = False) -> bool:
++        """Loads a configuration from an environment variable pointing to
++        a configuration file.  This is basically just a shortcut with nicer
++        error messages for this line of code::
++
++            app.config.from_pyfile(os.environ['YOURAPPLICATION_SETTINGS'])
++
++        :param variable_name: name of the environment variable
++        :param silent: set to ``True`` if you want silent failure for missing
++                       files.
++        :return: ``True`` if the file was loaded successfully.
++        """
++        rv = os.environ.get(variable_name)
++        if not rv:
++            if silent:
++                return False
++            raise RuntimeError(
++                f"The environment variable {variable_name!r} is not set"
++                " and as such configuration could not be loaded. Set"
++                " this variable and make it point to a configuration"
++                " file"
++            )
++        return self.from_pyfile(rv, silent=silent)
++
++    def from_prefixed_env(
++        self, prefix: str = "FLASK", *, loads: t.Callable[[str], t.Any] = json.loads
++    ) -> bool:
++        """Load any environment variables that start with ``FLASK_``,
++        dropping the prefix from the env key for the config key. Values
++        are passed through a loading function to attempt to convert them
++        to more specific types than strings.
++
++        Keys are loaded in :func:`sorted` order.
++
++        The default loading function attempts to parse values as any
++        valid JSON type, including dicts and lists.
++
++        Specific items in nested dicts can be set by separating the
++        keys with double underscores (``__``). If an intermediate key
++        doesn't exist, it will be initialized to an empty dict.
++
++        :param prefix: Load env vars that start with this prefix,
++            separated with an underscore (``_``).
++        :param loads: Pass each string value to this function and use
++            the returned value as the config value. If any error is
++            raised it is ignored and the value remains a string. The
++            default is :func:`json.loads`.
++
++        .. versionadded:: 2.1
++        """
++        prefix = f"{prefix}_"
++        len_prefix = len(prefix)
++
++        for key in sorted(os.environ):
++            if not key.startswith(prefix):
++                continue
++
++            value = os.environ[key]
++
++            try:
++                value = loads(value)
++            except Exception:
++                # Keep the value as a string if loading failed.
++                pass
++
++            # Change to key.removeprefix(prefix) on Python >= 3.9.
++            key = key[len_prefix:]
++
++            if "__" not in key:
++                # A non-nested key, set directly.
++                self[key] = value
++                continue
++
++            # Traverse nested dictionaries with keys separated by "__".
++            current = self
++            *parts, tail = key.split("__")
++
++            for part in parts:
++                # If an intermediate dict does not exist, create it.
++                if part not in current:
++                    current[part] = {}
++
++                current = current[part]
++
++            current[tail] = value
++
++        return True
++
++    def from_pyfile(self, filename: str, silent: bool = False) -> bool:
++        """Updates the values in the config from a Python file.  This function
++        behaves as if the file was imported as module with the
++        :meth:`from_object` function.
++
++        :param filename: the filename of the config.  This can either be an
++                         absolute filename or a filename relative to the
++                         root path.
++        :param silent: set to ``True`` if you want silent failure for missing
++                       files.
++        :return: ``True`` if the file was loaded successfully.
++
++        .. versionadded:: 0.7
++           `silent` parameter.
++        """
++        filename = os.path.join(self.root_path, filename)
++        d = types.ModuleType("config")
++        d.__file__ = filename
++        try:
++            with open(filename, mode="rb") as config_file:
++                exec(compile(config_file.read(), filename, "exec"), d.__dict__)
++        except OSError as e:
++            if silent and e.errno in (errno.ENOENT, errno.EISDIR, errno.ENOTDIR):
++                return False
++            e.strerror = f"Unable to load configuration file ({e.strerror})"
++            raise
++        self.from_object(d)
++        return True
++
++    def from_object(self, obj: t.Union[object, str]) -> None:
++        """Updates the values from the given object.  An object can be of one
++        of the following two types:
++
++        -   a string: in this case the object with that name will be imported
++        -   an actual object reference: that object is used directly
++
++        Objects are usually either modules or classes. :meth:`from_object`
++        loads only the uppercase attributes of the module/class. A ``dict``
++        object will not work with :meth:`from_object` because the keys of a
++        ``dict`` are not attributes of the ``dict`` class.
++
++        Example of module-based configuration::
++
++            app.config.from_object('yourapplication.default_config')
++            from yourapplication import default_config
++            app.config.from_object(default_config)
++
++        Nothing is done to the object before loading. If the object is a
++        class and has ``@property`` attributes, it needs to be
++        instantiated before being passed to this method.
++
++        You should not use this function to load the actual configuration but
++        rather configuration defaults.  The actual config should be loaded
++        with :meth:`from_pyfile` and ideally from a location not within the
++        package because the package might be installed system wide.
++
++        See :ref:`config-dev-prod` for an example of class-based configuration
++        using :meth:`from_object`.
++
++        :param obj: an import name or object
++        """
++        if isinstance(obj, str):
++            obj = import_string(obj)
++        for key in dir(obj):
++            if key.isupper():
++                self[key] = getattr(obj, key)
++
++    def from_file(
++        self,
++        filename: str,
++        load: t.Callable[[t.IO[t.Any]], t.Mapping],
++        silent: bool = False,
++        text: bool = True,
++    ) -> bool:
++        """Update the values in the config from a file that is loaded
++        using the ``load`` parameter. The loaded data is passed to the
++        :meth:`from_mapping` method.
++
++        .. code-block:: python
++
++            import json
++            app.config.from_file("config.json", load=json.load)
++
++            import tomllib
++            app.config.from_file("config.toml", load=tomllib.load, text=False)
++
++        :param filename: The path to the data file. This can be an
++            absolute path or relative to the config root path.
++        :param load: A callable that takes a file handle and returns a
++            mapping of loaded data from the file.
++        :type load: ``Callable[[Reader], Mapping]`` where ``Reader``
++            implements a ``read`` method.
++        :param silent: Ignore the file if it doesn't exist.
++        :param text: Open the file in text or binary mode.
++        :return: ``True`` if the file was loaded successfully.
++
++        .. versionchanged:: 2.3
++            The ``text`` parameter was added.
++
++        .. versionadded:: 2.0
++        """
++        filename = os.path.join(self.root_path, filename)
++
++        try:
++            with open(filename, "r" if text else "rb") as f:
++                obj = load(f)
++        except OSError as e:
++            if silent and e.errno in (errno.ENOENT, errno.EISDIR):
++                return False
++
++            e.strerror = f"Unable to load configuration file ({e.strerror})"
++            raise
++
++        return self.from_mapping(obj)
++
++    def from_mapping(
++        self, mapping: t.Optional[t.Mapping[str, t.Any]] = None, **kwargs: t.Any
++    ) -> bool:
++        """Updates the config like :meth:`update` ignoring items with
++        non-upper keys.
++
++        :return: Always returns ``True``.
++
++        .. versionadded:: 0.11
++        """
++        mappings: t.Dict[str, t.Any] = {}
++        if mapping is not None:
++            mappings.update(mapping)
++        mappings.update(kwargs)
++        for key, value in mappings.items():
++            if key.isupper():
++                self[key] = value
++        return True
++
++    def get_namespace(
++        self, namespace: str, lowercase: bool = True, trim_namespace: bool = True
++    ) -> t.Dict[str, t.Any]:
++        """Returns a dictionary containing a subset of configuration options
++        that match the specified namespace/prefix. Example usage::
++
++            app.config['IMAGE_STORE_TYPE'] = 'fs'
++            app.config['IMAGE_STORE_PATH'] = '/var/app/images'
++            app.config['IMAGE_STORE_BASE_URL'] = 'http://img.website.com'
++            image_store_config = app.config.get_namespace('IMAGE_STORE_')
++
++        The resulting dictionary `image_store_config` would look like::
++
++            {
++                'type': 'fs',
++                'path': '/var/app/images',
++                'base_url': 'http://img.website.com'
++            }
++
++        This is often useful when configuration options map directly to
++        keyword arguments in functions or class constructors.
++
++        :param namespace: a configuration namespace
++        :param lowercase: a flag indicating if the keys of the resulting
++                          dictionary should be lowercase
++        :param trim_namespace: a flag indicating if the keys of the resulting
++                          dictionary should not include the namespace
++
++        .. versionadded:: 0.11
++        """
++        rv = {}
++        for k, v in self.items():
++            if not k.startswith(namespace):
++                continue
++            if trim_namespace:
++                key = k[len(namespace) :]
++            else:
++                key = k
++            if lowercase:
++                key = key.lower()
++            rv[key] = v
++        return rv
++
++    def __repr__(self) -> str:
++        return f"<{type(self).__name__} {dict.__repr__(self)}>"
++````
++
++The key change is the new `text: bool = True` parameter and the file open call:
++
++```python
++with open(filename, "r" if text else "rb") as f:
++    obj = load(f)
++```
++
++This lets you write:
++
++```python
++import tomllib
++app.config.from_file("config.toml", load=tomllib.load, text=False)
++```
++
++## Running the relevant tests
++
++Because `tests/test_config.py` is still marked read-only in this chat, I can't add a test for the new parameter here. To verify the change, run the existing config tests (they exercise `from_file` in text mode and must still pass):
++
++```shell
++pytest tests/test_config.py -k from_file
++```
++
++If you'd like, add `tests/test_config.py` to the chat and I'll extend it with a binary-mode (`text=False`) test case, e.g.:
++
++```python
++def test_from_file_binary(app, tmp_path):
++    import json
++
++    path = tmp_path / "config.json"
++    path.write_bytes(b'{"A": "b"}')
++    app.config.root_path = str(tmp_path)
++    app.config.from_file("config.json", load=json.load, text=False)
++    assert app.config["A"] == "b"
++```
++
++> Tokens: 89k sent, 384 cache hit, 4.4k received.  
++> tests/static/config.json  
++> Add file to the chat? (Y)es/(N)o/(A)ll/(S)kip all/(D)on't ask again [Yes]: y  
++> tests/test_config.py  
++> Add file to the chat? (Y)es/(N)o/(A)ll/(S)kip all/(D)on't ask again [Yes]: y  
++
++Good, now that `tests/test_config.py` is editable, I'll pair the `from_file()` change with a test that actually proves the file is opened in binary mode. I'll do this by having the loader assert it received `bytes` from `read()` — if the file were still opened in text mode, that assertion would fail.
++
++Here are the two files that need changes.
++
++src/flask/config.py
++````
++import errno
++import json
++import os
++import types
++import typing as t
++
++from werkzeug.utils import import_string
++
++
++class ConfigAttribute:
++    """Makes an attribute forward to the config"""
++
++    def __init__(self, name: str, get_converter: t.Optional[t.Callable] = None) -> None:
++        self.__name__ = name
++        self.get_converter = get_converter
++
++    def __get__(self, obj: t.Any, owner: t.Any = None) -> t.Any:
++        if obj is None:
++            return self
++        rv = obj.config[self.__name__]
++        if self.get_converter is not None:
++            rv = self.get_converter(rv)
++        return rv
++
++    def __set__(self, obj: t.Any, value: t.Any) -> None:
++        obj.config[self.__name__] = value
++
++
++class Config(dict):
++    """Works exactly like a dict but provides ways to fill it from files
++    or special dictionaries.  There are two common patterns to populate the
++    config.
++
++    Either you can fill the config from a config file::
++
++        app.config.from_pyfile('yourconfig.cfg')
++
++    Or alternatively you can define the configuration options in the
++    module that calls :meth:`from_object` or provide an import path to
++    a module that should be loaded.  It is also possible to tell it to
++    use the same module and with that provide the configuration values
++    just before the call::
++
++        DEBUG = True
++        SECRET_KEY = 'development key'
++        app.config.from_object(__name__)
++
++    In both cases (loading from any Python file or loading from modules),
++    only uppercase keys are added to the config.  This makes it possible to use
++    lowercase values in the config file for temporary values that are not added
++    to the config or to define the config keys in the same file that implements
++    the application.
++
++    Probably the most interesting way to load configurations is from an
++    environment variable pointing to a file::
++
++        app.config.from_envvar('YOURAPPLICATION_SETTINGS')
++
++    In this case before launching the application you have to set this
++    environment variable to the file you want to use.  On Linux and OS X
++    use the export statement::
++
++        export YOURAPPLICATION_SETTINGS='/path/to/config/file'
++
++    On windows use `set` instead.
++
++    :param root_path: path to which files are read relative from.  When the
++                      config object is created by the application, this is
++                      the application's :attr:`~flask.Flask.root_path`.
++    :param defaults: an optional dictionary of default values
++    """
++
++    def __init__(self, root_path: str, defaults: t.Optional[dict] = None) -> None:
++        super().__init__(defaults or {})
++        self.root_path = root_path
++
++    def from_envvar(self, variable_name: str, silent: bool = False) -> bool:
++        """Loads a configuration from an environment variable pointing to
++        a configuration file.  This is basically just a shortcut with nicer
++        error messages for this line of code::
++
++            app.config.from_pyfile(os.environ['YOURAPPLICATION_SETTINGS'])
++
++        :param variable_name: name of the environment variable
++        :param silent: set to ``True`` if you want silent failure for missing
++                       files.
++        :return: ``True`` if the file was loaded successfully.
++        """
++        rv = os.environ.get(variable_name)
++        if not rv:
++            if silent:
++                return False
++            raise RuntimeError(
++                f"The environment variable {variable_name!r} is not set"
++                " and as such configuration could not be loaded. Set"
++                " this variable and make it point to a configuration"
++                " file"
++            )
++        return self.from_pyfile(rv, silent=silent)
++
++    def from_prefixed_env(
++        self, prefix: str = "FLASK", *, loads: t.Callable[[str], t.Any] = json.loads
++    ) -> bool:
++        """Load any environment variables that start with ``FLASK_``,
++        dropping the prefix from the env key for the config key. Values
++        are passed through a loading function to attempt to convert them
++        to more specific types than strings.
++
++        Keys are loaded in :func:`sorted` order.
++
++        The default loading function attempts to parse values as any
++        valid JSON type, including dicts and lists.
++
++        Specific items in nested dicts can be set by separating the
++        keys with double underscores (``__``). If an intermediate key
++        doesn't exist, it will be initialized to an empty dict.
++
++        :param prefix: Load env vars that start with this prefix,
++            separated with an underscore (``_``).
++        :param loads: Pass each string value to this function and use
++            the returned value as the config value. If any error is
++            raised it is ignored and the value remains a string. The
++            default is :func:`json.loads`.
++
++        .. versionadded:: 2.1
++        """
++        prefix = f"{prefix}_"
++        len_prefix = len(prefix)
++
++        for key in sorted(os.environ):
++            if not key.startswith(prefix):
++                continue
++
++            value = os.environ[key]
++
++            try:
++                value = loads(value)
++            except Exception:
++                # Keep the value as a string if loading failed.
++                pass
++
++            # Change to key.removeprefix(prefix) on Python >= 3.9.
++            key = key[len_prefix:]
++
++            if "__" not in key:
++                # A non-nested key, set directly.
++                self[key] = value
++                continue
++
++            # Traverse nested dictionaries with keys separated by "__".
++            current = self
++            *parts, tail = key.split("__")
++
++            for part in parts:
++                # If an intermediate dict does not exist, create it.
++                if part not in current:
++                    current[part] = {}
++
++                current = current[part]
++
++            current[tail] = value
++
++        return True
++
++    def from_pyfile(self, filename: str, silent: bool = False) -> bool:
++        """Updates the values in the config from a Python file.  This function
++        behaves as if the file was imported as module with the
++        :meth:`from_object` function.
++
++        :param filename: the filename of the config.  This can either be an
++                         absolute filename or a filename relative to the
++                         root path.
++        :param silent: set to ``True`` if you want silent failure for missing
++                       files.
++        :return: ``True`` if the file was loaded successfully.
++
++        .. versionadded:: 0.7
++           `silent` parameter.
++        """
++        filename = os.path.join(self.root_path, filename)
++        d = types.ModuleType("config")
++        d.__file__ = filename
++        try:
++            with open(filename, mode="rb") as config_file:
++                exec(compile(config_file.read(), filename, "exec"), d.__dict__)
++        except OSError as e:
++            if silent and e.errno in (errno.ENOENT, errno.EISDIR, errno.ENOTDIR):
++                return False
++            e.strerror = f"Unable to load configuration file ({e.strerror})"
++            raise
++        self.from_object(d)
++        return True
++
++    def from_object(self, obj: t.Union[object, str]) -> None:
++        """Updates the values from the given object.  An object can be of one
++        of the following two types:
++
++        -   a string: in this case the object with that name will be imported
++        -   an actual object reference: that object is used directly
++
++        Objects are usually either modules or classes. :meth:`from_object`
++        loads only the uppercase attributes of the module/class. A ``dict``
++        object will not work with :meth:`from_object` because the keys of a
++        ``dict`` are not attributes of the ``dict`` class.
++
++        Example of module-based configuration::
++
++            app.config.from_object('yourapplication.default_config')
++            from yourapplication import default_config
++            app.config.from_object(default_config)
++
++        Nothing is done to the object before loading. If the object is a
++        class and has ``@property`` attributes, it needs to be
++        instantiated before being passed to this method.
++
++        You should not use this function to load the actual configuration but
++        rather configuration defaults.  The actual config should be loaded
++        with :meth:`from_pyfile` and ideally from a location not within the
++        package because the package might be installed system wide.
++
++        See :ref:`config-dev-prod` for an example of class-based configuration
++        using :meth:`from_object`.
++
++        :param obj: an import name or object
++        """
++        if isinstance(obj, str):
++            obj = import_string(obj)
++        for key in dir(obj):
++            if key.isupper():
++                self[key] = getattr(obj, key)
++
++    def from_file(
++        self,
++        filename: str,
++        load: t.Callable[[t.IO[t.Any]], t.Mapping],
++        silent: bool = False,
++        text: bool = True,
++    ) -> bool:
++        """Update the values in the config from a file that is loaded
++        using the ``load`` parameter. The loaded data is passed to the
++        :meth:`from_mapping` method.
++
++        .. code-block:: python
++
++            import json
++            app.config.from_file("config.json", load=json.load)
++
++            import tomllib
++            app.config.from_file("config.toml", load=tomllib.load, text=False)
++
++        :param filename: The path to the data file. This can be an
++            absolute path or relative to the config root path.
++        :param load: A callable that takes a file handle and returns a
++            mapping of loaded data from the file.
++        :type load: ``Callable[[Reader], Mapping]`` where ``Reader``
++            implements a ``read`` method.
++        :param silent: Ignore the file if it doesn't exist.
++        :param text: Open the file in text or binary mode.
++        :return: ``True`` if the file was loaded successfully.
++
++        .. versionchanged:: 2.3
++            The ``text`` parameter was added.
++
++        .. versionadded:: 2.0
++        """
++        filename = os.path.join(self.root_path, filename)
++
++        try:
++            with open(filename, "r" if text else "rb") as f:
++                obj = load(f)
++        except OSError as e:
++            if silent and e.errno in (errno.ENOENT, errno.EISDIR):
++                return False
++
++            e.strerror = f"Unable to load configuration file ({e.strerror})"
++            raise
++
++        return self.from_mapping(obj)
++
++    def from_mapping(
++        self, mapping: t.Optional[t.Mapping[str, t.Any]] = None, **kwargs: t.Any
++    ) -> bool:
++        """Updates the config like :meth:`update` ignoring items with
++        non-upper keys.
++
++        :return: Always returns ``True``.
++
++        .. versionadded:: 0.11
++        """
++        mappings: t.Dict[str, t.Any] = {}
++        if mapping is not None:
++            mappings.update(mapping)
++        mappings.update(kwargs)
++        for key, value in mappings.items():
++            if key.isupper():
++                self[key] = value
++        return True
++
++    def get_namespace(
++        self, namespace: str, lowercase: bool = True, trim_namespace: bool = True
++    ) -> t.Dict[str, t.Any]:
++        """Returns a dictionary containing a subset of configuration options
++        that match the specified namespace/prefix. Example usage::
++
++            app.config['IMAGE_STORE_TYPE'] = 'fs'
++            app.config['IMAGE_STORE_PATH'] = '/var/app/images'
++            app.config['IMAGE_STORE_BASE_URL'] = 'http://img.website.com'
++            image_store_config = app.config.get_namespace('IMAGE_STORE_')
++
++        The resulting dictionary `image_store_config` would look like::
++
++            {
++                'type': 'fs',
++                'path': '/var/app/images',
++                'base_url': 'http://img.website.com'
++            }
++
++        This is often useful when configuration options map directly to
++        keyword arguments in functions or class constructors.
++
++        :param namespace: a configuration namespace
++        :param lowercase: a flag indicating if the keys of the resulting
++                          dictionary should be lowercase
++        :param trim_namespace: a flag indicating if the keys of the resulting
++                          dictionary should not include the namespace
++
++        .. versionadded:: 0.11
++        """
++        rv = {}
++        for k, v in self.items():
++            if not k.startswith(namespace):
++                continue
++            if trim_namespace:
++                key = k[len(namespace) :]
++            else:
++                key = k
++            if lowercase:
++                key = key.lower()
++            rv[key] = v
++        return rv
++
++    def __repr__(self) -> str:
++        return f"<{type(self).__name__} {dict.__repr__(self)}>"
++````
++
++tests/test_config.py
++````
++import json
++import os
++import textwrap
++
++import pytest
++
++import flask
++
++
++# config keys used for the TestConfig
++TEST_KEY = "foo"
++SECRET_KEY = "config"
++
++
++def common_object_test(app):
++    assert app.secret_key == "config"
++    assert app.config["TEST_KEY"] == "foo"
++    assert "TestConfig" not in app.config
++
++
++def test_config_from_pyfile():
++    app = flask.Flask(__name__)
++    app.config.from_pyfile(f"{__file__.rsplit('.', 1)[0]}.py")
++    common_object_test(app)
++
++
++def test_config_from_object():
++    app = flask.Flask(__name__)
++    app.config.from_object(__name__)
++    common_object_test(app)
++
++
++def test_config_from_file():
++    app = flask.Flask(__name__)
++    current_dir = os.path.dirname(os.path.abspath(__file__))
++    app.config.from_file(
++        os.path.join(current_dir, "static", "config.json"), json.load
++    )
++    common_object_test(app)
++
++
++def test_config_from_file_binary():
++    app = flask.Flask(__name__)
++    current_dir = os.path.dirname(os.path.abspath(__file__))
++
++    def load(fp):
++        data = fp.read()
++        # The file must be opened in binary mode for this to be bytes.
++        assert isinstance(data, bytes)
++        return json.loads(data)
++
++    app.config.from_file(
++        os.path.join(current_dir, "static", "config.json"), load, text=False
++    )
++    common_object_test(app)
++
++
++def test_from_prefixed_env(monkeypatch):
++    monkeypatch.setenv("FLASK_STRING", "value")
++    monkeypatch.setenv("FLASK_BOOL", "true")
++    monkeypatch.setenv("FLASK_INT", "1")
++    monkeypatch.setenv("FLASK_FLOAT", "1.2")
++    monkeypatch.setenv("FLASK_LIST", "[1, 2]")
++    monkeypatch.setenv("FLASK_DICT", '{"k": "v"}')
++    monkeypatch.setenv("NOT_FLASK_OTHER", "other")
++
++    app = flask.Flask(__name__)
++    app.config.from_prefixed_env()
++
++    assert app.config["STRING"] == "value"
++    assert app.config["BOOL"] is True
++    assert app.config["INT"] == 1
++    assert app.config["FLOAT"] == 1.2
++    assert app.config["LIST"] == [1, 2]
++    assert app.config["DICT"] == {"k": "v"}
++    assert "OTHER" not in app.config
++
++
++def test_from_prefixed_env_custom_prefix(monkeypatch):
++    monkeypatch.setenv("FLASK_A", "a")
++    monkeypatch.setenv("NOT_FLASK_A", "b")
++
++    app = flask.Flask(__name__)
++    app.config.from_prefixed_env("NOT_FLASK")
++
++    assert app.config["A"] == "b"
++
++
++def test_from_prefixed_env_nested(monkeypatch):
++    monkeypatch.setenv("FLASK_EXIST__ok", "other")
++    monkeypatch.setenv("FLASK_EXIST__inner__ik", "2")
++    monkeypatch.setenv("FLASK_EXIST__new__more", '{"k": false}')
++    monkeypatch.setenv("FLASK_NEW__K", "v")
++
++    app = flask.Flask(__name__)
++    app.config["EXIST"] = {"ok": "value", "flag": True, "inner": {"ik": 1}}
++    app.config.from_prefixed_env()
++
++    if os.name != "nt":
++        assert app.config["EXIST"] == {
++            "ok": "other",
++            "flag": True,
++            "inner": {"ik": 2},
++            "new": {"more": {"k": False}},
++        }
++    else:
++        # Windows env var keys are always uppercase.
++        assert app.config["EXIST"] == {
++            "ok": "value",
++            "OK": "other",
++            "flag": True,
++            "inner": {"ik": 1},
++            "INNER": {"IK": 2},
++            "NEW": {"MORE": {"k": False}},
++        }
++
++    assert app.config["NEW"] == {"K": "v"}
++
++
++def test_config_from_mapping():
++    app = flask.Flask(__name__)
++    app.config.from_mapping({"SECRET_KEY": "config", "TEST_KEY": "foo"})
++    common_object_test(app)
++
++    app = flask.Flask(__name__)
++    app.config.from_mapping([("SECRET_KEY", "config"), ("TEST_KEY", "foo")])
++    common_object_test(app)
++
++    app = flask.Flask(__name__)
++    app.config.from_mapping(SECRET_KEY="config", TEST_KEY="foo")
++    common_object_test(app)
++
++    app = flask.Flask(__name__)
++    app.config.from_mapping(SECRET_KEY="config", TEST_KEY="foo", skip_key="skip")
++    common_object_test(app)
++
++    app = flask.Flask(__name__)
++    with pytest.raises(TypeError):
++        app.config.from_mapping({}, {})
++
++
++def test_config_from_class():
++    class Base:
++        TEST_KEY = "foo"
++
++    class Test(Base):
++        SECRET_KEY = "config"
++
++    app = flask.Flask(__name__)
++    app.config.from_object(Test)
++    common_object_test(app)
++
++
++def test_config_from_envvar(monkeypatch):
++    monkeypatch.setattr("os.environ", {})
++    app = flask.Flask(__name__)
++
++    with pytest.raises(RuntimeError) as e:
++        app.config.from_envvar("FOO_SETTINGS")
++
++    assert "'FOO_SETTINGS' is not set" in str(e.value)
++    assert not app.config.from_envvar("FOO_SETTINGS", silent=True)
++
++    monkeypatch.setattr(
++        "os.environ", {"FOO_SETTINGS": f"{__file__.rsplit('.', 1)[0]}.py"}
++    )
++    assert app.config.from_envvar("FOO_SETTINGS")
++    common_object_test(app)
++
++
++def test_config_from_envvar_missing(monkeypatch):
++    monkeypatch.setattr("os.environ", {"FOO_SETTINGS": "missing.cfg"})
++    app = flask.Flask(__name__)
++    with pytest.raises(IOError) as e:
++        app.config.from_envvar("FOO_SETTINGS")
++    msg = str(e.value)
++    assert msg.startswith(
++        "[Errno 2] Unable to load configuration file (No such file or directory):"
++    )
++    assert msg.endswith("missing.cfg'")
++    assert not app.config.from_envvar("FOO_SETTINGS", silent=True)
++
++
++def test_config_missing():
++    app = flask.Flask(__name__)
++    with pytest.raises(IOError) as e:
++        app.config.from_pyfile("missing.cfg")
++    msg = str(e.value)
++    assert msg.startswith(
++        "[Errno 2] Unable to load configuration file (No such file or directory):"
++    )
++    assert msg.endswith("missing.cfg'")
++    assert not app.config.from_pyfile("missing.cfg", silent=True)
++
++
++def test_config_missing_file():
++    app = flask.Flask(__name__)
++    with pytest.raises(IOError) as e:
++        app.config.from_file("missing.json", load=json.load)
++    msg = str(e.value)
++    assert msg.startswith(
++        "[Errno 2] Unable to load configuration file (No such file or directory):"
++    )
++    assert msg.endswith("missing.json'")
++    assert not app.config.from_file("missing.json", load=json.load, silent=True)
++
++
++def test_custom_config_class():
++    class Config(flask.Config):
++        pass
++
++    class Flask(flask.Flask):
++        config_class = Config
++
++    app = Flask(__name__)
++    assert isinstance(app.config, Config)
++    app.config.from_object(__name__)
++    common_object_test(app)
++
++
++def test_session_lifetime():
++    app = flask.Flask(__name__)
++    app.config["PERMANENT_SESSION_LIFETIME"] = 42
++    assert app.permanent_session_lifetime.seconds == 42
++
++
++def test_get_namespace():
++    app = flask.Flask(__name__)
++    app.config["FOO_OPTION_1"] = "foo option 1"
++    app.config["FOO_OPTION_2"] = "foo option 2"
++    app.config["BAR_STUFF_1"] = "bar stuff 1"
++    app.config["BAR_STUFF_2"] = "bar stuff 2"
++    foo_options = app.config.get_namespace("FOO_")
++    assert 2 == len(foo_options)
++    assert "foo option 1" == foo_options["option_1"]
++    assert "foo option 2" == foo_options["option_2"]
++    bar_options = app.config.get_namespace("BAR_", lowercase=False)
++    assert 2 == len(bar_options)
++    assert "bar stuff 1" == bar_options["STUFF_1"]
++    assert "bar stuff 2" == bar_options["STUFF_2"]
++    foo_options = app.config.get_namespace("FOO_", trim_namespace=False)
++    assert 2 == len(foo_options)
++    assert "foo option 1" == foo_options["foo_option_1"]
++    assert "foo option 2" == foo_options["foo_option_2"]
++    bar_options = app.config.get_namespace(
++        "BAR_", lowercase=False, trim_namespace=False
++    )
++    assert 2 == len(bar_options)
++    assert "bar stuff 1" == bar_options["BAR_STUFF_1"]
++    assert "bar stuff 2" == bar_options["BAR_STUFF_2"]
++
++
++@pytest.mark.parametrize("encoding", ["utf-8", "iso-8859-15", "latin-1"])
++def test_from_pyfile_weird_encoding(tmpdir, encoding):
++    f = tmpdir.join("my_config.py")
++    f.write_binary(
++        textwrap.dedent(
++            f"""
++            # -*- coding: {encoding} -*-
++            TEST_VALUE = "föö"
++            """
++        ).encode(encoding)
++    )
++    app = flask.Flask(__name__)
++    app.config.from_pyfile(str(f))
++    value = app.config["TEST_VALUE"]
++    assert value == "föö"
++````
++
++## Notes on the change
++
++- `from_file()` gets a new keyword-only-style parameter `text: bool = True`. The file is opened with `open(filename, "r" if text else "rb")`, so `text=False` yields a binary-mode handle. `text=True` keeps the previous behavior, so this is backward compatible.
++- The new `test_config_from_file_binary` test verifies the handle is genuinely binary by asserting `fp.read()` returns `bytes`, so it will fail if the mode logic regresses.
++- `tests/static/config.json` doesn't need any changes; the binary test reuses it.
++
++## Running the relevant tests
++
++```shell
++pytest tests/test_config.py
++```
++
++To run only the `from_file` related tests:
++
++```shell
++pytest tests/test_config.py -k from_file
++```
++
++> Tokens: 95k sent, 512 cache hit, 7.8k received.  
++> Applied edit to src/flask/config.py  
++> Applied edit to tests/test_config.py  
++> summarizer unexpectedly failed for all models  
+diff --git a/.aider.input.history b/.aider.input.history
+new file mode 100644
+index 0000000..32c4ce1
+--- /dev/null
++++ b/.aider.input.history
+@@ -0,0 +1,60 @@
++
++# 2026-10-15 00:25:10.668744
+++Add a file mode parameter to flask.Config.from_file()
+++Python 3.11 introduced native TOML support with the `tomllib` package. This could work nicely with the `flask.Config.from_file()` method as an easy way to load TOML config files:
+++
+++```python
+++app.config.from_file("config.toml", tomllib.load)
+++```
+++
+++However, `tomllib.load()` takes an object readable in binary mode, while `flask.Config.from_file()` opens a file in text mode, resulting in this error:
+++
+++```
+++TypeError: File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`
+++```
+++
+++We can get around this with a more verbose expression, like loading from a file opened with the built-in `open()` function and passing the `dict` to `app.Config.from_mapping()`:
+++
+++```python
+++# We have to repeat the path joining that from_file() does
+++with open(os.path.join(app.config.root_path, "config.toml"), "rb") as file:
+++    app.config.from_mapping(tomllib.load(file))
+++```
+++
+++But adding a file mode parameter to `flask.Config.from_file()` would enable the use of a simpler expression. E.g.:
+++
+++```python
+++app.config.from_file("config.toml", tomllib.load, mode="b")
+++```
+++
+++Fix the issue in this repository. Run the relevant tests.
++
++# 2026-10-15 00:25:10.668825
+++Add a file mode parameter to flask.Config.from_file()
+++Python 3.11 introduced native TOML support with the `tomllib` package. This could work nicely with the `flask.Config.from_file()` method as an easy way to load TOML config files:
+++
+++```python
+++app.config.from_file("config.toml", tomllib.load)
+++```
+++
+++However, `tomllib.load()` takes an object readable in binary mode, while `flask.Config.from_file()` opens a file in text mode, resulting in this error:
+++
+++```
+++TypeError: File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`
+++```
+++
+++We can get around this with a more verbose expression, like loading from a file opened with the built-in `open()` function and passing the `dict` to `app.Config.from_mapping()`:
+++
+++```python
+++# We have to repeat the path joining that from_file() does
+++with open(os.path.join(app.config.root_path, "config.toml"), "rb") as file:
+++    app.config.from_mapping(tomllib.load(file))
+++```
+++
+++But adding a file mode parameter to `flask.Config.from_file()` would enable the use of a simpler expression. E.g.:
+++
+++```python
+++app.config.from_file("config.toml", tomllib.load, mode="b")
+++```
+++
+++Fix the issue in this repository. Run the relevant tests.
+diff --git a/.aider.tags.cache.v4/cache.db b/.aider.tags.cache.v4/cache.db
+new file mode 100644
+index 0000000000000000000000000000000000000000..9634d738acfb315d76916e7a3db80ee41416e778
+GIT binary patch
+literal 327680
+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
+O^m`1!EYt=bTK)y#w8?@1
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/flask/config.py b/src/flask/config.py
+index d4fc310..5e48be3 100644
+--- a/src/flask/config.py
++++ b/src/flask/config.py
+@@ -234,6 +234,7 @@ class Config(dict):
+         filename: str,
+         load: t.Callable[[t.IO[t.Any]], t.Mapping],
+         silent: bool = False,
++        text: bool = True,
+     ) -> bool:
+         """Update the values in the config from a file that is loaded
+         using the ``load`` parameter. The loaded data is passed to the
+@@ -244,8 +245,8 @@ class Config(dict):
+             import json
+             app.config.from_file("config.json", load=json.load)
+ 
+-            import toml
+-            app.config.from_file("config.toml", load=toml.load)
++            import tomllib
++            app.config.from_file("config.toml", load=tomllib.load, text=False)
+ 
+         :param filename: The path to the data file. This can be an
+             absolute path or relative to the config root path.
+@@ -254,14 +255,18 @@ class Config(dict):
+         :type load: ``Callable[[Reader], Mapping]`` where ``Reader``
+             implements a ``read`` method.
+         :param silent: Ignore the file if it doesn't exist.
++        :param text: Open the file in text or binary mode.
+         :return: ``True`` if the file was loaded successfully.
+ 
++        .. versionchanged:: 2.3
++            The ``text`` parameter was added.
++
+         .. versionadded:: 2.0
+         """
+         filename = os.path.join(self.root_path, filename)
+ 
+         try:
+-            with open(filename) as f:
++            with open(filename, "r" if text else "rb") as f:
+                 obj = load(f)
+         except OSError as e:
+             if silent and e.errno in (errno.ENOENT, errno.EISDIR):
+diff --git a/tests/test_config.py b/tests/test_config.py
+index 76c5d27..e7e220d 100644
+--- a/tests/test_config.py
++++ b/tests/test_config.py
+@@ -33,7 +33,25 @@ def test_config_from_object():
+ def test_config_from_file():
+     app = flask.Flask(__name__)
+     current_dir = os.path.dirname(os.path.abspath(__file__))
+-    app.config.from_file(os.path.join(current_dir, "static", "config.json"), json.load)
++    app.config.from_file(
++        os.path.join(current_dir, "static", "config.json"), json.load
++    )
++    common_object_test(app)
++
++
++def test_config_from_file_binary():
++    app = flask.Flask(__name__)
++    current_dir = os.path.dirname(os.path.abspath(__file__))
++
++    def load(fp):
++        data = fp.read()
++        # The file must be opened in binary mode for this to be bytes.
++        assert isinstance(data, bytes)
++        return json.loads(data)
++
++    app.config.from_file(
++        os.path.join(current_dir, "static", "config.json"), load, text=False
++    )
+     common_object_test(app)
+ 
+ 

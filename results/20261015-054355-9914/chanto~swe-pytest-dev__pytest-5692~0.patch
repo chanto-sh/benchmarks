@@ -1,0 +1,55 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..9502ba8
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1 @@
++The JUnit XML report now includes ``hostname`` and ``timestamp`` attributes in the root ``testsuite`` element.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..bcb6016 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -11,8 +11,10 @@ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
++from datetime import datetime
+ 
+ import py
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()
+diff --git a/testing/test_junitxml.py b/testing/test_junitxml.py
+index 3196f0e..c50dfe9 100644
+--- a/testing/test_junitxml.py
++++ b/testing/test_junitxml.py
+@@ -157,6 +157,19 @@ class TestPython:
+         val = tnode["time"]
+         assert round(float(val), 2) >= 0.03
+ 
++    def test_timestamp_and_hostname(self, testdir):
++        import re
++        import socket
++
++        testdir.makepyfile("def test_pass(): pass")
++        result, dom = runandparse(testdir)
++        node = dom.find_first_by_tag("testsuite")
++        timestamp = node["timestamp"]
++        assert timestamp is not None
++        # The timestamp is an ISO 8601 representation of the start time.
++        assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", timestamp)
++        assert node["hostname"] == socket.gethostname()
++
+     @pytest.mark.parametrize("duration_report", ["call", "total"])
+     def test_junit_duration_report(self, testdir, monkeypatch, duration_report):
+ 

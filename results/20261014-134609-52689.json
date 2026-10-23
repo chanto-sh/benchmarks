@@ -1,0 +1,170 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-14T13:46:09-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-hard.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--seed",
+      "210",
+      "--agents",
+      "chanto-verify,codex,goose",
+      "--tasks",
+      "swe-pylint-dev__pylint-7080"
+    ],
+    "bench_commit": "0824db2442a632c7d019e1dabe7879d06109cd4c",
+    "bench_dirty": false,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-cb06a06",
+      "sha256": "2aaf83d7b920467e87f95eab785ef1f4c65d89d5ca64aacccf60596a8140f391"
+    },
+    "agent_versions": {
+      "chanto-verify": "chanto 0.1.0",
+      "codex": "codex-cli 0.162.1",
+      "goose": "1.54.0"
+    },
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 210,
+    "repeat": 1,
+    "tasks": {
+      "swe-pylint-dev__pylint-7080": "4140df3bcf45f5dc399c5fd8c4c3fed489ded8741177e25fd8ee5ce5ac6e4986"
+    },
+    "offline_profile_sha256": "618d75f7edfb93b9987ff7fc2b41e3d84bb1a2b55d14d88b75f24a3fedd7340a"
+  },
+  "results": [
+    {
+      "agent": "goose",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": false,
+      "seconds": 4867.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "pected output status 0, got 20. Below pylint output: \nE         ************* Module failing\nE         ignored_subdirectory/failing.py:1:0: C0114: Missing module docstring (missing-module-docstring)\nE         ignored_subdirectory/failing.py:1:0: W0611: Unused import re (unused-import)\nE         \nE         -----------------------------------\nE         Your code has been rated at 0.00/10\nE         \nE         \nE       assert 20 == 0\n\ntests/test_self.py:146: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/goose/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_self.py::TestRunTC::test_ignore_path_recursive_current_dir\n1 failed, 120 passed in 20.76s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 29,
+        "input": 788341,
+        "output": 16890,
+        "cached": 754688
+      },
+      "meter_label": "goose~swe-pylint-dev__pylint-7080~0~9a9e5f91",
+      "started_at": "2026-10-14T13:46:40-0700",
+      "ended_at": "2026-10-14T15:07:47-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-134609-52689/goose~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "a246a52e6b54b28680fc113f1c2af48968f0065173c62aa41321e4301f0777a2"
+        },
+        "patch": {
+          "file": "20261014-134609-52689/goose~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-134609-52689/goose~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "32307705f65bc2da6f7283e7cba45cb41d0987a5ceecfeeb53c99800d3612670"
+        }
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/chanto-verify/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n121 passed in 27.02s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 152,
+        "input": 11060719,
+        "output": 88302,
+        "cached": 10840448
+      },
+      "meter_label": "chanto-verify~swe-pylint-dev__pylint-7080~0~2240aff3",
+      "started_at": "2026-10-14T15:08:33-0700",
+      "ended_at": "2026-10-14T15:28:33-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-134609-52689/chanto-verify~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261014-134609-52689/chanto-verify~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "61c35d33e8042632192a8c918d3c2d22ab16ec6b8ac252c39273c14ff68414a4"
+        },
+        "check": {
+          "file": "20261014-134609-52689/chanto-verify~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "0c62e23c203094f94e4ff63b2a27bc9675fa1205bca5425317c4427ca67e5ee3"
+        }
+      }
+    },
+    {
+      "agent": "codex",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": true,
+      "seconds": 476.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/codex/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n121 passed in 32.74s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 80,
+        "input": 3763770,
+        "output": 39742,
+        "cached": 0
+      },
+      "meter_label": "codex~swe-pylint-dev__pylint-7080~0~469c18f4",
+      "started_at": "2026-10-14T15:29:36-0700",
+      "ended_at": "2026-10-14T15:37:33-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-134609-52689/codex~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "5e47b153e1526d254c0785349c69efb791718b22043a86c1c887ba93326016b0"
+        },
+        "patch": {
+          "file": "20261014-134609-52689/codex~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "b4e8a40a7003d3e3ac6cb62a54b3190e9ff4453dc15ceca566c996a967be963e"
+        },
+        "check": {
+          "file": "20261014-134609-52689/codex~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "eff683f576e9ac246dccb74048f29b0597687aa8c70cf5e28b6c1200eabb9e33"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..42b5c12 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,68 @@
+ import math
+ 
+ 
++# 16-point Gauss-Legendre nodes and weights on [-1, 1].  Only the positive
++# half is listed; the rule is symmetric.
++_GL_NODES = (
++    0.09501250983763744,
++    0.2816035507792589,
++    0.4580167776572274,
++    0.6178762444026438,
++    0.7554044083550030,
++    0.8656312023878318,
++    0.9445750230732326,
++    0.9894009349916499,
++)
++_GL_WEIGHTS = (
++    0.1894506104550685,
++    0.1826034150449236,
++    0.1691565193950025,
++    0.1495959888165767,
++    0.1246289712555339,
++    0.09515851168249278,
++    0.06225352393864789,
++    0.02715245941175409,
++)
++_HALF_PI = math.pi / 2.0
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the singularity:
++
++        integral = 2 * integral_0^sqrt(b) cos(t*u**2) du.
++
++    The remaining integrand is smooth, so it is integrated with Gauss-Legendre
++    panels.  Panel boundaries are chosen where the phase t*u**2 advances by
++    pi/2, keeping each panel to at most a quarter oscillation.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0 or b == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    u_max = math.sqrt(b)
++    inv_sqrt_t = 1.0 / math.sqrt(t)
++    cos = math.cos
++    total = 0.0
++    u0 = 0.0
++    phase = 0.0
++
++    while u0 < u_max:
++        phase += _HALF_PI
++        u1 = math.sqrt(phase) * inv_sqrt_t
++        if u1 > u_max:
++            u1 = u_max
++
++        mid = 0.5 * (u0 + u1)
++        half = 0.5 * (u1 - u0)
++        panel = 0.0
++        for node, weight in zip(_GL_NODES, _GL_WEIGHTS):
++            offset = node * half
++            left = mid - offset
++            right = mid + offset
++            panel += weight * (cos(t * left * left) + cos(t * right * right))
++
++        total += half * panel
++        u0 = u1
++
++    return 2.0 * total

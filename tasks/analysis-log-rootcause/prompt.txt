@@ -1,0 +1,9 @@
+We had a checkout incident this morning: some customers got 502s at checkout from late morning on, while browsing kept working. logs/app.log is the combined log from all services for 09:00 to about 12:00 UTC. People are blaming the redis errors and the inventory deploy, but I'm not convinced.
+
+Please find the actual root cause and write answers.json with:
+
+- "root_cause_line": the line number (1-based) in logs/app.log of the event that started the failures.
+- "first_failed_request": the request id (like "r-000123") of the first checkout that failed because of it.
+- "failed_checkouts": how many checkouts failed because of it (not counting checkout failures with an unrelated cause).
+
+Also tell me in a sentence or two what happened.

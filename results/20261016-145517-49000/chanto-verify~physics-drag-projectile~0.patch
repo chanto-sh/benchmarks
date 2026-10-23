@@ -1,0 +1,183 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..801d4f8 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,175 @@
+-"""Point-mass projectile with quadratic air drag."""
++"""Point-mass projectile with quadratic air drag.
++
++The equations of motion for a projectile of mass ``m`` launched at speed
++``v0`` and elevation ``angle_deg``, subject to gravity ``g`` and a quadratic
++drag force ``F = -k |v| v``, are
++
++    dx/dt = vx
++    dy/dt = vy
++    dvx/dt = -(k/m) |v| vx
++    dvy/dt = -g - (k/m) |v| vy
++
++There is no closed-form solution once ``k != 0``, so the trajectory is
++integrated numerically with an adaptive Dormand-Prince (RK45) stepper.  The
++times at which the projectile reaches its apex (``vy = 0``) and returns to
++``y = 0`` are located by bisecting the step size, which keeps the reported
++range/apex/time consistent to well within four significant figures.
++"""
++
++import math
++
++# Dormand-Prince RK45 coefficients (a_ij for the stages, b for 5th/4th order).
++_C2 = 1.0 / 5.0
++_C3 = 3.0 / 10.0
++_C4 = 4.0 / 5.0
++_C5 = 8.0 / 9.0
++
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51, _A52, _A53, _A54 = (19372.0 / 6561.0, -25360.0 / 2187.0,
++                          64448.0 / 6561.0, -212.0 / 729.0)
++_A61, _A62, _A63, _A64, _A65 = (9017.0 / 3168.0, -355.0 / 33.0,
++                                46732.0 / 5247.0, 49.0 / 176.0,
++                                -5103.0 / 18656.0)
++_A71, _A73, _A74, _A75, _A76 = (35.0 / 384.0, 500.0 / 1113.0,
++                                125.0 / 192.0, -2187.0 / 6784.0,
++                                11.0 / 84.0)
++
++# 5th-order weights (same as the a_7i row) and the difference to 4th order.
++_B5 = (_A71, 0.0, _A73, _A74, _A75, _A76)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++# Tolerances: the table is printed to four significant figures (1e-4
++# relative), so 1e-12 keeps the accumulated error many orders below that.
++_ATOL = 1e-12
++_RTOL = 1e-12
++
++# Hard safety limit so a pathological input cannot hang the generator.
++_MAX_STEPS = 2_000_000
++
++
++def _derivs(state, g, k_over_m):
++    """Right-hand side of the equations of motion."""
++    _x, _y, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (vx, vy, -k_over_m * speed * vx, -g - k_over_m * speed * vy)
++
++
++def _combine(state, dt, terms):
++    """Return ``state + dt * sum(coef * k)`` as a 4-tuple."""
++    out = []
++    for i in range(4):
++        acc = 0.0
++        for coef, k in terms:
++            acc += coef * k[i]
++        out.append(state[i] + dt * acc)
++    return tuple(out)
++
++
++def _rk45_step(state, dt, g, k_over_m):
++    """One Dormand-Prince step; returns (5th-order state, error tuple)."""
++    k1 = _derivs(state, g, k_over_m)
++    k2 = _derivs(_combine(state, dt, ((_A21, k1),)), g, k_over_m)
++    k3 = _derivs(_combine(state, dt, ((_A31, k1), (_A32, k2))), g, k_over_m)
++    k4 = _derivs(_combine(state, dt, ((_A41, k1), (_A42, k2), (_A43, k3))),
++                 g, k_over_m)
++    k5 = _derivs(_combine(state, dt, ((_A51, k1), (_A52, k2), (_A53, k3),
++                                      (_A54, k4))), g, k_over_m)
++    k6 = _derivs(_combine(state, dt, ((_A61, k1), (_A62, k2), (_A63, k3),
++                                      (_A64, k4), (_A65, k5))), g, k_over_m)
++    k7 = _derivs(_combine(state, dt, ((_A71, k1), (_A73, k3), (_A74, k4),
++                                      (_A75, k5), (_A76, k6))), g, k_over_m)
++
++    stages = (k1, k2, k3, k4, k5, k6, k7)
++    y5 = _combine(state, dt, tuple(zip(_B5, stages)))
++    y4 = _combine(state, dt, tuple(zip(_B4, stages)))
++    err = tuple(abs(a - b) for a, b in zip(y5, y4))
++    return y5, err
++
++
++def _error_norm(err, state):
++    """Scaled error estimate; a step is accepted when this is <= 1."""
++    worst = 0.0
++    for e, s in zip(err, state):
++        scale = _ATOL + _RTOL * abs(s)
++        worst = max(worst, e / scale)
++    return worst
++
++
++def _locate(state, dt, g, k_over_m, index):
++    """Bisect the step size in [0, dt] where ``state[index]`` crosses zero.
++
++    ``state[index] > 0`` at ``dt = 0`` and ``<= 0`` at the full ``dt``.  The
++    crossing is solved on single high-order steps, each of which is no larger
++    than an already-accepted (hence accurate) step.
++    """
++    lo, hi = 0.0, dt
++    for _ in range(100):
++        mid = 0.5 * (lo + hi)
++        trial, _err = _rk45_step(state, mid, g, k_over_m)
++        if trial[index] > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    root_dt = 0.5 * (lo + hi)
++    trial, _err = _rk45_step(state, root_dt, g, k_over_m)
++    return root_dt, trial
+ 
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and
++    elevation ``angle_deg`` (degrees).  ``k`` is the quadratic drag
++    coefficient in kg/m, so the drag force is ``-k |v| v``.
++    """
++    angle = math.radians(angle_deg)
++    state = (0.0, float(h0), v0 * math.cos(angle), v0 * math.sin(angle))
++    k_over_m = k / mass
++
++    # Launched at or below ground level with no upward motion: it is already
++    # down, so the flight lasts zero time.
++    if state[1] <= 0.0 and state[3] <= 0.0:
++        return {"range": 0.0, "apex": max(state[1], 0.0), "time": 0.0}
++
++    # If it never rises, the maximum height is the launch height.
++    apex_found = state[3] <= 0.0
++    apex = state[1]
++    t = 0.0
++    dt = 1e-3
++
++    for _ in range(_MAX_STEPS):
++        trial, err = _rk45_step(state, dt, g, k_over_m)
++        error = _error_norm(err, state)
++
++        if error > 1.0:
++            # Reject and shrink the step.
++            dt *= max(0.1, 0.9 * error ** -0.2)
++            continue
++
++        # Apex: vy passes from positive to non-positive.
++        if not apex_found and state[3] > 0.0 and trial[3] <= 0.0:
++            root_dt, apex_state = _locate(state, dt, g, k_over_m, 3)
++            apex = apex_state[1]
++            apex_found = True
++            state = apex_state
++            t += root_dt
++            dt = max(root_dt, 1e-12)
++            continue
++
++        # Ground: y passes from positive to non-positive.
++        if state[1] > 0.0 and trial[1] <= 0.0:
++            root_dt, hit = _locate(state, dt, g, k_over_m, 1)
++            t += root_dt
++            return {"range": hit[0], "apex": apex, "time": t}
++
++        state = trial
++        t += dt
++        if error == 0.0:
++            dt *= 5.0
++        else:
++            dt *= min(5.0, max(1.0, 0.9 * error ** -0.2))
++
++    raise RuntimeError("projectile trajectory did not reach the ground")

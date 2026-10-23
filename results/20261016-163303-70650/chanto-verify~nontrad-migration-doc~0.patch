@@ -1,0 +1,64 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..e9938de
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,58 @@
++# Migrating off `app/legacy_db.py` (`query_raw`)
++
++Replacing `legacy_db.query_raw` with `app/db/session.py` (`Session.fetch_all`).
++This plan reflects the code as it is today; the 2024 notes in `docs/old_notes.md`
++are out of date and should not be used.
++
++## Call sites
++
++- `app/orders/service.py` — imports `query_raw` directly (`from app.legacy_db import query_raw`); `open_orders()` selects open orders and `cancel()` updates an order's status.
++- `app/billing/invoices.py` — imports the module (`from app import legacy_db`); `unpaid()` selects unpaid invoices and stamps them with the configured currency.
++- `app/admin/tools.py` — imports with an alias (`from app.legacy_db import query_raw as qr`); `purge_test_customers()` deletes test customer rows.
++
++These three are the only modules under `app/` that call `legacy_db.query_raw`.
++Two nearby things are *not* call sites and need no change:
++
++- `app/reports/export.py` calls `query_raw_v2`, which comes from `app/db/fastpath.py` and already goes through `Session` (it is not `legacy_db`).
++- `app/search/index.py` only mentions `legacy_db` in a comment; it already uses `Session`.
++
++## Schema
++
++Current schema version: 14
++
++This migration needs a new schema version. The highest applied migration is
++`0014_add_refunds.py` (`VERSION = 14`) and `SCHEMA_VERSION = 14` in
++`app/db/schema.py`. That file already carries a planned bump — `SCHEMA_VERSION = 15`
++"drop legacy views once legacy_db is gone" — so cutover should ship a migration
++`0015` that drops the legacy views and raises `SCHEMA_VERSION` to 15.
++
++## Environment
++
++Runtime environment variables read by the application code (excluding tests and docs):
++
++- `ORDERS_DB_URL` — read in `app/settings.py` (required). Still needed by the new session layer: `Session` defaults `url` to `settings.DB_URL`, which derives from this variable.
++- `ORDERS_DB_POOL` — read in `app/settings.py` (default `5`). Still needed by the new session layer: `Session` defaults `pool_size` to `settings.DB_POOL_SIZE`.
++- `LEGACY_DB_TIMEOUT_S` — read in `app/legacy_db.py` (default `30`). Not needed by the new session layer; it disappears with `legacy_db`.
++- `BILLING_CURRENCY` — read in `app/billing/invoices.py` (default `EUR`) via `app.util.env.env`. Not needed by the session layer, but it is unrelated billing config and stays in place after the switch.
++
++`ORDERS_DB_REPLICA` and `DB_PASSWORD` appear only as comments/prose, not as live
++reads, so they are not listed.
++
++## Rollback
++
++The switch is code-only until the schema bump ships, so backout is cheap:
++
++1. Revert the three call sites (`app/orders/service.py`, `app/billing/invoices.py`,
++   `app/admin/tools.py`) to their `legacy_db.query_raw` calls and redeploy. Keep
++   `app/legacy_db.py` in the tree (don't delete it) until the cutover has stuck for
++   a release, so this revert is a straight `git revert`.
++2. Do the cutover in two phases: first deploy the session-backed call sites with
++   `legacy_db.py` still present and `SCHEMA_VERSION` still 14. Only run the
++   migration `0015` that drops the legacy views *after* the code switch is proven,
++   since dropping the views is the one irreversible step. If anything goes wrong
++   before `0015`, roll back the code and nothing in the database has changed.
++3. Note that `Session.fetch_all` currently raises `NotImplementedError("wired up
++   in production")` in this repo, so the new path cannot actually serve traffic
++   until that is implemented — sequence the implementation and its tests before
++   the cutover deploy, otherwise rollback (reverting to `legacy_db`) is the only
++   working state.

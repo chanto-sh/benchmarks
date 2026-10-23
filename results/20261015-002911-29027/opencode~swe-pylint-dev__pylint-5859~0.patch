@@ -1,0 +1,53 @@
+diff --git a/ChangeLog b/ChangeLog
+index b6ba4be..f4b5107 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -405,6 +405,11 @@ Release date: TBA
+ 
+   Closes #4955
+ 
++* The ``--notes`` option now considers note tags that consist entirely of
++  punctuation, e.g. ``--notes="YES,???"``.
++
++  Closes #5859
++
+ ..
+   Insert your changelog randomly, it will reduce merge conflicts
+   (Ie. not necessarily at the end)
+diff --git a/pylint/checkers/misc.py b/pylint/checkers/misc.py
+index 69149e6..a9e9912 100644
+--- a/pylint/checkers/misc.py
++++ b/pylint/checkers/misc.py
+@@ -121,9 +121,9 @@ class EncodingChecker(BaseChecker):
+ 
+         notes = "|".join(re.escape(note) for note in self.config.notes)
+         if self.config.notes_rgx:
+-            regex_string = rf"#\s*({notes}|{self.config.notes_rgx})\b"
++            regex_string = rf"#\s*({notes}|{self.config.notes_rgx})(?!\w)"
+         else:
+-            regex_string = rf"#\s*({notes})\b"
++            regex_string = rf"#\s*({notes})(?!\w)"
+ 
+         self._fixme_pattern = re.compile(regex_string, re.I)
+ 
+diff --git a/tests/checkers/unittest_misc.py b/tests/checkers/unittest_misc.py
+index 23e19a9..9d2228b 100644
+--- a/tests/checkers/unittest_misc.py
++++ b/tests/checkers/unittest_misc.py
+@@ -89,6 +89,16 @@ class TestFixme(CheckerTestCase):
+         ):
+             self.checker.process_tokens(_tokenize_str(code))
+ 
++    @set_config(notes=["YES", "???"])
++    def test_fixme_with_punctuation(self) -> None:
++        code = """a = 1
++                # ???: no
++                """
++        with self.assertAddsMessages(
++            MessageTest(msg_id="fixme", line=2, args="???: no", col_offset=17)
++        ):
++            self.checker.process_tokens(_tokenize_str(code))
++
+     def test_issue_2321_should_not_trigger(self) -> None:
+         code = 'print("# TODO this should not trigger a fixme")'
+         with self.assertNoMessages():

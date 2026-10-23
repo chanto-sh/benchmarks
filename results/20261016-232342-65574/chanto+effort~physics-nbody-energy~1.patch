@@ -1,0 +1,106 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..99c8fc8 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -30,4 +30,33 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+     """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    pos = [[p[0], p[1]] for p in positions]
++    vel = [[v[0], v[1]] for v in velocities]
++    if steps <= 0 or not masses:
++        return pos, vel
++
++    def leapfrog_step(h):
++        acc = accelerations(masses, pos, G)
++        half = 0.5 * h
++        for i in range(len(masses)):
++            vel[i][0] += half * acc[i][0]
++            vel[i][1] += half * acc[i][1]
++        for i in range(len(masses)):
++            pos[i][0] += h * vel[i][0]
++            pos[i][1] += h * vel[i][1]
++        acc = accelerations(masses, pos, G)
++        for i in range(len(masses)):
++            vel[i][0] += half * acc[i][0]
++            vel[i][1] += half * acc[i][1]
++
++    # Fourth-order Yoshida composition of the second-order leapfrog step.
++    # Being symplectic and time-reversible, it keeps the energy error bounded
++    # instead of letting it drift over long integrations.
++    cbrt2 = 2.0 ** (1.0 / 3.0)
++    w1 = 1.0 / (2.0 - cbrt2)
++    w0 = -cbrt2 * w1
++    for _ in range(steps):
++        leapfrog_step(w1 * dt)
++        leapfrog_step(w0 * dt)
++        leapfrog_step(w1 * dt)
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..921ea3d 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,6 +4,13 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def momentum(masses, velocities):
++    return [
++        sum(m * v[0] for m, v in zip(masses, velocities)),
++        sum(m * v[1] for m, v in zip(masses, velocities)),
++    ]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +24,48 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_two_body_long_run(self):
++        # Perihelion of an equal-mass e=0.6 orbit with semi-major axis 1.
++        m = [1.0, 1.0]
++        r = 0.4
++        v = math.sqrt((1.0 + 0.6) / r) / 2.0
++        pos = [[-r, 0.0], [r, 0.0]]
++        vel = [[0.0, -v], [0.0, v]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.001, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-8)
++
++    def test_figure_eight_three_body(self):
++        m = [1.0, 1.0, 1.0]
++        r = [0.97000436, -0.24308753]
++        v = [0.4662036850, 0.4323657300]
++        pos = [r[:], [-r[0], -r[1]], [0.0, 0.0]]
++        vel = [v[:], v[:], [-2.0 * v[0], -2.0 * v[1]]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.001, 10000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-9)
++
++    def test_momentum_and_inputs_are_preserved(self):
++        m = [3.0, 1.0, 0.5]
++        pos = [[0.0, 0.0], [2.0, 0.3], [-1.3, 1.7]]
++        vel = [[0.0, 0.0], [0.0, 0.65], [0.4, -0.2]]
++        pos_before = [xy[:] for xy in pos]
++        vel_before = [xy[:] for xy in vel]
++        p0 = momentum(m, vel)
++
++        p, q = simulate(m, pos, vel, 0.0005, 5000)
++
++        self.assertEqual(pos, pos_before)
++        self.assertEqual(vel, vel_before)
++        p1 = momentum(m, q)
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-11)
++
++    def test_single_particle_moves_at_constant_velocity(self):
++        p, q = simulate([2.0], [[1.0, -1.0]], [[0.25, 0.5]], 0.1, 100)
++        self.assertAlmostEqual(p[0][0], 1.0 + 0.25 * 10.0)
++        self.assertAlmostEqual(p[0][1], -1.0 + 0.5 * 10.0)
++        self.assertEqual(q, [[0.25, 0.5]])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

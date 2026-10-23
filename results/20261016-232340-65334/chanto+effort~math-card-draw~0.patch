@@ -1,0 +1,64 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..50e85fa 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,22 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _hypergeometric_tail(red, blue, draws, k):
++    """P(at least k reds in ``draws`` cards drawn from red + blue cards)."""
++    if k <= 0:
++        return Fraction(1)
++    if k > red or draws < k:
++        return Fraction(0)
++
++    draws = min(draws, red + blue)
++    upper = min(red, draws)
++    favourable = sum(
++        comb(red, x) * comb(blue, draws - x)
++        for x in range(k, upper + 1)
++        if 0 <= draws - x <= blue
++    )
++    return Fraction(favourable, comb(red + blue, draws))
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +24,35 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r:
++        return Fraction(0)
++
++    total = r + b + g
++    if m <= 0:
++        return Fraction(0)
++    m = min(m, total)
++    non_green = r + b
++
++    probability = Fraction(0)
++
++    # No green card in the first m cards: the dealer stops after m cards.
++    if m <= non_green:
++        probability += (
++            Fraction(comb(non_green, m), comb(total, m))
++            * _hypergeometric_tail(r, b, m, k)
++        )
++
++    # First green card is at position n + 1, preceded by n non-green cards.
++    if g > 0:
++        for n in range(min(m - 1, non_green) + 1):
++            prefix_probability = Fraction(comb(non_green, n), comb(total, n))
++            green_probability = Fraction(g, total - n)
++            probability += (
++                prefix_probability
++                * green_probability
++                * _hypergeometric_tail(r, b, n, k)
++            )
++
++    return probability

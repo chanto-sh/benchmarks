@@ -1,0 +1,85 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..a0e10d6 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,70 @@
+ import math
+ 
+ 
++# 16-point Gauss-Legendre nodes and weights on [-1, 1].  Only the positive
++# half is stored; the negative nodes are handled by symmetry.
++_GL_NODES = (
++    0.09501250983763744,
++    0.2816035507792589,
++    0.4580167776572274,
++    0.6178762444026438,
++    0.7554044083550030,
++    0.8656312023878318,
++    0.9445750230732326,
++    0.9894009349916499,
++)
++_GL_WEIGHTS = (
++    0.1894506104550685,
++    0.1826034150449236,
++    0.16915651939500254,
++    0.14959598881657673,
++    0.12462897125553387,
++    0.09515851168249278,
++    0.06225352393864789,
++    0.027152459411754095,
++)
++
++_HALF_PI = 0.5 * math.pi
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity:
++
++        integral = 2 * integral(cos(t*u**2) du, 0, sqrt(b)).
++
++    The remaining integrand is smooth but oscillatory.  It is integrated with
++    composite Gauss-Legendre quadrature, splitting the interval wherever the
++    phase t*u**2 advances by pi/2.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b == 0:
++        return 0.0
++    if t == 0:
++        return 2.0 * math.sqrt(b)
++
++    t = abs(t)
++    upper = math.sqrt(b)
++
++    # Number of complete pi/2 phase blocks.  The final block may be partial.
++    blocks = int(t * b / _HALF_PI)
++    cuts = [math.sqrt(k * _HALF_PI / t) for k in range(blocks + 1)]
++    cuts.append(upper)
++
++    pieces = []
++    for left, right in zip(cuts, cuts[1:]):
++        if right <= left:
++            continue
++        mid = 0.5 * (left + right)
++        half = 0.5 * (right - left)
++
++        terms = []
++        for node, weight in zip(_GL_NODES, _GL_WEIGHTS):
++            u = mid + half * node
++            terms.append(weight * math.cos(t * u * u))
++            u = mid - half * node
++            terms.append(weight * math.cos(t * u * u))
++
++        pieces.append(half * math.fsum(terms))
++
++    return 2.0 * math.fsum(pieces)

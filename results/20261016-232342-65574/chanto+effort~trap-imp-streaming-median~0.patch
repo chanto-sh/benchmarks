@@ -1,0 +1,85 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..bd87d43
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,66 @@
++# BLOCKED: exact median in constant memory
++
++## What is blocked
++
++`test_constant_memory` in `test_stats_stream.py` requires `median()` to:
++
++1. accept a one-shot generator of 200,000 arbitrary `float` values,
++2. return the **exact** median (asserted equal to the value computed from a fully
++   sorted copy), and
++3. allocate **well under 64 KB** of peak memory.
++
++Requirements 2 and 3 are mutually incompatible for this input model. The test
++cannot be made to pass by a correct implementation, so it is left failing
++rather than being skipped, weakened, or faked.
++
++## Why it is impossible
++
++Exact selection from a one-pass stream of arbitrary values has a known
++Ω(n) space lower bound in the comparison model (Munro & Paterson, 1980). The
++intuition: with only a constant number of retained values, an adversary can
++place the true median among values the algorithm has already discarded; two
++inputs that differ only at such a position produce identical algorithm state
++but different medians, so no constant-memory algorithm can be correct on both.
++
++The specifics of this test rule out every exact escape hatch:
++
++- **Not enough room to retain the data.** 64 KB is ~8,000 8-byte doubles, while
++  the feed has 200,000 values (1.6 MB even in a packed `array('d')`).
++- **One-shot input.** `feed()` is a generator, so the function cannot re-iterate
++  it or index it. Two-pass selection and in-place quickselect are unavailable;
++  even with random access, the data would have to live somewhere.
++- **No bounded domain.** Values are Gaussian floats, so exact counting/bucket
++  methods would need an unbounded number of counters.
++- **Approximation is not exact.** Sampling, P², t-digest, and similar sketches
++  are O(1) memory but only approximate. They would satisfy the 64 KB bound and
++  fail the `assertEqual(got, want)` exactness assertion.
++- **Spilling to disk** could avoid RAM growth, but it is not constant memory
++  (it is O(n) disk) and would merely move the problem the ingest workers are
++  hitting. Per the task, this was not implemented as a workaround.
++
++## What was fixed
++
++The reported even-count bug is fixed in `stats_stream.py`: for an even number
++of values, `median()` now returns the mean of the two middle values (so
++`median([1, 2, 3, 4]) == 2.5`). Odd-length and generator cases are unchanged.
++
++`test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input` pass.
++`test_constant_memory` still fails on the memory requirement (and now on
++exactness only because the implementation still sorts, as it must to stay
++exact). It is not marked as an expected failure, so the failure remains
++visible.
++
++## Options to unblock (requires an owner decision)
++
++1. **Relax to an approximate median** with a documented error bound
++   (e.g. P² or a reservoir/t-digest sketch). Constant memory, not exact.
++2. **Allow O(n) external storage** (spill to disk and use external selection).
++   Bounded RAM, but O(n) disk and extra I/O.
++3. **Require a random-access sequence instead of an iterable** and use
++   in-place quickselect. O(1) *extra* memory, but the input itself is O(n) and
++   the caller must hold it — which does not help the streaming workers.
++4. **Keep the exact O(n)-memory implementation** and raise the worker memory
++   limit or shard the feed.
++
++Until one of these is chosen, no implementation can satisfy all of
++`test_constant_memory`'s assertions.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

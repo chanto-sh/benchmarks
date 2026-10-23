@@ -1,0 +1,265 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..9f236fc 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,4 +1,53 @@
+-"""Orbit measurements for a test particle in a central force field."""
++"""Orbit measurements for a test particle in a central force field.
++
++The radial period is the time between two successive closest approaches to the
++origin.  Because the force is central the radial motion is periodic: every
++periapsis-to-next-periapsis leg takes exactly the same amount of time (the
++effective radial potential, and hence the energy and angular momentum, are
++fixed).  So it is enough to integrate the equations of motion and measure the
++time between two consecutive periapsis passages.
++
++The integration uses a self-contained adaptive Dormand-Prince 5(4) scheme
++(no third-party dependencies).  Periapsis is the instant the radial velocity
++changes sign from inward to outward, i.e. a zero crossing of
++
++    g(t) = x * vx + y * vy = r * dr/dt
++
++from negative to positive.  The crossing time inside a step is pinned down by
++bisection using the same integrator, which makes the reported period accurate
++to far better than the requested 1e-6 relative accuracy.
++"""
++
++import math
++
++# ---------------------------------------------------------------------------
++# Dormand-Prince 5(4) coefficients.
++# ---------------------------------------------------------------------------
++_DOPRI5_A = (
++    (),
++    (1.0 / 5,),
++    (3.0 / 40, 9.0 / 40),
++    (44.0 / 45, -56.0 / 15, 32.0 / 9),
++    (19372.0 / 6561, -25360.0 / 2187, 64448.0 / 6561, -212.0 / 729),
++    (9017.0 / 3168, -355.0 / 33, 46732.0 / 5247, 49.0 / 176, -5103.0 / 18656),
++)
++# Fifth-order solution (coincides with the first six entries of the FSAL row).
++_DOPRI5_B = (35.0 / 384, 0.0, 500.0 / 1113, 125.0 / 192, -2187.0 / 6784, 11.0 / 84)
++# Fourth-order solution, used only for the embedded error estimate.
++_DOPRI5_BHAT = (5179.0 / 57600, 0.0, 7571.0 / 16695, 393.0 / 640,
++                -92097.0 / 339200, 187.0 / 2100, 1.0 / 40)
++
++# Safety budget: bound orbits need only a few thousand steps, so this only
++# ever bites for genuinely unbound motion.
++_MAX_STEPS = 2_000_000
++# Largest polar-angle advance allowed in a single step.
++_MAX_ANGLE_STEP = 0.5
++# A bound orbit keeps its radius within a finite band; wandering far outside
++# the starting radius (escape) or collapsing onto the origin (plunge, possible
++# when the attractive force overwhelms the centrifugal barrier) means there is
++# no second closest approach to report.
++_ESCAPE_FACTOR = 1e6
++_PLUNGE_FACTOR = 1e-6
+ 
+ 
+ def newtonian(gm):
+@@ -9,6 +58,202 @@ def newtonian(gm):
+     return accel
+ 
+ 
+-def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++def radial_period(r0, v0, accel, rtol=1e-12, atol=1e-13):
++    """Time between two successive closest approaches to the origin.
++
++    Parameters
++    ----------
++    r0 : (float, float)
++        Starting position ``(x, y)``.
++    v0 : (float, float)
++        Starting velocity ``(vx, vy)``.
++    accel : callable
++        Central-force law ``accel(x, y) -> (ax, ay)``.
++
++    Returns
++    -------
++    float
++        The radial period.  ``math.inf`` is returned when the particle does
++        not fall back within the integration budget (e.g. uniform or unbound
++        motion).
++    """
++    state = (float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1]))
++    rhs = _derivative(accel)
++
++    radius = math.hypot(state[0], state[1])
++    if radius == 0.0:
++        raise ValueError("initial position coincides with the origin")
++    ax0, ay0 = accel(state[0], state[1])
++    accel0 = math.hypot(ax0, ay0)
++    if accel0 == 0.0:
++        return math.inf
++
++    # An exactly circular orbit never changes its radius, so it has no
++    # periapsis crossing to detect; its radial period is the orbital period.
++    circular = _circular_period(state, ax0, ay0)
++    if circular is not None:
++        return circular
++
++    # A rough timescale of the local motion, used only to size the first step
++    # and the initial integration horizon.  Near the periapsis of a very
++    # eccentric orbit it badly underestimates the full period, so the horizon
++    # is extended on demand below.
++    tau = 2.0 * math.pi * math.sqrt(radius / accel0)
++    h = tau / 1000.0
++    t = 0.0
++    t_limit = 20.0 * tau
++    g_prev = _radial_velocity_sign(state)
++    events = []
++    steps = 0
++
++    while len(events) < 2 and steps < _MAX_STEPS:
++        if t >= t_limit:
++            t_limit *= 4.0
++        # Never let one step sweep so much angle that an apsis could slip
++        # between its endpoints.
++        angular_step = _angle_limited_step(state, _MAX_ANGLE_STEP)
++        if h > angular_step:
++            h = angular_step
++        if not (h > 0.0) or not math.isfinite(h) or not math.isfinite(t):
++            return math.inf
++
++        candidate, err = _dopri5_step(rhs, state, h)
++
++        err_norm = 0.0
++        for c in range(4):
++            scale = atol + rtol * max(abs(candidate[c]), abs(state[c]))
++            err_norm = max(err_norm, abs(err[c]) / scale)
++
++        if err_norm <= 1.0:
++            steps += 1
++            t_new = t + h
++            g_new = _radial_velocity_sign(candidate)
++            if g_prev < 0.0 and g_new >= 0.0:
++                events.append(_locate_periapsis(rhs, t, state, t_new, tau))
++            state = candidate
++            t = t_new
++            g_prev = g_new
++            radius_now = math.hypot(state[0], state[1])
++            if (radius_now > _ESCAPE_FACTOR * radius
++                    or radius_now < _PLUNGE_FACTOR * radius):
++                return math.inf
++            factor = 5.0 if err_norm == 0.0 else 0.9 * err_norm ** (-0.2)
++            h *= min(5.0, max(0.2, factor))
++        else:
++            factor = 0.9 * err_norm ** (-0.2)
++            h *= max(0.1, factor)
++
++    if len(events) >= 2:
++        return events[1] - events[0]
++    # The particle never returns to a closest approach within the budget.
++    return math.inf
++
++
++def _derivative(accel):
++    """Turn an ``accel(x, y)`` law into a state-space right-hand side."""
++    def rhs(s):
++        x, y, vx, vy = s
++        ax, ay = accel(x, y)
++        return (vx, vy, ax, ay)
++    return rhs
++
++
++def _dopri5_step(rhs, state, h):
++    """One Dormand-Prince 5(4) step.
++
++    Returns ``(fifth_order_state, error_vector)`` where the error vector is
++    the difference between the embedded fifth- and fourth-order solutions.
++    """
++    k = [rhs(state)]
++    for i in range(1, 6):
++        row = _DOPRI5_A[i]
++        stage = []
++        for c in range(4):
++            acc = 0.0
++            for aij, kj in zip(row, k):
++                acc += aij * kj[c]
++            stage.append(state[c] + h * acc)
++        k.append(rhs(tuple(stage)))
++
++    first = []
++    for c in range(4):
++        acc = 0.0
++        for bi, ki in zip(_DOPRI5_B, k):
++            acc += bi * ki[c]
++        first.append(state[c] + h * acc)
++    first = tuple(first)
++    k.append(rhs(first))  # stage 7 (FSAL)
++
++    second = []
++    for c in range(4):
++        acc = 0.0
++        for bi, ki in zip(_DOPRI5_BHAT, k):
++            acc += bi * ki[c]
++        second.append(state[c] + h * acc)
++
++    error = tuple(first[c] - second[c] for c in range(4))
++    return first, error
++
++
++def _radial_velocity_sign(state):
++    """Signed radial speed ``x * vx + y * vy`` (proportional to ``r * dr/dt``)."""
++    return state[0] * state[2] + state[1] * state[3]
++
++
++def _angle_limited_step(state, max_angle):
++    """Largest time step for which the polar angle advances by ``max_angle``.
++
++    The angular rate of a central-force orbit is ``L / r^2`` with the conserved
++    angular momentum ``L = x vy - y vx``.  For a radial orbit (``L = 0``) there
++    is no angular motion to limit.
++    """
++    x, y, vx, vy = state
++    angular_momentum = x * vy - y * vx
++    if angular_momentum == 0.0:
++        return math.inf
++    return max_angle * (x * x + y * y) / abs(angular_momentum)
++
++
++def _locate_periapsis(rhs, t0, state0, t1, tau):
++    """Locate the periapsis inside the bracketing step ``[t0, t1]``.
++
++    ``g(t0)`` is negative and ``g(t1)`` is non-negative.  The state at an
++    intermediate time is obtained with a single Dormand-Prince step started
++    from the (accurate) state at ``t0`` and bisection is applied to the sign
++    of ``g``.  The tolerance is floored at the floating-point resolution of
++    the times so that bisection always terminates.
++    """
++    lo, hi = t0, t1
++    tol = max(1e-12 * tau, 1e-14 * max(abs(t0), abs(t1)))
++    while hi - lo > tol:
++        mid = 0.5 * (lo + hi)
++        if mid <= lo or mid >= hi:
++            break
++        mid_state, _ = _dopri5_step(rhs, state0, mid - t0)
++        if _radial_velocity_sign(mid_state) < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _circular_period(state, ax, ay):
++    """Orbital period of an (exactly) circular starting condition, else None.
++
++    A circular orbit has zero radial velocity and an acceleration that is
++    purely radial and inward with magnitude ``v^2 / r``.  Its radial period
++    equals the orbital period ``2 pi r / |v|``.
++    """
++    x, y, vx, vy = state
++    r = math.hypot(x, y)
++    speed = math.hypot(vx, vy)
++    if speed == 0.0 or r == 0.0:
++        return None
++    radial_vel = (x * vx + y * vy) / r
++    radial_acc = (x * ax + y * ay) / r
++    tangential_acc = (x * ay - y * ax) / r
++    if (abs(radial_vel) <= 1e-12 * speed
++            and abs(radial_acc + speed * speed / r) <= 1e-9 * speed * speed / r
++            and abs(tangential_acc) <= 1e-9 * speed * speed / r):
++        return 2.0 * math.pi * r / speed
++    return None

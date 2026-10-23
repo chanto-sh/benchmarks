@@ -1,0 +1,92 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..798c352
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,5 @@
++Fix a crash when an invalid regular expression is supplied for an option (e.g. a
++`function-rgx` using the unsupported `\p{...}` syntax). Pylint now reports a
++readable error message instead of a traceback.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..8b22b54 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,21 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regex_transformer(value: str) -> Pattern[str]:
++    """Transforms a string into a regex."""
++    try:
++        return re.compile(value)
++    except re.error as e:
++        raise argparse.ArgumentTypeError(
++            f"Invalid regular expression '{value}': {e}"
++        ) from e
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -112,7 +122,7 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+         patterns.append(
+-            re.compile(
++            _regex_transformer(
+                 str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+                 + "|"
+                 + pathlib.PureWindowsPath(pattern).as_posix()
+@@ -130,7 +140,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regex_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,
+diff --git a/tests/config/unittest_config.py b/tests/config/unittest_config.py
+index 8c668aa..7270b74 100644
+--- a/tests/config/unittest_config.py
++++ b/tests/config/unittest_config.py
+@@ -6,6 +6,7 @@
+ 
+ from __future__ import annotations
+ 
++import argparse
+ import re
+ import sre_constants
+ 
+@@ -60,6 +61,23 @@ def test__regexp_csv_validator_invalid() -> None:
+         config.option._regexp_csv_validator(None, None, ",".join(pattern_strings))
+ 
+ 
++def test__regex_transformer_valid() -> None:
++    result = config.argument._regex_transformer("test_.*")
++    assert isinstance(result, re.Pattern)
++    assert result.pattern == "test_.*"
++
++
++def test__regex_transformer_invalid() -> None:
++    with pytest.raises(argparse.ArgumentTypeError):
++        config.argument._regex_transformer("test_)")
++
++
++def test__regexp_csv_transfomer_invalid() -> None:
++    pattern_strings = ["test_.*", "foo\\.bar", "^baz)$"]
++    with pytest.raises(argparse.ArgumentTypeError):
++        config.argument._regexp_csv_transfomer(",".join(pattern_strings))
++
++
+ class TestPyLinterOptionSetters(CheckerTestCase):
+     """Class to check the set_config decorator for options declared in PyLinter."""
+ 

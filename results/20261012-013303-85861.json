@@ -1,0 +1,66 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "poly-python-dot-dsl",
+      "rep": 0,
+      "passed": true,
+      "seconds": 478.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "----------------------------------------------------------------------\nRan 12 tests in 0.000s\n\nOK\n",
+      "tokens": {
+        "in": 356275,
+        "out": 15792
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 26,
+        "input": 356275,
+        "output": 15792,
+        "cached": 0
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "te\n   --> src/lib.rs:131:1\n    |\n131 | impl ExactSizeIterator for std::vec::IntoIter<u8> {}\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------------\n    |                            |\n    |                            `std::vec::IntoIter` is not defined in the current crate\n    |\n    = note: impl doesn't have any local type before any uncovered type parameters\n    = note: for more information see https://doc.rust-lang.org/reference/items/implementations.html#orphan-rules\n    = note: define and implement a trait or new type instead\n\nSome errors have detailed explanations: E0117, E0207, E0401.\nFor more information about an error, try `rustc --explain E0117`.\nerror: could not compile `xorcism` (lib) due to 4 previous errors\nerror: could not compile `xorcism` (lib test) due to 4 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 81,
+        "input": 4497460,
+        "output": 59540,
+        "cached": 4155360
+      }
+    },
+    {
+      "agent": "chanto-verify",
+      "task": "poly-go-beer-song",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "o:97: Verse(7,5)\n             got:\"7 bottles of beer on the wall, 7 bottles of beer.\\nTake one down and pass it around, 6 bottles of beer on the wall.\\n\\n\\n6 bottles of beer on the wall, 6 bottles of beer.\\nTake one down and pass it around, 5 bottles of beer on the wall.\\n\\n\\n5 bottles of beer on the wall, 5 bottles of beer.\\nTake one down and pass it around, 4 bottles of beer on the wall.\\n\"\n            want:\"7 bottles of beer on the wall, 7 bottles of beer.\\nTake one down and pass it around, 6 bottles of beer on the wall.\\n\\n6 bottles of beer on the wall, 6 bottles of beer.\\nTake one down and pass it around, 5 bottles of beer on the wall.\\n\\n5 bottles of beer on the wall, 5 bottles of beer.\\nTake one down and pass it around, 4 bottles of beer on the wall.\\n\\n\"\nFAIL\nFAIL\tbeer\t0.426s\nFAIL\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 28,
+        "input": 525320,
+        "output": 23482,
+        "cached": 223232
+      }
+    }
+  ]
+}

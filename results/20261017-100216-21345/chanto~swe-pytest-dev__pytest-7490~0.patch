@@ -1,0 +1,48 @@
+diff --git a/changelog/7490.bugfix.rst b/changelog/7490.bugfix.rst
+new file mode 100644
+index 0000000..78cd67b
+--- /dev/null
++++ b/changelog/7490.bugfix.rst
+@@ -0,0 +1,2 @@
++Fixed ``pytest.mark.xfail`` marks added dynamically during the test call (for example
++through ``request.node.add_marker``) not being taken into account.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 335e109..28bc008 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -262,6 +262,10 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):
+     outcome = yield
+     rep = outcome.get_result()
+     xfailed = item._store.get(xfailed_key, None)
++    if not item.config.option.runxfail and xfailed is None and call.when == "call":
++        # The xfail mark can be added dynamically during the test call, so
++        # evaluate the marks again before processing the report.
++        item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)
+     # unittest special case, see setting of unexpectedsuccess_key
+     if unexpectedsuccess_key in item._store and rep.when == "call":
+         reason = item._store[unexpectedsuccess_key]
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index 8fceb37..250e92d 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -425,6 +425,20 @@ class TestXFail:
+         result = testdir.runpytest(p)
+         result.stdout.fnmatch_lines(["*1 xfailed*"])
+ 
++    def test_dynamic_xfail_set_during_test(self, testdir):
++        p = testdir.makepyfile(
++            """
++            import pytest
++            def test_fail(request):
++                request.node.add_marker(pytest.mark.xfail(reason="xfail"))
++                assert 0
++            def test_pass(request):
++                request.node.add_marker(pytest.mark.xfail(reason="xfail"))
++        """
++        )
++        result = testdir.runpytest(p, "-rxX")
++        result.stdout.fnmatch_lines(["*XFAIL*test_fail*", "*XPASS*test_pass*"])
++
+     @pytest.mark.parametrize(
+         "expected, actual, matchline",
+         [

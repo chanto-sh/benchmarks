@@ -1,0 +1,55 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..610e59c 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _c(n, i):
++    """Binomial coefficient, 0 when the choice is impossible."""
++    if i < 0 or n < 0 or i > n:
++        return 0
++    return comb(n, i)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,36 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or m <= 0:
++        return Fraction(0)
++
++    n = r + b + g
++
++    def tail(t):
++        """P(at least k reds among t cards drawn from the r red / b blue pool)."""
++        total = _c(r + b, t)
++        if total == 0:
++            return Fraction(0)
++        good = sum(_c(r, i) * _c(b, t - i) for i in range(k, min(r, t) + 1))
++        return Fraction(good, total)
++
++    prob = Fraction(0)
++
++    # The first t positions are reachable; the deal stops at the first green
++    # among them or after t cards.
++    t = min(m, n)
++
++    # Stop because the first green is at position j: the j-1 preceding cards
++    # are all non-green and the j-th is green.
++    for j in range(1, t + 1):
++        p_stop = Fraction(_c(r + b, j - 1), _c(n, j - 1)) * Fraction(g, n - j + 1)
++        if p_stop:
++            prob += p_stop * tail(j - 1)
++
++    # No green among the first t cards: the deal turns all t of them.
++    p_no_green = Fraction(_c(r + b, t), _c(n, t))
++    prob += p_no_green * tail(t)
++
++    return prob

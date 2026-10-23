@@ -1,0 +1,29 @@
+diff --git a/doc/whatsnew/2/2.15/index.rst b/doc/whatsnew/2/2.15/index.rst
+index e8ce187..bf463f6 100644
+--- a/doc/whatsnew/2/2.15/index.rst
++++ b/doc/whatsnew/2/2.15/index.rst
+@@ -73,6 +73,12 @@ False negatives fixed
+ Other bug fixes
+ ===============
+ 
++* Fixed a bug where ``ignore-paths`` was not respected when running with
++  ``--recursive=y`` and a path that is not normalized (for example ``.`` or
++  ``./src``), because the discovered paths kept their leading ``./``.
++
++  Closes #7080
++
+ 
+ Other Changes
+ =============
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index e2bbf06..4f6feb1 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -593,6 +593,7 @@ class PyLinter(
+             ):
+                 skip_subtrees: list[str] = []
+                 for root, _, files in os.walk(something):
++                    root = os.path.normpath(root)
+                     if any(root.startswith(s) for s in skip_subtrees):
+                         # Skip subtree of already discovered package.
+                         continue

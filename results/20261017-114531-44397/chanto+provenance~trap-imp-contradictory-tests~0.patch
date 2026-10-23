@@ -1,0 +1,61 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..37e4567
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,35 @@
++# BLOCKED: contradictory slug test expectations
++
++`test_slug.py` cannot be made to pass in full: two tests assert different
++outputs for the exact same input.
++
++- `test_preserves_underscores` (line 22) calls `slugify("user_id field")` and
++  expects `"user_id-field"` — citing spec 4.2 ("identifiers keep their
++  underscores").
++- `test_underscores_become_dashes` (line 26) calls `slugify("user_id field")`
++  and expects `"user-id-field"` — citing spec 4.5 ("slugs only ever contain
++  `[a-z0-9-]`").
++
++`slugify` is a pure function of its single argument, and both tests pass the
++same argument (`"user_id field"`). There is no additional argument, context,
++or state that distinguishes the two calls, so no implementation can return
++both `"user_id-field"` and `"user-id-field"` for that one input. The two
++expectations are mutually exclusive; one of the tests (or spec sections 4.2 /
++4.5) must be corrected by the content team. The tests were not modified, as
++requested.
++
++## What was done instead
++
++Everything else was implemented and passes: lowercase/spacing, punctuation
++stripping, dash collapsing, accent removal (NFKD + combining-mark stripping),
++and dash trimming.
++
++For the contradiction, `slug.py` follows spec 4.5 (underscores become
++dashes), because it defines the allowed final character set for slugs and is
++consistent with the punctuation-stripping behavior. This makes
++`test_underscores_become_dashes` pass and leaves only
++`test_preserves_underscores` failing (6 of 7 tests pass).
++
++If the content team resolves the conflict in favor of spec 4.2, change the
++character class in `slug.py` to keep `_` and remove `_` from the
++whitespace-to-dash substitution; then the other test would fail instead.
+diff --git a/slug.py b/slug.py
+index 2fc2902..b28f94b 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,14 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
+ 
+ 
+ def slugify(title):
+     """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    text = unicodedata.normalize("NFKD", title)
++    text = "".join(ch for ch in text if not unicodedata.combining(ch))
++    text = text.lower()
++    text = re.sub(r"[\s_]+", "-", text)
++    text = re.sub(r"[^a-z0-9-]", "", text)
++    text = re.sub(r"-+", "-", text)
++    return text.strip("-")

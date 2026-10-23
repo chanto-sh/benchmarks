@@ -1,0 +1,46 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..f181877
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1 @@
++Fixed tracebacks showing the decorator lines of a function or class following a failing statement as if they were part of the failing statement.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..e331d35 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -155,6 +155,10 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+                 if val:
+                     # Treat the finally/orelse part as its own statement.
+                     values.append(val[0].lineno - 1 - 1)
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                # The decorators are part of the statement, but their line
++                # numbers are not the same as the def/class statement's one.
++                values.extend(d.lineno - 1 for d in x.decorator_list)
+     values.sort()
+     insert_index = bisect_right(values, lineno)
+     start = values[insert_index - 1]
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..0c0b4e3 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -193,6 +193,19 @@ class TestSourceParsing:
+         assert len(source) == 9
+         assert source.getstatementrange(5) == (0, 9)
+ 
++    def test_getstatementrange_with_decorator(self) -> None:
++        source = Source(
++            """\
++            def test():
++                assert True
++
++                @decorator
++                def foo():
++                    pass
++        """
++        )
++        assert source.getstatementrange(1) == (1, 2)
++
+     def test_getstatementrange_ast_issue58(self) -> None:
+         source = Source(
+             """\

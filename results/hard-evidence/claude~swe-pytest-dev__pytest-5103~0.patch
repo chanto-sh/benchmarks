@@ -1,0 +1,127 @@
+diff --git a/changelog/5062.feature.rst b/changelog/5062.feature.rst
+new file mode 100644
+index 0000000..f1c6ab8
+--- /dev/null
++++ b/changelog/5062.feature.rst
+@@ -0,0 +1,2 @@
++Unroll calls to ``all`` to full for-loops with assertion rewriting for better
++failure messages, especially when using Generator Expressions.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..105aed4 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -964,10 +964,101 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _unroll_all(self, comprehension):
++        """Rewrite ``all(<comprehension>)`` into an equivalent ``for`` loop.
++
++        This makes the failure message point at the element which made the
++        ``all`` call fail instead of showing an opaque generator object.
++        """
++        res_var = self.variable()
++        expl_var = self.variable()
++        # Assume an empty iterable (``all`` returns True in that case).
++        self.statements.append(
++            ast.Assign([ast.Name(res_var, ast.Store())], _NameConstant(True))
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(expl_var, ast.Store())], ast.Str(""))
++        )
++
++        # Build the innermost body: evaluate the element expression and, upon
++        # hitting the first falsy value, remember its explanation and stop.
++        save_statements, save_on_failure = self.statements, self.on_failure
++        body = []
++        self.statements = body
++        # ``visit`` may emit formatting statements onto ``on_failure`` (e.g.
++        # for comparisons); those values are needed inside the loop.
++        self.on_failure = body
++        self.push_format_context()
++        elt_res, elt_expl = self.visit(comprehension.elt)
++        specifiers = self.stack.pop()
++        if self.stack:
++            self.explanation_specifiers = self.stack[-1]
++        format_dict = ast.Dict(
++            [ast.Str(key) for key in specifiers], list(specifiers.values())
++        )
++        body.append(
++            ast.If(
++                ast.UnaryOp(ast.Not(), elt_res),
++                [
++                    ast.Assign(
++                        [ast.Name(expl_var, ast.Store())],
++                        ast.BinOp(ast.Str(elt_expl), ast.Mod(), format_dict),
++                    ),
++                    ast.Assign(
++                        [ast.Name(res_var, ast.Store())], _NameConstant(False)
++                    ),
++                    ast.Break(),
++                ],
++                [],
++            )
++        )
++        self.statements, self.on_failure = save_statements, save_on_failure
++
++        # Wrap the body in the nested ``for``/``if`` comprehension clauses,
++        # propagating the ``break`` out through any enclosing loops.
++        inner = body
++        for level in range(len(comprehension.generators) - 1, -1, -1):
++            generator = comprehension.generators[level]
++            wrapped = inner
++            for condition in reversed(generator.ifs):
++                wrapped = [ast.If(condition, wrapped, [])]
++            inner = [ast.For(generator.target, generator.iter, wrapped, [])]
++            if level > 0:
++                inner.append(
++                    ast.If(
++                        ast.UnaryOp(ast.Not(), ast.Name(res_var, ast.Load())),
++                        [ast.Break()],
++                        [],
++                    )
++                )
++        self.statements.extend(inner)
++        return (
++            ast.Name(res_var, ast.Load()),
++            self.explanation_param(ast.Name(expl_var, ast.Load())),
++        )
++
++    @staticmethod
++    def _is_unrollable_all(call):
++        return (
++            isinstance(call.func, ast.Name)
++            and call.func.id == "all"
++            and len(call.args) == 1
++            and not call.keywords
++            and isinstance(
++                call.args[0], (ast.GeneratorExp, ast.ListComp, ast.SetComp)
++            )
++            and all(
++                not getattr(generator, "is_async", 0)
++                for generator in call.args[0].generators
++            )
++        )
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if self._is_unrollable_all(call):
++            return self._unroll_all(call.args[0])
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1092,12 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        if (
++            self._is_unrollable_all(call)
++            and not call.starargs
++            and not call.kwargs
++        ):
++            return self._unroll_all(call.args[0])
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

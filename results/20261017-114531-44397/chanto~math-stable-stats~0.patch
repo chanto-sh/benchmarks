@@ -1,0 +1,98 @@
+diff --git a/stats.py b/stats.py
+index add4f59..086d154 100644
+--- a/stats.py
++++ b/stats.py
+@@ -2,20 +2,87 @@
+ import math
+ 
+ 
++def _scaled_mean_var(xs, n):
++    """Fallback for magnitudes where shifting by ``xs[0]`` overflows."""
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0, 0.0
++
++    ys = [x / scale for x in xs]
++    mean_scaled = math.fsum(ys) / n
++    mean = mean_scaled * scale
++
++    spread = max(abs(y - mean_scaled) for y in ys)
++    if spread == 0.0:
++        return mean, 0.0
++
++    ss = math.fsum(((y - mean_scaled) / spread) ** 2 for y in ys)
++    var = (ss / n) * spread * spread
++    var = var * scale * scale
++    return mean, var
++
++
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++
++    # Work with deviations from the first reading.  This removes a large
++    # common offset (timestamps, absolute pressures) before any squaring, so
++    # no catastrophic cancellation leaves a negative variance behind.
++    ref = xs[0]
++    devs = []
++    for x in xs:
++        d = x - ref
++        if not math.isfinite(d):
++            devs = None
++            break
++        devs.append(d)
++
++    if devs is not None:
++        try:
++            total = math.fsum(devs)
++        except OverflowError:
++            devs = None
++
++    if devs is None:
++        return _scaled_mean_var(xs, n)
++
++    mean_dev = total / n
++    mean = ref + mean_dev
++    if not math.isfinite(mean):
++        return _scaled_mean_var(xs, n)
++
++    spread = 0.0
++    for d in devs:
++        a = abs(d - mean_dev)
++        if a > spread:
++            spread = a
++    if spread == 0.0:
++        return mean, 0.0
++
++    # Scaling the centred deviations avoids overflow/underflow in the
++    # squares while preserving relative accuracy.
++    ss = math.fsum(((d - mean_dev) / spread) ** 2 for d in devs)
++    var = (ss / n) * spread * spread
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == math.inf:
++        return math.inf
++    if m == -math.inf:
++        return -math.inf
++    # Since m is the maximum, x - m <= 0: exp never overflows, and terms
++    # that underflow to zero are negligible relative to the maximum term.
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0:
++        # exp(-x) is small and log1p keeps the correction term accurate.
++        return x + math.log1p(math.exp(-x))
++    # log1p(exp(x)) retains the exp(x) tail when exp(x) < machine epsilon.
++    return math.log1p(math.exp(x))

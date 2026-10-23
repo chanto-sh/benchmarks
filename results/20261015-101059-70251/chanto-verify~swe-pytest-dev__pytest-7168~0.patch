@@ -1,0 +1,66 @@
+diff --git a/changelog/7168.bugfix.rst b/changelog/7168.bugfix.rst
+new file mode 100644
+index 0000000..6fb18ab
+--- /dev/null
++++ b/changelog/7168.bugfix.rst
+@@ -0,0 +1 @@
++Fixed internal error when the ``__repr__`` of an object raises an exception, while the object's class name cannot be retrieved because ``__getattribute__`` also raises.
+diff --git a/src/_pytest/_io/saferepr.py b/src/_pytest/_io/saferepr.py
+index 23af4d0..2bd5d97 100644
+--- a/src/_pytest/_io/saferepr.py
++++ b/src/_pytest/_io/saferepr.py
+@@ -1,5 +1,6 @@
+ import pprint
+ import reprlib
++from inspect import isclass
+ from typing import Any
+ 
+ 
+@@ -19,8 +20,18 @@ def _format_repr_exception(exc: BaseException, obj: Any) -> str:
+         raise
+     except BaseException as exc:
+         exc_info = "unpresentable exception ({})".format(_try_repr_or_str(exc))
++    try:
++        if isclass(obj):
++            class_name = obj.__name__
++        else:
++            class_name = obj.__class__.__name__
++    except (KeyboardInterrupt, SystemExit):
++        raise
++    except BaseException:
++        class_name = "<unknown>"
++
+     return "<[{} raised in repr()] {} object at 0x{:x}>".format(
+-        exc_info, obj.__class__.__name__, id(obj)
++        exc_info, class_name, id(obj)
+     )
+ 
+ 
+diff --git a/testing/io/test_saferepr.py b/testing/io/test_saferepr.py
+index 0608420..2bac9ea 100644
+--- a/testing/io/test_saferepr.py
++++ b/testing/io/test_saferepr.py
+@@ -144,6 +144,23 @@ def test_repr_on_newstyle():
+     assert saferepr(Function())
+ 
+ 
++def test_broken_getattribute():
++    # Simulate an object whose __getattribute__ raises for every attribute
++    # access, so that even the class name can't be retrieved while building
++    # the already-failed repr (#7168).
++
++    class SomeClass:
++        def __getattribute__(self, attr):
++            raise RuntimeError("broken")
++
++        def __repr__(self):
++            raise RuntimeError("broken")
++
++    s = saferepr(SomeClass())
++    assert "raised in repr()" in s
++    assert "<unknown>" in s
++
++
+ def test_unicode():
+     val = "£€"
+     reprval = "'£€'"

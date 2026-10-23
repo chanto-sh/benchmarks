@@ -1,0 +1,50 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..885daf2 100644
+--- a/odds.py
++++ b/odds.py
+@@ -6,4 +6,44 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++
++    # Never draw more cards than the deck contains.
++    m = min(m, r + b + g)
++
++    # dp[(R, B)] is the probability of reaching the current position with R
++    # reds and B blues left, having drawn no green (a green would have stopped
++    # the deal). The number of greens left is always g until a green appears.
++    dp = {(r, b): Fraction(1)}
++    result = Fraction(0)
++
++    for _ in range(m):
++        next_dp = {}
++        for (R, B), p in dp.items():
++            total = R + B + g
++            reds_drawn = r - R
++
++            if g:
++                # Drawing a green now stops the deal without adding a red.
++                if reds_drawn >= k:
++                    result += p * Fraction(g, total)
++
++            if R:
++                q = p * Fraction(R, total)
++                key = (R - 1, B)
++                next_dp[key] = next_dp.get(key, Fraction(0)) + q
++
++            if B:
++                q = p * Fraction(B, total)
++                key = (R, B - 1)
++                next_dp[key] = next_dp.get(key, Fraction(0)) + q
++
++        dp = next_dp
++
++    # Reached m cards without seeing a green: the deal stops here.
++    for (R, _), p in dp.items():
++        if r - R >= k:
++            result += p
++
++    return result

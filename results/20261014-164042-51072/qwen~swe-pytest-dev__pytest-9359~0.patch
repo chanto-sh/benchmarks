@@ -1,0 +1,46 @@
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..28e7027 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,12 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Start lineno of the statement; for decorated functions/classes
++            # this points at the "def"/"class" line, so include the decorators
++            # explicitly as otherwise they get attached to the previous
++            # statement's source range.
++            for decorator in getattr(x, "decorator_list", ()):
++                values.append(decorator.lineno - 1)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..fb4c20e 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -207,6 +207,24 @@ class TestSourceParsing:
+         assert getstatement(2, source).lines == source.lines[2:3]
+         assert getstatement(3, source).lines == source.lines[3:4]
+ 
++    def test_getstatementrange_with_decorator(self) -> None:
++        # A decorator belongs to the following function, not to the preceding
++        # statement (see #9059).
++        source = Source(
++            """\
++            def test_some():
++                assert 1 == 2
++
++                @decorator
++                def inner():
++                    pass
++        """
++        )
++        assert len(source) == 6
++        assert source.getstatementrange(1) == (1, 2)
++        assert source.getstatementrange(3) == (3, 4)
++        assert source.getstatementrange(4) == (4, 5)
++
+     def test_getstatementrange_out_of_bounds_py3(self) -> None:
+         source = Source("if xxx:\n   from .collections import something")
+         r = source.getstatementrange(1)

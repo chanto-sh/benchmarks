@@ -1,0 +1,225 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..e7827e3 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,211 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51, _A52, _A53, _A54 = (
++    19372.0 / 6561.0,
++    -25360.0 / 2187.0,
++    64448.0 / 6561.0,
++    -212.0 / 729.0,
++)
++_A61, _A62, _A63, _A64, _A65 = (
++    9017.0 / 3168.0,
++    -355.0 / 33.0,
++    46732.0 / 5247.0,
++    49.0 / 176.0,
++    -5103.0 / 18656.0,
++)
++
++_B1 = 35.0 / 384.0
++_B3, _B4, _B5, _B6 = 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0
++
++# Difference between the fifth- and fourth-order weights.
++_E1, _E3, _E4, _E5, _E6, _E7 = (
++    71.0 / 57600.0,
++    -71.0 / 16695.0,
++    71.0 / 1920.0,
++    -17253.0 / 339200.0,
++    22.0 / 525.0,
++    -1.0 / 40.0,
++)
++
++
++def _deriv(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _rk_step(state, h, accel, with_error=True):
++    """One Dormand-Prince 5(4) step."""
++    x, y, vx, vy = state
++    k1 = _deriv(state, accel)
++
++    s = (x + h * _A21 * k1[0], y + h * _A21 * k1[1],
++         vx + h * _A21 * k1[2], vy + h * _A21 * k1[3])
++    k2 = _deriv(s, accel)
++
++    s = (x + h * (_A31 * k1[0] + _A32 * k2[0]),
++         y + h * (_A31 * k1[1] + _A32 * k2[1]),
++         vx + h * (_A31 * k1[2] + _A32 * k2[2]),
++         vy + h * (_A31 * k1[3] + _A32 * k2[3]))
++    k3 = _deriv(s, accel)
++
++    s = (x + h * (_A41 * k1[0] + _A42 * k2[0] + _A43 * k3[0]),
++         y + h * (_A41 * k1[1] + _A42 * k2[1] + _A43 * k3[1]),
++         vx + h * (_A41 * k1[2] + _A42 * k2[2] + _A43 * k3[2]),
++         vy + h * (_A41 * k1[3] + _A42 * k2[3] + _A43 * k3[3]))
++    k4 = _deriv(s, accel)
++
++    s = (x + h * (_A51 * k1[0] + _A52 * k2[0] + _A53 * k3[0] + _A54 * k4[0]),
++         y + h * (_A51 * k1[1] + _A52 * k2[1] + _A53 * k3[1] + _A54 * k4[1]),
++         vx + h * (_A51 * k1[2] + _A52 * k2[2] + _A53 * k3[2] + _A54 * k4[2]),
++         vy + h * (_A51 * k1[3] + _A52 * k2[3] + _A53 * k3[3] + _A54 * k4[3]))
++    k5 = _deriv(s, accel)
++
++    s = (x + h * (_A61 * k1[0] + _A62 * k2[0] + _A63 * k3[0]
++                  + _A64 * k4[0] + _A65 * k5[0]),
++         y + h * (_A61 * k1[1] + _A62 * k2[1] + _A63 * k3[1]
++                  + _A64 * k4[1] + _A65 * k5[1]),
++         vx + h * (_A61 * k1[2] + _A62 * k2[2] + _A63 * k3[2]
++                   + _A64 * k4[2] + _A65 * k5[2]),
++         vy + h * (_A61 * k1[3] + _A62 * k2[3] + _A63 * k3[3]
++                   + _A64 * k4[3] + _A65 * k5[3]))
++    k6 = _deriv(s, accel)
++
++    new = (x + h * (_B1 * k1[0] + _B3 * k3[0] + _B4 * k4[0]
++                    + _B5 * k5[0] + _B6 * k6[0]),
++           y + h * (_B1 * k1[1] + _B3 * k3[1] + _B4 * k4[1]
++                    + _B5 * k5[1] + _B6 * k6[1]),
++           vx + h * (_B1 * k1[2] + _B3 * k3[2] + _B4 * k4[2]
++                     + _B5 * k5[2] + _B6 * k6[2]),
++           vy + h * (_B1 * k1[3] + _B3 * k3[3] + _B4 * k4[3]
++                     + _B5 * k5[3] + _B6 * k6[3]))
++
++    if not with_error:
++        return new, None
++
++    k7 = _deriv(new, accel)
++    err = (h * (_E1 * k1[0] + _E3 * k3[0] + _E4 * k4[0]
++                + _E5 * k5[0] + _E6 * k6[0] + _E7 * k7[0]),
++           h * (_E1 * k1[1] + _E3 * k3[1] + _E4 * k4[1]
++                + _E5 * k5[1] + _E6 * k6[1] + _E7 * k7[1]),
++           h * (_E1 * k1[2] + _E3 * k3[2] + _E4 * k4[2]
++                + _E5 * k5[2] + _E6 * k6[2] + _E7 * k7[2]),
++           h * (_E1 * k1[3] + _E3 * k3[3] + _E4 * k4[3]
++                + _E5 * k5[3] + _E6 * k6[3] + _E7 * k7[3]))
++    return new, err
++
++
++def _event_time(state, h, accel):
++    """Locate a sign change of x*vx + y*vy inside [0, h] by bisection."""
++    lo, hi = 0.0, h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if mid == lo or mid == hi:
++            break
++        trial, _ = _rk_step(state, mid, accel, with_error=False)
++        g = trial[0] * trial[2] + trial[1] * trial[3]
++        if g < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
++
++def _radial_velocity_dot(state):
++    return state[0] * state[2] + state[1] * state[3]
++
++
+ def radial_period(r0, v0, accel):
+     """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    state = (float(r0[0]), float(r0[1]), float(v0[0]), float(v0[1]))
++    x, y, vx, vy = state
++    r = math.hypot(x, y)
++    v = math.hypot(vx, vy)
++
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++    if v == 0.0:
++        raise ValueError("the particle has no velocity")
++
++    ax, ay = accel(x, y)
++    a = math.hypot(ax, ay)
++    h = x * vy - y * vx
++
++    # A circular orbit has no distinct closest approach.  Its natural radial
++    # period is the orbital period.
++    rdot = (x * vx + y * vy) / r
++    a_rad = (x * ax + y * ay) / r
++    if h != 0.0:
++        balance = h * h / (r * r * r)
++        if (abs(rdot) <= 1e-13 * v
++                and abs(a_rad + balance) <= 1e-13 * max(a, balance)):
++            return 2.0 * math.pi * r * r / abs(h)
++
++    # Time and state scales used for the local error estimate.
++    r_scale = r
++    v_scale = max(v, math.sqrt(r * a) if a > 0.0 else 0.0)
++    atol = (1e-13 * r_scale, 1e-13 * r_scale,
++            1e-13 * v_scale, 1e-13 * v_scale)
++    rtol = 1e-13
++
++    timescales = [r / v]
++    if a > 0.0:
++        timescales.append(math.sqrt(r / a))
++    step = 0.01 * min(timescales)
++    max_time = 1.0e15 * max(timescales)
++    max_steps = 1000000
++
++    t = 0.0
++    g = _radial_velocity_dot(state)
++    periapses = []
++    steps = 0
++
++    while len(periapses) < 2:
++        steps += 1
++        if steps > max_steps or t > max_time:
++            raise ValueError("could not find two successive closest approaches")
++
++        new, err = _rk_step(state, step, accel)
++        err_norm = 0.0
++        for i in range(4):
++            scale = atol[i] + rtol * max(abs(state[i]), abs(new[i]))
++            err_norm += (err[i] / scale) ** 2
++        err_norm = math.sqrt(err_norm / 4.0)
++
++        if not (err_norm <= 1.0):
++            factor = 0.9 * err_norm ** -0.2 if err_norm > 0.0 else 0.1
++            step *= max(0.1, min(0.5, factor))
++            if step == 0.0:
++                raise ValueError("integration step underflow")
++            continue
++
++        g_new = _radial_velocity_dot(new)
++
++        # A minimum of r is a negative-to-positive zero of r*rdot.
++        if g < 0.0 <= g_new:
++            tau = _event_time(state, step, accel)
++            periapses.append(t + tau)
++
++        t += step
++        state = new
++        g = g_new
++
++        if err_norm == 0.0:
++            factor = 5.0
++        else:
++            factor = 0.9 * err_norm ** -0.2
++        step *= max(0.2, min(5.0, factor))
++
++        # Do not let a single step jump across a peri/apoapsis passage.
++        r_now = math.hypot(state[0], state[1])
++        ax_now, ay_now = accel(state[0], state[1])
++        a_now = math.hypot(ax_now, ay_now)
++        if a_now > 0.0:
++            step = min(step, 0.25 * math.sqrt(r_now / a_now))
++
++    return periapses[1] - periapses[0]

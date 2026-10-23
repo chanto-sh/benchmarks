@@ -1,0 +1,234 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..9e68d09 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,4 +1,17 @@
+-"""Orbit measurements for a test particle in a central force field."""
++"""Orbit measurements for a test particle in a central force field.
++
++The radial period of a bound orbit is the time between two successive closest
++approaches to the origin (periapsis passages).  Because the force law is only
++known through the callable ``accel``, the equations of motion are integrated
++numerically and the passages are located as the zeros of ``d(r**2)/dt``.
++
++The integration uses a Dormand-Prince 5(4) adaptive Runge-Kutta scheme, which
++needs no third-party dependencies.  Closest approaches are detected as places
++where ``x*vx + y*vy`` crosses zero from below (a minimum of ``r``) and their
++times are refined by bisection on a freshly integrated arc.
++"""
++
++import math
+ 
+ 
+ def newtonian(gm):
+@@ -9,6 +22,208 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# --- Dormand-Prince 5(4) adaptive Runge-Kutta integrator -------------------
++#
++# State is the tuple (x, y, vx, vy) with
++#     d/dt (x, y, vx, vy) = (vx, vy, ax, ay).
++# Error control keeps the local error below RTOL/ATOL, which is far tighter
++# than the requested 1e-6 relative accuracy.
++
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_C = (0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0,
++       11.0 / 84.0, 0.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_RTOL = 1e-11
++_ATOL = 1e-13
++_MAX_STEPS = 2_000_000
++# If the radius grows this far beyond the starting radius the orbit is treated
++# as unbound (a bound orbit's apoapsis is finite).
++_ESCAPE_FACTOR = 1e12
++
++# A passage only counts as a real "closest approach" once the orbit has shown a
++# radial excursion this many times larger than the closest radius.  Below that
++# the orbit is (numerically) circular and the radial period is taken from the
++# epicyclic frequency instead.
++_CIRCULAR_TOL = 1e-6
++_KAPPA_STEP = 1e-4
++
++
++def _deriv(state, accel):
++    x, y, vx, vy = state
++    ax, ay = accel(x, y)
++    return (vx, vy, ax, ay)
++
++
++def _scaled_norm(vec, scale):
++    return math.sqrt(sum((vec[i] / scale[i]) ** 2 for i in range(4)) / 4.0)
++
++
++def _initial_step(state, accel):
++    """Heuristic starting step size, after Hairer & Wanner."""
++    f = _deriv(state, accel)
++    scale = [_ATOL + _RTOL * abs(state[i]) for i in range(4)]
++    d0 = _scaled_norm(state, scale)
++    d1 = _scaled_norm(f, scale)
++    if d0 < 1e-5 or d1 < 1e-5:
++        return 1e-6
++    return 0.01 * d0 / d1
++
++
++def _step(t, state, h, accel):
++    """One Dormand-Prince step; returns the 5th and 4th order estimates."""
++    k = [_deriv(state, accel)]
++    for i in range(1, 7):
++        a = _A[i]
++        stage = tuple(state[d] + h * sum(a[j] * k[j][d] for j in range(i))
++                      for d in range(4))
++        k.append(_deriv(stage, accel))
++    y5 = tuple(state[d] + h * sum(_B5[j] * k[j][d] for j in range(7))
++               for d in range(4))
++    y4 = tuple(state[d] + h * sum(_B4[j] * k[j][d] for j in range(7))
++               for d in range(4))
++    return y5, y4
++
++
++def _error_norm(state, y5, y4):
++    scale = [_ATOL + _RTOL * max(abs(state[d]), abs(y5[d])) for d in range(4)]
++    return math.sqrt(sum(((y5[d] - y4[d]) / scale[d]) ** 2 for d in range(4)) / 4.0)
++
++
++def _shrink_factor(err_norm):
++    if err_norm == 0.0:
++        return 10.0
++    return min(10.0, max(0.2, 0.9 * err_norm ** -0.2))
++
++
++def _advance(t, state, target, accel):
++    """Integrate forward from ``t`` to ``target`` and return the state there."""
++    h = _initial_step(state, accel)
++    steps = 0
++    while target - t > 0.0:
++        if t + h > target:
++            h = target - t
++        y5, y4 = _step(t, state, h, accel)
++        err = _error_norm(state, y5, y4)
++        if err <= 1.0 or h <= 1e-14 * max(1.0, abs(t)):
++            t += h
++            state = y5
++            h *= _shrink_factor(err)
++        else:
++            h *= max(0.1, 0.9 * err ** -0.2)
++        steps += 1
++        if steps > _MAX_STEPS:
++            raise RuntimeError("integration failed to reach the requested time")
++    return state
++
++
++def _locate_periapsis(t_a, state_a, t_b, accel):
++    """Refine a periapsis time bracketed in ``[t_a, t_b]`` by bisection."""
++    lo, state_lo = t_a, state_a
++    hi = t_b
++    tol = 1e-12 * max(1.0, abs(t_b))
++    while hi - lo > tol:
++        mid = 0.5 * (lo + hi)
++        state_mid = _advance(lo, state_lo, mid, accel)
++        if state_mid[0] * state_mid[2] + state_mid[1] * state_mid[3] >= 0.0:
++            hi = mid
++        else:
++            lo, state_lo = mid, state_mid
++    return 0.5 * (lo + hi)
++
++
++def _epicyclic_period(radius, angular_momentum, accel):
++    """Radial period of the infinitesimally eccentric orbit at ``radius``.
++
++    Linearising the radial equation ``r'' = F_r(r) + L**2/r**3`` about the
++    circular orbit gives the epicyclic frequency ``kappa`` and hence the small
++    amplitude limit of the radial period, ``2*pi/kappa``.  For an inverse-square
++    force this is exactly the orbital period; for other central forces it is the
++    appropriate limit.
++    """
++    l2 = angular_momentum * angular_momentum
++
++    def effective_force(r):
++        return accel(r, 0.0)[0] + l2 / (r * r * r)
++
++    h = _KAPPA_STEP * radius
++    slope = (effective_force(radius + h) - effective_force(radius - h)) / (2.0 * h)
++    kappa_sq = -slope
++    if kappa_sq <= 0.0:
++        return None
++    return 2.0 * math.pi / math.sqrt(kappa_sq)
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    ``r0`` and ``v0`` are the starting position and velocity; ``accel(x, y)``
++    gives the (central) acceleration.  The particle may start anywhere on its
++    orbit, not only at closest approach.
++    """
++    x0, y0 = r0
++    vx0, vy0 = v0
++    radius0 = math.hypot(x0, y0)
++    if radius0 == 0.0:
++        raise ValueError("the particle starts at the origin, where accel is singular")
++
++    state = (float(x0), float(y0), float(vx0), float(vy0))
++    speed0 = math.hypot(vx0, vy0)
++    angular_momentum = x0 * vy0 - y0 * vx0
++
++    # Timescale over which a (near) circular orbit completes a revolution; used
++    # only to decide when a featureless orbit should be treated as circular.
++    t_scale = radius0 / speed0 if speed0 > 0.0 else float("inf")
++    circular_guard = 4.0 * math.pi * t_scale
++
++    t = 0.0
++    h = _initial_step(state, accel)
++    # Negative-to-positive zero of this quantity marks a minimum of r, i.e. a
++    # closest approach to the origin.
++    radial_vr = state[0] * state[2] + state[1] * state[3]
++    passages = []
++    r_min_seen = r_max_seen = radius0
++    steps = 0
++    while len(passages) < 2:
++        y5, y4 = _step(t, state, h, accel)
++        err = _error_norm(state, y5, y4)
++        if err > 1.0 and h > 1e-14 * max(1.0, abs(t)):
++            h *= max(0.1, 0.9 * err ** -0.2)
++        else:
++            t_next = t + h
++            r_next = math.hypot(y5[0], y5[1])
++            if not math.isfinite(r_next) or r_next > _ESCAPE_FACTOR * radius0:
++                raise RuntimeError(
++                    "orbit escapes to infinity; it has no radial period"
++                )
++            r_min_seen = min(r_min_seen, r_next)
++            r_max_seen = max(r_max_seen, r_next)
++            next_vr = y5[0] * y5[2] + y5[1] * y5[3]
++            if radial_vr < 0.0 <= next_vr:
++                if r_max_seen - r_min_seen > _CIRCULAR_TOL * r_min_seen:
++                    passages.append(_locate_periapsis(t, state, t_next, accel))
++            t, state, radial_vr = t_next, y5, next_vr
++            h *= _shrink_factor(err)
++
++            if (t > circular_guard
++                    and r_max_seen - r_min_seen <= _CIRCULAR_TOL * r_min_seen):
++                period = _epicyclic_period(
++                    0.5 * (r_min_seen + r_max_seen), angular_momentum, accel)
++                if period is not None:
++                    return period
++        steps += 1
++        if steps > _MAX_STEPS:
++            raise RuntimeError(
++                "no two successive closest approaches found; the orbit may be unbound"
++            )
++    return passages[1] - passages[0]

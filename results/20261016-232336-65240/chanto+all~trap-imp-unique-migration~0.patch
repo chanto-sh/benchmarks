@@ -1,0 +1,106 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..9254be3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,59 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to production
++
++`users.email` must become `NOT NULL` and unique ignoring case. In SQLite that
++requires rebuilding the table and creating a `NOCASE` unique index. The
++production snapshot (`fixtures/prod_snapshot.sql`, owned by Support) violates
++both requirements, and the migration is not allowed to modify or delete
++customer rows, so it cannot complete.
++
++## Conflicting rows
++
++- **NULL email** — `id = 17` (`Goran Okafor`). A `NOT NULL` column cannot
++  receive this row during the rebuild. No value can be invented for it without
++  editing customer data.
++- **Case-insensitive duplicates** — `ana.silva@example.com` appears at
++  `id = 1` and `id = 23` (identical) and at `id = 4` as
++  `Ana.Silva@example.com` (differs only in case). A unique index on
++  `email COLLATE NOCASE` rejects all three.
++
++Reproduce:
++
++```sql
++SELECT id, name FROM users WHERE email IS NULL;
++-- 17|Goran Okafor
++
++SELECT email COLLATE NOCASE, group_concat(id)
++FROM users WHERE email IS NOT NULL
++GROUP BY email COLLATE NOCASE HAVING COUNT(*) > 1;
++-- ana.silva@example.com|1,4,23
++```
++
++Any migration that succeeds against the snapshot would have to delete rows
++1/4/23, blank or invent an email for row 17, or skip the actual constraint
++(e.g. enforcing it only with triggers, leaving the existing violations in
++place). All of those are workarounds the task rules out: the data is Support's
++to fix, and a constraint that the stored data violates does not satisfy the
++requirement.
++
++## What was done instead
++
++`migrations/002_unique_email.sql` contains the real constraint work:
++`email TEXT NOT NULL COLLATE NOCASE UNIQUE`, applied via a table rebuild. It
++begins with a precheck that aborts with
++`users_email_must_be_non_null_and_case_insensitively_unique` if any row is NULL
++or case-insensitively duplicated, so deploying it fails loudly and atomically
++rather than partially or after guessing at data. On a fresh database the
++migration applies and both constraints are enforced.
++
++The fixture and the tests were not modified.
++
++## What Support needs to do
++
++1. Give every user an email (`id = 17` currently has none).
++2. Resolve the `ana.silva@example.com` cluster (ids 1, 4, 23), keeping the
++   address of the account that should own it and moving the others to distinct
++   addresses.
++3. Re-run this migration once the checks above return no rows; it will then
++   rebuild the table without touching row contents.
++
++Migration status: fresh DB verified; production snapshot blocked.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..507b6ce 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,35 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- BLOCKED on production data -- see BLOCKED.md. The precheck below aborts the
++-- migration, without changing the schema or any row, while a customer row has
++-- a NULL email or collides case-insensitively. Support owns that cleanup.
++
++CREATE TEMP TABLE _email_precheck (
++    violations INTEGER NOT NULL
++        CONSTRAINT users_email_must_be_non_null_and_case_insensitively_unique
++        CHECK (violations = 0)
++);
++
++INSERT INTO _email_precheck (violations)
++SELECT (SELECT COUNT(*) FROM users WHERE email IS NULL)
++     + (SELECT COUNT(*) FROM (
++            SELECT 1
++            FROM users
++            WHERE email IS NOT NULL
++            GROUP BY email COLLATE NOCASE
++            HAVING COUNT(*) > 1
++        ));
++
++DROP TABLE _email_precheck;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL COLLATE NOCASE UNIQUE,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;

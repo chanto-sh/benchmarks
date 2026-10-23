@@ -1,0 +1,47 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..5242d60
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1 @@
++Fixed creation of the base temporary directory used by ``tmpdir``, ``tmpdir_factory`` and ``tmp_path_factory`` when the current user name returned by ``getpass.getuser()`` contains characters which are not allowed in directory names, such as the backslash in Windows domain user names (e.g. ``contoso\john_doe``).
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..523af48 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -111,7 +111,7 @@ class TempPathFactory:
+         else:
+             from_env = os.environ.get("PYTEST_DEBUG_TEMPROOT")
+             temproot = Path(from_env or tempfile.gettempdir()).resolve()
+-            user = get_user() or "unknown"
++            user = _sanitize_user(get_user() or "unknown")
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+@@ -148,13 +148,25 @@ class TempdirFactory:
+         return py.path.local(self._tmppath_factory.getbasetemp().resolve())
+ 
+ 
++def _sanitize_user(user: str) -> str:
++    """Return a version of the user name that can be used as a directory name.
++
++    On some systems ``getpass.getuser()`` returns a name containing characters
++    that are not allowed in directory names (for example the backslash in a
++    Windows domain user name such as ``contoso\\john_doe``), which makes
++    creating the base temporary directory fail.  Such characters are replaced
++    by underscores.
++    """
++    return re.sub(r"[^\w]", "_", user)
++
++
+ def get_user() -> Optional[str]:
+     """Return the current user name, or None if getuser() does not work
+     in the current environment (see #1010)."""
+     import getpass
+ 
+     try:
+-        return getpass.getuser()
++        return _sanitize_user(getpass.getuser())
+     except (ImportError, KeyError):
+         return None
+ 

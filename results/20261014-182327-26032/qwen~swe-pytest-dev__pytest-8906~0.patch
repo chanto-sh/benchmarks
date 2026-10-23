@@ -1,0 +1,46 @@
+diff --git a/changelog/8906.improvement.rst b/changelog/8906.improvement.rst
+new file mode 100644
+index 0000000..2bdd5d5
+--- /dev/null
++++ b/changelog/8906.improvement.rst
+@@ -0,0 +1,3 @@
++Improved the error message shown when :func:`pytest.skip` is used at module level without
++``allow_module_level=True``, explaining how to skip an entire module and how to skip a
++specific test or class instead.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 79dfb73..8e8d2f3 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -608,10 +608,10 @@ class Module(nodes.File, PyCollector):
+             if e.allow_module_level:
+                 raise
+             raise self.CollectError(
+-                "Using pytest.skip outside of a test is not allowed. "
+-                "To decorate a test function, use the @pytest.mark.skip "
+-                "or @pytest.mark.skipif decorators instead, and to skip a "
+-                "module use `pytestmark = pytest.mark.{skip,skipif}."
++                "Using pytest.skip outside of a test will skip the entire module. "
++                "If that's your intention, pass `allow_module_level=True`. "
++                "If you want to skip a specific test or an entire class, "
++                "use the @pytest.mark.skip or @pytest.mark.skipif decorators."
+             ) from e
+         self.config.pluginmanager.consider_module(mod)
+         return mod
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index 53bf953..2c592ef 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -1341,7 +1341,12 @@ def test_module_level_skip_error(pytester: Pytester) -> None:
+     )
+     result = pytester.runpytest()
+     result.stdout.fnmatch_lines(
+-        ["*Using pytest.skip outside of a test is not allowed*"]
++        [
++            (
++                "*Using pytest.skip outside of a test will skip the entire module*"
++                "If that's your intention, pass `allow_module_level=True`*"
++            )
++        ]
+     )
+ 
+ 

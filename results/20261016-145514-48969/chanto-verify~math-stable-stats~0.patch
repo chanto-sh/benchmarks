@@ -1,0 +1,43 @@
+diff --git a/stats.py b/stats.py
+index add4f59..9804057 100644
+--- a/stats.py
++++ b/stats.py
+@@ -3,19 +3,31 @@ import math
+ 
+ 
+ def mean_var(xs):
+-    """(mean, population variance) of a non-empty sequence of floats."""
++    """(mean, population variance) of a non-empty sequence of floats.
++
++    Stable for large offsets: the data is shifted by a reference point so the
++    spread, not the absolute magnitude, drives the arithmetic, and both sums
++    use :func:`math.fsum` for exact rounding.  The variance is accumulated as
++    a sum of squared deviations from the (accurate) mean, so it can never come
++    out negative.
++    """
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    ref = xs[0]
++    mean = ref + math.fsum(x - ref for x in xs) / n
++    m2 = math.fsum((x - mean) * (x - mean) for x in xs)
++    return mean, m2 / n
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == -math.inf:
++        return m
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

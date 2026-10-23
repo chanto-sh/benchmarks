@@ -1,0 +1,186 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..2356f54 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,180 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (
++        9017.0 / 3168.0,
++        -355.0 / 33.0,
++        46732.0 / 5247.0,
++        49.0 / 176.0,
++        -5103.0 / 18656.0,
++    ),
++    (
++        35.0 / 384.0,
++        0.0,
++        500.0 / 1113.0,
++        125.0 / 192.0,
++        -2187.0 / 6784.0,
++        11.0 / 84.0,
++    ),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_BHAT = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++         -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++# Dense-output coefficients (Shampine).  A state at t0 + theta*h is
++# s0 + h * sum_i k_i * (p_i0*theta + p_i1*theta^2 + ...).
++_P = (
++    (1.0, -8048581381.0 / 2820520608.0, 8663915743.0 / 2820520608.0,
++     -12715105075.0 / 11282082432.0),
++    (0.0, 0.0, 0.0, 0.0),
++    (0.0, 131558114200.0 / 32700410799.0, -68118460800.0 / 10900136933.0,
++     87487479700.0 / 32700410799.0),
++    (0.0, -1754552775.0 / 470086768.0, 14199869525.0 / 1410260304.0,
++     -10690763975.0 / 1880347072.0),
++    (0.0, 127303824393.0 / 49829197408.0, -318862633887.0 / 49829197408.0,
++     701980252875.0 / 199316789632.0),
++    (0.0, -282668133.0 / 205662961.0, 2019193451.0 / 616988883.0,
++     -1453857185.0 / 822651844.0),
++    (0.0, 40617522.0 / 29380423.0, -110615467.0 / 29380423.0,
++     69997945.0 / 29380423.0),
++)
++
++
++def _rhs(state, drag, g):
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    return (
++        vx,
++        vy,
++        -drag * speed * vx,
++        -g - drag * speed * vy,
++    )
++
++
++def _step(state, h, drag, g):
++    """Take one Dormand-Prince step; return new state, error and stages."""
++    stages = [_rhs(state, drag, g)]
++    for i in range(1, 7):
++        a = _A[i]
++        stage_state = tuple(
++            state[j] + h * sum(a[m] * stages[m][j] for m in range(i))
++            for j in range(4)
++        )
++        stages.append(_rhs(stage_state, drag, g))
++
++    new_state = tuple(
++        state[j] + h * sum(_B[i] * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    error = tuple(
++        h * sum((_B[i] - _BHAT[i]) * stages[i][j] for i in range(7))
++        for j in range(4)
++    )
++    return new_state, error, stages
++
++
++def _dense(state, h, stages, theta, component):
++    """Evaluate one component of the dense output polynomial."""
++    total = 0.0
++    for i in range(7):
++        p = _P[i]
++        b = theta * (p[0] + theta * (p[1] + theta * (p[2] + theta * p[3])))
++        total += stages[i][component] * b
++    return state[component] + h * total
++
++
++def _dense_root(state, h, stages, component):
++    """Locate a sign-changing root of a dense component in [0, 1]."""
++    lo, hi = 0.0, 1.0
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        value = _dense(state, h, stages, mid, component)
++        if value > 0.0:
++            lo = mid
++        elif value < 0.0:
++            hi = mid
++        else:
++            return mid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+     """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++
++    drag = k / mass
++    angle = math.radians(angle_deg)
++    vx0 = v0 * math.cos(angle)
++    vy0 = v0 * math.sin(angle)
++
++    # With no upward launch and no height, the projectile is already at y = 0.
++    if h0 == 0.0 and vy0 <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    state = (0.0, h0, vx0, vy0)
++    t = 0.0
++    apex = h0
++    rtol = 1.0e-11
++    atol = 1.0e-12
++
++    # Keep the first step within the shortest initial drag timescale.
++    h = min(0.01, 0.01 / max(1.0, drag * abs(v0)))
++
++    while True:
++        new_state, error, stages = _step(state, h, drag, g)
++
++        error_norm = 0.0
++        for j in range(4):
++            scale = atol + rtol * max(abs(state[j]), abs(new_state[j]))
++            error_norm = max(error_norm, abs(error[j]) / scale)
++
++        if not math.isfinite(error_norm):
++            h *= 0.1
++            continue
++
++        if error_norm > 1.0:
++            h *= max(0.1, 0.9 * error_norm ** -0.2)
++            continue
++
++        # The initial step must clear y = 0 so the later down-crossing is
++        # unambiguous even for extreme drag.
++        if t == 0.0 and h0 == 0.0 and vy0 > 0.0 and new_state[1] <= 0.0:
++            h *= 0.2
++            continue
++
++        # Find the apex if vertical velocity crosses zero during this step.
++        if state[3] > 0.0 and new_state[3] <= 0.0:
++            theta = _dense_root(state, h, stages, 3)
++            apex = max(apex, _dense(state, h, stages, theta, 1))
++        elif new_state[1] > apex:
++            apex = new_state[1]
++
++        # Landing: first downward crossing of y = 0 after launch.
++        if state[1] > 0.0 and new_state[1] <= 0.0:
++            theta = _dense_root(state, h, stages, 1)
++            return {
++                "range": _dense(state, h, stages, theta, 0),
++                "apex": apex,
++                "time": t + theta * h,
++            }
++
++        state = new_state
++        t += h
++        h *= 5.0 if error_norm == 0.0 else min(
++            5.0, max(0.2, 0.9 * error_norm ** -0.2)
++        )

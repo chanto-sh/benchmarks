@@ -1,0 +1,56 @@
+diff --git a/doc/whatsnew/2.14.rst b/doc/whatsnew/2.14.rst
+index 064832e..868018a 100644
+--- a/doc/whatsnew/2.14.rst
++++ b/doc/whatsnew/2.14.rst
+@@ -95,6 +95,12 @@ Extensions
+ Other Changes
+ =============
+ 
++* Fixed a crash when an unrecognized option was passed on the command line.
++  Pylint now emits the ``unrecognized-option`` message and exits cleanly instead
++  of printing a traceback.
++
++  Closes #6506
++
+ * Started ignoring underscore as a local variable for ``too-many-locals``.
+ 
+   Closes #6488
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index 778e644..cee654f 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -13,7 +13,10 @@ from typing import Any
+ 
+ from pylint import config
+ from pylint.config.config_initialization import _config_initialization
+-from pylint.config.exceptions import ArgumentPreprocessingError
++from pylint.config.exceptions import (
++    ArgumentPreprocessingError,
++    _UnrecognizedOptionError,
++)
+ from pylint.config.utils import _preprocess_options
+ from pylint.constants import full_version
+ from pylint.lint.base_options import _make_run_options
+@@ -132,9 +135,19 @@ group are mutually exclusive.",
+         linter.disable("I")
+         linter.enable("c-extension-no-member")
+ 
+-        args = _config_initialization(
+-            linter, args, reporter, config_file=self._rcfile, verbose_mode=self.verbose
+-        )
++        try:
++            args = _config_initialization(
++                linter,
++                args,
++                reporter,
++                config_file=self._rcfile,
++                verbose_mode=self.verbose,
++            )
++        except _UnrecognizedOptionError:
++            # The error message has already been emitted by
++            # ``_config_initialization``. Exit cleanly instead of
++            # printing a traceback to the user.
++            sys.exit(32)
+ 
+         if linter.config.jobs < 0:
+             print(

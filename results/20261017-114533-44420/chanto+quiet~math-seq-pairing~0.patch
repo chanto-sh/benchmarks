@@ -1,0 +1,79 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..e04cea9 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,72 @@
+ """Integer keys for lists of non-negative integers."""
+ 
++from math import isqrt
++
++
++def _pair(a, b):
++    """Cantor pairing: a bijection from N x N to N."""
++    s = a + b
++    return (s * (s + 1)) // 2 + b
++
++
++def _unpair(z):
++    """Inverse of _pair."""
++    s = (isqrt(8 * z + 1) - 1) // 2
++    b = z - (s * (s + 1)) // 2
++    return s - b, b
++
++
++def _pair_with_length(length, key):
++    """Pair a length with a key from N x N to N.
++
++    This pairing stores the length in the exponent of two, so the key grows
++    by only len's bit length rather than being squared.
++    """
++    return ((2 * key + 1) << length) - 1
++
++
++def _unpair_with_length(z):
++    """Inverse of _pair_with_length."""
++    m = z + 1
++    length = (m & -m).bit_length() - 1
++    return length, ((m >> length) - 1) // 2
++
++
++def _encode_tuple(lst):
++    """Encode a non-empty list of non-negative ints as a non-negative int.
++
++    The list is paired up as a balanced binary tree, so the key grows by only
++    a constant factor per level of the tree (about log2(len(lst)) levels)
++    instead of exploding with the list length.
++    """
++    n = len(lst)
++    if n == 1:
++        return lst[0]
++    mid = n // 2
++    return _pair(_encode_tuple(lst[:mid]), _encode_tuple(lst[mid:]))
++
++
++def _decode_tuple(n, key):
++    """Decode a key produced by _encode_tuple for a list of length n."""
++    if n == 1:
++        return [key]
++    mid = n // 2
++    left, right = _unpair(key)
++    return _decode_tuple(mid, left) + _decode_tuple(n - mid, right)
++
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = len(lst)
++    if n == 0:
++        return 0
++    # Reserve key 0 for the empty list; pair (n - 1, tuple key) over N x N.
++    return 1 + _pair_with_length(n - 1, _encode_tuple(lst))
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++    length_minus_one, key = _unpair_with_length(n - 1)
++    return _decode_tuple(length_minus_one + 1, key)

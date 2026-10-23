@@ -1,0 +1,77 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..f8cbfde 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,62 @@
+ """Frequency response of the detector model."""
+ import math
++from functools import lru_cache
++
++
++@lru_cache(maxsize=None)
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(1, n + 1):
++        x = math.cos(math.pi * (i - 0.25) / (n + 0.5))
++        for _ in range(20):
++            p_prev, p = 1.0, x
++            for k in range(2, n + 1):
++                p_prev, p = p, ((2 * k - 1) * x * p - (k - 1) * p_prev) / k
++            dp = n * (x * p - p_prev) / (x * x - 1.0)
++            dx = p / dp
++            x -= dx
++            if abs(dx) <= 1e-16:
++                break
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * dp * dp))
++    return nodes, weights
+ 
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity and gives
++
++        2 * integral of cos(t*u**2) du from 0 to sqrt(b).
++
++    The remaining integrand is smooth.  Its phase is split into equal
++    intervals and each interval is integrated with Gauss-Legendre quadrature,
++    which resolves the oscillations regardless of t.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    upper = math.sqrt(b)
++    phase_step = math.pi / 4.0
++    panels = max(1, int(math.ceil(t * b / phase_step)))
++    nodes, weights = _gauss_legendre(16)
++
++    contributions = []
++    previous = 0.0
++    for panel in range(panels):
++        if panel + 1 == panels:
++            current = upper
++        else:
++            current = math.sqrt((panel + 1) * phase_step / t)
++        half_width = 0.5 * (current - previous)
++        midpoint = 0.5 * (current + previous)
++        panel_sum = math.fsum(
++            weight * math.cos(t * (midpoint + half_width * node) ** 2)
++            for node, weight in zip(nodes, weights)
++        )
++        contributions.append(half_width * panel_sum)
++        previous = current
++
++    return 2.0 * math.fsum(contributions)

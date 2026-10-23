@@ -1,0 +1,182 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..67c4216 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -1,19 +1,34 @@
+ """Small 2D gravitational N-body integrator."""
+ import math
+ 
++# Coefficients for the 4th-order Yoshida composition of leapfrog steps.
++_CBRT2 = 2.0 ** (1.0 / 3.0)
++_YOSHIDA_WEIGHTS = (
++    1.0 / (2.0 - _CBRT2),
++    -_CBRT2 / (2.0 - _CBRT2),
++    1.0 / (2.0 - _CBRT2),
++)
++
+ 
+ def accelerations(masses, positions, G=1.0):
+     n = len(masses)
+     acc = [[0.0, 0.0] for _ in range(n)]
+     for i in range(n):
+-        for j in range(n):
+-            if i == j:
+-                continue
+-            dx = positions[j][0] - positions[i][0]
+-            dy = positions[j][1] - positions[i][1]
+-            r3 = (dx * dx + dy * dy) ** 1.5
+-            acc[i][0] += G * masses[j] * dx / r3
+-            acc[i][1] += G * masses[j] * dy / r3
++        xi, yi = positions[i]
++        mi = masses[i]
++        for j in range(i + 1, n):
++            dx = positions[j][0] - xi
++            dy = positions[j][1] - yi
++            r2 = dx * dx + dy * dy
++            inv_r3 = 1.0 / (r2 * math.sqrt(r2))
++            # Accumulate each pair from a single force so the two
++            # contributions are equal and opposite (momentum conservation).
++            si = G * masses[j] * inv_r3
++            sj = G * mi * inv_r3
++            acc[i][0] += si * dx
++            acc[i][1] += si * dy
++            acc[j][0] -= sj * dx
++            acc[j][1] -= sj * dy
+     return acc
+ 
+ 
+@@ -29,5 +44,41 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses a 4th-order Yoshida composition of kick-drift-kick leapfrog
++    steps.  Each leapfrog substep is symplectic and time-reversible, so
++    energy stays bounded over long runs, while the composition reduces
++    the energy error to O(dt**4).
++    """
++    n = len(masses)
++    pos = [[float(p[0]), float(p[1])] for p in positions]
++    vel = [[float(v[0]), float(v[1])] for v in velocities]
++
++    if n == 0 or steps == 0:
++        return pos, vel
++
++    acc = accelerations(masses, pos, G)
++
++    for _ in range(steps):
++        for weight in _YOSHIDA_WEIGHTS:
++            h = weight * dt
++            half_h = 0.5 * h
++
++            # Half kick, then drift.
++            for i in range(n):
++                vx = vel[i][0] + half_h * acc[i][0]
++                vy = vel[i][1] + half_h * acc[i][1]
++                vel[i][0] = vx
++                vel[i][1] = vy
++                pos[i][0] += vx * h
++                pos[i][1] += vy * h
++
++            acc = accelerations(masses, pos, G)
++
++            # Second half kick with the new forces.
++            for i in range(n):
++                vel[i][0] += half_h * acc[i][0]
++                vel[i][1] += half_h * acc[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..9430780 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,6 +4,10 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def total_momentum(masses, velocities):
++    return [sum(m * v[d] for m, v in zip(masses, velocities)) for d in range(2)]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +21,75 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_orbit_long_term_energy(self):
++        # e = 0.6 orbit; perihelion passage exercises the integrator
++        m = [1.0, 1.0]
++        e = 0.6
++        r = 1.0 + e
++        v = math.sqrt(2.0 * (1.0 - e) / (1.0 + e))
++        pos = [[-r / 2.0, 0.0], [r / 2.0, 0.0]]
++        vel = [[0.0, -v / 2.0], [0.0, v / 2.0]]
++        e0 = energy(m, pos, vel)
++        p0 = total_momentum(m, vel)
++
++        p, q = simulate(m, pos, vel, 0.01, 20000)
++
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-5)
++        for actual, expected in zip(total_momentum(m, q), p0):
++            self.assertAlmostEqual(actual, expected, places=12)
++
++    def test_figure_eight_three_body_energy(self):
++        # Chenciner-Montgomery figure-eight orbit
++        m = [1.0, 1.0, 1.0]
++        x, y = 0.97000436, -0.24308753
++        vx, vy = 0.466203685, 0.43236573
++        pos = [[x, y], [-x, -y], [0.0, 0.0]]
++        vel = [[vx, vy], [vx, vy], [-2.0 * vx, -2.0 * vy]]
++        e0 = energy(m, pos, vel)
++
++        p, q = simulate(m, pos, vel, 0.001, 20000)
++
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-9)
++
++    def test_momentum_conserved_for_nonzero_boost(self):
++        # A uniform boost leaves the relative orbit unchanged but gives
++        # the system a nonzero total momentum to track.
++        m = [1.0, 1.0]
++        v = math.sqrt(1.0 / 4.0)
++        boost = [0.3, -0.7]
++        pos = [[-1.0, 0.0], [1.0, 0.0]]
++        vel = [[boost[0], -v + boost[1]], [boost[0], v + boost[1]]]
++        p0 = total_momentum(m, vel)
++
++        _, q = simulate(m, pos, vel, 0.01, 5000)
++
++        for actual, expected in zip(total_momentum(m, q), p0):
++            self.assertAlmostEqual(actual, expected, places=12)
++
++    def test_inputs_are_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[-1.0, 0.5], [1.0, -0.5]]
++        vel = [[0.0, -0.2], [0.0, 0.1]]
++        pos_before = [xy[:] for xy in pos]
++        vel_before = [vx[:] for vx in vel]
++
++        simulate(m, pos, vel, 0.01, 100)
++
++        self.assertEqual(pos, pos_before)
++        self.assertEqual(vel, vel_before)
++
++    def test_zero_steps_returns_copies(self):
++        m = [1.0]
++        pos = [[1.0, 2.0]]
++        vel = [[3.0, 4.0]]
++
++        p, q = simulate(m, pos, vel, 0.01, 0)
++
++        self.assertEqual(p, pos)
++        self.assertEqual(q, vel)
++        self.assertIsNot(p, pos)
++        self.assertIsNot(q, vel)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

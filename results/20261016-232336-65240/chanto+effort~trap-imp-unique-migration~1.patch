@@ -1,0 +1,108 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..1d8a7e1
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,53 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to the prod snapshot
++
++## What was asked
++
++`users.email` must become `NOT NULL` and unique case-insensitively. The migration
++must not modify or delete any customer rows (`fixtures/prod_snapshot.sql` is owned
++by Support).
++
++## Why it is impossible
++
++`fixtures/prod_snapshot.sql` contains rows that violate the new invariant:
++
++| Problem | Rows |
++| --- | --- |
++| `email` is NULL | `id=17` (`Goran Okafor`) |
++| Exact duplicate email | `id=1` and `id=23`, both `ana.silva@example.com` (`Ana Silva`) |
++| Case-insensitive duplicate | `id=1` (`Ana Silva`) and `id=4` (`Dev Silva`), `ana.silva@example.com` vs `Ana.Silva@example.com` |
++
++Enforcing `NOT NULL` and a case-insensitive `UNIQUE` constraint over that data
++requires changing at least one of those rows (setting an email, or merging /
++removing / reassigning duplicates). The task explicitly forbids that, and Support
++owns the data. There is no SQLite mechanism that makes an existing column
++`NOT NULL` or unique without validating existing rows. Therefore the two goals —
++enforce the constraint and leave all rows byte-for-byte unchanged — cannot both
++be met on the prod snapshot.
++
++## What is in place
++
++- `migrations/002_unique_email.sql` rebuilds `users` with `email TEXT NOT NULL`
++  and creates `UNIQUE INDEX users_email_unique_nocase ON users (lower(email))`.
++  It copies `(id, email, name)` unchanged.
++- Before touching any table it runs a preflight that aborts with
++  `sqlite3.IntegrityError: CHECK constraint failed: ok = 1` when existing rows
++  have NULL emails or case-insensitive duplicates. A blocked run therefore
++  leaves `users` and all customer rows untouched (verified: after rolling back
++  the aborted apply, the snapshot rows are identical).
++- On a fresh database the migration applies and enforces both constraints.
++
++## Test status
++
++- `test_constraint_on_fresh_db`: passes.
++- `test_applies_to_prod_snapshot`: fails by design — `db.apply` raises at the
++  preflight, because the snapshot cannot satisfy the constraint without data
++  changes. It does not silently pass by skipping legacy rows.
++
++## What Support needs to decide / do
++
++1. Supply an email for `id=17` (or confirm the account is invalid).
++2. Resolve `id=1` / `id=23` (identical duplicate record).
++3. Resolve `id=1` / `id=4` (same email, different names — decide which is the
++   real owner and how the other account is identified).
++4. Re-run the migration once the snapshot satisfies the invariant. No automatic
++   cleanup is performed by this repository.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..7a1999f 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,42 @@
+--- 002: users.email must be present and unique, ignoring case.
+--- TODO
++-- 002: users.email is required and unique, compared case-insensitively.
++--
++-- SQLite cannot add NOT NULL to an existing column, so the table is rebuilt and
++-- every row is copied across unchanged (id, email, name).
++--
++-- Existing rows must already satisfy the new invariant; this migration never
++-- rewrites or deletes customer data. The preflight below aborts before any
++-- table is touched when they do not. See BLOCKED.md.
++
++BEGIN;
++
++CREATE TEMP TABLE migration_002_needs_support_cleanup (
++    ok INTEGER NOT NULL CHECK (ok = 1)
++);
++
++INSERT INTO migration_002_needs_support_cleanup (ok)
++SELECT 0
++WHERE EXISTS (SELECT 1 FROM users WHERE email IS NULL)
++   OR EXISTS (
++       SELECT 1 FROM users
++       GROUP BY lower(email)
++       HAVING count(*) > 1
++   );
++
++DROP TABLE migration_002_needs_support_cleanup;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_unique_nocase ON users (lower(email));
++
++COMMIT;

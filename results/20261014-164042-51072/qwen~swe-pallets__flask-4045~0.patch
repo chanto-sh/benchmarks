@@ -1,0 +1,27 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index d546dca..3f6a7d7 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -15,6 +15,7 @@ Unreleased
+ -   Fix some types that weren't available in Python 3.6.0. :issue:`4040`
+ -   Improve typing for ``send_file``, ``send_from_directory``, and
+     ``get_send_file_max_age``. :issue:`4044`, :pr:`4026`
++-   Blueprint names may not contain a dot. :issue:`4045`
+ 
+ 
+ Version 2.0.0
+diff --git a/src/flask/blueprints.py b/src/flask/blueprints.py
+index 5fb84d8..24a5f4a 100644
+--- a/src/flask/blueprints.py
++++ b/src/flask/blueprints.py
+@@ -188,6 +188,10 @@ class Blueprint(Scaffold):
+             template_folder=template_folder,
+             root_path=root_path,
+         )
++
++        if "." in name:
++            raise ValueError("'name' may not contain a dot '.' character.")
++
+         self.name = name
+         self.url_prefix = url_prefix
+         self.subdomain = subdomain

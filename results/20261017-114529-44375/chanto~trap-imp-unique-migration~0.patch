@@ -1,0 +1,117 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..6cfd41b
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,53 @@
++# BLOCKED: `002_unique_email.sql` cannot be applied to production
++
++## What is blocked
++
++`migrations/002_unique_email.sql` makes `users.email` required (`NOT NULL`) and
++case-insensitively unique. It works on a clean database, but it cannot be
++applied to the current production snapshot (`fixtures/prod_snapshot.sql`)
++without changing customer rows.
++
++## Why
++
++The production snapshot violates both new constraints:
++
++- **NULL email:** id 17 (`Goran Okafor`) has `email = NULL`.
++- **Exact duplicate:** ids 1 and 23 both have `ana.silva@example.com`.
++- **Case-insensitive duplicate:** ids 1 and 4 have `ana.silva@example.com` and
++  `Ana.Silva@example.com`.
++
++SQLite cannot add `NOT NULL` to an existing column in place, so the migration
++rebuilds `users`. Inserting the existing rows into the rebuilt table then fails
++on the `NOT NULL` and unique constraints. The only ways to make that succeed
++are to update, merge, or delete the offending rows, or to leave production
++unenforced (for example, only preventing new writes with triggers or a partial
++index). The task explicitly forbids modifying or deleting customer rows because
++Support owns that data, so this is not something the migration may do.
++
++## What is implemented
++
++`002_unique_email.sql` is complete for a clean database. It rebuilds `users`
++with `email TEXT NOT NULL COLLATE NOCASE UNIQUE` while preserving `id` and
++`name`.
++
++Before rebuilding, it runs a read-only preflight. If any NULL or
++case-insensitive duplicate emails exist, it aborts with an explicit error
++before touching `users`; no customer rows are changed or removed. Against the
++current snapshot, that preflight is what fires.
++
++As a result:
++
++- `test_constraint_on_fresh_db` passes.
++- `test_applies_to_prod_snapshot` still fails with the preflight abort against
++  the current snapshot. That is the block, not a defect in the test.
++
++## What is needed to unblock
++
++Support must decide how to clean or canonicalize the data, for example:
++
++- choose an email for id 17 (or otherwise resolve that account);
++- resolve ids 1/4 and 1/23 according to Support's duplicate-account policy.
++
++Once the snapshot contains no NULLs or case-insensitive duplicates, re-running
++the migration preserves every remaining row and installs the required
++constraints.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..597f71d 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,52 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add a NOT NULL constraint to an existing column in place, so
++-- the table has to be rebuilt. Before doing that, check the existing rows and
++-- abort without touching users if the data already violates the new
++-- constraints. See BLOCKED.md: the current production snapshot has both NULL
++-- and duplicate emails, and Support owns that data.
++CREATE TEMP TABLE _users_email_precheck (violation TEXT);
++
++CREATE TEMP TRIGGER _users_email_precheck_abort
++BEFORE INSERT ON _users_email_precheck
++BEGIN
++    SELECT RAISE(
++        ABORT,
++        '002_unique_email: users.email has NULL values or case-insensitive duplicates; Support must clean the data first (see BLOCKED.md)'
++    );
++END;
++
++INSERT INTO _users_email_precheck (violation)
++SELECT 'email is NULL'
++FROM users
++WHERE email IS NULL
++UNION ALL
++SELECT 'case-insensitive duplicate email'
++FROM users u
++WHERE u.email IS NOT NULL
++  AND EXISTS (
++      SELECT 1
++      FROM users v
++      WHERE v.email IS NOT NULL
++        AND v.email = u.email COLLATE NOCASE
++        AND v.id <> u.id
++  )
++LIMIT 1;
++
++DROP TABLE _users_email_precheck;
++
++BEGIN;
++
++CREATE TABLE users_rebuilt (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL COLLATE NOCASE UNIQUE,
++    name TEXT
++);
++
++INSERT INTO users_rebuilt (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_rebuilt RENAME TO users;
++
++COMMIT;

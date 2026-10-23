@@ -1,0 +1,288 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..a7d1368
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,3 @@
++Assertion rewriting now unrolls ``all()`` and ``any()`` calls over a
++comprehension, so that a failing assertion reports the value of the element
++which made it fail instead of an opaque generator object.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..9b8bbb7 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -4,6 +4,7 @@ from __future__ import division
+ from __future__ import print_function
+ 
+ import ast
++import copy
+ import errno
+ import imp
+ import itertools
+@@ -605,6 +606,40 @@ def set_location(node, lineno, col_offset):
+     return node
+ 
+ 
++def _comprehension_target_names(node):
++    """Return the names bound by a comprehension ``for`` target."""
++    if isinstance(node, ast.Name):
++        return [node.id]
++    names = []
++    for child in ast.iter_child_nodes(node):
++        names.extend(_comprehension_target_names(child))
++    return names
++
++
++def _rename_comprehension_target(node, mapping):
++    """Rename the names bound by a comprehension ``for`` target in place."""
++    if isinstance(node, ast.Name):
++        if node.id in mapping:
++            node.id = mapping[node.id]
++        return node
++    for child in ast.iter_child_nodes(node):
++        _rename_comprehension_target(child, mapping)
++    return node
++
++
++def _rename_comprehension_loads(node, mapping):
++    """Rename loads of the names in *mapping* inside *node*."""
++
++    class Renamer(ast.NodeTransformer):
++        def visit_Name(self, name):
++            if name.id in mapping and isinstance(name.ctx, ast.Load):
++                new = ast.Name(mapping[name.id], ast.Load())
++                return ast.copy_location(new, name)
++            return name
++
++    return Renamer().visit(node)
++
++
+ class AssertionRewriter(ast.NodeVisitor):
+     """Assertion rewriting implementation.
+ 
+@@ -964,10 +999,119 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _is_unrollable_all_any(self, call):
++        """Return True if *call* is an ``all``/``any`` call we can unroll.
++
++        We only unroll calls to the builtins with a single comprehension
++        argument, since for those we can produce a report pointing at the
++        element which made the assertion fail (issue #5103).
++        """
++        if not (isinstance(call.func, ast.Name) and call.func.id in ("all", "any")):
++            return False
++        if len(call.args) != 1:
++            return False
++        # ``keywords``/``kwargs``/``starargs`` are only valid on some Python
++        # versions; ``all``/``any`` don't accept them anyway.
++        if (
++            getattr(call, "keywords", None)
++            or getattr(call, "kwargs", None)
++            or getattr(call, "starargs", None)
++        ):
++            return False
++        arg = call.args[0]
++        if not isinstance(arg, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
++            return False
++        return not any(getattr(gen, "is_async", False) for gen in arg.generators)
++
++    def _visit_all_any(self, call):
++        """Rewrite ``all(...)``/``any(...)`` by unrolling the iterable.
++
++        The comprehension is turned into an explicit loop so that the
++        existing assertion machinery reports the value of the element which
++        made the assertion fail, instead of an opaque generator object.
++        """
++        is_all = call.func.id == "all"
++        comp = call.args[0]
++        # Unrolling hoists the comprehension targets into the enclosing scope,
++        # so rename them to fresh names to avoid clobbering (or making local)
++        # variables which are used elsewhere in the function.
++        mapping = {}
++        generators = []
++        for comp_for in comp.generators:
++            target = copy.deepcopy(comp_for.target)
++            iterable = copy.deepcopy(comp_for.iter)
++            if mapping:
++                iterable = _rename_comprehension_loads(iterable, mapping)
++            renamed_targets = {}
++            for name in _comprehension_target_names(target):
++                renamed_targets[name] = self.variable()
++            _rename_comprehension_target(target, renamed_targets)
++            mapping.update(renamed_targets)
++            ifs = [
++                _rename_comprehension_loads(copy.deepcopy(cond), mapping)
++                for cond in comp_for.ifs
++            ]
++            generators.append((target, iterable, ifs))
++        elt = _rename_comprehension_loads(copy.deepcopy(comp.elt), mapping)
++
++        res_var = self.variable()
++        done_var = self.variable()
++        # ``all([])`` is True, ``any([])`` is False.
++        self.statements.append(
++            ast.Assign([ast.Name(res_var, ast.Store())], _NameConstant(is_all))
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(False))
++        )
++
++        def visit_collect(node):
++            saved = self.statements
++            self.statements = []
++            res, expl = self.visit(node)
++            stmts = self.statements
++            self.statements = saved
++            return res, expl, stmts
++
++        explained = []
++
++        def build(index):
++            if index == len(generators):
++                elem_res, elem_expl, elem_stmts = visit_collect(elt)
++                explained.append(elem_expl)
++                if is_all:
++                    fail_cond = ast.UnaryOp(ast.Not(), elem_res)
++                else:
++                    fail_cond = elem_res
++                on_fail = [
++                    ast.Assign(
++                        [ast.Name(res_var, ast.Store())], _NameConstant(not is_all)
++                    ),
++                    ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(True)),
++                    ast.Break(),
++                ]
++                return elem_stmts + [ast.If(fail_cond, on_fail, [])]
++
++            target, iterable, ifs = generators[index]
++            iter_res, _expl, iter_stmts = visit_collect(iterable)
++            body = build(index + 1)
++            # A comprehension's filters are evaluated in the enclosing loop,
++            # after its target has been assigned.
++            for cond in reversed(ifs):
++                cond_res, _cexpl, cond_stmts = visit_collect(cond)
++                body = cond_stmts + [ast.If(cond_res, body, [])]
++            # Stop the outer loops as soon as a result has been determined.
++            body = [ast.If(ast.Name(done_var, ast.Load()), [ast.Break()], [])] + body
++            return iter_stmts + [ast.For(target, iter_res, body, [])]
++
++        self.statements.extend(build(0))
++        return ast.Name(res_var, ast.Load()), explained[0]
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if self._is_unrollable_all_any(call):
++            return self._visit_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1145,8 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        if self._is_unrollable_all_any(call):
++            return self._visit_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index 87dada2..fda5ef1 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -426,6 +426,92 @@ class TestAssertionRewrite(object):
+ 
+         assert getmsg(f) == "assert (False or (4 % 2))"
+ 
++    def test_unroll_all_generator(self):
++        def f():
++            assert all(x < 3 for x in [1, 2, 3, 4])
++
++        assert getmsg(f) == "assert 3 < 3"
++
++    def test_unroll_any_generator(self):
++        def f():
++            assert any(x > 5 for x in [1, 2, 3])
++
++        assert getmsg(f) == "assert 3 > 5"
++
++    def test_unroll_all_list_comprehension(self):
++        def f():
++            assert all([x < 3 for x in [1, 2, 3, 4]])
++
++        assert getmsg(f) == "assert 3 < 3"
++
++    def test_unroll_all_with_function_call(self):
++        def is_even(number):
++            return number % 2 == 0
++
++        def f():
++            assert all(is_even(number) for number in [1, 3, 5])
++
++        assert getmsg(f, {"is_even": is_even}) == (
++            "assert False\n +  where False = is_even(1)"
++        )
++
++    def test_unroll_all_with_filter(self):
++        def f():
++            assert all(x < 3 for x in [1, 2, 3, 4] if x != 4)
++
++        assert getmsg(f) == "assert 3 < 3"
++
++    def test_unroll_all_nested_generators(self):
++        def f():
++            assert all(i + j < 5 for i in [0, 1, 2] for j in [0, 1, 2, 3])
++
++        assert getmsg(f) == "assert (2 + 3) < 5"
++
++    def test_unroll_all_short_circuits(self):
++        calls = []
++
++        def g(x):
++            calls.append(x)
++            return x < 2
++
++        def f():
++            assert all(g(x) for x in [1, 2, 3])
++
++        getmsg(f, {"g": g})
++        assert calls == [1, 2]
++
++    def test_unroll_all_passing(self):
++        def f():
++            assert all(x < 3 for x in [1, 2])
++
++        getmsg(f, must_pass=True)
++
++    def test_unroll_simple_name_element(self):
++        def f():
++            assert all(x for x in [True, False])
++
++        assert getmsg(f) == "assert False"
++
++    def test_unroll_does_not_clobber_variable(self):
++        def f():
++            x = 5
++            try:
++                assert all(x < 3 for x in [1, 2, 3])
++            except AssertionError:
++                pass
++            assert x == 5
++
++        getmsg(f, must_pass=True)
++
++    def test_unroll_does_not_make_global_local(self):
++        GLOBAL = 5
++
++        def f():
++            assert GLOBAL == 5
++            assert all(GLOBAL < 3 for GLOBAL in [1, 2, 3, 4])
++
++        assert getmsg(f, {"GLOBAL": GLOBAL}) == "assert 3 < 3"
++
+     @pytest.mark.skipif("sys.version_info < (3,5)")
+     def test_at_operator_issue1290(self, testdir):
+         testdir.makepyfile(

@@ -1,0 +1,92 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index d546dca..0b0a314 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -15,6 +15,8 @@ Unreleased
+ -   Fix some types that weren't available in Python 3.6.0. :issue:`4040`
+ -   Improve typing for ``send_file``, ``send_from_directory``, and
+     ``get_send_file_max_age``. :issue:`4044`, :pr:`4026`
++-   A ``Blueprint`` name may not contain a dot. Every dot in a blueprint
++    name is significant now that blueprints can be nested. :issue:`4045`
+ 
+ 
+ Version 2.0.0
+diff --git a/src/flask/blueprints.py b/src/flask/blueprints.py
+index 5fb84d8..24a5f4a 100644
+--- a/src/flask/blueprints.py
++++ b/src/flask/blueprints.py
+@@ -188,6 +188,10 @@ class Blueprint(Scaffold):
+             template_folder=template_folder,
+             root_path=root_path,
+         )
++
++        if "." in name:
++            raise ValueError("'name' may not contain a dot '.' character.")
++
+         self.name = name
+         self.url_prefix = url_prefix
+         self.subdomain = subdomain
+diff --git a/tests/test_basic.py b/tests/test_basic.py
+index d6ec3fe..7bdeba1 100644
+--- a/tests/test_basic.py
++++ b/tests/test_basic.py
+@@ -1631,7 +1631,7 @@ def test_url_processors(app, client):
+ 
+ 
+ def test_inject_blueprint_url_defaults(app):
+-    bp = flask.Blueprint("foo.bar.baz", __name__, template_folder="template")
++    bp = flask.Blueprint("foo", __name__, template_folder="template")
+ 
+     @bp.url_defaults
+     def bp_defaults(endpoint, values):
+@@ -1644,12 +1644,12 @@ def test_inject_blueprint_url_defaults(app):
+     app.register_blueprint(bp)
+ 
+     values = dict()
+-    app.inject_url_defaults("foo.bar.baz.view", values)
++    app.inject_url_defaults("foo.view", values)
+     expected = dict(page="login")
+     assert values == expected
+ 
+     with app.test_request_context("/somepage"):
+-        url = flask.url_for("foo.bar.baz.view")
++        url = flask.url_for("foo.view")
+     expected = "/login"
+     assert url == expected
+ 
+diff --git a/tests/test_blueprints.py b/tests/test_blueprints.py
+index b986ca0..88cf011 100644
+--- a/tests/test_blueprints.py
++++ b/tests/test_blueprints.py
+@@ -253,28 +253,9 @@ def test_templates_list(test_apps):
+     assert templates == ["admin/index.html", "frontend/index.html"]
+ 
+ 
+-def test_dotted_names(app, client):
+-    frontend = flask.Blueprint("myapp.frontend", __name__)
+-    backend = flask.Blueprint("myapp.backend", __name__)
+-
+-    @frontend.route("/fe")
+-    def frontend_index():
+-        return flask.url_for("myapp.backend.backend_index")
+-
+-    @frontend.route("/fe2")
+-    def frontend_page2():
+-        return flask.url_for(".frontend_index")
+-
+-    @backend.route("/be")
+-    def backend_index():
+-        return flask.url_for("myapp.frontend.frontend_index")
+-
+-    app.register_blueprint(frontend)
+-    app.register_blueprint(backend)
+-
+-    assert client.get("/fe").data.strip() == b"/be"
+-    assert client.get("/fe2").data.strip() == b"/fe"
+-    assert client.get("/be").data.strip() == b"/fe"
++def test_dotted_name_not_allowed(app, client):
++    with pytest.raises(ValueError):
++        flask.Blueprint("app.ui", __name__)
+ 
+ 
+ def test_dotted_names_from_app(app, client):

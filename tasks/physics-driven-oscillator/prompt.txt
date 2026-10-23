@@ -1,0 +1,6 @@
+I'm building a vibration-isolation calculator around a driven mass-spring-damper, m x'' + c x' + k x = F0 cos(omega t). Please implement the two functions in oscillator.py:
+
+- `amplitude(m, k, c, F0, omega)`: the steady-state amplitude of x.
+- `displacement(m, k, c, F0, omega, x0, v0, t)`: x(t) for the full motion (transient plus steady state) starting from x(0) = x0, x'(0) = v0.
+
+They have to work for any physical parameters we feed them: underdamped, critically damped and overdamped systems, driving near resonance, and undamped systems (c = 0) as long as omega is not exactly the natural frequency. Results should be accurate to about 1e-6 relative to the size of the motion. test_oscillator.py only covers one easy case.

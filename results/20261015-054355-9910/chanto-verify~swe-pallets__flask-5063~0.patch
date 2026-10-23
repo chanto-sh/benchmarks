@@ -1,0 +1,141 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..8f48250 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -44,6 +44,10 @@ Unreleased
+     to set the domain, which modern browsers interpret as an exact match rather than
+     a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
+     :issue:`5051`
++-   ``flask routes`` shows the ``Subdomain`` or ``Host`` column when a rule uses
++    subdomain or host matching, respectively. :issue:`5063`
++-   ``FlaskClient.session_transaction`` is compatible with the ``path`` argument added
++    to Werkzeug's ``_update_cookies_from_response`` in Werkzeug 2.3.3.
+ 
+ 
+ Version 2.2.4
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..c887af5 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -9,7 +9,7 @@ import sys
+ import traceback
+ import typing as t
+ from functools import update_wrapper
+-from operator import attrgetter
++from operator import itemgetter
+ 
+ import click
+ from click.core import ParameterSource
+@@ -989,7 +989,7 @@ def shell_command() -> None:
+ @click.option(
+     "--sort",
+     "-s",
+-    type=click.Choice(("endpoint", "methods", "rule", "match")),
++    type=click.Choice(("endpoint", "methods", "domain", "rule", "match")),
+     default="endpoint",
+     help=(
+         'Method to sort routes by. "match" is the order that Flask will match '
+@@ -1000,38 +1000,51 @@ def shell_command() -> None:
+ @with_appcontext
+ def routes_command(sort: str, all_methods: bool) -> None:
+     """Show all registered routes with endpoints and methods."""
+-
+     rules = list(current_app.url_map.iter_rules())
++
+     if not rules:
+         click.echo("No routes were registered.")
+         return
+ 
+     ignored_methods = set(() if all_methods else ("HEAD", "OPTIONS"))
++    host_matching = current_app.url_map.host_matching
++    has_domain = any(rule.host if host_matching else rule.subdomain for rule in rules)
++    rows = []
+ 
+-    if sort in ("endpoint", "rule"):
+-        rules = sorted(rules, key=attrgetter(sort))
+-    elif sort == "methods":
+-        rules = sorted(rules, key=lambda rule: sorted(rule.methods))  # type: ignore
+-
+-    rule_methods = [
+-        ", ".join(sorted(rule.methods - ignored_methods))  # type: ignore
+-        for rule in rules
+-    ]
+-
+-    headers = ("Endpoint", "Methods", "Rule")
+-    widths = (
+-        max(len(rule.endpoint) for rule in rules),
+-        max(len(methods) for methods in rule_methods),
+-        max(len(rule.rule) for rule in rules),
+-    )
+-    widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    for rule in rules:
++        row = [
++            rule.endpoint,
++            ", ".join(sorted(rule.methods - ignored_methods)),  # type: ignore
++        ]
++
++        if has_domain:
++            row.append((rule.host if host_matching else rule.subdomain) or "")
++
++        row.append(rule.rule)
++        rows.append(row)
++
++    headers = ["Endpoint", "Methods"]
++    sorts = ["endpoint", "methods"]
++
++    if has_domain:
++        headers.append("Host" if host_matching else "Subdomain")
++        sorts.append("domain")
++
++    headers.append("Rule")
++    sorts.append("rule")
++
++    try:
++        rows.sort(key=itemgetter(sorts.index(sort)))
++    except ValueError:
++        pass
+ 
+-    click.echo(row.format(*headers).strip())
+-    click.echo(row.format(*("-" * width for width in widths)))
++    rows.insert(0, headers)
++    widths = [max(len(row[i]) for row in rows) for i in range(len(headers))]
++    rows.insert(1, ["-" * w for w in widths])
++    template = "  ".join(f"{{{i}:<{w}}}" for i, w in enumerate(widths))
+ 
+-    for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++    for row in rows:
++        click.echo(template.format(*row))
+ 
+ 
+ cli = FlaskGroup(
+diff --git a/src/flask/testing.py b/src/flask/testing.py
+index a972a3f..1f4eb1c 100644
+--- a/src/flask/testing.py
++++ b/src/flask/testing.py
+@@ -2,6 +2,7 @@ import typing as t
+ from contextlib import contextmanager
+ from contextlib import ExitStack
+ from copy import copy
++from inspect import signature
+ from types import TracebackType
+ from urllib.parse import urlsplit
+ 
+@@ -168,8 +169,15 @@ class FlaskClient(Client):
+             app.session_interface.save_session(app, sess, resp)
+ 
+         if hasattr(self, "_update_cookies_from_response"):
++            # Werkzeug >= 2.3.3. The ``path`` argument was added in
++            # Werkzeug 2.3.3, older versions only take the server name.
++            args = [ctx.request.host.partition(":")[0]]
++
++            if "path" in signature(self._update_cookies_from_response).parameters:
++                args.append(ctx.request.path)
++
+             self._update_cookies_from_response(
+-                ctx.request.host.partition(":")[0], resp.headers.getlist("Set-Cookie")
++                *args, resp.headers.getlist("Set-Cookie")
+             )
+         else:
+             self.cookie_jar.extract_wsgi(  # type: ignore[union-attr]

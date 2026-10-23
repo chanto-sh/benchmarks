@@ -1,0 +1,48 @@
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 7bd975e..c9bdfee 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -291,7 +291,7 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):
+             else:
+                 rep.outcome = "passed"
+                 rep.wasxfail = xfailed.reason
+-    elif (
++    if (
+         item._store.get(skipped_by_mark_key, True)
+         and rep.skipped
+         and type(rep.longrepr) is tuple
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index 0b1c0b4..450cb84 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -648,6 +648,30 @@ class TestSkip:
+         result = testdir.runpytest("-rs")
+         result.stdout.fnmatch_lines(["*unconditional skip*", "*1 skipped*"])
+ 
++    def test_skip_location(self, testdir):
++        testdir.makepyfile(
++            """
++            import pytest
++            @pytest.mark.skip
++            def test_skip_location() -> None:
++                assert 0
++        """
++        )
++        result = testdir.runpytest("-rs")
++        result.stdout.fnmatch_lines(["*SKIPPED*test_skip_location*:2: unconditional skip"])
++
++    def test_skip_location_runxfail(self, testdir):
++        testdir.makepyfile(
++            """
++            import pytest
++            @pytest.mark.skip
++            def test_skip_location() -> None:
++                assert 0
++        """
++        )
++        result = testdir.runpytest("-rs", "--runxfail")
++        result.stdout.fnmatch_lines(["*SKIPPED*test_skip_location*:2: unconditional skip"])
++
+ 
+ class TestSkipif:
+     def test_skipif_conditional(self, testdir):

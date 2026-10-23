@@ -1,0 +1,205 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..d6bd9f1
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,4 @@
++Improve the assertion failure message for ``all()`` and ``any()`` calls over a
++comprehension by unrolling the iterable.  The report now points at the
++predicate and the element which made the assertion fail, instead of showing an
++unhelpful representation of the generator.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..ffe80f0 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -964,10 +964,181 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _is_all_any_call(self, call):
++        """Return True if *call* calls the ``all`` or ``any`` builtin over a
++        comprehension and can therefore be unrolled for a better report."""
++        if not (isinstance(call.func, ast.Name) and call.func.id in ("all", "any")):
++            return False
++        # Calls with *args/**kwargs or keyword arguments can't be unrolled.
++        if getattr(call, "starargs", None) is not None:
++            return False
++        if getattr(call, "kwargs", None) is not None:
++            return False
++        if len(call.args) != 1 or call.keywords:
++            return False
++        arg = call.args[0]
++        if not isinstance(arg, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
++            return False
++        # Async comprehensions must keep their ``async for`` semantics.
++        if any(getattr(gen, "is_async", 0) for gen in arg.generators):
++            return False
++        return True
++
++    def _visit_all_any(self, call):
++        """Rewrite ``all``/``any`` over a comprehension into an explicit loop.
++
++        The loop assigns the value of the predicate for the element which made
++        the assertion fail to a temporary variable, which is then used to build
++        the failure message using the regular machinery.  This gives a failure
++        report which points at the predicate and the offending element, similar
++        to writing the loop out by hand.  See #5103.
++        """
++        comp = call.args[0]
++        is_all = call.func.id == "all"
++        result_var = self.variable()
++        done_var = self.variable()
++
++        # Rewrite the element expression in a temporary buffer so that it can
++        # be moved into the loop body, keeping track of the temporary variables
++        # it uses so they can be initialised before the loop.
++        old_statements = self.statements
++        self.statements = elt_statements = []
++        variables_before = len(self.variables)
++        pred_res, pred_expl = self.visit(comp.elt)
++        new_variables = self.variables[variables_before:]
++
++        self.statements = old_statements
++        self.statements.append(
++            ast.Assign([ast.Name(result_var, ast.Store())], _NameConstant(is_all))
++        )
++        self.statements.append(
++            ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(False))
++        )
++        # A unique sentinel used to detect the end of each iterator.
++        stop_var = self.variable()
++        self.statements.append(
++            ast.Assign(
++                [ast.Name(stop_var, ast.Store())],
++                ast_Call(self.builtin("object"), [], []),
++            )
++        )
++        if new_variables:
++            self.statements.append(
++                ast.Assign(
++                    [ast.Name(var, ast.Store()) for var in new_variables],
++                    _NameConstant(None),
++                )
++            )
++
++        self._unroll_all_any(
++            list(comp.generators),
++            elt_statements,
++            pred_res,
++            result_var,
++            done_var,
++            stop_var,
++            is_all,
++        )
++        return ast.Name(result_var, ast.Load()), pred_expl
++
++    def _unroll_all_any(
++        self,
++        generators,
++        elt_statements,
++        pred_res,
++        result_var,
++        done_var,
++        stop_var,
++        is_all,
++    ):
++        """Emit the nested loops implementing an unrolled ``all``/``any``.
++
++        Explicit ``iter``/``next`` loops are used instead of ``for`` loops so
++        that, once the failing element has been found, the targets of the outer
++        loops keep the values of the offending element (rather than being
++        overwritten with the next element before the loop is left).
++        """
++        if not generators:
++            self.statements.extend(elt_statements)
++            if is_all:
++                test = ast.UnaryOp(ast.Not(), pred_res)
++            else:
++                test = pred_res
++            body = [
++                ast.Assign([ast.Name(result_var, ast.Store())], pred_res),
++                ast.Assign([ast.Name(done_var, ast.Store())], _NameConstant(True)),
++                ast.Break(),
++            ]
++            self.statements.append(ast.If(test, body, []))
++            return
++
++        gen = generators[0]
++        iter_var = self.variable()
++        next_var = self.variable()
++        self.statements.append(
++            ast.Assign(
++                [ast.Name(iter_var, ast.Store())],
++                ast_Call(self.builtin("iter"), [gen.iter], []),
++            )
++        )
++        self.statements.append(
++            ast.Assign(
++                [ast.Name(next_var, ast.Store())],
++                self._next_call(iter_var, stop_var),
++            )
++        )
++        test = ast.BoolOp(
++            ast.And(),
++            [
++                ast.UnaryOp(ast.Not(), ast.Name(done_var, ast.Load())),
++                ast.Compare(
++                    ast.Name(next_var, ast.Load()),
++                    [ast.IsNot()],
++                    [ast.Name(stop_var, ast.Load())],
++                ),
++            ],
++        )
++        while_body = [ast.Assign([gen.target], ast.Name(next_var, ast.Load()))]
++        while_node = ast.While(test, while_body, [])
++        self.statements.append(while_node)
++        # Nest the ``if`` filters directly inside the loop body.
++        inner = while_body
++        for cond in gen.ifs:
++            if_node = ast.If(cond, [], [])
++            inner.append(if_node)
++            inner = if_node.body
++        outer_statements = self.statements
++        self.statements = inner
++        self._unroll_all_any(
++            generators[1:],
++            elt_statements,
++            pred_res,
++            result_var,
++            done_var,
++            stop_var,
++            is_all,
++        )
++        self.statements = outer_statements
++        while_body.append(
++            ast.Assign(
++                [ast.Name(next_var, ast.Store())], self._next_call(iter_var, stop_var)
++            )
++        )
++
++    def _next_call(self, iter_var, stop_var):
++        """Build ``next(iter_var, stop_var)``."""
++        return ast_Call(
++            self.builtin("next"),
++            [ast.Name(iter_var, ast.Load()), ast.Name(stop_var, ast.Load())],
++            [],
++        )
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if self._is_all_any_call(call):
++            return self._visit_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1172,8 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        if self._is_all_any_call(call):
++            return self._visit_all_any(call)
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

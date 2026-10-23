@@ -1,0 +1,62 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index d546dca..56ca51d 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -15,6 +15,7 @@ Unreleased
+ -   Fix some types that weren't available in Python 3.6.0. :issue:`4040`
+ -   Improve typing for ``send_file``, ``send_from_directory``, and
+     ``get_send_file_max_age``. :issue:`4044`, :pr:`4026`
++-   Blueprint names may no longer contain dots. :issue:`4045`
+ 
+ 
+ Version 2.0.0
+diff --git a/src/flask/blueprints.py b/src/flask/blueprints.py
+index 5fb84d8..827cad2 100644
+--- a/src/flask/blueprints.py
++++ b/src/flask/blueprints.py
+@@ -188,6 +188,9 @@ class Blueprint(Scaffold):
+             template_folder=template_folder,
+             root_path=root_path,
+         )
++        if "." in name:
++            raise ValueError("'name' may not contain a dot '.' character.")
++
+         self.name = name
+         self.url_prefix = url_prefix
+         self.subdomain = subdomain
+diff --git a/tests/test_blueprints.py b/tests/test_blueprints.py
+index b986ca0..88cf011 100644
+--- a/tests/test_blueprints.py
++++ b/tests/test_blueprints.py
+@@ -253,28 +253,9 @@ def test_templates_list(test_apps):
+     assert templates == ["admin/index.html", "frontend/index.html"]
+ 
+ 
+-def test_dotted_names(app, client):
+-    frontend = flask.Blueprint("myapp.frontend", __name__)
+-    backend = flask.Blueprint("myapp.backend", __name__)
+-
+-    @frontend.route("/fe")
+-    def frontend_index():
+-        return flask.url_for("myapp.backend.backend_index")
+-
+-    @frontend.route("/fe2")
+-    def frontend_page2():
+-        return flask.url_for(".frontend_index")
+-
+-    @backend.route("/be")
+-    def backend_index():
+-        return flask.url_for("myapp.frontend.frontend_index")
+-
+-    app.register_blueprint(frontend)
+-    app.register_blueprint(backend)
+-
+-    assert client.get("/fe").data.strip() == b"/be"
+-    assert client.get("/fe2").data.strip() == b"/fe"
+-    assert client.get("/be").data.strip() == b"/fe"
++def test_dotted_name_not_allowed(app, client):
++    with pytest.raises(ValueError):
++        flask.Blueprint("app.ui", __name__)
+ 
+ 
+ def test_dotted_names_from_app(app, client):

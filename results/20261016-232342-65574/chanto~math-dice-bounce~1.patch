@@ -1,0 +1,65 @@
+diff --git a/game.py b/game.py
+index 768dec9..5abdc3f 100644
+--- a/game.py
++++ b/game.py
+@@ -1,6 +1,59 @@
+ from fractions import Fraction
+ 
+ 
++def _solve(matrix, rhs):
++    """Solve a square linear system exactly using Gaussian elimination."""
++    size = len(matrix)
++    aug = [row[:] + [value] for row, value in zip(matrix, rhs)]
++
++    for col in range(size):
++        pivot = next(row for row in range(col, size) if aug[row][col] != 0)
++        aug[col], aug[pivot] = aug[pivot], aug[col]
++
++        pivot_value = aug[col][col]
++        aug[col] = [value / pivot_value for value in aug[col]]
++
++        for row in range(size):
++            if row != col and aug[row][col] != 0:
++                factor = aug[row][col]
++                aug[row] = [
++                    current - factor * pivot_entry
++                    for current, pivot_entry in zip(aug[row], aug[col])
++                ]
++
++    return [aug[row][-1] for row in range(size)]
++
++
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Only the last k-1 squares can send a roll backwards.  Transitions from
++    # them stay inside that window, so solve for those squares first.
++    window_start = n - k + 1
++    window_size = k - 1
++    expected = [Fraction(0)] * (n + 1)
++
++    if window_size > 0:
++        matrix = [[Fraction(0)] * window_size for _ in range(window_size)]
++        rhs = [Fraction(1)] * window_size
++
++        for r in range(window_size):
++            square = window_start + r
++            matrix[r][r] = Fraction(1)
++            for roll in range(1, k + 1):
++                destination = square + roll
++                if destination > n:
++                    destination = 2 * n - destination
++                if destination == n:
++                    continue
++                matrix[r][destination - window_start] -= Fraction(1, k)
++
++        solutions = _solve(matrix, rhs)
++        for r, value in enumerate(solutions):
++            expected[window_start + r] = value
++
++    # Squares before the window always move forward, so work backwards.
++    for square in range(n - k, -1, -1):
++        total = sum(expected[square + roll] for roll in range(1, k + 1))
++        expected[square] = Fraction(1) + total / k
++
++    return expected[0]

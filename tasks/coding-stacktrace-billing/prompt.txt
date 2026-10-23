@@ -1,0 +1,19 @@
+The September invoice run is crashing and August ran fine with the same code:
+
+```
+$ python3 billing/run.py invoices/2026-09.csv
+Traceback (most recent call last):
+  File "billing/run.py", line 22, in <module>
+    main(sys.argv[1])
+  File "billing/run.py", line 15, in main
+    total = invoice_total(inv, rates)
+  File "billing/invoice.py", line 16, in invoice_total
+    total += line_amount(line, inv, rates)
+  File "billing/invoice.py", line 10, in line_amount
+    return convert(line.amount, line.currency, inv.currency, rates).quantize(CENT, ROUND_HALF_UP)
+  File "billing/fx.py", line 19, in convert
+    return amount * rates[(src, dst)]
+KeyError: ('eur', 'USD')
+```
+
+Please find the real cause and fix it there (not by papering over it in the conversion), so the September report comes out right and looks like the sample in README.md. The tests are in test_billing.py.

@@ -1,0 +1,71 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..1dfa729 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,56 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of an n-point Gauss-Legendre rule."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        for _ in range(100):
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p1, p2 = ((2 * j - 1) * z * p1 - (j - 1) * p2) / j, p1
++            derivative = n * (z * p1 - p2) / (z * z - 1.0)
++            z, previous = z - p1 / derivative, z
++            if abs(z - previous) <= 1e-15:
++                break
++        nodes[i], nodes[n - 1 - i] = -z, z
++        weight = 2.0 / ((1.0 - z * z) * derivative * derivative)
++        weights[i] = weights[n - 1 - i] = weight
++    return nodes, weights
++
++
++_NODES, _WEIGHTS = _gauss_legendre(16)
++_QUARTER_TURN = math.pi / 2.0
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 gives 2 * integral(cos(t*u**2), u=0..sqrt(b)),
++    which is smooth.  The interval is split into pieces spanning a quarter
++    of a cosine oscillation and each piece is integrated by Gauss-Legendre
++    quadrature.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    limit = math.sqrt(b)
++    panels = max(1, math.ceil(t * b / _QUARTER_TURN))
++    step = _QUARTER_TURN / t
++    total = 0.0
++    lo = 0.0
++    for k in range(panels):
++        hi = limit if k == panels - 1 else min(limit, math.sqrt((k + 1) * step))
++        if hi <= lo:
++            continue
++        mid = 0.5 * (lo + hi)
++        half = 0.5 * (hi - lo)
++        subtotal = 0.0
++        for x, w in zip(_NODES, _WEIGHTS):
++            u = mid + half * x
++            subtotal += w * math.cos(t * u * u)
++        total += half * subtotal
++        lo = hi
++    return 2.0 * total

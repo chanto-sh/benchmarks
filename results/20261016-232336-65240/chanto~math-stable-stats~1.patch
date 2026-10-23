@@ -1,0 +1,58 @@
+diff --git a/stats.py b/stats.py
+index add4f59..7fd42e9 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,47 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires a non-empty sequence")
++
++    # Center the data first.  With readings on a large common offset (e.g.
++    # absolute pressures or timestamps) this keeps the values we square
++    # small, instead of subtracting two huge nearly-equal squares.
++    origin = xs[0]
++    ys = [x - origin for x in xs]
++    if not all(math.isfinite(y) for y in ys):
++        # The shift itself overflowed (values at opposite ends of the float
++        # range).  Their variance is not representable, but keep the
++        # arithmetic well defined rather than producing a NaN.
++        origin = 0.0
++        ys = list(xs)
++
++    # Divide each term by n before summing so that even a partial sum of
++    # same-signed terms cannot exceed the magnitude of the input values.
++    mean_y = math.fsum(y / n for y in ys)
++
++    root_n = math.sqrt(n)
++    try:
++        # sum((y - mean_y) ** 2) / n, arranged so no term can overflow
++        # unless the variance itself does.
++        var = math.fsum(((y - mean_y) / root_n) ** 2 for y in ys)
++    except OverflowError:
++        var = math.inf
++
++    return origin + mean_y, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    # Subtracting the maximum makes every exponent non-positive, so exp()
++    # can neither overflow nor underflow away the dominant term.
++    m = max(xs)
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    # max(x, 0) + log1p(exp(-abs(x))) is finite for every finite x, and
++    # log1p preserves the small term when x is very negative (where
++    # log(1 + exp(x)) would round the argument to 1 and return 0).
++    return max(x, 0.0) + math.log1p(math.exp(-abs(x)))

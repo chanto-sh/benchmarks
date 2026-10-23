@@ -1,0 +1,17 @@
+We're finally retiring `app/legacy_db.py` (`query_raw`) in favour of `app/db/session.py`. Before anyone starts, I need a migration plan in MIGRATION.md at the repo root that the team can work from. Please base it on what the code actually does today, not on the old notes.
+
+Use exactly these sections:
+
+## Call sites
+One bullet per module under app/ that calls `legacy_db.query_raw` (however it's imported), with the file path in backticks, e.g. `app/foo/bar.py`, and a word on what it does.
+
+## Schema
+Include a line `Current schema version: N` with the version the code is at now, and say whether this migration needs a new schema version.
+
+## Environment
+One bullet per environment variable the application code reads at runtime (not tests, not docs), name in backticks, and note which ones the new session layer still needs.
+
+## Rollback
+How we back out if the switch goes wrong.
+
+Don't change any code yet; this is just the plan.

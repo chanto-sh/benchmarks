@@ -1,0 +1,83 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..c05cdc6 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,76 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++from fractions import Fraction
++
++
++def _detuning(m, k, omega):
++    """Return k - m*omega**2, avoiding cancellation near resonance."""
++    mw2 = m * omega * omega
++    d = k - mw2
++    if abs(d) <= 1e-6 * (abs(k) + abs(mw2)):
++        # The subtraction has lost most of its significant digits.  Recompute
++        # it exactly from the floating-point inputs, then round once.
++        d = float(Fraction(k) - Fraction(m) * Fraction(omega) * Fraction(omega))
++    return d
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    d = _detuning(m, k, omega)
++    cw = c * omega
++    denom = math.hypot(d, cw)
++    if denom == 0.0:
++        return math.inf if F0 != 0.0 else 0.0
++    return abs(F0) / denom
++
++
++def _homogeneous(y0, v0, gamma, delta, t):
++    """Transient part with y(0) = y0, y'(0) = v0.
++
++    ``delta = gamma**2 - k/m``.  Its sign selects the damping regime.
++    """
++    if delta < 0.0:
++        wd = math.sqrt(-delta)
++        return math.exp(-gamma * t) * (
++            y0 * math.cos(wd * t)
++            + (v0 + gamma * y0) / wd * math.sin(wd * t)
++        )
++
++    if delta == 0.0:
++        return math.exp(-gamma * t) * (y0 + (v0 + gamma * y0) * t)
++
++    lam = math.sqrt(delta)
++    # e^(-gamma t) cosh(lam t) and e^(-gamma t) sinh(lam t) / lam,
++    # written so that the slow exponential is factored out.  This avoids
++    # overflow and the severe cancellation of sinh(lam t) / lam near
++    # critical damping.
++    slow = math.exp((lam - gamma) * t)
++    fast = math.exp(-(lam + gamma) * t)
++    cosh_part = 0.5 * (slow + fast)
++    sinh_part = slow * (-math.expm1(-2.0 * lam * t)) / (2.0 * lam)
++    return y0 * cosh_part + (v0 + gamma * y0) * sinh_part
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    d = _detuning(m, k, omega)
++    cw = c * omega
++    denom = math.hypot(d, cw)
++
++    if denom == 0.0:
++        # Undamped forcing exactly at resonance: x_p = F0/(2 m w) t sin(w t).
++        w = math.sqrt(k / m)
++        xh = x0 * math.cos(w * t) + (v0 / w) * math.sin(w * t)
++        xp = F0 / (2.0 * m * w) * t * math.sin(w * t)
++        return xh + xp
++
++    scale = F0 / denom
++    a = scale * (d / denom)
++    b = scale * (cw / denom)
++    xp = a * math.cos(omega * t) + b * math.sin(omega * t)
++
++    gamma = c / (2.0 * m)
++    delta = gamma * gamma - k / m
++    xh = _homogeneous(x0 - a, v0 - omega * b, gamma, delta, t)
++    return xp + xh

@@ -1,0 +1,46 @@
+diff --git a/changelog/11143.bugfix.rst b/changelog/11143.bugfix.rst
+new file mode 100644
+index 0000000..3d70943
+--- /dev/null
++++ b/changelog/11143.bugfix.rst
+@@ -0,0 +1 @@
++Fixed a regression where assertion rewriting would fail with ``TypeError: argument of type 'int' is not iterable`` when the first statement of a test module was a non-string expression, such as a number.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 157903f..8d6fccc 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -678,7 +678,7 @@ class AssertionRewriter(ast.NodeVisitor):
+                 and isinstance(item.value, ast.Constant)
+             ):
+                 doc = item.value.value
+-                if self.is_rewrite_disabled(doc):
++                if isinstance(doc, str) and self.is_rewrite_disabled(doc):
+                     return
+                 expect_docstring = False
+             elif (
+diff --git a/testing/test_assertrewrite.py b/testing/test_assertrewrite.py
+index d018032..72ebf4f 100644
+--- a/testing/test_assertrewrite.py
++++ b/testing/test_assertrewrite.py
+@@ -141,6 +141,21 @@ class TestAssertionRewrite:
+         assert isinstance(m.body[1], ast.Assert)
+         assert m.body[1].msg is None
+ 
++    def test_dont_rewrite_first_statement_is_not_a_string(
++        self, pytester: Pytester
++    ) -> None:
++        # A non-string first statement (e.g. a number) must not be mistaken for a
++        # docstring. Regression test for #11143.
++        pytester.makepyfile(
++            """
++            1
++            def test_foo():
++                assert 1 == 1
++            """
++        )
++        result = pytester.runpytest()
++        result.assert_outcomes(passed=1)
++
+     def test_dont_rewrite_plugin(self, pytester: Pytester) -> None:
+         contents = {
+             "conftest.py": "pytest_plugins = 'plugin'; import plugin",

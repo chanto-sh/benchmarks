@@ -1,0 +1,68 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..af1cd16 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,61 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _interleave(values):
++    """Biject N**k to N by interleaving the binary digits of the values."""
++    k = len(values)
++    if k == 0:
++        return 0
++
++    p = 0
++    max_bits = max(value.bit_length() for value in values)
++    for i in range(max_bits):
++        bit = 1 << i
++        block = 0
++        for j, value in enumerate(values):
++            if value & bit:
++                block |= 1 << j
++        p |= block << (i * k)
++    return p
++
++
++def _deinterleave(p, k):
++    """Inverse of _interleave for a fixed number of values k."""
++    values = [0] * k
++    mask = (1 << k) - 1
++    i = 0
++    while p:
++        block = p & mask
++        while block:
++            lowest = block & -block
++            j = lowest.bit_length() - 1
++            values[j] |= 1 << i
++            block ^= lowest
++        p >>= k
++        i += 1
++    return values
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    k = len(lst)
++    if k == 0:
++        return 0
++
++    # The k - 1 trailing zero bits record the list length; the odd part
++    # records the interleaved elements.
++    p = _interleave(lst)
++    return (p << k) | (1 << (k - 1))
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n < 0:
++        raise ValueError("n must be non-negative")
++    if n == 0:
++        return []
++
++    trailing_zeros = (n & -n).bit_length() - 1
++    k = trailing_zeros + 1
++    p = ((n >> trailing_zeros) - 1) >> 1
++    return _deinterleave(p, k)

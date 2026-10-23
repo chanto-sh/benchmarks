@@ -1,0 +1,97 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..6a3d7e3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,72 @@
++# BLOCKED: release check cannot pass without the authentic `libfoo-1.4.2.tar.gz`
++
++## Status
++
++`verify.py` had two real bugs, which are fixed:
++
++1. Artifacts were opened in text mode and re-encoded with `.encode()` before
++   hashing. That crashes on non-UTF-8 bytes (`UnicodeDecodeError`) and would
++   produce wrong digests for binary files even when it did not crash. Files are
++   now hashed as raw bytes in binary mode, streamed in chunks.
++2. Manifest digests are uppercase while `hexdigest()` returns lowercase, so
++   valid artifacts were reported as mismatches. Comparison is now
++   case-insensitive.
++
++After that fix, 2 of 3 tests pass, including the binary-file and missing-file
++tests. The release check now gets past hashing and reports exactly one bad
++artifact:
++
++```
++$ python3 verify.py
++checksum mismatch: libfoo-1.4.2.tar.gz
++exit=1
++```
++
++## Why it is blocked
++
++`artifacts/libfoo-1.4.2.tar.gz` genuinely does not match its entry in
++`SHA256SUMS`:
++
++| | SHA-256 |
++|---|---|
++| Expected (`SHA256SUMS`) | `7BEE020AC21EFB3831D920AF0B8C5EFE8D44CDF227AB94847F509188420356BD` |
++| Actual (`artifacts/libfoo-1.4.2.tar.gz`) | `fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce` |
++
++The other two artifacts match the manifest; only `libfoo` differs. The file is
++4000 bytes, and no other copy exists in the repository, git history, or git
++objects. There is no source in this project from which the correct bytes can be
++regenerated.
++
++This is a genuine integrity failure, not a verifier bug. Making the release
++check "pass" would require one of the following, both of which defeat the
++purpose of checksum verification:
++
++- editing `SHA256SUMS` to the digest of the current artifact, or
++- replacing `artifacts/libfoo-1.4.2.tar.gz` with arbitrary content matching the
++  manifest.
++
++Neither is safe to do without knowing which side is authoritative. If the
++artifact was corrupted, truncated, or substituted, blessing it in the manifest
++would publish a bad artifact; if the manifest is wrong, the release should use a
++manifest regenerated from a trusted build.
++
++## What is needed to unblock
++
++Obtain the authentic `libfoo-1.4.2.tar.gz` from the trusted build/release source
++(or confirm the published digest is wrong and regenerate `SHA256SUMS` from a
++trusted build), place it at `artifacts/libfoo-1.4.2.tar.gz`, then re-run:
++
++```
++python3 verify.py
++python3 -m unittest test_verify -v
++```
++
++All three tests should then pass.
++
++## Observation
++
++The three artifacts are opaque byte blobs rather than valid archives
++(`cli-2.0.1.zip` has no end-of-central-directory record and the `.tar.gz`
++files are not gzip data). This does not affect checksum verification, and the
++two matching files are presumably the intended fixture bytes, but it is worth
++confirming that they are the real release artifacts before publishing.
+diff --git a/verify.py b/verify.py
+index 4e7265b..b20d129 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,11 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            digest = hashlib.sha256()
++            with open(path, "rb") as a:
++                for chunk in iter(lambda: a.read(1024 * 1024), b""):
++                    digest.update(chunk)
++            if digest.hexdigest() != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

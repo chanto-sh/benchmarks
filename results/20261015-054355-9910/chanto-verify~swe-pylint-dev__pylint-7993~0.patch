@@ -1,0 +1,80 @@
+diff --git a/doc/whatsnew/fragments/5508.bugfix b/doc/whatsnew/fragments/5508.bugfix
+new file mode 100644
+index 0000000..98798bc
+--- /dev/null
++++ b/doc/whatsnew/fragments/5508.bugfix
+@@ -0,0 +1,4 @@
++Fix ``--msg-template`` so that escaped curly braces (``{{`` and ``}}``) are
++no longer mistaken for unknown arguments.
++
++Closes #5508
+diff --git a/pylint/config/arguments_manager.py b/pylint/config/arguments_manager.py
+index 6b9a8dc..4e7d7d0 100644
+--- a/pylint/config/arguments_manager.py
++++ b/pylint/config/arguments_manager.py
+@@ -684,7 +684,11 @@ class _ArgumentsManager:
+         """
+         toml_doc = tomlkit.document()
+         pylint_tool_table = tomlkit.table(is_super_table=True)
+-        toml_doc.add(tomlkit.key(["tool", "pylint"]), pylint_tool_table)
++        # Add the [tool.pylint] super table. Nested assignment is used instead of
++        # ``toml_doc.add(tomlkit.key(["tool", "pylint"]), ...)`` as the latter is
++        # rejected by recent versions of tomlkit.
++        toml_doc["tool"] = tomlkit.table(is_super_table=True)
++        toml_doc["tool"]["pylint"] = pylint_tool_table
+ 
+         for group in sorted(
+             self._arg_parser._action_groups,
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..5951c91 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -11,10 +11,10 @@
+ from __future__ import annotations
+ 
+ import os
+-import re
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
++from string import Formatter
+ from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, TextIO, cast, overload
+ 
+ from pylint.message import Message
+@@ -174,16 +174,29 @@ class TextReporter(BaseReporter):
+         # Set template to the currently selected template
+         self._template = template
+ 
+-        # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
+-        for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++        # Check to see if all parameters in the template are attributes of the Message.
++        # ``string.Formatter`` is used so that escaped braces (``{{`` and ``}}``) are
++        # not mistaken for fields.
++        fixed_template = []
++        for literal, field_name, format_spec, conversion in Formatter().parse(template):
++            # ``Formatter`` unescapes doubled braces, so escape them again to keep
++            # the literal parts from being interpreted as fields when formatting.
++            fixed_template.append(literal.replace("{", "{{").replace("}", "}}"))
++            if field_name is None:
++                continue
++            if field_name not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{field_name}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
+-        self._fixed_template = template
++                continue
++            field = f"{{{field_name}"
++            if conversion:
++                field += f"!{conversion}"
++            if format_spec:
++                field += f":{format_spec}"
++            fixed_template.append(f"{field}}}")
++        self._fixed_template = "".join(fixed_template)
+ 
+     def write_message(self, msg: Message) -> None:
+         """Convenience method to write a formatted message with class default

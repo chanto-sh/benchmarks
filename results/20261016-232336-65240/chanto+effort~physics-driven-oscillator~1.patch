@@ -1,0 +1,180 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..61ce624 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,173 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++_SPLITTER = 134217729.0  # 2**27 + 1, for error-free floating-point products
++
++
++def _split(a):
++    c = _SPLITTER * a
++    if not math.isfinite(c):
++        return a, 0.0
++    hi = c - (c - a)
++    return hi, a - hi
++
++
++def _two_sum(a, b):
++    s = a + b
++    b_virtual = s - a
++    return s, (a - (s - b_virtual)) + (b - b_virtual)
++
++
++def _two_prod(a, b):
++    p = a * b
++    if p == 0.0 or not math.isfinite(p):
++        return p, 0.0
++    a_hi, a_lo = _split(a)
++    b_hi, b_lo = _split(b)
++    err = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo
++    return p, err
++
++
++def _restoring_force(m, k, omega):
++    """Compute k - m*omega**2 without losing relative accuracy near resonance."""
++    omega_sq, omega_sq_err = _two_prod(omega, omega)
++    product, product_err = _two_prod(m, omega_sq)
++    product_err += m * omega_sq_err
++
++    partial, partial_err = _two_sum(k, -product)
++    result, result_err = _two_sum(partial, -product_err)
++    return result + (result_err + partial_err)
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return P, Q such that the steady-state motion is P cos(wt) + Q sin(wt)."""
++    restoring = _restoring_force(m, k, omega)
++    damping = c * omega
++    denom = math.hypot(restoring, damping)
++    if denom == 0.0:
++        return 0.0, 0.0
++
++    scale = F0 / denom
++    return scale * (restoring / denom), scale * (damping / denom)
++
++
++def _sin_over_omega(omega, t):
++    """Compute sin(omega*t) / omega accurately, including omega -> 0."""
++    theta = omega * t
++    if abs(theta) < 1.0e-4:
++        theta2 = theta * theta
++        # t * sin(theta)/theta
++        return t * (1.0 - theta2 / 6.0 + theta2 * theta2 / 120.0)
++    return math.sin(theta) / omega
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    if F0 == 0.0:
++        return 0.0
++    restoring = _restoring_force(m, k, omega)
++    damping = c * omega
++    denom = math.hypot(restoring, damping)
++    if denom == 0.0:
++        return math.inf
++    return abs(F0) / denom
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    restoring = _restoring_force(m, k, omega)
++
++    # Undamped driving exactly at the natural frequency: the particular
++    # solution contains a secular t*sin(omega*t) term.
++    if F0 != 0.0 and c == 0.0 and restoring == 0.0 and omega != 0.0:
++        k_over_m = k / m
++        w0 = math.sqrt(k_over_m) if k_over_m > 0.0 else abs(omega)
++        secular = F0 / (2.0 * m * omega)
++        return (
++            x0 * math.cos(w0 * t)
++            + (v0 / w0) * math.sin(w0 * t)
++            + secular * t * math.sin(omega * t)
++        )
++
++    P, Q = _steady_state_coefficients(m, k, c, F0, omega)
++    if (P == 0.0 and Q == 0.0 and F0 != 0.0
++            and math.hypot(restoring, c * omega) == 0.0):
++        raise ValueError("no steady-state solution exists for these parameters")
++
++    # Initial displacement and velocity of the homogeneous part.
++    e0 = x0 - P
++    h0 = v0 - Q * omega
++
++    beta = c / (2.0 * m)
++    w0_sq = k / m
++
++    # Compute the discriminant as (beta - w0)(beta + w0), which avoids
++    # unnecessary cancellation near critical damping.
++    if w0_sq > 0.0:
++        w0 = math.sqrt(w0_sq)
++        disc = (beta - w0) * (beta + w0)
++    else:
++        disc = beta * beta
++
++    if disc < 0.0:
++        omega_d = math.sqrt(-disc)
++        theta = omega_d * t
++        decay = math.exp(-beta * t)
++        q = _sin_over_omega(omega_d, t)
++        cos_theta = math.cos(theta)
++        sin_theta = math.sin(theta)
++
++        # Frequency splitting computed from squared frequencies; this remains
++        # accurate when omega and omega_d are too close to subtract directly.
++        sum_freq = omega + omega_d
++        if sum_freq != 0.0:
++            freq_diff = (beta * beta - restoring / m) / sum_freq
++        else:
++            freq_diff = omega - omega_d
++
++        # Split the solution into (i) the homogeneous response to the actual
++        # initial conditions and (ii) the driven response starting from rest.
++        # The latter is written with trigonometric difference identities so
++        # that a large resonant response does not lose accuracy through
++        # cancellation with the homogeneous part.
++        half_diff = math.sin(0.5 * freq_diff * t)
++        half_sum = 0.5 * sum_freq * t
++        cp = (
++            -2.0 * math.sin(half_sum) * half_diff
++            - math.expm1(-beta * t) * cos_theta
++            - decay * beta * q
++        )
++        cq = (
++            2.0 * math.cos(half_sum) * half_diff
++            - math.expm1(-beta * t) * sin_theta
++            - decay * freq_diff * q
++        )
++        x_h = decay * (x0 * cos_theta + (v0 + beta * x0) * q)
++        return x_h + P * cp + Q * cq
++    elif disc > 0.0:
++        gamma = math.sqrt(disc)
++        # -beta + gamma written this way to avoid cancellation when gamma ~ beta.
++        r_fast = -w0_sq / (beta + gamma)
++
++        if t >= 0.0:
++            rho = math.exp(-2.0 * gamma * t)
++            q = -math.expm1(-2.0 * gamma * t) / (2.0 * gamma)
++            x_h = math.exp(r_fast * t) * (
++                e0 * (1.0 + rho) / 2.0 + (h0 + beta * e0) * q
++            )
++        else:
++            # Same homogeneous solution, factored by the other root so that
++            # the exponentials remain bounded for negative times.
++            rho = math.exp(2.0 * gamma * t)
++            q = -math.expm1(2.0 * gamma * t) / (2.0 * gamma)
++            x_h = math.exp((-beta - gamma) * t) * (
++                e0 * (1.0 + rho) / 2.0 - (h0 + beta * e0) * q
++            )
++    else:  # critically damped
++        x_h = math.exp(-beta * t) * (e0 + (h0 + beta * e0) * t)
++
++    return P * math.cos(omega * t) + Q * math.sin(omega * t) + x_h

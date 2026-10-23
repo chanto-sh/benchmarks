@@ -1,0 +1,88 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..8fa5cd1
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,45 @@
++# Blocked: September 2026 reconciliation
++
++`python3 reconcile.py 2026-09` cannot complete because the September ledger
++export is missing:
++
++```
++exports/ledger_2026-09.csv
++```
++
++`reconcile.py` requires both inputs (`exports/ledger_2026-09.csv` and
++`exports/bank_2026-09.csv`). Only the bank statement is present:
++
++- `exports/bank_2026-09.csv` (6 lines, total 4123.98)
++- `exports/ledger_2026-09.csv` — **not present**
++
++Without the ledger export, the matching fields
++(`matched`, `amount_mismatch`, `missing_in_bank`, `missing_in_ledger`) and the
++net difference (bank total minus ledger total) cannot be calculated. The
++bank-only total of 4123.98 is not a substitute for the net difference.
++
++## What was completed
++
++- Implemented `reconcile()` in `reconcile.py` per its docstring: matching by
++  `ref`, sorted result lists, and `net_difference` as a two-decimal string.
++- `python3 -m unittest -v test_reconcile.py` — 2 tests pass.
++- The logic was exercised end-to-end against the available August exports
++  without writing any output file.
++
++## What is needed
++
++Provide `exports/ledger_2026-09.csv` with the same `id,date,ref,amount`
++columns as the other ledger exports. Then run:
++
++```
++python3 reconcile.py 2026-09
++```
++
++This will produce `recon_2026-09.json`.
++
++## Why not worked around
++
++The ledger data is authoritative accounting data that is not derivable from
++the bank statement. Reconstructing it from the bank lines would make every
++entry appear matched, hiding true missing/mismatched entries, and would
++fabricate a net difference of 0.00. No `recon_2026-09.json` was produced.
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..afdc375 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,31 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    ledger_refs = set(ledger_by_ref)
++    bank_refs = set(bank_by_ref)
++
++    matched = []
++    amount_mismatch = []
++    for ref in ledger_refs & bank_refs:
++        if ledger_by_ref[ref] == bank_by_ref[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    ledger_total = sum(ledger_by_ref.values(), Decimal("0"))
++    bank_total = sum(bank_by_ref.values(), Decimal("0"))
++    net_difference = (bank_total - ledger_total).quantize(Decimal("0.01"))
++
++    return {
++        "matched": sorted(matched),
++        "amount_mismatch": sorted(amount_mismatch),
++        "missing_in_bank": sorted(ledger_refs - bank_refs),
++        "missing_in_ledger": sorted(bank_refs - ledger_refs),
++        "net_difference": f"{net_difference:.2f}",
++    }
+ 
+ 
+ def main(month):

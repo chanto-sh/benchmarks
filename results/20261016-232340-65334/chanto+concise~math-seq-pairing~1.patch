@@ -1,0 +1,83 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..cd093bc 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,76 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _to_bits(n):
++    """Bijection from non-negative ints to finite binary strings.
++
++    ``0 -> ""``, ``1 -> "0"``, ``2 -> "1"``, ``3 -> "00"``, ...
++    """
++    return bin(n + 1)[3:]
++
++
++def _from_bits(bits):
++    """Inverse of :func:`_to_bits`."""
++    return int("1" + bits, 2) - 1
++
++
++def _level_start(m):
++    """Index of the first pair whose two bitstrings have total length ``m``."""
++    return ((m - 1) << m) + 1
++
++
++def _pair(u, v):
++    """Bijection from pairs of binary strings to non-negative ints.
++
++    Pairs are enumerated by total length, then by the length of ``u``, then
++    lexicographically.  The key has about ``len(u) + len(v)`` bits.
++    """
++    m = len(u) + len(v)
++    i = len(u)
++    ux = int(u, 2) if u else 0
++    vx = int(v, 2) if v else 0
++    offset = (i << m) + (ux << len(v)) + vx
++    return _level_start(m) + offset
++
++
++def _unpair(x):
++    """Inverse of :func:`_pair`."""
++    # Find the level m with _level_start(m) <= x < _level_start(m + 1).
++    hi = x.bit_length() + 1
++    lo = 0
++    while lo < hi:
++        mid = (lo + hi + 1) >> 1
++        if _level_start(mid) <= x:
++            lo = mid
++        else:
++            hi = mid - 1
++    m = lo
++
++    offset = x - _level_start(m)
++    i = offset >> m
++    rem = offset & ((1 << m) - 1)
++    v_len = m - i
++    ux = rem >> v_len
++    vx = rem & ((1 << v_len) - 1)
++
++    u = format(ux, "0%db" % i) if i else ""
++    v = format(vx, "0%db" % v_len) if v_len else ""
++    return u, v
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(_to_bits(value), _to_bits(key)) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        u, v = _unpair(n - 1)
++        result.append(_from_bits(u))
++        n = _from_bits(v)
++    return result

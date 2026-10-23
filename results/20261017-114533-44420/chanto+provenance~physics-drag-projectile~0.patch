@@ -1,0 +1,241 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..666c7b1 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,234 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++from math import cos, hypot, radians, sin, sqrt
++
++
++# Dormand-Prince 5(4) Butcher tableau.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (
++        19372.0 / 6561.0,
++        -25360.0 / 2187.0,
++        64448.0 / 6561.0,
++        -212.0 / 729.0,
++    ),
++    (
++        9017.0 / 3168.0,
++        -355.0 / 33.0,
++        46732.0 / 5247.0,
++        49.0 / 176.0,
++        -5103.0 / 18656.0,
++    ),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0)
++_E = (
++    71.0 / 57600.0,
++    0.0,
++    -71.0 / 16695.0,
++    71.0 / 1920.0,
++    -17253.0 / 339200.0,
++    22.0 / 525.0,
++    -1.0 / 40.0,
++)
++
++# Dense-output coefficients for the Dormand-Prince method (Hairer, Norsett &
++# Wanner).  They interpolate the state to fourth order within an accepted step.
++_P = (
++    (
++        1.0,
++        -8048581381.0 / 2820520608.0,
++        8663915743.0 / 2820520608.0,
++        -12715105075.0 / 11282082432.0,
++    ),
++    (0.0, 0.0, 0.0, 0.0),
++    (
++        0.0,
++        131558114200.0 / 32700410799.0,
++        -68118460800.0 / 10900136933.0,
++        87487479700.0 / 32700410799.0,
++    ),
++    (
++        0.0,
++        -1754552775.0 / 470086768.0,
++        14199869525.0 / 1410260304.0,
++        -10690763975.0 / 1880347072.0,
++    ),
++    (
++        0.0,
++        127303824393.0 / 49829197408.0,
++        -318862633887.0 / 49829197408.0,
++        701980252875.0 / 199316789632.0,
++    ),
++    (
++        0.0,
++        -282668133.0 / 205662961.0,
++        2019193451.0 / 616988883.0,
++        -1453857185.0 / 822651844.0,
++    ),
++    (
++        0.0,
++        40617522.0 / 29380423.0,
++        -110615467.0 / 29380423.0,
++        69997945.0 / 29380423.0,
++    ),
++)
++
++
++def _dense_coefficients(stages):
++    """Return dense-output coefficients, one four-vector per state variable."""
++    return [
++        [sum(stages[s][i] * _P[s][j] for s in range(7)) for j in range(4)]
++        for i in range(4)
++    ]
++
++
++def _dense_state(y0, h, coefficients, variable, u):
++    """Evaluate one state variable at fractional step position ``u``."""
++    c = coefficients[variable]
++    return y0[variable] + h * u * (c[0] + u * (c[1] + u * (c[2] + u * c[3])))
++
++
++def _find_event(f, fa, fb):
++    """Bisect a sign-changing event on [0, 1]; fa and fb have opposite signs."""
++    a, b = 0.0, 1.0
++    positive = fa > 0.0
++    for _ in range(80):
++        m = 0.5 * (a + b)
++        fm = f(m)
++        if fm == 0.0:
++            return m
++        if (fm > 0.0) == positive:
++            a = m
++            fa = fm
++        else:
++            b = m
++            fb = fm
++    return 0.5 * (a + b)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` at speed ``v0`` and elevation
++    ``angle_deg``.  Quadratic drag is ``F = -k |v| v`` and is integrated with an
++    adaptive Dormand-Prince 5(4) scheme; both the apex and ground impact are
++    located from the method's dense output rather than from step endpoints.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if g <= 0.0:
++        raise ValueError("g must be positive")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = radians(angle_deg)
++    vx = v0 * cos(theta)
++    vy = v0 * sin(theta)
++    y = [0.0, float(h0), vx, vy]
++
++    # A projectile starting on the ground and not moving upwards is already
++    # at its only ground contact.
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    drag = k / mass
++
++    def derivative(state):
++        _, _, sx, sy = state
++        speed = hypot(sx, sy)
++        return (sx, sy, -drag * speed * sx, -g - drag * speed * sy)
++
++    time = 0.0
++    apex = float(h0)
++    apex_found = vy <= 0.0
++
++    # Vacuum fall time provides a scale for the initial and maximum steps.
++    fall_scale = (vy + sqrt(vy * vy + 2.0 * g * h0)) / g
++    if fall_scale <= 0.0:
++        fall_scale = 1.0
++    h_max = max(0.05 * fall_scale, 1e-12)
++
++    h = min(0.01 * fall_scale, 0.01, h_max)
++    if vy > 0.0:
++        h = min(h, 0.01 * vy / g)
++    if k > 0.0 and v0 > 0.0:
++        h = min(h, 0.01 * mass / (k * v0))
++    if h <= 0.0:
++        h = h_max * 1e-6
++
++    rtol = 1e-12
++    atol = 1e-12
++
++    while time < fall_scale * 1.0e6:
++        k1 = derivative(y)
++
++        stages = [k1]
++        for s in range(1, 6):
++            trial = [
++                y[i] + h * sum(_A[s][j] * stages[j][i] for j in range(s))
++                for i in range(4)
++            ]
++            stages.append(derivative(trial))
++
++        y_new = [
++            y[i] + h * sum(_B[j] * stages[j][i] for j in range(6))
++            for i in range(4)
++        ]
++        stages.append(derivative(y_new))
++
++        error = [
++            h * sum(_E[j] * stages[j][i] for j in range(7))
++            for i in range(4)
++        ]
++        norm = 0.0
++        for i in range(4):
++            scale = atol + rtol * max(abs(y[i]), abs(y_new[i]))
++            norm = max(norm, abs(error[i]) / scale)
++
++        if norm > 1.0:
++            factor = 0.2 if norm != norm else max(0.2, 0.9 * norm ** -0.2)
++            h = max(h * factor, 1e-15)
++            continue
++
++        coefficients = _dense_coefficients(stages)
++
++        # Locate the first apex in this step (vy changes sign from + to -).
++        if not apex_found and y_new[3] <= 0.0:
++            u = _find_event(
++                lambda u: _dense_state(y, h, coefficients, 3, u),
++                y[3],
++                y_new[3],
++            )
++            apex = _dense_state(y, h, coefficients, 1, u)
++            apex_found = True
++
++        # First contact with y = 0 after launch.
++        if y[1] > 0.0 and y_new[1] <= 0.0:
++            u = _find_event(
++                lambda u: _dense_state(y, h, coefficients, 1, u),
++                y[1],
++                y_new[1],
++            )
++            ground_time = time + u * h
++            ground_x = _dense_state(y, h, coefficients, 0, u)
++            return {
++                "range": abs(ground_x),
++                "apex": apex,
++                "time": ground_time,
++            }
++
++        time += h
++        y = y_new
++
++        if norm == 0.0:
++            factor = 5.0
++        else:
++            factor = max(0.2, min(5.0, 0.9 * norm ** -0.2))
++        h = min(h * factor, h_max)
++
++    raise RuntimeError("projectile did not reach the ground")

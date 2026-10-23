@@ -1,0 +1,245 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..7d25fa9 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,238 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++from math import cos, hypot, radians, sin, sqrt
++
++
++# Dormand-Prince (RK45) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B5 = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++       -2187.0 / 6784.0, 11.0 / 84.0)
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_RTOL = 1.0e-11
++_ATOL = 1.0e-10
++
++
++def _deriv(state, c, g):
++    """Derivative of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = hypot(vx, vy)
++    ax = -c * speed * vx
++    ay = -g - c * speed * vy
++    return (vx, vy, ax, ay)
++
++
++def _rk45_step(state, h, c, g):
++    """One Dormand-Prince step; return state, error estimate and f(end)."""
++    k1 = _deriv(state, c, g)
++    stages = [k1]
++    for stage in range(1, 6):
++        a = _A[stage]
++        trial = tuple(
++            state[i] + h * sum(a[j] * stages[j][i] for j in range(stage))
++            for i in range(4)
++        )
++        stages.append(_deriv(trial, c, g))
++
++    new_state = tuple(
++        state[i] + h * sum(_B5[j] * stages[j][i] for j in range(6))
++        for i in range(4)
++    )
++    k7 = _deriv(new_state, c, g)
++    stages.append(k7)
++
++    fourth_order = tuple(
++        state[i] + h * sum(_B4[j] * stages[j][i] for j in range(7))
++        for i in range(4)
++    )
++    error = tuple(new_state[i] - fourth_order[i] for i in range(4))
++    return new_state, error, k7
++
++
++def _quintic_coeffs(f0, d0, dd0, f1, d1, dd1, h):
++    """Normalised quintic Hermite interpolant on s in [0, 1]."""
++    a0 = f0
++    a1 = h * d0
++    a2 = 0.5 * h * h * dd0
++
++    delta = f1 - a0 - a1 - a2
++    slope = h * d1 - a1 - 2.0 * a2
++    curvature = h * h * dd1 - 2.0 * a2
++
++    a5 = 0.5 * (curvature - 6.0 * slope + 12.0 * delta)
++    a4 = slope - 3.0 * delta - 2.0 * a5
++    a3 = delta - a4 - a5
++    return (a0, a1, a2, a3, a4, a5)
++
++
++def _poly(coeffs, s):
++    return ((((coeffs[5] * s + coeffs[4]) * s + coeffs[3]) * s
++             + coeffs[2]) * s + coeffs[1]) * s + coeffs[0]
++
++
++def _first_downward_crossing(coeffs):
++    """First s in (0, 1] at which the interpolant falls through zero."""
++    previous_s = 0.0
++    previous_f = coeffs[0]
++    samples = 64
++    for i in range(1, samples + 1):
++        s = i / samples
++        f = _poly(coeffs, s)
++        if previous_f > 0.0 and f <= 0.0:
++            lo, hi = previous_s, s
++            for _ in range(70):
++                mid = 0.5 * (lo + hi)
++                if _poly(coeffs, mid) > 0.0:
++                    lo = mid
++                else:
++                    hi = mid
++            return 0.5 * (lo + hi)
++        previous_s = s
++        previous_f = f
++    return 1.0
++
++
++def _vy_jerk(state, c, g):
++    """Time derivative of vertical acceleration (for the apex interpolant)."""
++    _, _, vx, vy = state
++    speed = hypot(vx, vy)
++    if speed == 0.0:
++        return 0.0
++    ax = -c * speed * vx
++    ay = -g - c * speed * vy
++    speed_dot = -c * speed * speed - g * vy / speed
++    return -c * (speed_dot * vy + speed * ay)
++
++
++def _vacuum(v0, angle_deg, g, h0):
++    """Closed-form solution for k == 0."""
++    theta = radians(angle_deg)
++    vx = v0 * cos(theta)
++    vy = v0 * sin(theta)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    t = (vy + sqrt(vy * vy + 2.0 * g * h0)) / g
++    apex = h0 + vy * vy / (2.0 * g) if vy > 0.0 else h0
++    return {"range": vx * t, "apex": apex, "time": t}
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height ``h0`` with speed ``v0`` and
++    elevation ``angle_deg``.  Quadratic drag is ``-k |v| v``, so the
++    equations of motion are
++
++        dv/dt = -g yhat - (k / mass) |v| v.
++
++    They are integrated with an adaptive Dormand-Prince (RK45) method.
++    Apex and ground impact are located with a quintic Hermite interpolant,
++    then the final impact step is refined by Newton iteration on y(t).
++    """
++    if k == 0.0:
++        return _vacuum(v0, angle_deg, g, h0)
++
++    theta = radians(angle_deg)
++    vx = v0 * cos(theta)
++    vy = v0 * sin(theta)
++
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    c = k / mass
++    state = (0.0, float(h0), vx, vy)
++    t = 0.0
++    apex = float(h0)
++    h = 1.0e-4
++
++    for _ in range(1_000_000):
++        new_state, error, f_end = _rk45_step(state, h, c, g)
++
++        norm_sq = 0.0
++        for i in range(4):
++            scale = _ATOL + _RTOL * max(abs(state[i]), abs(new_state[i]))
++            norm_sq += (error[i] / scale) ** 2
++        error_norm = sqrt(norm_sq / 4.0)
++
++        if error_norm > 1.0:
++            factor = max(0.2, 0.9 * error_norm ** -0.2)
++            h *= factor
++            if h <= 0.0:
++                raise RuntimeError("step size underflow")
++            continue
++
++        f_start = _deriv(state, c, g)
++        y0 = state[1]
++        vy0 = state[3]
++        y1 = new_state[1]
++        vy1 = new_state[3]
++
++        s_ground = None
++        if y1 <= 0.0 and (y0 > 0.0 or (t == 0.0 and vy0 > 0.0)):
++            ground_coeffs = _quintic_coeffs(
++                y0, vy0, f_start[3],
++                y1, vy1, f_end[3], h,
++            )
++            s_ground = _first_downward_crossing(ground_coeffs)
++
++        if vy0 > 0.0 and vy1 <= 0.0:
++            apex_coeffs = _quintic_coeffs(
++                vy0, f_start[3], _vy_jerk(state, c, g),
++                vy1, f_end[3], _vy_jerk(new_state, c, g), h,
++            )
++            s_apex = _first_downward_crossing(apex_coeffs)
++            if s_ground is None or s_apex <= s_ground:
++                y_coeffs = _quintic_coeffs(
++                    y0, vy0, f_start[3],
++                    y1, vy1, f_end[3], h,
++                )
++                apex = max(apex, _poly(y_coeffs, s_apex))
++
++        if s_ground is not None:
++            # Recompute the shortened step, then converge onto y(t) = 0.
++            h_final = h * s_ground
++            final_state, _, final_f = _rk45_step(state, h_final, c, g)
++            for _ in range(8):
++                residual = final_state[1]
++                vertical_speed = final_state[3]
++                if abs(residual) <= 1.0e-12 or vertical_speed == 0.0:
++                    break
++                correction = -residual / vertical_speed
++                h_next = h_final + correction
++                if h_next <= 0.0 or h_next > h:
++                    break
++                if abs(h_next - h_final) <= 1.0e-15 * max(1.0, h):
++                    h_final = h_next
++                    final_state, _, final_f = _rk45_step(
++                        state, h_final, c, g)
++                    break
++                h_final = h_next
++                final_state, _, final_f = _rk45_step(
++                    state, h_final, c, g)
++
++            return {
++                "range": final_state[0],
++                "apex": apex,
++                "time": t + h_final,
++            }
++
++        state = new_state
++        t += h
++        factor = 5.0 if error_norm == 0.0 else 0.9 * error_norm ** -0.2
++        h *= min(5.0, max(0.2, factor))
++
++    raise RuntimeError("projectile integration did not terminate")

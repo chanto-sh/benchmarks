@@ -1,0 +1,232 @@
+diff --git a/reports/common.py b/reports/common.py
+new file mode 100644
+index 0000000..05626d6
+--- /dev/null
++++ b/reports/common.py
+@@ -0,0 +1,42 @@
++"""Helpers shared by the ledger exporters."""
++import json
++from datetime import datetime, timezone
++
++
++def load_rows(path):
++    """Ledger rows from a JSON-lines file; blank lines and # comments are skipped."""
++    rows = []
++    with open(path) as f:
++        for line in f:
++            line = line.strip()
++            if not line or line.startswith("#"):
++                continue
++            rows.append(json.loads(line))
++    return rows
++
++
++def parse_ts(s):
++    """ISO date or datetime -> aware UTC datetime (naive values are taken as UTC)."""
++    s = s.strip()
++    if s.endswith("Z"):
++        s = s[:-1] + "+00:00"
++    if len(s) == 10:
++        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
++    else:
++        dt = datetime.fromisoformat(s)
++        if dt.tzinfo is None:
++            dt = dt.replace(tzinfo=timezone.utc)
++    return dt.astimezone(timezone.utc)
++
++
++def in_range(row, start, end):
++    """start <= ts < end; either bound may be None."""
++    ts = parse_ts(row["ts"])
++    return (start is None or ts >= start) and (end is None or ts < end)
++
++
++def fmt_money(cents):
++    """Integer cents -> '1,234.56' (with a leading '-' when negative)."""
++    sign = "-" if cents < 0 else ""
++    cents = abs(cents)
++    return f"{sign}{cents // 100:,}.{cents % 100:02d}"
+diff --git a/reports/csv_export.py b/reports/csv_export.py
+index baf1f2d..58a26ff 100644
+--- a/reports/csv_export.py
++++ b/reports/csv_export.py
+@@ -1,55 +1,16 @@
+ """CSV export of the ledger."""
+ import csv
+ import io
+-import json
+-from datetime import datetime, timezone
+ 
+-
+-def _load_rows(path):
+-    """Ledger rows from a JSON-lines file; blank lines and # comments are skipped."""
+-    rows = []
+-    with open(path) as f:
+-        for line in f:
+-            line = line.strip()
+-            if not line or line.startswith("#"):
+-                continue
+-            rows.append(json.loads(line))
+-    return rows
+-
+-
+-def _parse_ts(s):
+-    """ISO date or datetime -> aware UTC datetime (naive values are taken as UTC)."""
+-    s = s.strip()
+-    if s.endswith("Z"):
+-        s = s[:-1] + "+00:00"
+-    if len(s) == 10:
+-        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+-    else:
+-        dt = datetime.fromisoformat(s)
+-        if dt.tzinfo is None:
+-            dt = dt.replace(tzinfo=timezone.utc)
+-    return dt.astimezone(timezone.utc)
+-
+-
+-def _in_range(row, start, end):
+-    """start <= ts < end; either bound may be None."""
+-    ts = _parse_ts(row["ts"])
+-    return (start is None or ts >= start) and (end is None or ts < end)
+-
+-
+-def _fmt_money(cents):
+-    """Integer cents -> '1,234.56' (with a leading '-' when negative)."""
+-    sign = "-" if cents < 0 else ""
+-    cents = abs(cents)
+-    return f"{sign}{cents // 100:,}.{cents % 100:02d}"
++from .common import fmt_money, in_range, load_rows, parse_ts
+ 
+ 
+ def export(path, start=None, end=None):
+-    rows = [r for r in _load_rows(path) if _in_range(r, start, end)]
++    rows = [r for r in load_rows(path) if in_range(r, start, end)]
+     buf = io.StringIO()
+     w = csv.writer(buf, lineterminator="\n")
+     w.writerow(["ts", "account", "amount"])
+     for r in rows:
+-        w.writerow([_parse_ts(r["ts"]).isoformat(), r["account"], _fmt_money(r["cents"])])
+-    w.writerow(["", "TOTAL", _fmt_money(sum(r["cents"] for r in rows))])
++        w.writerow([parse_ts(r["ts"]).isoformat(), r["account"], fmt_money(r["cents"])])
++    w.writerow(["", "TOTAL", fmt_money(sum(r["cents"] for r in rows))])
+     return buf.getvalue()
+diff --git a/reports/json_export.py b/reports/json_export.py
+index 6c21393..499fe8d 100644
+--- a/reports/json_export.py
++++ b/reports/json_export.py
+@@ -1,52 +1,14 @@
+ """JSON export of the ledger."""
+ import json
+-from datetime import datetime, timezone
+ 
+-
+-def _load_rows(path):
+-    """Ledger rows from a JSON-lines file; blank lines and # comments are skipped."""
+-    rows = []
+-    with open(path) as f:
+-        for line in f:
+-            line = line.strip()
+-            if not line or line.startswith("#"):
+-                continue
+-            rows.append(json.loads(line))
+-    return rows
+-
+-
+-def _parse_ts(s):
+-    """ISO date or datetime -> aware UTC datetime (naive values are taken as UTC)."""
+-    s = s.strip()
+-    if s.endswith("Z"):
+-        s = s[:-1] + "+00:00"
+-    if len(s) == 10:
+-        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+-    else:
+-        dt = datetime.fromisoformat(s)
+-        if dt.tzinfo is None:
+-            dt = dt.replace(tzinfo=timezone.utc)
+-    return dt.astimezone(timezone.utc)
+-
+-
+-def _in_range(row, start, end):
+-    """start <= ts < end; either bound may be None."""
+-    ts = _parse_ts(row["ts"])
+-    return (start is None or ts >= start) and (end is None or ts <= end)
+-
+-
+-def _fmt_money(cents):
+-    """Integer cents -> '1,234.56' (with a leading '-' when negative)."""
+-    sign = "-" if cents < 0 else ""
+-    cents = abs(cents)
+-    return f"{sign}{cents // 100:,}.{cents % 100:02d}"
++from .common import fmt_money, in_range, load_rows, parse_ts
+ 
+ 
+ def export(path, start=None, end=None):
+-    rows = [r for r in _load_rows(path) if _in_range(r, start, end)]
++    rows = [r for r in load_rows(path) if in_range(r, start, end)]
+     doc = {
+-        "rows": [{"ts": _parse_ts(r["ts"]).isoformat(), "account": r["account"], "amount": _fmt_money(r["cents"])}
++        "rows": [{"ts": parse_ts(r["ts"]).isoformat(), "account": r["account"], "amount": fmt_money(r["cents"])}
+                  for r in rows],
+-        "total": _fmt_money(sum(r["cents"] for r in rows)),
++        "total": fmt_money(sum(r["cents"] for r in rows)),
+     }
+     return json.dumps(doc, indent=2)
+diff --git a/reports/md_export.py b/reports/md_export.py
+index 78d2724..d6b6672 100644
+--- a/reports/md_export.py
++++ b/reports/md_export.py
+@@ -1,50 +1,11 @@
+ """Markdown export of the ledger (for the monthly email)."""
+-import json
+-from datetime import datetime, timezone
+-
+-
+-def _load_rows(path):
+-    """Ledger rows from a JSON-lines file; blank lines and # comments are skipped."""
+-    rows = []
+-    with open(path) as f:
+-        for line in f:
+-            line = line.strip()
+-            if not line or line.startswith("#"):
+-                continue
+-            rows.append(json.loads(line))
+-    return rows
+-
+-
+-def _parse_ts(s):
+-    """ISO date or datetime -> aware UTC datetime (naive values are taken as UTC)."""
+-    s = s.strip()
+-    if s.endswith("Z"):
+-        s = s[:-1] + "+00:00"
+-    if len(s) == 10:
+-        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+-    else:
+-        dt = datetime.fromisoformat(s)
+-        if dt.tzinfo is None:
+-            dt = dt.replace(tzinfo=timezone.utc)
+-    return dt.astimezone(timezone.utc)
+-
+-
+-def _in_range(row, start, end):
+-    """start <= ts < end; either bound may be None."""
+-    ts = _parse_ts(row["ts"])
+-    return (start is None or ts >= start) and (end is None or ts < end)
+-
+-
+-def _fmt_money(cents):
+-    """Integer cents -> '1,234.56' (with a leading '-' when negative)."""
+-    sign = "-" if cents < 0 else ""
+-    return f"{sign}{cents // 100:,}.{cents % 100:02d}"
++from .common import fmt_money, in_range, load_rows, parse_ts
+ 
+ 
+ def export(path, start=None, end=None):
+-    rows = [r for r in _load_rows(path) if _in_range(r, start, end)]
++    rows = [r for r in load_rows(path) if in_range(r, start, end)]
+     out = ["| date | account | amount |", "|---|---|---:|"]
+     for r in rows:
+-        out.append(f"| {_parse_ts(r['ts']).date().isoformat()} | {r['account']} | {_fmt_money(r['cents'])} |")
+-    out.append(f"| | **total** | **{_fmt_money(sum(r['cents'] for r in rows))}** |")
++        out.append(f"| {parse_ts(r['ts']).date().isoformat()} | {r['account']} | {fmt_money(r['cents'])} |")
++    out.append(f"| | **total** | **{fmt_money(sum(r['cents'] for r in rows))}** |")
+     return "\n".join(out) + "\n"

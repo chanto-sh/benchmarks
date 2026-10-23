@@ -1,0 +1,108 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..059e4d7
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,52 @@
++# Blocked: cannot enforce required + case-insensitively unique email on prod data
++
++## What is blocked
++
++`migrations/002_unique_email.sql` cannot be applied to the production snapshot
++(`fixtures/prod_snapshot.sql`) while also leaving every customer row untouched.
++The requested rules are:
++
++- `users.email` is `NOT NULL`
++- `users.email` is unique, ignoring case
++
++## Why
++
++The snapshot contains rows that already violate both rules:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | id 17 |
++| Exact duplicate email | ids 1 and 23 (`ana.silva@example.com`) |
++| Case-insensitive duplicate | ids 1, 4, 23 (`ana.silva@example.com`, `Ana.Silva@example.com`, `ana.silva@example.com`) |
++
++SQLite cannot add a `NOT NULL` constraint (or a case-insensitive `UNIQUE`
++constraint) to an existing table without rebuilding it and copying the rows.
++Copying these rows into a table with those constraints necessarily fails. The
++only ways to make the migration succeed would be to:
++
++- delete the duplicate rows,
++- change the duplicate/NULL email values (for example, appending a suffix), or
++- install triggers that enforce the rules only for future writes while leaving
++  the existing violating rows in place.
++
++All three are workarounds that either modify/delete customer rows or leave the
++data not actually satisfying the constraint. Support owns this data, so none of
++them is acceptable.
++
++## Current behaviour
++
++- New/clean databases migrate successfully and get `NOT NULL` plus a unique
++  index on `lower(email)`.
++- On the prod snapshot, the migration's pre-check aborts **before any schema
++  change**, so no customer row is modified or deleted. The snapshot test
++  (`test_applies_to_prod_snapshot`) consequently fails at the apply step until
++  the data is fixed.
++
++## What Support needs to do
++
++1. Decide how to handle id 17's missing email.
++2. Deduplicate ids 1, 4, and 23 case-insensitively (including the exact
++   duplicate pair 1/23), deciding which row is the canonical customer.
++3. Once the snapshot has no NULL emails and no case-insensitive duplicates,
++   rerun `002_unique_email.sql`; it will rebuild the table and add the
++   constraint without changing the remaining values.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..f52cad8 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,44 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- The constraint is enforced by rebuilding the table (SQLite cannot add
++-- NOT NULL to an existing column) and adding a unique index on lower(email).
++--
++-- Rebuilding the table leaves every customer row byte-for-byte unchanged, but
++-- it cannot succeed while existing rows violate the new rules. This migration
++-- therefore checks the existing data first and aborts before any schema change
++-- if it finds a NULL email or a case-insensitive duplicate. Support owns that
++-- data; see BLOCKED.md.
++
++CREATE TEMP TABLE _002_email_precheck (
++    ok INTEGER NOT NULL CHECK (ok = 1)
++);
++
++INSERT INTO _002_email_precheck (ok)
++SELECT CASE
++    WHEN EXISTS (SELECT 1 FROM users WHERE email IS NULL) THEN 0
++    WHEN EXISTS (
++        SELECT 1 FROM users GROUP BY lower(email) HAVING COUNT(*) > 1
++    ) THEN 0
++    ELSE 1
++END;
++
++DROP TABLE _002_email_precheck;
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_nocase ON users (lower(email));
++
++COMMIT;

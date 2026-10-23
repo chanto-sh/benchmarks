@@ -1,0 +1,50 @@
+diff --git a/game.py b/game.py
+index 768dec9..ec91f31 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,44 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Unknowns are E[0], ..., E[n-1]; E[n] = 0.
++    # E[i] = 1 + (1/k) * sum(E[j] for each roll's landing square j).
++    size = n
++    roll_prob = Fraction(1, k)
++    matrix = [
++        [Fraction(0) for _ in range(size + 1)]
++        for _ in range(size)
++    ]
++
++    for start in range(size):
++        row = matrix[start]
++        row[start] += 1
++        for roll in range(1, k + 1):
++            landing = start + roll
++            if landing > n:
++                landing = 2 * n - landing
++            if landing != n:
++                row[landing] -= roll_prob
++        row[size] = 1
++
++    # Gauss-Jordan elimination over the rationals.
++    for col in range(size):
++        pivot = next(r for r in range(col, size) if matrix[r][col] != 0)
++        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++
++        pivot_row = matrix[col]
++        pivot_value = pivot_row[col]
++        for c in range(col, size + 1):
++            pivot_row[c] /= pivot_value
++
++        for r in range(size):
++            if r == col:
++                continue
++            factor = matrix[r][col]
++            if factor == 0:
++                continue
++            target_row = matrix[r]
++            for c in range(col, size + 1):
++                target_row[c] -= factor * pivot_row[c]
++
++    return matrix[0][size]

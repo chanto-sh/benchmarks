@@ -1,0 +1,93 @@
+diff --git a/stats.py b/stats.py
+index add4f59..aabba24 100644
+--- a/stats.py
++++ b/stats.py
+@@ -1,21 +1,82 @@
+ """Summary statistics for the sensor pipeline."""
+ import math
++import sys
++
++_MAX_FLOAT = sys.float_info.max
++_SQRT_MAX_FLOAT = math.sqrt(_MAX_FLOAT)
++_LOG_MAX_FLOAT = math.log(_MAX_FLOAT)
+ 
+ 
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    shift = xs[0]
++
++    # Center on the first reading before summing.  This keeps a large common
++    # offset from destroying the variance through cancellation.
++    deviations = [x - shift for x in xs]
++    if not all(math.isfinite(d) for d in deviations):
++        # A difference overflowed, so the variance is necessarily infinite.
++        scale = max(abs(x) for x in xs)
++        if scale == 0.0:
++            mean = 0.0
++        else:
++            mean = scale * (math.fsum(x / scale for x in xs) / n)
++        return mean, math.inf
++
++    try:
++        total = math.fsum(deviations)
++    except OverflowError:
++        # The sum can overflow even when its average is representable.
++        mean_shift = math.fsum(d / n for d in deviations)
++    else:
++        mean_shift = total / n
++
++    mean = shift + mean_shift
++
++    # Second pass, again centered on the shift.  Scaling by the largest
++    # deviation prevents overflow of the squared terms when the final
++    # variance itself is representable.
++    max_dev = 0.0
++    for d in deviations:
++        dev = abs(d - mean_shift)
++        if not math.isfinite(dev):
++            return mean, math.inf
++        if dev > max_dev:
++            max_dev = dev
++
++    if max_dev == 0.0:
++        return mean, 0.0
++
++    sum_sq = math.fsum(((d - mean_shift) / max_dev) ** 2 for d in deviations)
++
++    if max_dev <= _SQRT_MAX_FLOAT:
++        variance = (sum_sq / n) * max_dev * max_dev
++    else:
++        scaled = max_dev / math.sqrt(n)
++        variance = scaled * scaled * sum_sq
++
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    xs = list(xs)
++    maximum = max(xs)
++    n = len(xs)
++
++    # When the exponentials are all in a safe range, sum them directly to
++    # avoid losing small results to cancellation in maximum + log(sum).
++    if -700.0 <= maximum <= _LOG_MAX_FLOAT - math.log(n) - 1.0:
++        return math.log(math.fsum(math.exp(x) for x in xs))
++
++    return maximum + math.log(
++        math.fsum(math.exp(x - maximum) for x in xs)
++    )
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

@@ -1,0 +1,195 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..8464084 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,188 @@
+ """Point-mass projectile with quadratic air drag."""
+ 
++import math
++
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1 / 5,),
++    (3 / 40, 9 / 40),
++    (44 / 45, -56 / 15, 32 / 9),
++    (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
++    (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
++    (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
++)
++_B = (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0)
++_BS = (
++    5179 / 57600,
++    0.0,
++    7571 / 16695,
++    393 / 640,
++    -92097 / 339200,
++    187 / 2100,
++    1 / 40,
++)
++
++_RTOL = 1e-11
++_ATOL = 1e-11
++
++
++def _accel(vx, vy, g, c):
++    """Acceleration for drag force -k |v| v, with c = k / mass."""
++    q = c * math.hypot(vx, vy)
++    return -q * vx, -g - q * vy
++
++
++def _step(state, h, g, c):
++    """One Dormand-Prince 5(4) step; return (new_state, error, k1, k7)."""
++    x, y, vx, vy = state
++    ks = []
++    for i in range(7):
++        if i == 0:
++            sx, sy, svx, svy = x, y, vx, vy
++        else:
++            sx = sy = svx = svy = 0.0
++            for j, a in enumerate(_A[i]):
++                kx, ky, kvx, kvy = ks[j]
++                sx += a * kx
++                sy += a * ky
++                svx += a * kvx
++                svy += a * kvy
++            sx = x + h * sx
++            sy = y + h * sy
++            svx = vx + h * svx
++            svy = vy + h * svy
++
++        ax, ay = _accel(svx, svy, g, c)
++        ks.append((svx, svy, ax, ay))
++
++    dx = dy = dvx = dvy = 0.0
++    ex = ey = evx = evy = 0.0
++    for i in range(7):
++        kx, ky, kvx, kvy = ks[i]
++        dx += _B[i] * kx
++        dy += _B[i] * ky
++        dvx += _B[i] * kvx
++        dvy += _B[i] * kvy
++        ex += (_B[i] - _BS[i]) * kx
++        ey += (_B[i] - _BS[i]) * ky
++        evx += (_B[i] - _BS[i]) * kvx
++        evy += (_B[i] - _BS[i]) * kvy
++
++    new_state = (x + h * dx, y + h * dy, vx + h * dvx, vy + h * dvy)
++    error = (h * ex, h * ey, h * evx, h * evy)
++    return new_state, error, ks[0], ks[6]
++
++
++def _norm_error(error, old, new):
++    total = 0.0
++    for e, a, b in zip(error, old, new):
++        scale = _ATOL + _RTOL * max(abs(a), abs(b))
++        total += (e / scale) ** 2
++    return math.sqrt(total / 4.0)
++
++
++def _hermite(q0, q1, d0, d1, h, s):
++    """Cubic Hermite interpolation on [0, h], evaluated at s in [0, 1]."""
++    s2 = s * s
++    s3 = s2 * s
++    return (
++        (2 * s3 - 3 * s2 + 1) * q0
++        + (s3 - 2 * s2 + s) * h * d0
++        + (-2 * s3 + 3 * s2) * q1
++        + (s3 - s2) * h * d1
++    )
++
++
++def _root(q0, q1, d0, d1, h):
++    """Root in [0, 1] of the Hermite interpolant when q0 and q1 bracket it."""
++    if q1 == 0.0:
++        return 1.0
++    lo, hi = 0.0, 1.0
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        if _hermite(q0, q1, d0, d1, h, mid) > 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return 0.5 * (lo + hi)
++
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    The projectile is launched from height *h0* at speed *v0* and elevation
++    *angle_deg*.  Air resistance is quadratic: F = -k |v| v.
++    """
++    if mass <= 0.0:
++        raise ValueError("mass must be positive")
++    if k < 0.0:
++        raise ValueError("k must be non-negative")
++    if v0 < 0.0:
++        raise ValueError("v0 must be non-negative")
++    if h0 < 0.0:
++        raise ValueError("h0 must be non-negative")
++
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    # Vacuum solution (also covers degenerate zero-duration cases).
++    if k == 0.0:
++        t_land = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++        apex = h0 + (vy * vy / (2.0 * g) if vy > 0.0 else 0.0)
++        return {"range": abs(vx * t_land), "apex": apex, "time": t_land}
++
++    # Launched from ground level along or below the ground: no flight.
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    c = k / mass
++    state = (0.0, h0, vx, vy)
++    t = 0.0
++
++    # Vacuum flight time sets a sensible cap on the step length.
++    t_est = (vy + math.sqrt(vy * vy + 2.0 * g * h0)) / g
++    h_max = t_est if t_est > 0.0 else 1.0
++    h = max(h_max * 1e-3, 1e-12)
++
++    apex = h0 if vy <= 0.0 else None
++
++    for _ in range(2_000_000):
++        h = min(h, h_max)
++        while True:
++            new, error, k1, k7 = _step(state, h, g, c)
++            err = _norm_error(error, state, new)
++            if err <= 1.0 or h <= 1e-15:
++                break
++            h *= max(0.1, 0.9 * err ** -0.2)
++            if h < 1e-15:
++                h = 1e-15
++
++        x, y, vx_old, vy_old = state
++        x_new, y_new, vx_new, vy_new = new
++
++        # Maximum height: vertical velocity crosses zero from above.
++        if apex is None and vy_old > 0.0 and vy_new <= 0.0:
++            s = _root(vy_old, vy_new, k1[3], k7[3], h)
++            apex = max(_hermite(y, y_new, vy_old, vy_new, h, s), h0)
++
++        # Landing: height crosses zero from above.
++        if y > 0.0 and y_new <= 0.0:
++            s = _root(y, y_new, vy_old, vy_new, h)
++            t_land = t + s * h
++            x_land = _hermite(x, x_new, vx_old, vx_new, h, s)
++            if apex is None:
++                apex = h0
++            return {"range": abs(x_land), "apex": apex, "time": t_land}
++
++        if err == 0.0:
++            factor = 5.0
++        else:
++            factor = min(5.0, max(0.2, 0.9 * err ** -0.2))
++
++        t += h
++        state = new
++        h = min(h * factor, h_max)
++
++    raise RuntimeError("projectile integration did not converge")

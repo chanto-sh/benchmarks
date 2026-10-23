@@ -1,0 +1,248 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..108c189 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,233 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31, _A32 = 3.0 / 40.0, 9.0 / 40.0
++_A41, _A42, _A43 = 44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0
++_A51, _A52, _A53, _A54 = (
++    19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0
++)
++_A61, _A62, _A63, _A64, _A65 = (
++    9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++    -5103.0 / 18656.0,
++)
++_A71, _A73, _A74, _A75, _A76 = (
++    35.0 / 384.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0,
++    11.0 / 84.0,
++)
++_E1, _E3, _E4, _E5, _E6, _E7 = (
++    71.0 / 57600.0, -71.0 / 16695.0, 71.0 / 1920.0, -17253.0 / 339200.0,
++    22.0 / 525.0, -1.0 / 40.0,
++)
++
++_RTOL = 1.0e-12
++
++
++def _radial_acceleration(accel, r):
++    """Radial component of a central acceleration at distance *r*."""
++    return accel(r, 0.0)[0]
++
++
++def _radial_derivative(accel, r):
++    """Derivative of the radial acceleration with respect to *r*."""
++    dr = 1.0e-6 * r
++    return (
++        _radial_acceleration(accel, r + dr)
++        - _radial_acceleration(accel, r - dr)
++    ) / (2.0 * dr)
++
++
++def _circular_radius(h2, r, accel):
++    """Circular orbit radius with angular momentum squared *h2*."""
++    rc = r
++    for _ in range(4):
++        centrifugal = h2 / (rc * rc * rc)
++        slope = -3.0 * centrifugal / rc + _radial_derivative(accel, rc)
++        if slope == 0.0:
++            break
++        step = -(centrifugal + _radial_acceleration(accel, rc)) / slope
++        rc += step
++        if abs(step) <= 1.0e-14 * rc:
++            break
++    return rc
++
++
++def _circular_radial_period(h2, r, accel):
++    """Radial period of a small perturbation of a circular orbit."""
++    rc = _circular_radius(h2, r, accel)
++    if rc <= 0.0:
++        return None
++    kappa2 = 3.0 * h2 / (rc ** 4) - _radial_derivative(accel, rc)
++    if kappa2 <= 0.0:
++        return None
++    return 2.0 * math.pi / math.sqrt(kappa2)
++
++
++def _rk_step(r, vr, h, h2, accel):
++    """One Dormand-Prince 5(4) step for the radial equation."""
++    def deriv(rr, vv):
++        return vv, h2 / (rr * rr * rr) + _radial_acceleration(accel, rr)
++
++    k1r, k1v = deriv(r, vr)
++
++    r2 = r + h * _A21 * k1r
++    v2 = vr + h * _A21 * k1v
++    k2r, k2v = deriv(r2, v2)
++
++    r3 = r + h * (_A31 * k1r + _A32 * k2r)
++    v3 = vr + h * (_A31 * k1v + _A32 * k2v)
++    k3r, k3v = deriv(r3, v3)
++
++    r4 = r + h * (_A41 * k1r + _A42 * k2r + _A43 * k3r)
++    v4 = vr + h * (_A41 * k1v + _A42 * k2v + _A43 * k3v)
++    k4r, k4v = deriv(r4, v4)
++
++    r5 = r + h * (_A51 * k1r + _A52 * k2r + _A53 * k3r + _A54 * k4r)
++    v5 = vr + h * (_A51 * k1v + _A52 * k2v + _A53 * k3v + _A54 * k4v)
++    k5r, k5v = deriv(r5, v5)
++
++    r6 = r + h * (
++        _A61 * k1r + _A62 * k2r + _A63 * k3r + _A64 * k4r + _A65 * k5r
++    )
++    v6 = vr + h * (
++        _A61 * k1v + _A62 * k2v + _A63 * k3v + _A64 * k4v + _A65 * k5v
++    )
++    k6r, k6v = deriv(r6, v6)
++
++    r7 = r + h * (
++        _A71 * k1r + _A73 * k3r + _A74 * k4r + _A75 * k5r + _A76 * k6r
++    )
++    v7 = vr + h * (
++        _A71 * k1v + _A73 * k3v + _A74 * k4v + _A75 * k5v + _A76 * k6v
++    )
++    k7r, k7v = deriv(r7, v7)
++
++    er = h * (
++        _E1 * k1r + _E3 * k3r + _E4 * k4r + _E5 * k5r + _E6 * k6r
++        + _E7 * k7r
++    )
++    ev = h * (
++        _E1 * k1v + _E3 * k3v + _E4 * k4v + _E5 * k5v + _E6 * k6v
++        + _E7 * k7v
++    )
++    return r7, v7, er, ev
++
++
++def _locate_periapsis(r, vr, h, h2, accel):
++    """Find the first periapsis inside a step whose endpoints bracket it."""
++    lo = 0.0
++    hi = h
++    for _ in range(60):
++        mid = 0.5 * (lo + hi)
++        _, vm, _, _ = _rk_step(r, vr, mid, h2, accel)
++        if vm < 0.0:
++            lo = mid
++        else:
++            hi = mid
++    h_event = 0.5 * (lo + hi)
++    re, _, _, _ = _rk_step(r, vr, h_event, h2, accel)
++    # The true event has vr = 0.  Setting it exactly avoids a second,
++    # spurious crossing on the next step.
++    return h_event, re, 0.0
++
++
++def _next_periapsis(t, r, vr, h2, accel, atol_v):
++    """Integrate forward until the next closest approach to the origin."""
++    speed_scale = max(
++        abs(vr), math.sqrt(h2) / r, math.sqrt(abs(_radial_acceleration(accel, r)) * r),
++        1.0e-300,
++    )
++    h = 0.01 * r / speed_scale
++
++    for _ in range(200000):
++        r_new, vr_new, er, ev = _rk_step(r, vr, h, h2, accel)
++
++        scale_r = _RTOL * max(abs(r), abs(r_new)) + 1.0e-300
++        scale_v = atol_v + _RTOL * max(abs(vr), abs(vr_new))
++        err = math.sqrt(0.5 * ((er / scale_r) ** 2 + (ev / scale_v) ** 2))
++
++        if not math.isfinite(err):
++            h *= 0.2
++            if h == 0.0:
++                break
++            continue
++
++        if err <= 1.0:
++            if vr < 0.0 <= vr_new:
++                h_event, re, ve = _locate_periapsis(r, vr, h, h2, accel)
++                return t + h_event, re, ve
++
++            if r_new <= 0.0:
++                raise ValueError("orbit reaches the origin")
++
++            t += h
++            r, vr = r_new, vr_new
++
++            factor = 5.0 if err == 0.0 else min(5.0, 0.9 * err ** -0.2)
++            h *= max(0.2, factor)
++        else:
++            h *= max(0.2, 0.9 * err ** -0.2)
++    raise ValueError("orbit did not return to a closer approach")
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    *r0* and *v0* are the initial two-dimensional position and velocity and
++    *accel(x, y)* returns the central acceleration at a point.  The orbit is
++    reduced to its radial motion using conservation of angular momentum, so
++    the result applies to any central force law.
++    """
++    x, y = r0
++    vx, vy = v0
++
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    h = x * vy - y * vx
++    if h == 0.0:
++        raise ValueError("a purely radial orbit has no closest approach")
++
++    h2 = h * h
++    vr = (x * vx + y * vy) / r
++    vt = h / r
++
++    ar = _radial_acceleration(accel, r)
++    a_centrifugal = h2 / (r * r * r)
++    a_eff = a_centrifugal + ar
++
++    v_scale = max(abs(vt), abs(vr), 1.0e-300)
++    a_scale = max(abs(a_centrifugal), abs(ar), 1.0e-300)
++
++    # An exactly circular orbit has no isolated closest approach.  For a
++    # nearly circular orbit the periapsis-to-periapsis time is, to second
++    # order in the radial amplitude, the epicyclic period.
++    slope = -3.0 * a_centrifugal / r + _radial_derivative(accel, r)
++    if slope < 0.0:
++        delta_r = -a_eff / slope
++        if (abs(delta_r) <= 1.0e-5 * r
++                and abs(vr) <= 1.0e-5 * v_scale):
++            period = _circular_radial_period(h2, r, accel)
++            if period is not None:
++                return period
++
++    if (abs(vr) <= 1.0e-12 * v_scale
++            and abs(a_eff) <= 1.0e-12 * a_scale):
++        period = _circular_radial_period(h2, r, accel)
++        if period is not None:
++            return period
++        return 2.0 * math.pi * r / abs(vt)
++
++    atol_v = 1.0e-14 * v_scale
++
++    # If the motion starts exactly at a periapsis, that is the first of the
++    # two closest approaches; otherwise integrate to the next one.
++    if abs(vr) <= 1.0e-13 * v_scale and a_eff > 0.0:
++        t1, r1, vr1 = 0.0, r, 0.0
++    else:
++        t1, r1, vr1 = _next_periapsis(0.0, r, vr, h2, accel, atol_v)
++
++    t2, _, _ = _next_periapsis(t1, r1, vr1, h2, accel, atol_v)
++    return t2 - t1

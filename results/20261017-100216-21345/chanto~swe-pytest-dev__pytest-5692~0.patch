@@ -1,0 +1,32 @@
+diff --git a/changelog/5692.feature.rst b/changelog/5692.feature.rst
+new file mode 100644
+index 0000000..38e36bf
+--- /dev/null
++++ b/changelog/5692.feature.rst
+@@ -0,0 +1 @@
++Add ``hostname`` and ``timestamp`` attributes to the ``testsuite`` element in JUnit XML reports.
+diff --git a/src/_pytest/junitxml.py b/src/_pytest/junitxml.py
+index 15c630b..8897826 100644
+--- a/src/_pytest/junitxml.py
++++ b/src/_pytest/junitxml.py
+@@ -8,9 +8,11 @@ Based on initial code from Ross Lawley.
+ Output conforms to https://github.com/jenkinsci/xunit-plugin/blob/master/
+ src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd
+ """
++from datetime import datetime
+ import functools
+ import os
+ import re
++import socket
+ import sys
+ import time
+ 
+@@ -666,6 +668,8 @@ class LogXML:
+             skipped=self.stats["skipped"],
+             tests=numtests,
+             time="%.3f" % suite_time_delta,
++            timestamp=datetime.fromtimestamp(self.suite_start_time).isoformat(),
++            hostname=socket.gethostname(),
+         )
+         logfile.write(Junit.testsuites([suite_node]).unicode(indent=0))
+         logfile.close()

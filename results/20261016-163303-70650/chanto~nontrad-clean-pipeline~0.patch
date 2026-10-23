@@ -1,0 +1,184 @@
+diff --git a/clean.py b/clean.py
+new file mode 100644
+index 0000000..42620b2
+--- /dev/null
++++ b/clean.py
+@@ -0,0 +1,178 @@
++#!/usr/bin/env python3
++"""Clean the customer export.
++
++Usage:
++    python3 clean.py <input.csv> <output.csv>
++
++Reads the raw export, applies the data-team cleaning rules, and writes a
++canonical CSV (header: customer_id,name,email,signup_date,country,spend).
++"""
++
++import csv
++import os
++import re
++import sys
++from datetime import date
++from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
++
++COLUMNS = ["customer_id", "name", "email", "signup_date", "country", "spend"]
++
++CENT = Decimal("0.01")
++MONTHS = {
++    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
++    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
++}
++
++RE_ID = re.compile(r"^\d+$")
++RE_DATE_ISO = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
++RE_DATE_EU = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
++RE_DATE_MONTH = re.compile(r"^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})$")
++RE_WHITESPACE = re.compile(r"\s+")
++RE_NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?$")
++
++
++def load_country_aliases(path):
++    """Return {lowercased alias: code} from country_aliases.csv."""
++    aliases = {}
++    with open(path, newline="", encoding="utf-8-sig") as handle:
++        for row in csv.reader(handle):
++            if len(row) < 2:
++                continue
++            alias = row[0].strip().lower()
++            code = row[1].strip()
++            if not alias or alias == "alias":
++                continue
++            aliases[alias] = code
++    return aliases
++
++
++def parse_id(text):
++    """All-digit customer id as a plain int, else None."""
++    if not RE_ID.match(text):
++        return None
++    return int(text)
++
++
++def parse_email(text):
++    """Lowercased email if it is valid, else None."""
++    email = text.lower()
++    if email.count("@") != 1:
++        return None
++    local, _, domain = email.partition("@")
++    if not local:
++        return None
++    # Need a dot strictly inside the domain (not its first or last char).
++    if not any(domain[i] == "." for i in range(1, len(domain) - 1)):
++        return None
++    return email
++
++
++def _make_date(year, month, day):
++    try:
++        return date(year, month, day).isoformat()
++    except ValueError:
++        return None
++
++
++def parse_date(text):
++    """Normalise a signup date to YYYY-MM-DD, else None."""
++    match = RE_DATE_ISO.match(text)
++    if match:
++        return _make_date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
++
++    match = RE_DATE_EU.match(text)
++    if match:
++        # Day first (European): DD/MM/YYYY.
++        return _make_date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
++
++    match = RE_DATE_MONTH.match(text)
++    if match:
++        month = MONTHS.get(match.group(1).lower())
++        if month is None:
++            return None
++        return _make_date(int(match.group(3)), month, int(match.group(2)))
++
++    return None
++
++
++def format_money(value):
++    """Round half up to two decimals and render as a fixed-point string."""
++    rounded = value.quantize(CENT, rounding=ROUND_HALF_UP)
++    if rounded == 0:
++        rounded = abs(rounded)  # avoid "-0.00"
++    return format(rounded, "f")
++
++
++def parse_spend(text):
++    """Strip currency/thousands separators and round, else None."""
++    cleaned = text.replace("$", "").replace(",", "").strip()
++    if cleaned == "":
++        return format_money(Decimal("0"))
++    if not RE_NUMBER.match(cleaned):
++        return None
++    try:
++        value = Decimal(cleaned)
++    except InvalidOperation:
++        return None
++    return format_money(value)
++
++
++def clean(input_path, output_path):
++    aliases = load_country_aliases(
++        os.path.join(os.path.dirname(os.path.abspath(__file__)), "country_aliases.csv")
++    )
++
++    with open(input_path, newline="", encoding="utf-8-sig") as handle:
++        reader = csv.reader(handle)
++        try:
++            header = next(reader)
++        except StopIteration:
++            header = []
++        index = {name.strip().lower(): i for i, name in enumerate(header)}
++
++        def field(row, name):
++            i = index.get(name)
++            if i is None or i >= len(row):
++                return ""
++            return row[i].strip()
++
++        best = {}
++        for row in reader:
++            if not row or all(cell.strip() == "" for cell in row):
++                continue
++
++            cid = parse_id(field(row, "customer_id"))
++            name = RE_WHITESPACE.sub(" ", field(row, "name"))
++            email = parse_email(field(row, "email"))
++            signup = parse_date(field(row, "signup_date"))
++            country = aliases.get(field(row, "country").lower(), "")
++            spend = parse_spend(field(row, "spend"))
++
++            if cid is None or email is None or signup is None or spend is None:
++                continue
++
++            record = (cid, name, email, signup, country, spend)
++            previous = best.get(cid)
++            # ISO dates sort chronologically; ">=" keeps the later row on ties.
++            if previous is None or signup >= previous[3]:
++                best[cid] = record
++
++    rows = sorted(best.values(), key=lambda record: record[0])
++
++    with open(output_path, "w", newline="", encoding="utf-8") as handle:
++        writer = csv.writer(handle, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
++        writer.writerow(COLUMNS)
++        for cid, name, email, signup, country, spend in rows:
++            writer.writerow([str(cid), name, email, signup, country, spend])
++
++
++def main(argv):
++    if len(argv) != 3:
++        print("usage: python3 clean.py <input.csv> <output.csv>", file=sys.stderr)
++        return 2
++    clean(argv[1], argv[2])
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv))

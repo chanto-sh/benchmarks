@@ -1,0 +1,79 @@
+diff --git a/stats.py b/stats.py
+index add4f59..4a12455 100644
+--- a/stats.py
++++ b/stats.py
+@@ -2,20 +2,68 @@
+ import math
+ 
+ 
++def _mean(xs):
++    """Mean of a non-empty sequence, avoiding overflow in the sum."""
++    n = len(xs)
++    try:
++        return math.fsum(xs) / n
++    except OverflowError:
++        scale = max(abs(x) for x in xs)
++        if scale == 0.0:
++            return 0.0
++        return scale * (math.fsum(x / scale for x in xs) / n)
++
++
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    offset = xs[0]
++    deviations = [x - offset for x in xs]
++
++    # Opposite-sign extremes can make x - offset overflow even though both
++    # inputs are finite. Fall back to no offset; such a variance overflows
++    # anyway, but this keeps the mean finite.
++    if any(math.isinf(d) for d in deviations):
++        offset = 0.0
++        deviations = list(xs)
++
++    delta = _mean(deviations)
++    mean = offset + delta
++    largest_residual = max(abs(d - delta) for d in deviations)
++    if largest_residual == 0.0:
++        variance = 0.0
++    elif math.isinf(largest_residual):
++        variance = math.inf
++    else:
++        # Scale before squaring so large-but-finite variances do not overflow.
++        mean_square = (
++            math.fsum(
++                (d - delta) / largest_residual * ((d - delta) / largest_residual)
++                for d in deviations
++            )
++            / n
++        )
++        variance = largest_residual * (largest_residual * mean_square)
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    largest = max(xs)
++    # Keep one largest term separate so that log1p sees the small tail even
++    # when the final result is close to zero. This also avoids overflow.
++    terms = []
++    skipped_largest = False
++    for x in xs:
++        if not skipped_largest and x == largest:
++            skipped_largest = True
++            continue
++        terms.append(math.exp(x - largest))
++    return largest + math.log1p(math.fsum(terms))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        return x + math.log1p(math.exp(-x))
++    return math.log1p(math.exp(x))

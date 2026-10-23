@@ -1,0 +1,52 @@
+diff --git a/game.py b/game.py
+index 768dec9..6178671 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,46 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Work in terms of the distance d = n - position.  A roll r moves the
++    # distance to |d - r|: forward while r <= d, back past the goal otherwise.
++    # E[d] is the expected number of turns from distance d, with E[0] = 0.
++    #
++    #   E[d] = 1 + (1/k) * sum_{r=1..k, r != d} E[|d - r|]
++    #
++    # Solve the resulting linear system exactly.
++    size = n
++    matrix = [[Fraction(0) for _ in range(size + 1)] for _ in range(size)]
++
++    for d in range(1, n + 1):
++        row = matrix[d - 1]
++        row[d - 1] = Fraction(k)
++        for r in range(1, k + 1):
++            other = abs(d - r)
++            if other != 0:
++                row[other - 1] -= 1
++        row[size] = Fraction(k)
++
++    # Forward elimination with exact rational arithmetic.
++    for col in range(size):
++        pivot = next(i for i in range(col, size) if matrix[i][col] != 0)
++        if pivot != col:
++            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++
++        pivot_value = matrix[col][col]
++        for i in range(col + 1, size):
++            factor = matrix[i][col] / pivot_value
++            if factor == 0:
++                continue
++            matrix[i][col] = Fraction(0)
++            for j in range(col + 1, size + 1):
++                matrix[i][j] -= factor * matrix[col][j]
++
++    # Back substitution.
++    solution = [Fraction(0)] * size
++    for i in range(size - 1, -1, -1):
++        total = matrix[i][size]
++        for j in range(i + 1, size):
++            total -= matrix[i][j] * solution[j]
++        solution[i] = total / matrix[i][i]
++
++    return solution[n - 1]

@@ -1,0 +1,71 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..1b6e5b3
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,52 @@
++# Blocked: exact median in constant memory
++
++## What cannot be done
++
++`test_constant_memory` requires `median()` to return the **exact** median of a
++one-pass iterable of 200,000 arbitrary numbers while using less than 64 KB of
++memory (and O(1) memory in general). For an arbitrary, single-pass feed this is
++impossible.
++
++## Why
++
++Determining an exact median requires knowing the relative order of essentially
++the entire input. In the streaming/comparison model, exact selection of the
++median of `n` values in one pass has a linear-space lower bound: with only
++`o(n)` storage, an adversary can choose the unseen remainder so that any
++candidate returned is not the median. Keeping every value already costs O(n)
++memory, and sorting it adds more.
++
++The current implementation materializes and sorts the input, which is exact but
++O(n) in memory. The fixed test measures about 7.2 MB of peak traced memory:
++
++```
++FAIL: test_constant_memory
++AssertionError: 7221928 not less than 65536
++```
++
++Constant-memory techniques do not solve the exact problem:
++
++- Running medians with two heaps still store all values (O(n)).
++- Streaming sketches (P², t-digest, reservoir sampling, etc.) are approximate,
++  and this test requires exact equality with the sorted median.
++- An exact multi-pass selection algorithm needs to re-read the input, but the
++  test supplies a one-shot generator.
++- Spilling the values to a temporary file and externally sorting them would
++  pass the Python memory measurement, but it is a workaround that replaces
++  memory usage with unbounded disk I/O, not a constant-memory algorithm. It was
++  intentionally not implemented.
++
++## What was completed
++
++The reported even-count bug is fixed in `stats_stream.py`: `median([1, 2, 3, 4])`
++now returns `2.5`, and odd-length, generator, and empty-input behavior is
++unchanged. All tests except `test_constant_memory` pass.
++
++## Options to unblock
++
++1. Relax exactness and accept an approximate streaming median.
++2. Allow O(n) memory (the current implementation).
++3. Require a re-iterable input and accept multiple passes for exact O(1)-memory
++   selection.
++4. Explicitly permit disk-backed external sorting if bounded RAM, not bounded
++   storage, is the real operational requirement.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..5eea255 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    middle = len(data) // 2
++    if len(data) % 2:
++        return data[middle]
++    return (data[middle - 1] + data[middle]) / 2

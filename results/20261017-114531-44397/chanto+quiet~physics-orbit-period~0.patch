@@ -1,0 +1,223 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..dede76f 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,208 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A21 = 1.0 / 5.0
++_A31 = 3.0 / 40.0
++_A32 = 9.0 / 40.0
++_A41 = 44.0 / 45.0
++_A42 = -56.0 / 15.0
++_A43 = 32.0 / 9.0
++_A51 = 19372.0 / 6561.0
++_A52 = -25360.0 / 2187.0
++_A53 = 64448.0 / 6561.0
++_A54 = -212.0 / 729.0
++_A61 = 9017.0 / 3168.0
++_A62 = -355.0 / 33.0
++_A63 = 46732.0 / 5247.0
++_A64 = 49.0 / 176.0
++_A65 = -5103.0 / 18656.0
++
++_B1 = 35.0 / 384.0
++_B3 = 500.0 / 1113.0
++_B4 = 125.0 / 192.0
++_B5 = -2187.0 / 6784.0
++_B6 = 11.0 / 84.0
++
++_ERR1 = _B1 - 5179.0 / 57600.0
++_ERR3 = _B3 - 7571.0 / 16695.0
++_ERR4 = _B4 - 393.0 / 640.0
++_ERR5 = _B5 + 92097.0 / 339200.0
++_ERR6 = _B6 - 187.0 / 2100.0
++_ERR7 = -1.0 / 40.0
++
++_RTOL = 1.0e-13
++_MAX_STEPS = 200000
++
++
++def _step(r, u, h, radial_force):
++    """One Dormand-Prince step for (r, dr/dt), with local error estimate."""
++    k1r = u
++    k1u = radial_force(r)
++
++    r2 = r + h * _A21 * k1r
++    u2 = u + h * _A21 * k1u
++    k2r = u2
++    k2u = radial_force(r2)
++
++    r3 = r + h * (_A31 * k1r + _A32 * k2r)
++    u3 = u + h * (_A31 * k1u + _A32 * k2u)
++    k3r = u3
++    k3u = radial_force(r3)
++
++    r4 = r + h * (_A41 * k1r + _A42 * k2r + _A43 * k3r)
++    u4 = u + h * (_A41 * k1u + _A42 * k2u + _A43 * k3u)
++    k4r = u4
++    k4u = radial_force(r4)
++
++    r5 = r + h * (_A51 * k1r + _A52 * k2r + _A53 * k3r + _A54 * k4r)
++    u5 = u + h * (_A51 * k1u + _A52 * k2u + _A53 * k3u + _A54 * k4u)
++    k5r = u5
++    k5u = radial_force(r5)
++
++    r6 = r + h * (
++        _A61 * k1r + _A62 * k2r + _A63 * k3r + _A64 * k4r + _A65 * k5r
++    )
++    u6 = u + h * (
++        _A61 * k1u + _A62 * k2u + _A63 * k3u + _A64 * k4u + _A65 * k5u
++    )
++    k6r = u6
++    k6u = radial_force(r6)
++
++    r_new = r + h * (_B1 * k1r + _B3 * k3r + _B4 * k4r
++                     + _B5 * k5r + _B6 * k6r)
++    u_new = u + h * (_B1 * k1u + _B3 * k3u + _B4 * k4u
++                     + _B5 * k5u + _B6 * k6u)
++
++    # Stage seven is the derivative at the fifth-order solution.
++    k7r = u_new
++    k7u = radial_force(r_new)
++
++    err_r = h * (_ERR1 * k1r + _ERR3 * k3r + _ERR4 * k4r
++                 + _ERR5 * k5r + _ERR6 * k6r + _ERR7 * k7r)
++    err_u = h * (_ERR1 * k1u + _ERR3 * k3u + _ERR4 * k4u
++                 + _ERR5 * k5u + _ERR6 * k6u + _ERR7 * k7u)
++
++    return r_new, u_new, err_r, err_u
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The orbit is integrated in polar coordinates.  For a central force the
++    angular momentum ``h = x*vy - y*vx`` is conserved, so the radial motion
++    obeys the one-dimensional equation
++
++        r'' = h**2 / r**3 + a_r(r),
++
++    where ``a_r`` is the radial component of the acceleration.  A closest
++    approach is a turning point with ``r'`` changing from negative to positive.
++    """
++    x, y = r0
++    vx, vy = v0
++
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("the initial position must not be the origin")
++
++    angmom = x * vy - y * vx
++    if angmom == 0.0:
++        raise ValueError("the orbit has zero angular momentum")
++
++    u = (x * vx + y * vy) / r
++
++    def radial_accel(radius):
++        # A central force evaluated on the positive x axis points along the
++        # radial direction, so its x component is the radial component.
++        ax, _ = accel(radius, 0.0)
++        return ax
++
++    def radial_force(radius):
++        return (angmom * angmom / (radius * radius * radius)
++                + radial_accel(radius))
++
++    f = radial_force(r)
++
++    # A circular orbit has no radial turning points.  Its closest-approach
++    # period is the orbital period.
++    angular_rate = abs(angmom) / (r * r)
++    a_scale = abs(angmom * angmom / (r * r * r)) + abs(radial_accel(r))
++    v_scale = max(abs(u), abs(angmom) / r)
++    if (abs(u) <= 1.0e-12 * v_scale
++            and abs(f) <= 1.0e-10 * a_scale):
++        return 2.0 * math.pi / angular_rate
++
++    t = 0.0
++    first_periapsis = None
++    steps = 0
++
++    while steps < _MAX_STEPS:
++        # Keep a step well inside both the angular and radial dynamical
++        # time-scales.  This prevents an accepted step from jumping over a
++        # radial turning point.
++        t_radial = r / (abs(u) + math.sqrt(r * abs(f)) + 1.0e-300)
++        t_angular = r * r / abs(angmom)
++        h_max = 0.05 * min(t_radial, t_angular)
++        h = min(h, h_max) if steps else 0.1 * h_max
++        h_step = h
++        v_scale = max(abs(u), abs(angmom) / r, math.sqrt(r * abs(f)),
++                      1.0e-300)
++
++        if (not math.isfinite(r) or r <= 0.0
++                or not math.isfinite(u) or not math.isfinite(f)
++                or not math.isfinite(h_step) or h_step <= 0.0):
++            raise RuntimeError(
++                "radial period could not be found; the orbit may be unbound"
++            )
++
++        r_new, u_new, err_r, err_u = _step(r, u, h_step, radial_force)
++
++        r_scale = max(abs(r), abs(r_new), 1.0e-300)
++        u_scale = max(abs(u), abs(u_new), v_scale, 1.0e-300)
++        err = max(abs(err_r) / (r_scale * _RTOL),
++                  abs(err_u) / (u_scale * _RTOL))
++
++        if not math.isfinite(err):
++            raise RuntimeError(
++                "radial period could not be found; the orbit may be unbound"
++            )
++
++        if err <= 1.0:
++            # Let the step grow again after it has been reduced; otherwise a
++            # close periapsis would keep the step tiny for the whole orbit.
++            factor = 5.0 if err == 0.0 else 0.9 * err ** (-0.2)
++            h *= min(5.0, max(1.0, factor))
++
++            # A negative-to-positive zero of u is a periapsis.
++            if u < 0.0 and u_new >= 0.0:
++                lo, hi = 0.0, h_step
++                for _ in range(60):
++                    mid = 0.5 * (lo + hi)
++                    _, u_mid, _, _ = _step(r, u, mid, radial_force)
++                    if u_mid < 0.0:
++                        lo = mid
++                    else:
++                        hi = mid
++                event_h = 0.5 * (lo + hi)
++
++                r_event, _, _, _ = _step(r, u, event_h, radial_force)
++                t += event_h
++                if first_periapsis is None:
++                    first_periapsis = t
++                    r, u = r_event, 0.0
++                    f = radial_force(r)
++                    steps += 1
++                    continue
++                return t - first_periapsis
++
++            t += h_step
++            r, u = r_new, u_new
++            f = radial_force(r)
++            steps += 1
++        else:
++            # Fifth-order local error estimate -> new step size.
++            factor = 0.9 * err ** (-0.2)
++            factor = max(0.2, min(5.0, factor))
++            h *= factor
++
++    raise RuntimeError("radial period could not be found; the orbit may be unbound")

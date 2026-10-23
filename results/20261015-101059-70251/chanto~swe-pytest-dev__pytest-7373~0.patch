@@ -1,0 +1,94 @@
+diff --git a/changelog/7373.bugfix.rst b/changelog/7373.bugfix.rst
+new file mode 100644
+index 0000000..07c9a70
+--- /dev/null
++++ b/changelog/7373.bugfix.rst
+@@ -0,0 +1,3 @@
++Fix incorrect caching of ``skipif``/``xfail`` marker string conditions: the
++condition is now evaluated in the context of the item's globals each time,
++so the same expression can yield different results in different modules.
+diff --git a/src/_pytest/mark/evaluate.py b/src/_pytest/mark/evaluate.py
+index 7591916..6ac7b64 100644
+--- a/src/_pytest/mark/evaluate.py
++++ b/src/_pytest/mark/evaluate.py
+@@ -2,7 +2,6 @@ import os
+ import platform
+ import sys
+ import traceback
+-from typing import Any
+ from typing import Dict
+ from typing import List
+ from typing import Optional
+@@ -10,25 +9,7 @@ from typing import Optional
+ from ..outcomes import fail
+ from ..outcomes import TEST_OUTCOME
+ from .structures import Mark
+-from _pytest.config import Config
+ from _pytest.nodes import Item
+-from _pytest.store import StoreKey
+-
+-
+-evalcache_key = StoreKey[Dict[str, Any]]()
+-
+-
+-def cached_eval(config: Config, expr: str, d: Dict[str, object]) -> Any:
+-    default = {}  # type: Dict[str, object]
+-    evalcache = config._store.setdefault(evalcache_key, default)
+-    try:
+-        return evalcache[expr]
+-    except KeyError:
+-        import _pytest._code
+-
+-        exprcode = _pytest._code.compile(expr, mode="eval")
+-        evalcache[expr] = x = eval(exprcode, d)
+-        return x
+ 
+ 
+ class MarkEvaluator:
+@@ -98,7 +79,10 @@ class MarkEvaluator:
+                     self.expr = expr
+                     if isinstance(expr, str):
+                         d = self._getglobals()
+-                        result = cached_eval(self.item.config, expr, d)
++                        import _pytest._code
++
++                        exprcode = _pytest._code.compile(expr, mode="eval")
++                        result = eval(exprcode, d)
+                     else:
+                         if "reason" not in mark.kwargs:
+                             # XXX better be checked at collection time
+diff --git a/testing/test_skipping.py b/testing/test_skipping.py
+index a6f1a9c..aae635b 100644
+--- a/testing/test_skipping.py
++++ b/testing/test_skipping.py
+@@ -924,6 +924,30 @@ def test_xfail_skipif_with_globals(testdir):
+     result.stdout.fnmatch_lines(["*SKIP*x == 3*", "*XFAIL*test_boolean*", "*x == 3*"])
+ 
+ 
++def test_skipif_condition_evaluated_per_module(testdir):
++    testdir.makepyfile(
++        test_module_1="""
++        import pytest
++        skip = True
++        @pytest.mark.skipif("skip")
++        def test_should_skip():
++            assert False
++        """,
++        test_module_2="""
++        import pytest
++        skip = False
++        @pytest.mark.skipif("skip")
++        def test_should_not_skip():
++            assert False
++        """,
++    )
++    result = testdir.runpytest("-rs")
++    assert result.ret == 1
++    result.stdout.fnmatch_lines_random(
++        ["*SKIPPED*test_module_1*", "*test_should_not_skip*"]
++    )
++
++
+ def test_direct_gives_error(testdir):
+     testdir.makepyfile(
+         """

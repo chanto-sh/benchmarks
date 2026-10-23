@@ -1,0 +1,141 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..7d5bcdb 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,134 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coeffs(m, k, c, F0, omega):
++    """Return a, b, omega*b for x_p = a cos(omega t) + b sin(omega t)."""
++    detuning = math.fsum((k, -m * omega * omega))
++    damping = c * omega
++    scale = math.hypot(detuning, damping)
++
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0, 0.0, 0.0
++        raise ValueError("steady state is unbounded at resonance with no damping")
++
++    size = F0 / scale
++    a = size * (detuning / scale)
++    b = size * (damping / scale)
++    return a, b, omega * b
++
++
++def _sinc(x):
++    """sin(x) / x, with the limiting value at zero."""
++    if x == 0.0:
++        return 1.0
++    return math.sin(x) / x
++
++
++def _sinhc(x):
++    """sinh(x) / x, with the limiting value at zero."""
++    if x == 0.0:
++        return 1.0
++    return math.sinh(x) / x
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    detuning = math.fsum((k, -m * omega * omega))
++    scale = math.hypot(detuning, c * omega)
++
++    if scale == 0.0:
++        if F0 == 0.0:
++            return 0.0
++        raise ValueError("steady state is unbounded at resonance with no damping")
++
++    return abs(F0) / scale
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    a, b, vp = _steady_state_coeffs(m, k, c, F0, omega)
++
++    alpha = c / (2.0 * m)
++    natural = math.sqrt(k / m)
++    drive = omega * t
++    cos_drive = math.cos(drive)
++    sin_drive = math.sin(drive)
++
++    if alpha < natural:
++        omega_d = math.sqrt((natural - alpha) * (natural + alpha))
++        phase = omega_d * t
++        decay = math.exp(-alpha * t)
++
++        free = decay * (
++            x0 * math.cos(phase)
++            + (v0 + alpha * x0) * t * _sinc(phase)
++        )
++
++        # Zero-state forced response, written as the particular solution
++        # minus the transient needed to make x(0) = x'(0) = 0.  The
++        # rearrangement below avoids subtracting two O(1/alpha) terms when
++        # the drive is close to resonance.
++        correction = (vp + alpha * a) / omega_d
++        delta = omega_d - omega
++        u = -math.expm1(-alpha * t) + decay * 2.0 * math.sin(0.5 * delta * t) ** 2
++        v = decay * math.sin(delta * t)
++
++        forced = (
++            (b - correction) * sin_drive
++            + (a * u - correction * v) * cos_drive
++            + (a * v + correction * u) * sin_drive
++        )
++        return free + forced
++
++    if alpha == natural:
++        decay = math.exp(-alpha * t)
++        free = decay * (x0 + (v0 + alpha * x0) * t)
++
++        correction = vp + alpha * a
++        cos_minus_decay = (
++            -2.0 * math.sin(0.5 * drive) ** 2 - math.expm1(-alpha * t)
++        )
++        forced = (
++            b * sin_drive
++            + a * cos_minus_decay
++            - correction * t * decay
++        )
++        return free + forced
++
++    beta = math.sqrt((alpha - natural) * (alpha + natural))
++    u = beta * t
++
++    if u <= 1.0:
++        decay = math.exp(-alpha * t)
++        cosh_part = decay * math.cosh(u)
++        sinh_part = decay * t * _sinhc(u)
++        one_minus_cosh_part = (
++            -math.expm1(-alpha * t)
++            - decay * 2.0 * math.sinh(0.5 * u) ** 2
++        )
++    else:
++        # Evaluate the decaying exponentials directly when cosh/sinh
++        # could overflow.  r1 is written this way to avoid cancellation
++        # when the system is heavily overdamped.
++        r1 = -natural * natural / (alpha + beta)
++        r2 = -(alpha + beta)
++        e1 = math.exp(r1 * t)
++        e2 = math.exp(r2 * t)
++        cosh_part = 0.5 * (e1 + e2)
++        sinh_part = 0.5 * (e1 - e2) / beta
++        one_minus_cosh_part = 1.0 - cosh_part
++
++    free = x0 * cosh_part + (v0 + alpha * x0) * sinh_part
++    correction = vp + alpha * a
++    cos_minus_cosh_part = (
++        -2.0 * math.sin(0.5 * drive) ** 2 + one_minus_cosh_part
++    )
++    forced = (
++        b * sin_drive
++        + a * cos_minus_cosh_part
++        - correction * sinh_part
++    )
++    return free + forced

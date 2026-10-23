@@ -1,0 +1,9 @@
+For the container deployment I need our config loader (app/config/) to take settings from the environment and from the command line, not just the JSON file.
+
+- `load(path=None, env=None, overrides=())`. `env` is a mapping and defaults to `os.environ`. Variables named `SHOPD__<KEY>__<SUBKEY>...` set the nested setting (`SHOPD__DB__POOL__SIZE=20` -> `db.pool.size`; key names are case-insensitive, settings are lowercase). Other variables are ignored.
+- `overrides` is a list of `"db.pool.size=20"` style strings and `python3 -m app.config` should accept them as repeatable `--set db.port=6543` options.
+- Precedence: defaults < file < environment < overrides.
+- Env/override values are strings and must be converted to the type of the built-in default for that setting: int, float, bool (`1/true/yes/on` and `0/false/no/off`, any case), str, or list (comma-separated, items trimmed, empty string -> empty list).
+- Anything wrong raises `ConfigError` with a message containing the dotted setting name: an unknown setting (e.g. a typo like `db.prot`), a value that doesn't convert (e.g. port `abc` or `5.5`, ssl `maybe`), or trying to set a whole section such as `db`. The CLI prints the error and exits 2, as it does now for file errors.
+
+Keep test_config.py passing and add tests for the new behaviour.

@@ -1,0 +1,105 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..1614078 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,90 @@
+ """Frequency response of the detector model."""
+ import math
++from decimal import Decimal, localcontext
++
++_PI_STR = (
++    "3.141592653589793238462643383279502884197169399375105820974944592307816406"
++    "2862089986280348253421170679"
++)
++_PI_DEC = Decimal(_PI_STR)
++_TOL = Decimal("1e-50")
++
++
++def _fresnel_c_over_x_series(x):
++    """C(x)/x from the power series, using extended precision.
++
++    The series has large alternating terms for x near 6, so ordinary
++    double-precision arithmetic would lose too many digits to cancellation.
++    """
++    with localcontext() as ctx:
++        ctx.prec = 60
++        xd = Decimal(x)
++        x4 = xd * xd
++        x4 *= x4
++        factor = (_PI_DEC * _PI_DEC / 4) * x4
++
++        term = Decimal(1)
++        total = term
++        n = 0
++        while True:
++            term = -term * factor * (4 * n + 1) / (
++                (2 * n + 1) * (2 * n + 2) * (4 * n + 5)
++            )
++            total += term
++            n += 1
++            if abs(term) < _TOL:
++                break
++        return float(total)
++
++
++def _fresnel_c_over_x_asymptotic(x):
++    """C(x)/x using the asymptotic expansion of the Fresnel integral."""
++    pi = math.pi
++    x2 = x * x
++    u = 1.0 / (pi * pi * x2 * x2)
++
++    # C(x) = 1/2 + f(x) sin(phi) - g(x) cos(phi), where
++    #   f(x) = 1/(pi*x) * sum (-1)^k (4k-1)!! / (pi*x^2)^(2k)
++    #   g(x) = 1/(pi^2*x^3) * sum (-1)^k (4k+1)!! / (pi*x^2)^(2k)
++    sum_f = 0.0
++    sum_g = 0.0
++    term_f = 1.0
++    term_g = 1.0
++    k = 0
++    while True:
++        sum_f += term_f
++        sum_g += term_g
++        if abs(term_f) < 1e-20 and abs(term_g) < 1e-20:
++            break
++        term_f *= -(4 * k + 1) * (4 * k + 3) * u
++        term_g *= -(4 * k + 3) * (4 * k + 5) * u
++        k += 1
++
++    f = sum_f / (pi * x)
++    g = sum_g / (pi * pi * x2 * x)
++    phase = 0.5 * pi * x2
++    c = 0.5 + f * math.sin(phase) - g * math.cos(phase)
++    return c / x
++
++
++def _fresnel_c_over_x(x):
++    """Return C(x)/x for x >= 0, with C the Fresnel cosine integral."""
++    if x == 0.0:
++        return 1.0
++    if x < 6.0:
++        return _fresnel_c_over_x_series(x)
++    return _fresnel_c_over_x_asymptotic(x)
+ 
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    With x = u^2 this is 2 * integral(cos(t*u^2), 0, sqrt(b)), which equals
++    2*sqrt(b) * C(sqrt(2*t*b/pi)) / sqrt(2*t*b/pi), where C is the Fresnel
++    cosine integral.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0 or b == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    x = math.sqrt(2.0 * t * b / math.pi)
++    return 2.0 * math.sqrt(b) * _fresnel_c_over_x(x)

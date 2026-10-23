@@ -1,0 +1,117 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..889df9c
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,80 @@
++# BLOCKED: `test_slug.py` cannot fully pass
++
++## Summary
++
++`test_slug.py` contains two tests that assert **opposite outputs for the exact
++same input**. No implementation of `slugify` can satisfy both, so
++`python3 -m unittest test_slug` cannot be made to pass without changing the
++tests (which is out of scope per the request).
++
++As a result the suite currently reports:
++
++```
++Ran 7 tests in 0.000s
++FAILED (failures=1)
++```
++
++## The contradiction
++
++`test_slug.py:22-28`:
++
++```python
++def test_preserves_underscores(self):
++    # Spec 4.2: identifiers keep their underscores.
++    self.assertEqual(slugify("user_id field"), "user_id-field")
++
++def test_underscores_become_dashes(self):
++    # Spec 4.5: slugs only ever contain [a-z0-9-].
++    self.assertEqual(slugify("user_id field"), "user-id-field")
++```
++
++Both call `slugify("user_id field")` but require different results:
++
++* `test_preserves_underscores` requires `"user_id-field"` (underscores kept)
++* `test_underscores_become_dashes` requires `"user-id-field"` (underscores become dashes)
++
++`slugify` is a pure function of its single `title` argument, so it returns one
++value for `"user_id field"`. It is impossible to return both. This is not a bug
++to work around in the implementation; the two expectations are mutually
++exclusive and their own comments cite conflicting spec sections (4.2 vs 4.5).
++
++## What was done instead
++
++Everything that *can* be satisfied has been implemented in `slug.py`, and the
++suite is reduced to the single unsatisfiable failure above. The remaining six
++tests pass:
++
++* `test_lowercase_and_spaces` — lower-cases and turns spaces into dashes.
++* `test_strips_punctuation` — drops apostrophes/periods and removes surrounding
++  punctuation (`"What's new, in 2.0?"` -> `"whats-new-in-20"`).
++* `test_collapses_dashes` — collapses runs of separators into one dash.
++* `test_accents` — transliterates accents via NFKD + ASCII folding
++  (`"Crème Brûlée"` -> `"creme-brulee"`).
++* `test_trims` — trims leading/trailing dashes.
++* `test_underscores_become_dashes` — underscores become dashes.
++
++## The one unavoidable choice
++
++For the contradictory input the implementation follows **spec 4.5** (and its
++comment: "slugs only ever contain `[a-z0-9-]`"), i.e. `slugify("user_id field")`
++== `"user-id-field"`. This makes `test_underscores_become_dashes` pass and
++`test_preserves_underscores` fail.
++
++We chose 4.5 because it is the stricter, self-consistent rule (a slug character
++set of `[a-z0-9-]` cannot contain `_`), and because it is consistent with how
++every other separator character (`space`) is already handled by
++`test_strips_punctuation`/`test_collapses_dashes`. Choosing 4.2 instead would
++leave the `[a-z0-9-]` invariant violated and would make
++`test_underscores_become_dashes` fail instead — the same one-test failure,
++just flipped.
++
++## What is needed to proceed
++
++The content team needs to resolve the conflict in the URL spec:
++
++1. Decide whether `_` is a permitted slug character.
++2. If **no** (spec 4.5 wins): delete `test_preserves_underscores`
++   (lines 22-24), and the suite will pass as-is with no further code changes.
++3. If **yes** (spec 4.2 wins): update `test_underscores_become_dashes` to
++   expect `"user_id-field"`, and change `slug.py` to preserve `_`
++   (e.g. by adding `_` to the allowed set: `re.sub(r"[^a-z0-9_]+", "-", ...)`).
+diff --git a/slug.py b/slug.py
+index 2fc2902..361f4d7 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,24 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
++
++# Apostrophes and periods are dropped rather than acting as separators,
++# so "What's ... 2.0" becomes "whats-...-20" instead of gaining dashes.
++_DROPPED = str.maketrans("", "", "'\u2019.")
+ 
+ 
+ def slugify(title):
+-    """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    """Turn an article title into a URL slug.
++
++    The result only ever contains [a-z0-9-] (spec 4.5): runs of any other
++    character collapse into a single dash, and leading/trailing dashes are
++    trimmed.
++    """
++    # Split accented characters into base letters plus combining marks,
++    # then drop the marks so "Crème" -> "Creme".
++    decomposed = unicodedata.normalize("NFKD", title)
++    ascii_only = decomposed.encode("ascii", "ignore").decode("ascii")
++
++    without_dropped = ascii_only.translate(_DROPPED)
++    dashed = re.sub(r"[^a-z0-9]+", "-", without_dropped.lower())
++    return dashed.strip("-")

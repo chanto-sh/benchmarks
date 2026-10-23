@@ -1,0 +1,55 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..f4949bc 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,5 @@
+ from fractions import Fraction
++from math import comb, perm
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +7,43 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if r < 0 or b < 0 or g < 0 or m < 0:
++        raise ValueError("r, b, g and m must be non-negative")
++
++    if k <= 0:
++        return Fraction(1)
++    if k > r or m == 0:
++        return Fraction(0)
++
++    n = r + b + g
++    if g == 0:
++        # With no green cards the deck is simply exhausted if m exceeds it.
++        m = min(m, n)
++
++    total = Fraction(0)
++
++    # Case 1: the first green is at position j (1-based), so the dealer
++    # stops there.  The first j-1 cards contain x reds and j-1-x blues.
++    if g:
++        for j in range(1, min(m, n) + 1):
++            x_lo = max(k, (j - 1) - b)
++            x_hi = min(r, j - 1)
++            numerator = 0
++            for x in range(x_lo, x_hi + 1):
++                numerator += (
++                    comb(j - 1, x) * perm(r, x) * perm(b, j - 1 - x)
++                )
++            if numerator:
++                total += Fraction(numerator * g, perm(n, j))
++
++    # Case 2: no green appears in the first m cards, so the dealer stops
++    # after m cards.  This is only possible if m <= r+b.
++    if m <= n and m <= r + b:
++        x_lo = max(k, m - b)
++        x_hi = min(r, m)
++        numerator = 0
++        for x in range(x_lo, x_hi + 1):
++            numerator += comb(m, x) * perm(r, x) * perm(b, m - x)
++        total += Fraction(numerator, perm(n, m))
++
++    return total

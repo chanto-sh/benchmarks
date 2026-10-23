@@ -1,0 +1,83 @@
+diff --git a/changelog/5495.bugfix.rst b/changelog/5495.bugfix.rst
+new file mode 100644
+index 0000000..5168dea
+--- /dev/null
++++ b/changelog/5495.bugfix.rst
+@@ -0,0 +1,2 @@
++Show a readable diff instead of the numeric values of the differing bytes when
++comparing byte strings in assertion explanations.
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..48df455 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -254,15 +254,38 @@ def _compare_eq_iterable(left, right, verbose=0):
+ 
+ 
+ def _compare_eq_sequence(left, right, verbose=0):
++    comparing_bytes = isinstance(left, bytes) and isinstance(right, bytes)
+     explanation = []
+     len_left = len(left)
+     len_right = len(right)
+     for i in range(min(len_left, len_right)):
+         if left[i] != right[i]:
++            if comparing_bytes:
++                # when comparing bytes, we want to see their ascii representation
++                # instead of their numeric values (#5260)
++                # using a slice gives us the ascii representation:
++                # >>> s = b'foo'
++                # >>> s[0]
++                # 102
++                # >>> s[0:1]
++                # b'f'
++                left_value = left[i : i + 1]
++                right_value = right[i : i + 1]
++            else:
++                left_value = left[i]
++                right_value = right[i]
++
+             explanation += [
+-                "At index {} diff: {!r} != {!r}".format(i, left[i], right[i])
++                "At index {} diff: {!r} != {!r}".format(i, left_value, right_value)
+             ]
+             break
++
++    if comparing_bytes:
++        # when comparing bytes, it doesn't help to show the "sides contain one or more
++        # items" longer explanation, so skip it
++
++        return explanation
++
+     len_diff = len_left - len_right
+ 
+     if len_diff:
+diff --git a/testing/test_assertion.py b/testing/test_assertion.py
+index 0fcfd9f..c6c69c4 100644
+--- a/testing/test_assertion.py
++++ b/testing/test_assertion.py
+@@ -459,6 +459,26 @@ class TestAssert_reprcompare:
+             "+ (4,)",
+         ]
+ 
++    def test_bytes_different_items(self):
++        lines = callequal(b"spam", b"eggs", verbose=2)
++        assert lines == [
++            "b'spam' == b'eggs'",
++            "At index 0 diff: b's' != b'e'",
++            "Full diff:",
++            "- b'spam'",
++            "+ b'eggs'",
++        ]
++
++    def test_bytes_different_lengths(self):
++        lines = callequal(b"", b"42", verbose=2)
++        assert lines == [
++            "b'' == b'42'",
++            "Full diff:",
++            "- b''",
++            "+ b'42'",
++            "?   ++",
++        ]
++
+     def test_set(self):
+         expl = callequal({0, 1}, {0, 2})
+         assert len(expl) > 1

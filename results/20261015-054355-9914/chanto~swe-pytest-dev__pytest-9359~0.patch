@@ -1,0 +1,51 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..3655ed3
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1 @@
++Fixed the ``Source`` of a failing statement being extended to include the decorators of the following decorated function/class, which resulted in extra lines being shown in the failure report.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..575a79f 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,6 +149,12 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
++            # Before Python 3.8: the lineno of a decorated function or class
++            # pointed at the first decorator. Starting with 3.8, it points at
++            # the "def"/"class" line, so we need to also consider the
++            # decorators to find the real start of the statement.
++            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++                values.extend(d.lineno - 1 for d in x.decorator_list)
+             values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..0e196f7 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -212,6 +212,22 @@ class TestSourceParsing:
+         r = source.getstatementrange(1)
+         assert r == (1, 2)
+ 
++    def test_getstatementrange_decorated_function(self) -> None:
++        # A statement preceding a decorated function/class must not include
++        # the decorator lines of the following statement (issue #9359).
++        source = Source(
++            """\
++def test_right_statement():
++    assert 1 == 2
++
++    @decorator
++    def inner():
++        pass
++"""
++        )
++        assert source.getstatementrange(1) == (1, 2)
++        assert str(source.getstatement(1)) == "    assert 1 == 2"
++
+     def test_getstatementrange_with_syntaxerror_issue7(self) -> None:
+         source = Source(":")
+         pytest.raises(SyntaxError, lambda: source.getstatementrange(0))

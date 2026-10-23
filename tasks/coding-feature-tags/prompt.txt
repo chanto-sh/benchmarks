@@ -1,0 +1,12 @@
+I'd like to add tags to my little notes app (the `notes/` package, run as `python3 -m notes`). What I want:
+
+- `notes add "Buy milk" --tag home --tag Errands` - `--tag` can be repeated. Tags are case-insensitive: store them lowercased with surrounding whitespace trimmed, drop duplicates, keep the order they were first given in.
+- A tag that is empty after trimming, or contains whitespace, a comma or a `#`, is invalid: the command prints an error naming the bad tag to stderr, returns exit code 2, and saves nothing.
+- `notes list --tag home` shows only notes with that tag; repeating `--tag` means the note must have all of them (matching is case-insensitive too).
+- In `list`, a note with tags gets them after the title, two spaces then `#tag` words separated by single spaces, e.g. `  1  Buy milk  #home #errands`. Notes without tags look exactly like today.
+- `notes show ID` prints a `tags: #home #errands` line directly under the `#ID title` line when the note has tags.
+- `notes tags` prints one line per tag in use, `name count` (e.g. `home 2`), most used first, ties alphabetically.
+- `notes tag ID TAG [TAG...]` adds tags to an existing note (same normalization/validation; already-present tags are ignored) and `notes untag ID TAG [TAG...]` removes them (tags it doesn't have are ignored). Unknown IDs behave like `show` does today (exit 1, "no such note").
+- My existing notes.json files have no tags and must keep loading. When the app saves, write `"version": 2` and give every note a `"tags"` list.
+
+`main()` in notes/cli.py should keep returning the exit code. Keep the existing tests passing and add tests for the new behaviour.

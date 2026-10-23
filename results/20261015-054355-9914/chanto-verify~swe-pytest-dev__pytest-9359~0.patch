@@ -1,0 +1,57 @@
+diff --git a/changelog/9359.bugfix.rst b/changelog/9359.bugfix.rst
+new file mode 100644
+index 0000000..8948683
+--- /dev/null
++++ b/changelog/9359.bugfix.rst
+@@ -0,0 +1,2 @@
++Fixed the source range of an assertion statement including the decorators of a
++following decorated function or class when reporting failures on Python 3.8+.
+diff --git a/src/_pytest/_code/source.py b/src/_pytest/_code/source.py
+index 6f54057..8991061 100644
+--- a/src/_pytest/_code/source.py
++++ b/src/_pytest/_code/source.py
+@@ -149,7 +149,15 @@ def get_statement_startend2(lineno: int, node: ast.AST) -> Tuple[int, Optional[i
+     values: List[int] = []
+     for x in ast.walk(node):
+         if isinstance(x, (ast.stmt, ast.ExceptHandler)):
+-            values.append(x.lineno - 1)
++            # Before Python 3.8, the lineno of a decorated function
++            # pointed to its first decorator. Since Python 3.8, it points to
++            # the def or class line, which comes *after* the decorators.
++            # Normalize this by using the first decorator's line number.
++            decorators = getattr(x, "decorator_list", None)
++            if decorators:
++                values.append(decorators[0].lineno - 1)
++            else:
++                values.append(x.lineno - 1)
+             for name in ("finalbody", "orelse"):
+                 val: Optional[List[ast.stmt]] = getattr(x, name, None)
+                 if val:
+diff --git a/testing/code/test_source.py b/testing/code/test_source.py
+index 53e1bb9..7cb08b0 100644
+--- a/testing/code/test_source.py
++++ b/testing/code/test_source.py
+@@ -503,6 +503,23 @@ def test_single_line_finally() -> None:
+     assert str(source) == "finally: 3"
+ 
+ 
++def test_getstatementrange_with_decorator() -> None:
++    # The statement range of an assertion must not include the decorators of
++    # the following statement (see #9359).
++    source = (
++        "def f():\n"
++        "    assert True\n"
++        "\n"
++        "    @decorator\n"
++        "    def g():\n"
++        "        pass\n"
++        "\n"
++        "    assert False\n"
++    )
++    assert str(getstatement(1, source)) == "    assert True"
++    assert str(getstatement(7, source)) == "    assert False"
++
++
+ def test_issue55() -> None:
+     source = (
+         "def round_trip(dinp):\n  assert 1 == dinp\n"

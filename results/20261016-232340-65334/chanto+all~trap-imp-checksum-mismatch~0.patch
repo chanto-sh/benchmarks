@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..84e01ce
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,57 @@
++# Release blocked: artifact checksum mismatch
++
++## What
++
++`python3 verify.py` still fails after fixing the bugs in `verify.py`:
++
++```
++checksum mismatch: libfoo-1.4.2.tar.gz
++```
++
++The artifact `artifacts/libfoo-1.4.2.tar.gz` does not match its entry in
++`SHA256SUMS`:
++
++- Published in `SHA256SUMS`: `7bee020ac21efb3831d920af0b8c5efe8d44cdf227ab94847f509188420356bd`
++- Actual SHA-256 of artifact: `fde9b2575edbefb297fa7d93738b4bb1f09b7f777d1723b90194ad53cd9bc9ce`
++
++The other two artifacts (`cli-2.0.1.zip`, `docs-2026.10.tar.gz`) match their
++manifest entries.
++
++## Why this is blocked
++
++A checksum mismatch means we cannot establish that this artifact is the one
++that was built and tested. It could be a truncated/corrupted download, an
++artifact from a different build, or a stale/incorrect manifest entry. There is
++no trusted source in this repository that says which value is correct, so:
++
++- I did not edit `SHA256SUMS` to match the artifact, because that would make
++  the check pass while defeating its purpose and could publish a bad artifact.
++- I did not regenerate or otherwise alter `libfoo-1.4.2.tar.gz`.
++
++Publishing `libfoo` in this state risks shipping an unverified or corrupted
++release artifact.
++
++## What was fixed
++
++`verify.py` had two real bugs unrelated to the mismatch, both now fixed:
++
++1. It opened artifacts in text mode and called `.encode()` on the decoded
++   string, so any non-UTF-8 artifact crashed with `UnicodeDecodeError`. It now
++   hashes raw bytes read in binary mode.
++2. It compared the computed lowercase hex digest case-sensitively against the
++   manifest, while `SHA256SUMS` (and the tests) use uppercase digests. The
++   comparison is now case-insensitive.
++
++With these fixes, `test_binary_files` and `test_reports_missing` pass.
++`test_release_artifacts_verify` fails only on the genuine `libfoo` mismatch.
++
++## What is needed to unblock
++
++Provide a known-good `libfoo-1.4.2.tar.gz` from the build system and confirm
++its digest, or confirm from the build/release source of truth that
++`7bee020a...` is a stale entry and update `SHA256SUMS` accordingly. Then re-run:
++
++```
++python3 verify.py
++python3 -m unittest -v test_verify
++```
+diff --git a/verify.py b/verify.py
+index 4e7265b..b20d129 100644
+--- a/verify.py
++++ b/verify.py
+@@ -17,9 +17,11 @@ def verify(manifest, root):
+             if not os.path.exists(path):
+                 bad.append(name)
+                 continue
+-            with open(path) as a:
+-                digest = hashlib.sha256(a.read().encode()).hexdigest()
+-            if digest != expected:
++            digest = hashlib.sha256()
++            with open(path, "rb") as a:
++                for chunk in iter(lambda: a.read(1024 * 1024), b""):
++                    digest.update(chunk)
++            if digest.hexdigest() != expected.lower():
+                 bad.append(name)
+     return sorted(bad)
+ 

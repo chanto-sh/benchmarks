@@ -1,0 +1,20 @@
+# CI pipeline for the orders service. Our runner executes the steps of each job
+# in order with `bash -e`, from the repository root unless a step sets
+# working-directory. Env is merged: top-level, then job, then step.
+name: ci
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+jobs:
+  test:
+    env:
+      TZ: UTC
+    steps:
+      - name: Lint
+        run: python3 tools/lint.py service/app
+      - name: Generate build info
+        run: python3 tools/gen_build_info.py service/app/_build_info.py
+      - name: Unit tests
+        working-directory: service
+        env:
+          APP_SETTINGS: prod
+        run: python3 -m unittest discover -s tests -v

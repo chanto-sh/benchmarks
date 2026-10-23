@@ -1,0 +1,52 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..447b1ae
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed a crash when the username returned by :func:`getpass.getuser` contains
++characters that are not valid in directory names (for example ``contoso\john_doe``
++on Windows over SSH). ``getbasetemp`` now falls back to the ``unknown`` user
++directory in this case.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..75c4d4c 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,13 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # getuser() likely returned illegal characters for the
++                # platform, use the default user name "unknown" instead.
++                rootdir = temproot.joinpath("pytest-of-unknown")
++                rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )
+diff --git a/testing/test_tmpdir.py b/testing/test_tmpdir.py
+index d123287..1480fab 100644
+--- a/testing/test_tmpdir.py
++++ b/testing/test_tmpdir.py
+@@ -246,6 +246,18 @@ def test_get_user(monkeypatch):
+     assert get_user() is None
+ 
+ 
++def test_getbasetemp_fallback_if_unable_to_create(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Test that getbasetemp() falls back to "unknown" if the user name
++    contains characters that are invalid for directory names (#8365)."""
++    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path))
++    monkeypatch.setattr("_pytest.tmpdir.get_user", lambda: "illegal/user")
++    factory = TempPathFactory(None, lambda *args: None, _ispytest=True)
++    basetemp = factory.getbasetemp()
++    assert basetemp.parent.name == "pytest-of-unknown"
++
++
+ class TestNumberedDir:
+     PREFIX = "fun-"
+ 

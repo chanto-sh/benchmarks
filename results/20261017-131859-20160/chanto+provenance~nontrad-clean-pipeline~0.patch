@@ -1,0 +1,224 @@
+diff --git a/clean.py b/clean.py
+new file mode 100644
+index 0000000..3a2ba77
+--- /dev/null
++++ b/clean.py
+@@ -0,0 +1,218 @@
++#!/usr/bin/env python3
++"""Clean a customer export CSV."""
++
++import csv
++import re
++import sys
++from datetime import date
++from decimal import Decimal, DecimalException, ROUND_HALF_UP, localcontext
++from pathlib import Path
++
++FIELDS = ["customer_id", "name", "email", "signup_date", "country", "spend"]
++
++ID_RE = re.compile(r"[0-9]+")
++ISO_DATE_RE = re.compile(r"([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})")
++SLASH_DATE_RE = re.compile(r"([0-9]{1,2})/([0-9]{1,2})/([0-9]{4})")
++NAMED_DATE_RE = re.compile(r"([A-Za-z]{3})\s+([0-9]{1,2})\s*,\s*([0-9]{4})")
++NUMBER_RE = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)")
++
++MONTHS = {
++    "jan": 1,
++    "feb": 2,
++    "mar": 3,
++    "apr": 4,
++    "may": 5,
++    "jun": 6,
++    "jul": 7,
++    "aug": 8,
++    "sep": 9,
++    "oct": 10,
++    "nov": 11,
++    "dec": 12,
++}
++
++
++def make_date(year, month, day):
++    try:
++        return date(year, month, day)
++    except ValueError:
++        return None
++
++
++def parse_date(value):
++    match = ISO_DATE_RE.fullmatch(value)
++    if match:
++        year, month, day = (int(part) for part in match.groups())
++        return make_date(year, month, day)
++
++    match = SLASH_DATE_RE.fullmatch(value)
++    if match:
++        day, month, year = (int(part) for part in match.groups())
++        return make_date(year, month, day)
++
++    match = NAMED_DATE_RE.fullmatch(value)
++    if match:
++        month = MONTHS.get(match.group(1).lower())
++        if month is None:
++            return None
++        return make_date(int(match.group(3)), month, int(match.group(2)))
++
++    return None
++
++
++def parse_spend(value):
++    cleaned = value.replace("$", "").replace(",", "").strip()
++    if not cleaned:
++        return Decimal("0.00")
++    if not NUMBER_RE.fullmatch(cleaned):
++        return None
++
++    try:
++        with localcontext() as context:
++            context.prec = max(28, len(cleaned) + 8)
++            amount = Decimal(cleaned).quantize(
++                Decimal("0.01"), rounding=ROUND_HALF_UP
++            )
++    except DecimalException:
++        return None
++
++    if amount == 0:
++        amount = Decimal("0.00")
++    return amount
++
++
++def parse_row(row, indexes):
++    values = []
++    for field in FIELDS:
++        index = indexes[field]
++        if index >= len(row):
++            return None
++        values.append(row[index].strip())
++
++    customer_id, name, email, signup_date, country, spend = values
++
++    if not ID_RE.fullmatch(customer_id):
++        return None
++    customer_id = int(customer_id)
++
++    name = " ".join(name.split())
++
++    email = email.lower()
++    if email.count("@") != 1:
++        return None
++    local_part, domain = email.split("@")
++    if not local_part or "." not in domain:
++        return None
++    if domain.startswith(".") or domain.endswith("."):
++        return None
++
++    signup = parse_date(signup_date)
++    if signup is None:
++        return None
++
++    amount = parse_spend(spend)
++    if amount is None:
++        return None
++
++    return (
++        customer_id,
++        name,
++        email,
++        signup,
++        country,
++        format(amount, ".2f"),
++    )
++
++
++def load_country_aliases(path):
++    aliases = {}
++    with path.open("r", encoding="utf-8-sig", newline="") as handle:
++        reader = csv.reader(handle)
++        header = next(reader, None)
++        if header is None:
++            raise ValueError("country_aliases.csv is empty")
++        header = [column.strip().lower() for column in header]
++        try:
++            alias_index = header.index("alias")
++            code_index = header.index("code")
++        except ValueError:
++            raise ValueError("country_aliases.csv needs alias and code columns")
++
++        for row in reader:
++            if not row:
++                continue
++            if alias_index >= len(row) or code_index >= len(row):
++                continue
++            alias = row[alias_index].strip().lower()
++            if alias:
++                aliases[alias] = row[code_index].strip()
++    return aliases
++
++
++def read_and_clean(path, country_aliases):
++    rows_by_id = {}
++    with path.open("r", encoding="utf-8-sig", newline="") as handle:
++        reader = csv.reader(handle)
++        header = next(reader, None)
++        if header is None:
++            raise ValueError("input file is empty")
++        header = [column.strip().lower() for column in header]
++
++        indexes = {}
++        for index, column in enumerate(header):
++            if column in FIELDS and column not in indexes:
++                indexes[column] = index
++        missing = [field for field in FIELDS if field not in indexes]
++        if missing:
++            raise ValueError("missing column(s): " + ", ".join(missing))
++
++        for row in reader:
++            if not row:
++                continue
++            record = parse_row(row, indexes)
++            if record is None:
++                continue
++
++            country = country_aliases.get(record[4].lower(), "")
++            record = record[:4] + (country,) + record[5:]
++
++            customer_id = record[0]
++            signup = record[3]
++            existing = rows_by_id.get(customer_id)
++            if existing is None or signup >= existing[3]:
++                rows_by_id[customer_id] = record
++    return rows_by_id
++
++
++def write_output(path, rows_by_id):
++    with path.open("w", encoding="utf-8", newline="") as handle:
++        writer = csv.writer(handle, lineterminator="\n")
++        writer.writerow(FIELDS)
++        for customer_id in sorted(rows_by_id):
++            _, name, email, signup, country, spend = rows_by_id[customer_id]
++            writer.writerow(
++                [str(customer_id), name, email, signup.isoformat(), country, spend]
++            )
++
++
++def main(argv):
++    if len(argv) != 3:
++        print(
++            "usage: python3 clean.py <input.csv> <output.csv>",
++            file=sys.stderr,
++        )
++        return 2
++
++    aliases_path = Path(__file__).resolve().with_name("country_aliases.csv")
++    try:
++        country_aliases = load_country_aliases(aliases_path)
++        rows_by_id = read_and_clean(Path(argv[1]), country_aliases)
++        write_output(Path(argv[2]), rows_by_id)
++    except (OSError, ValueError, csv.Error) as exc:
++        print("error: {}".format(exc), file=sys.stderr)
++        return 1
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv))

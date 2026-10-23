@@ -1,0 +1,25 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "crush",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 3.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                    ------------ ^^^ doesn't have a size known at compile-time\n     |                                |\n     |                                required by a bound introduced by this call\n     |\n     = help: the trait `Sized` is not implemented for `str`\nnote: required by an implicit `Sized` bound in `xorcism::Xorcism::<'a>::new`\n    --> ~/.local/share/chanto-bench/runs/2026-10-11/work-qw-finish/crush/poly-rust-xorcism-0/src/lib.rs:13:16\n     |\n  13 |     pub fn new<Key>(key: &Key) -> Xorcism<'a> {\n     |                ^^^ required by the implicit `Sized` requirement on this type parameter in `Xorcism::<'a>::new`\n\nFor more information about this error, try `rustc --explain E0277`.\nerror: could not compile `xorcism` (test \"xorcism\") due to 72 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 1,
+        "input": 15473,
+        "output": 88,
+        "cached": 0
+      }
+    }
+  ]
+}

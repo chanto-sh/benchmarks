@@ -1,0 +1,47 @@
+diff --git a/changelog/5495.bugfix.rst b/changelog/5495.bugfix.rst
+new file mode 100644
+index 0000000..a3041ce
+--- /dev/null
++++ b/changelog/5495.bugfix.rst
+@@ -0,0 +1,3 @@
++Fix confusing assertion rewriting message when comparing ``bytes`` objects, which
++reported the ordinal value of the first differing item instead of showing a
++readable text diff.
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..570786e 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -86,7 +86,7 @@ def issequence(x):
+ 
+ 
+ def istext(x):
+-    return isinstance(x, str)
++    return isinstance(x, (str, bytes))
+ 
+ 
+ def isdict(x):
+diff --git a/testing/test_assertion.py b/testing/test_assertion.py
+index 0fcfd9f..26b0749 100644
+--- a/testing/test_assertion.py
++++ b/testing/test_assertion.py
+@@ -331,6 +331,20 @@ class TestAssert_reprcompare:
+         assert "- spam" in diff
+         assert "+ eggs" in diff
+ 
++    def test_bytes_diff(self):
++        """Bytes are diffed as text instead of being compared item by item (#5495)."""
++        diff = callequal(b"spam", b"eggs")[1:]
++        assert "- 'spam" in diff
++        assert "+ 'eggs" in diff
++
++    def test_bytes_diff_is_not_confusing(self):
++        # https://github.com/pytest-dev/pytest/issues/5495
++        # b"" == b"42" used to report "Right contains more items, first
++        # extra item: 52", where 52 is the ordinal of b"4".
++        expl = callequal(b"", b"42")
++        assert not any("more item" in line for line in expl)
++        assert "+ '42" in expl
++
+     def test_list(self):
+         expl = callequal([0, 1], [0, 2])
+         assert len(expl) > 1

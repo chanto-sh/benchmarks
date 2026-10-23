@@ -1,0 +1,65 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..4970963 100644
+--- a/detector.py
++++ b/detector.py
+@@ -1,18 +1,50 @@
+ """Frequency response of the detector model."""
+ import math
++from decimal import Decimal, localcontext
+ 
+ 
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Expanding cos(t*x) in a power series and integrating term by term gives
++
++        sqrt(b) * sum((-1)**n * (t*b)**(2*n) / ((2*n)! * (2*n + 1/2))).
++
++    For large t*b the terms reach roughly exp(t*b) before cancelling, so the
++    sum is evaluated with enough Decimal precision to keep the result accurate
++    to well below 1e-9.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    t = float(t)
++    b = float(b)
++    if b <= 0.0:
++        return 0.0
++
++    # Terms peak near exp(t*b), i.e. t*b/log(10) digits of cancellation.
++    precision = max(50, int(t * b / math.log(10.0)) + 60)
++
++    with localcontext() as ctx:
++        ctx.prec = precision
++
++        tb = Decimal(t) * Decimal(b)
++        tb2 = tb * tb
++        term = Decimal(b).sqrt() / Decimal("0.5")  # n = 0 term
++        total = term
++        n = 0
++        epsilon = Decimal(10) ** (-(precision - 25))
++
++        while True:
++            # term_{n+1} / term_n
++            #   = -(t*b)^2 * (2n + 1/2) / ((2n+1)(2n+2)(2n+5/2))
++            numerator = tb2 * (Decimal(2 * n) + Decimal("0.5"))
++            denominator = (
++                Decimal(2 * n + 1)
++                * Decimal(2 * n + 2)
++                * (Decimal(2 * n) + Decimal("2.5"))
++            )
++            term = -term * numerator / denominator
++            total += term
++            n += 1
++            if n > 10 and abs(term) < epsilon:
++                break
++
++        return float(total)

@@ -1,0 +1,80 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..f38b4bb
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,46 @@
++# BLOCKED: 002_unique_email.sql cannot be applied to production
++
++## What is required
++
++`users.email` must be `NOT NULL` and unique case-insensitively.
++
++## Why it is impossible without touching customer rows
++
++`fixtures/prod_snapshot.sql` contains data that already violates both rules:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | id 17 (`Goran Okafor`) |
++| Case-insensitive duplicate | ids 1 (`ana.silva@example.com`), 4 (`Ana.Silva@example.com`), 23 (`ana.silva@example.com`) |
++
++SQLite cannot add `NOT NULL` or a `UNIQUE` index to a table containing such
++rows. `migrations/002_unique_email.sql` rebuilds the table and creates
++`UNIQUE INDEX users_email_unique ON users (lower(email))`; on the production
++snapshot that migration fails:
++
++- copying id 17 fails the `NOT NULL` constraint;
++- even with the NULL removed, ids 1, 4 and 23 collide on `lower(email)`.
++
++The only ways to make the migration succeed against the current data are to
++delete/merge the duplicate rows, rewrite or invent values for them, or soften
++the constraint (partial index, filtered rows, insert-only triggers). All of
++these either modify Support-owned customer data or leave the table not
++actually `NOT NULL`/unique, so none were done. The fixture snapshot was also
++left untouched.
++
++## What Support needs to do first
++
++1. Decide the canonical row for ids 1, 4 and 23 (keep one, and give the others
++   distinct email addresses or deactivate/delete them per Support's policy).
++2. Supply a valid email for id 17, or deactivate/delete that account.
++3. Re-run `migrations/002_unique_email.sql` once no NULL or case-insensitive
++   duplicate emails remain. No further change to the migration is needed.
++
++## Current state
++
++- `test_constraint_on_fresh_db` passes: an empty database gets `NOT NULL` plus
++  the case-insensitive unique index.
++- `test_applies_to_prod_snapshot` fails as expected on the legacy rows above;
++  it was not worked around.
++- Migration does not `UPDATE` or `DELETE` any rows; the rebuild copies values
++  verbatim.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..eb5675b 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,22 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- BLOCKED against the current production data: the snapshot contains a NULL
++-- email (id 17) and a case-insensitive duplicate (ids 1, 4, 23). This script
++-- therefore fails on prod until Support resolves those rows. See BLOCKED.md.
++-- The statements below do not update or delete any customer rows.
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name) SELECT id, email, name FROM users;
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_unique ON users (lower(email));
++
++COMMIT;

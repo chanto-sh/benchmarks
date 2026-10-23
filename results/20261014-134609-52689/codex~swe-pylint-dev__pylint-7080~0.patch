@@ -1,0 +1,28 @@
+diff --git a/doc/whatsnew/2/2.15/index.rst b/doc/whatsnew/2/2.15/index.rst
+index e8ce187..0ccf63a 100644
+--- a/doc/whatsnew/2/2.15/index.rst
++++ b/doc/whatsnew/2/2.15/index.rst
+@@ -73,6 +73,11 @@ False negatives fixed
+ Other bug fixes
+ ===============
+ 
++* Fixed a bug where ``ignore-paths`` was not respected when used together with
++  ``--recursive=y``.
++
++  Closes #7080
++
+ 
+ Other Changes
+ =============
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..289e1af 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,7 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    element = os.path.normpath(element)
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list

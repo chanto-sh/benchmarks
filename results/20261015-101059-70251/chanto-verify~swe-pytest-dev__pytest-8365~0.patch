@@ -1,0 +1,28 @@
+diff --git a/changelog/8365.bugfix.rst b/changelog/8365.bugfix.rst
+new file mode 100644
+index 0000000..84dd46c
+--- /dev/null
++++ b/changelog/8365.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed ``tmpdir`` and ``tmp_path`` to work even if the current user name
++contains characters that are not allowed in directory names (for example
++``contoso\john_doe`` on Windows). In this case the base temporary directory
++now falls back to using ``unknown`` as the user name.
+diff --git a/src/_pytest/tmpdir.py b/src/_pytest/tmpdir.py
+index 29c7e19..47729ae 100644
+--- a/src/_pytest/tmpdir.py
++++ b/src/_pytest/tmpdir.py
+@@ -115,7 +115,12 @@ class TempPathFactory:
+             # use a sub-directory in the temproot to speed-up
+             # make_numbered_dir() call
+             rootdir = temproot.joinpath(f"pytest-of-{user}")
+-            rootdir.mkdir(exist_ok=True)
++            try:
++                rootdir.mkdir(exist_ok=True)
++            except OSError:
++                # getuser() likely returned illegal characters for the platform, use unknown back off mechanism
++                rootdir = temproot.joinpath("pytest-of-unknown")
++                rootdir.mkdir(exist_ok=True)
+             basetemp = make_numbered_dir_with_cleanup(
+                 prefix="pytest-", root=rootdir, keep=3, lock_timeout=LOCK_TIMEOUT
+             )

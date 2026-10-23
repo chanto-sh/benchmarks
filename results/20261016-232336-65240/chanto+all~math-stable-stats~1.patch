@@ -1,0 +1,70 @@
+diff --git a/stats.py b/stats.py
+index add4f59..dcd6024 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,59 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires a non-empty sequence")
++
++    # Work with differences from the first reading.  Subtracting two nearby
++    # large values is exact (Sterbenz), so a large offset does not destroy the
++    # information carried by the small spread.
++    shift = xs[0]
++    deltas = [x - shift for x in xs]
++
++    if not all(math.isfinite(d) for d in deltas):
++        # The spread exceeds the float range (the true variance is not
++        # representable), but the mean still is.
++        mean = math.fsum(x / n for x in xs)
++        return mean, math.inf
++
++    # Dividing each term by n keeps the running sum bounded by the largest
++    # difference, so fsum cannot overflow on the way to a finite mean.
++    mean_delta = math.fsum(d / n for d in deltas)
++    mean = shift + mean_delta
++
++    deviations = [d - mean_delta for d in deltas]
++    if not all(math.isfinite(e) for e in deviations):
++        return mean, math.inf
++
++    if all(e == 0.0 for e in deviations):
++        return mean, 0.0
++
++    # Scale before squaring: squares of 1e200-scale deviations overflow even
++    # when the resulting variance is representable.
++    max_dev = max(abs(e) for e in deviations)
++    scaled_sq = math.fsum((e / max_dev) ** 2 for e in deviations)
++    variance = (scaled_sq / n) * max_dev * max_dev
++    return mean, variance
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    values = list(xs)
++    if not values:
++        raise ValueError("logsumexp() requires a non-empty sequence")
++
++    # Factor out the maximum so no exp() argument is positive.  The max term
++    # contributes exactly 1, so the sum is always at least 1.
++    m = max(values)
++    s = math.fsum(math.exp(x - m) for x in values)
++    return m + math.log(s)
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        # exp(-x) is at most 1 instead of exp(x) overflowing.
++        return x + math.log1p(math.exp(-x))
++    # log1p preserves the result when exp(x) is tiny (unlike log(1 + exp(x)),
++    # which rounds to log(1) == 0).
++    return math.log1p(math.exp(x))

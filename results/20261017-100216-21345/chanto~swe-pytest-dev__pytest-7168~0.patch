@@ -1,0 +1,47 @@
+diff --git a/changelog/7168.bugfix.rst b/changelog/7168.bugfix.rst
+new file mode 100644
+index 0000000..4db12bc
+--- /dev/null
++++ b/changelog/7168.bugfix.rst
+@@ -0,0 +1,2 @@
++Fix internal error when an object with a broken ``__getattribute__`` raises in
++its ``__repr__`` while pytest is formatting a traceback.
+diff --git a/src/_pytest/_io/saferepr.py b/src/_pytest/_io/saferepr.py
+index 23af4d0..47a00de 100644
+--- a/src/_pytest/_io/saferepr.py
++++ b/src/_pytest/_io/saferepr.py
+@@ -20,7 +20,7 @@ def _format_repr_exception(exc: BaseException, obj: Any) -> str:
+     except BaseException as exc:
+         exc_info = "unpresentable exception ({})".format(_try_repr_or_str(exc))
+     return "<[{} raised in repr()] {} object at 0x{:x}>".format(
+-        exc_info, obj.__class__.__name__, id(obj)
++        exc_info, type(obj).__name__, id(obj)
+     )
+ 
+ 
+diff --git a/testing/io/test_saferepr.py b/testing/io/test_saferepr.py
+index 0608420..d29d312 100644
+--- a/testing/io/test_saferepr.py
++++ b/testing/io/test_saferepr.py
+@@ -130,6 +130,21 @@ def test_buggy_builtin_repr():
+     assert "Buggy" in saferepr(int())
+ 
+ 
++def test_broken_getattribute():
++    # both __getattribute__ and __repr__ raise: saferepr() must not raise and
++    # must not rely on attribute access to determine the class name.
++    class SomeClass:
++        def __getattribute__(self, attr):
++            raise
++
++        def __repr__(self):
++            raise
++
++    s = saferepr(SomeClass())
++    assert "SomeClass" in s
++    assert "raised in repr()" in s
++
++
+ def test_big_repr():
+     from _pytest._io.saferepr import SafeRepr
+ 

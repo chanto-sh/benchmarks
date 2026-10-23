@@ -1,0 +1,300 @@
+diff --git a/roots.py b/roots.py
+index d624667..ac3176a 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,243 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++# Internally polynomials are lists of integer coefficients in ascending
++# degree order.  Trailing (= highest-degree) zero coefficients are removed.
++
++
++def _trim(p):
++    while p and p[-1] == 0:
++        p.pop()
++    return p
++
++
++def _to_ascending(coeffs):
++    p = [int(c) for c in reversed(coeffs)]
++    return _trim(p)
++
++
++def _derivative(p):
++    return _trim([i * p[i] for i in range(1, len(p))])
++
++
++def _divmod(a, b):
++    """Polynomial division over Q; returns (quotient, remainder)."""
++    a = _trim([Fraction(c) for c in a])
++    b = _trim([Fraction(c) for c in b])
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return [], a
++
++    q = [Fraction(0)] * (len(a) - len(b) + 1)
++    r = a[:]
++    lead = b[-1]
++    while len(r) >= len(b):
++        shift = len(r) - len(b)
++        factor = r[-1] / lead
++        q[shift] = factor
++        for i, c in enumerate(b):
++            r[i + shift] -= factor * c
++        _trim(r)
++    return _trim(q), r
++
++
++def _pseudo_remainder(a, b):
++    """Integer pseudo-remainder of a by b.
++
++    Returns (remainder, scale_sign), where the exact rational remainder R
++    satisfies remainder == scale_sign * |lc(b)|**k * R for some k >= 0.
++    """
++    a = _trim(list(a))
++    b = _trim(list(b))
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if len(a) < len(b):
++        return a, 1
++
++    degree_b = len(b) - 1
++    lead = b[-1]
++    r = a[:]
++    steps = 0
++    while len(r) > degree_b:
++        factor = r[-1]
++        r = [lead * c for c in r]
++        shift = len(r) - 1 - degree_b
++        for i, c in enumerate(b):
++            r[i + shift] -= factor * c
++        _trim(r)
++        steps += 1
++
++    scale_sign = -1 if lead < 0 and steps % 2 else 1
++    return r, scale_sign
++
++
++def _gcd(a, b):
++    """Polynomial gcd up to a nonzero constant, via a primitive PRS."""
++    a = _primitive(a)
++    b = _primitive(b)
++    while b:
++        r, _ = _pseudo_remainder(a, b)
++        a, b = b, _primitive(r)
++    return a
++
++
++def _primitive(p):
++    """Clear denominators and remove the integer content, preserving sign."""
++    p = _trim([Fraction(c) for c in p])
++    if not p:
++        return []
++
++    lcm = 1
++    for c in p:
++        lcm = lcm * c.denominator // gcd(lcm, c.denominator)
++
++    ints = [c.numerator * (lcm // c.denominator) for c in p]
++    content = 0
++    for c in ints:
++        content = gcd(content, abs(c))
++    if content > 1:
++        ints = [c // content for c in ints]
++    return _trim(ints)
++
++
++def _sign_at(p, x):
++    """Exact sign of p(x); x is a Fraction and p has integer coefficients."""
++    num, den = x.numerator, x.denominator
++    y = p[-1]
++    den_pow = 1
++    for i in range(len(p) - 2, -1, -1):
++        den_pow *= den
++        y = y * num + p[i] * den_pow
++    return (y > 0) - (y < 0)
++
++
++def _square_free(p):
++    """The square-free part of p: p / gcd(p, p'), with the same distinct roots."""
++    p = _primitive(p)
++    if len(p) <= 1:
++        return p
++
++    d = _primitive(_derivative(p))
++    common = _primitive(_gcd(p, d))
++    quotient, remainder = _divmod(p, common)
++    if remainder:
++        raise ArithmeticError("inexact square-free division")
++    quotient = _primitive(quotient)
++    if quotient and quotient[-1] < 0:
++        quotient = [-c for c in quotient]
++    return quotient
++
++
++def _sturm_sequence(p):
++    """Sturm sequence for a square-free integer polynomial p."""
++    p0 = _primitive(p)
++    p1 = _primitive(_derivative(p0))
++    seq = [p0, p1]
++
++    while len(seq[-1]) > 1:
++        remainder, scale_sign = _pseudo_remainder(seq[-2], seq[-1])
++        if not remainder:
++            break
++        # The Sturm recurrence needs the negative of the rational remainder.
++        # The pseudo-remainder is a positive or negative multiple of it.
++        if scale_sign > 0:
++            remainder = [-c for c in remainder]
++        remainder = _primitive(remainder)
++        if not remainder:
++            break
++        seq.append(remainder)
++    return seq
++
++
++def _variations(seq, x):
++    """Number of sign changes in a Sturm sequence at x, ignoring zeros."""
++    changes = 0
++    previous = 0
++    for p in seq:
++        sign = _sign_at(p, x)
++        if sign == 0:
++            continue
++        if previous and sign != previous:
++            changes += 1
++        previous = sign
++    return changes
++
++
++_TOLERANCE = Fraction(1, 10**12)
++
++
++def _refine_root(a, b, va, vb, seq):
++    """Shrink an interval known to contain exactly one root in (a, b]."""
++    if _sign_at(seq[0], b) == 0:
++        return b
++
++    while b - a > _TOLERANCE:
++        m = (a + b) / 2
++        vm = _variations(seq, m)
++        if va - vm:
++            b, vb = m, vm
++        else:
++            a, va = m, vm
++
++    if _sign_at(seq[0], b) == 0:
++        return b
++    return (a + b) / 2
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
++    lo, hi: int or fractions.Fraction.
++
++    The polynomial is reduced to its square-free part, roots are isolated with
++    an exact Sturm sequence, and each isolated root is refined by bisection.
++    Repeated roots therefore appear once, and roots on either endpoint are
++    included.
+     """
+-    n = 1000
++    p = _to_ascending(coeffs)
++    if not p:
++        raise ValueError("zero polynomial")
++
++    lo = Fraction(lo)
++    hi = Fraction(hi)
++    if lo > hi:
++        return []
++
++    p = _square_free(p)
++    if len(p) <= 1:
++        return []
++
++    seq = _sturm_sequence(p)
++
++    if lo == hi:
++        return [float(lo)] if _sign_at(p, lo) == 0 else []
++
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if _sign_at(p, lo) == 0:
++        roots.append(lo)
++
++    # For a square-free polynomial, V(a) - V(b) counts the roots in (a, b].
++    va = _variations(seq, lo)
++    vb = _variations(seq, hi)
++    pending = [(lo, hi, va, vb)]
++
++    while pending:
++        a, b, va, vb = pending.pop()
++        count = va - vb
++        if count <= 0:
++            continue
++        if count == 1:
++            roots.append(_refine_root(a, b, va, vb, seq))
++            continue
++
++        m = (a + b) / 2
++        vm = _variations(seq, m)
++        # (a, m] has va - vm roots; (m, b] has vm - vb roots.
++        if vm - vb > 0:
++            pending.append((m, b, vm, vb))
++        if va - vm > 0:
++            pending.append((a, m, va, vm))
++
++    return sorted(float(r) for r in roots)
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..ea81ac6 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,23 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_close_roots(self):
++        # (10^7 x - 10^7)(10^7 x - (10^7 + 1)) has roots 1 and 1 + 1e-7.
++        d = 10**7
++        coeffs = [d * d, -d * (2 * d + 1), d * (d + 1)]
++        self.assertRoots(real_roots(coeffs, 0, 2), [1, 1 + 1e-7])
++
++    def test_roots_on_boundaries(self):
++        # x^2 - 4
++        self.assertRoots(real_roots([1, 0, -4], 2, 5), [2])
++        self.assertRoots(real_roots([1, 0, -4], -5, 2), [-2, 2])
++        self.assertRoots(real_roots([1, 0, -4], -2, 2), [-2, 2])
++        self.assertRoots(real_roots([1, 0, -4], 2, 2), [2])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

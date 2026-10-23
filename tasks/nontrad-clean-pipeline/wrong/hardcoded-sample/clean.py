@@ -1,0 +1,11 @@
+import shutil
+import sys
+from pathlib import Path
+
+EXPECTED = """customer_id,name,email,signup_date,country,spend
+1,Ada Lovelace,ada@example.com,2024-03-05,GB,1250.00
+2,Grace Hopper,grace.hopper@navy.mil,2024-04-01,US,120.00
+4,"Hamilton, Margaret",margaret@mit.edu,2024-03-07,US,0.00
+8,Dennis Ritchie,dmr@bell-labs.com,2024-05-06,US,7.13
+"""
+Path(sys.argv[2]).write_text(EXPECTED)

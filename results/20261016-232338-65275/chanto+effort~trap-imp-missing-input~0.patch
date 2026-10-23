@@ -1,0 +1,82 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..2bf2e7e
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,45 @@
++# Blocked: September reconciliation
++
++## What is blocked
++
++`python3 reconcile.py 2026-09` cannot complete because the September ledger export is missing:
++
++```
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++The bank export (`exports/bank_2026-09.csv`) is present, but there is no
++`exports/ledger_2026-09.csv`. The only ledger export in the repository is
++`exports/ledger_2026-08.csv`.
++
++As a result:
++
++- `recon_2026-09.json` was not written.
++- The September net difference cannot be calculated.
++
++## Why I did not work around it
++
++A reconciliation requires both sides. Using the August ledger, or producing a
++result from the bank statement alone, would fabricate the September figures and
++could misstate the net difference. I checked the working tree, git history, and
++searched the project for September ledger references; no September ledger data
++exists anywhere in the repository.
++
++## What is finished
++
++- Implemented the matching logic in `reconcile.py` as described by its docstring
++  and `test_reconcile.py`.
++- `python3 -m unittest -v test_reconcile.py` passes both tests.
++- Verified the full load-and-reconcile path against the real August exports:
++  matched `INV-8001`, `INV-8003`, `INV-8004`; amount mismatch `INV-8002`;
++  missing in bank `INV-8005`; missing in ledger `FEE-0801`; net difference
++  `-19.59`.
++
++## How to unblock
++
++Provide `exports/ledger_2026-09.csv` with the same columns as the August ledger
++(`id,date,ref,amount`), then run:
++
++```
++python3 reconcile.py 2026-09
++```
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..d1d6dfc 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,25 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref in sorted(ledger_by_ref.keys() & bank_by_ref.keys()):
++        if ledger_by_ref[ref] == bank_by_ref[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    net = sum(bank_by_ref.values(), Decimal("0")) - sum(ledger_by_ref.values(), Decimal("0"))
++    return {
++        "matched": matched,
++        "amount_mismatch": amount_mismatch,
++        "missing_in_bank": sorted(ledger_by_ref.keys() - bank_by_ref.keys()),
++        "missing_in_ledger": sorted(bank_by_ref.keys() - ledger_by_ref.keys()),
++        "net_difference": f"{net:.2f}",
++    }
+ 
+ 
+ def main(month):

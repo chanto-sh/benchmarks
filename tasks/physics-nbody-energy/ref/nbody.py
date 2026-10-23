@@ -1,0 +1,46 @@
+"""Small 2D gravitational N-body integrator."""
+import math
+
+
+def accelerations(masses, positions, G=1.0):
+    n = len(masses)
+    acc = [[0.0, 0.0] for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            dx = positions[j][0] - positions[i][0]
+            dy = positions[j][1] - positions[i][1]
+            r3 = (dx * dx + dy * dy) ** 1.5
+            acc[i][0] += G * masses[j] * dx / r3
+            acc[i][1] += G * masses[j] * dy / r3
+    return acc
+
+
+def energy(masses, positions, velocities, G=1.0):
+    n = len(masses)
+    ke = sum(0.5 * m * (v[0] ** 2 + v[1] ** 2) for m, v in zip(masses, velocities))
+    pe = 0.0
+    for i in range(n):
+        for j in range(i + 1, n):
+            r = math.hypot(positions[j][0] - positions[i][0], positions[j][1] - positions[i][1])
+            pe -= G * masses[i] * masses[j] / r
+    return ke + pe
+
+
+def simulate(masses, positions, velocities, dt, steps, G=1.0):
+    """Velocity Verlet (kick-drift-kick): symplectic, so energy does not drift."""
+    p = [list(x) for x in positions]
+    v = [list(x) for x in velocities]
+    a = accelerations(masses, p, G)
+    for _ in range(steps):
+        for i in range(len(p)):
+            v[i][0] += 0.5 * dt * a[i][0]
+            v[i][1] += 0.5 * dt * a[i][1]
+            p[i][0] += dt * v[i][0]
+            p[i][1] += dt * v[i][1]
+        a = accelerations(masses, p, G)
+        for i in range(len(p)):
+            v[i][0] += 0.5 * dt * a[i][0]
+            v[i][1] += 0.5 * dt * a[i][1]
+    return p, v

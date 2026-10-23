@@ -1,0 +1,77 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..10b0f62
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,58 @@
++# BLOCKED: exact streaming median in constant memory
++
++## Requirement
++
++`test_constant_memory` requires `median()` to consume a one-pass generator of
++200,000 arbitrary floats and return the exact median while allocating less than
++64 KB of Python memory (as measured by `tracemalloc`).
++
++## Why it cannot be met
++
++The two requirements are mutually exclusive for a general one-pass stream:
++
++- **Exactness requires retaining order information.** Finding the exact median
++  of an arbitrary sequence in a single pass requires Ω(n) space. Picking the
++  middle element is a selection problem; no constant-space algorithm can
++  distinguish all possible streams well enough to name the exact middle value.
++  Approximate streaming medians exist precisely because exact ones are
++  impossible under a bounded-memory, single-pass constraint.
++- **The test's own data already exceeds the budget.** The feed contains
++  200,000 arbitrary `float64` values. Merely holding those values requires
++  `200,000 * 8 = 1,600,000` bytes, about 24 times the 64 KB limit, before any
++  Python object or algorithm overhead. The observed peak with the exact
++  implementation is 7,221,928 bytes.
++
++The generator is consumed once (`values` cannot be replayed), so the usual
++alternative -- repeated passes with constant auxiliary storage -- is also
++unavailable.
++
++Satisfying the test would therefore require one of the following, all of which
++change the contract:
++
++1. Return an approximation and relax the exactness assertion.
++2. Restrict inputs to a known, small value domain and count values.
++3. Spill to disk / use an external sort, making memory constant but adding
++   O(n) disk usage and I/O.
++4. Exploit details of the test's seeded generator rather than the values
++   actually passed to `median()`, which is not a real solution.
++
++None of these is an honest implementation of the stated requirement, so no
++workaround was applied. The test is left in place and continues to fail on its
++memory assertion.
++
++## What was completed
++
++- Fixed the even-count bug: `median([1, 2, 3, 4])` now returns `2.5` (the mean
++  of the middle two) instead of `3`.
++- Preserved exactness, empty-input handling, and one-pass generator support;
++  the implementation continues to use O(n) memory.
++- Test status: `test_odd`, `test_even`, `test_empty_raises`, and
++  `test_generator_input` pass. `test_constant_memory` returns the correct
++  median but fails with a peak of 7,221,928 bytes.
++
++## Decision needed
++
++Choose which requirement to relax: exactness (use a bounded-memory approximate
++quantile algorithm), memory/disk model (use external sorting), or input model
++(require a replayable/bounded-domain source). Once the contract is clear,
++`median()` can be implemented accordingly.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

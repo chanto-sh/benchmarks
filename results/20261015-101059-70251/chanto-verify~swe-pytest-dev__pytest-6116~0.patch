@@ -1,0 +1,19 @@
+diff --git a/changelog/6116.feature.rst b/changelog/6116.feature.rst
+new file mode 100644
+index 0000000..43263fb
+--- /dev/null
++++ b/changelog/6116.feature.rst
+@@ -0,0 +1 @@
++New ``--co`` alias for the ``--collect-only`` option.
+diff --git a/src/_pytest/main.py b/src/_pytest/main.py
+index 843c5b5..b4261c1 100644
+--- a/src/_pytest/main.py
++++ b/src/_pytest/main.py
+@@ -109,6 +109,7 @@ def pytest_addoption(parser):
+     group.addoption(
+         "--collectonly",
+         "--collect-only",
++        "--co",
+         action="store_true",
+         help="only collect tests, don't execute them.",
+     ),

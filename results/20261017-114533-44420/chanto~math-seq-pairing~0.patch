@@ -1,0 +1,74 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..b6afb56 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,67 @@
+ """Integer keys for lists of non-negative integers."""
+ 
+ 
++def _pair(a, b):
++    """A size-efficient bijection from N x N to N.
++
++    If ``A = a + 1`` and ``B = b + 1`` have bit lengths ``la`` and ``lb``,
++    the pair is ranked inside the block ``la + lb``.  The resulting integer
++    has about ``la + lb`` bits, so repeatedly consing a list does not make
++    the key blow up exponentially.
++    """
++    A = a + 1
++    B = b + 1
++    la = A.bit_length()
++    lb = B.bit_length()
++    total = la + lb
++    half = 1 << (total - 2)
++    return (
++        (total - 3) * half
++        + 1
++        + (la - 1) * half
++        + ((A - (1 << (la - 1))) << (lb - 1))
++        + (B - (1 << (lb - 1)))
++    )
++
++
++def _unpair(n):
++    """Inverse of :func:`_pair`."""
++    # With k = total - 2, the offset of a block is (k - 1) * 2**k + 1.
++    # Its bit length is k + bit_length(k - 1), so this is a close estimate.
++    k = n.bit_length() - n.bit_length().bit_length()
++    if k < 0:
++        k = 0
++    while k * (1 << (k + 1)) + 1 <= n:
++        k += 1
++    while (k - 1) * (1 << k) + 1 > n:
++        k -= 1
++
++    total = k + 2
++    half = 1 << k
++    rank = n - ((k - 1) * half + 1)
++    la = rank // half + 1
++    lb = total - la
++
++    rem = rank & (half - 1)
++    lb_bits = lb - 1
++    x = rem >> lb_bits
++    y = rem & ((1 << lb_bits) - 1)
++
++    return (1 << (la - 1)) + x - 1, (1 << (lb - 1)) + y - 1
++
++
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    n = 0
++    for value in reversed(lst):
++        n = _pair(value, n) + 1
++    return n
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

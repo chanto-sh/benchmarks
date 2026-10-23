@@ -1,0 +1,91 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..c93f893 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,84 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    if F0 == 0.0:
++        return 0.0
++    denominator = math.hypot(k - m * omega * omega, c * omega)
++    if denominator == 0.0:
++        return math.inf
++    return abs(F0) / denominator
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    # Particular solution A cos(omega t) + B sin(omega t).
++    k_minus_mw2 = k - m * omega * omega
++    cw = c * omega
++    denominator = math.hypot(k_minus_mw2, cw)
++
++    if c == 0.0:
++        # With no damping the homogeneous and particular solutions can nearly
++        # cancel.  Write the forced part as a difference of cosines instead,
++        # and evaluate that difference with a product formula.
++        w0 = math.sqrt(k / m)
++        frequency_difference = (w0 - omega) * (w0 + omega)
++        if F0 == 0.0:
++            forced = 0.0
++        elif frequency_difference == 0.0:
++            # Exact resonance (excluded by the API contract, but well defined).
++            forced = F0 / (2.0 * m * w0) * t * math.sin(w0 * t)
++        else:
++            # cos(omega t) - cos(w0 t) = -2 sin(...) sin(...)
++            cosine_difference = -2.0 * math.sin(
++                0.5 * (omega + w0) * t
++            ) * math.sin(0.5 * (omega - w0) * t)
++            forced = F0 / (m * frequency_difference) * cosine_difference
++        return (
++            x0 * math.cos(w0 * t)
++            + v0 / w0 * math.sin(w0 * t)
++            + forced
++        )
++
++    A = F0 * k_minus_mw2 / (denominator * denominator)
++    B = F0 * cw / (denominator * denominator)
++
++    alpha = c / (2.0 * m)
++    # Coefficients of the homogeneous solution, written in the stable basis
++    # e^{-alpha t} cosh(q t) and e^{-alpha t} t sinh(q t) / (q t).
++    C = x0 - A
++    N = v0 - B * omega + alpha * C
++
++    discriminant = alpha * alpha - k / m
++    if discriminant >= 0.0:
++        # Critically or overdamped.  Avoid forming exp(-alpha t) cosh(q t)
++        # directly, since the two factors can overflow and underflow even
++        # though their product is finite.
++        q = math.sqrt(discriminant)
++        if q == 0.0:
++            decay = math.exp(-alpha * t)
++            homogeneous = decay * (C + N * t)
++        else:
++            a_plus = alpha + q
++            a_minus = (k / m) / a_plus  # alpha - q without cancellation
++            e_minus = math.exp(-a_minus * t)
++            e_plus = math.exp(-a_plus * t)
++            z = q * t
++            # (1 - exp(-2z)) / (2z), with its limit 1 at z = 0.
++            phi = -math.expm1(-2.0 * z) / (2.0 * z) if z != 0.0 else 1.0
++            H0 = 0.5 * (e_minus + e_plus)
++            H1 = e_minus * t * phi
++            homogeneous = C * H0 + N * H1
++    else:
++        # Underdamped (including the limiting critical case).
++        q = math.sqrt(-discriminant)
++        decay = math.exp(-alpha * t)
++        z = q * t
++        sinc = math.sin(z) / z if z != 0.0 else 1.0
++        homogeneous = decay * (C * math.cos(z) + N * t * sinc)
++
++    particular = A * math.cos(omega * t) + B * math.sin(omega * t)
++    return homogeneous + particular

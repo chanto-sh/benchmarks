@@ -1,0 +1,86 @@
+diff --git a/retry.go b/retry.go
+index f93e1fc..fbe958d 100644
+--- a/retry.go
++++ b/retry.go
+@@ -3,6 +3,7 @@ package retry
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"time"
+ )
+ 
+@@ -26,8 +27,35 @@ func (p *permanent) Unwrap() error { return p.err }
+ func Permanent(err error) error { return &permanent{err} }
+ 
+ func defaultSleep(ctx context.Context, d time.Duration) error {
+-	time.Sleep(d)
+-	return nil
++	if d <= 0 {
++		return ctx.Err()
++	}
++	t := time.NewTimer(d)
++	defer t.Stop()
++	select {
++	case <-ctx.Done():
++		return ctx.Err()
++	case <-t.C:
++		return nil
++	}
++}
++
++// backoff returns the delay before call n+1, capped at max, without
++// overflowing for large n.
++func backoff(base, max time.Duration, n int) time.Duration {
++	d := base
++	for i := 1; i < n; i++ {
++		// d >= max handles an oversized base/max; d > max-d guards the
++		// doubling against integer overflow.
++		if d >= max || d > max-d {
++			return max
++		}
++		d += d
++	}
++	if d > max {
++		return max
++	}
++	return d
+ }
+ 
+ // Do calls fn until it returns nil, returns a permanent error, the attempts
+@@ -40,23 +68,27 @@ func Do(ctx context.Context, p Policy, fn func() error) error {
+ 	if sleep == nil {
+ 		sleep = defaultSleep
+ 	}
++	attempts := p.Attempts
++	if attempts < 1 {
++		attempts = 1
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
+ 	var err error
+-	for n := 1; n <= p.Attempts; n++ {
++	for n := 1; n <= attempts; n++ {
+ 		err = fn()
+ 		if err == nil {
+ 			return nil
+ 		}
+-		if _, ok := err.(*permanent); ok {
++		var perm *permanent
++		if errors.As(err, &perm) {
+ 			return err
+ 		}
+-		if n == p.Attempts {
++		if n == attempts {
+ 			break
+ 		}
+-		d := p.Base << uint(n-1)
+-		if d > p.Max {
+-			d = p.Max
+-		}
+-		if serr := sleep(ctx, d); serr != nil {
++		if serr := sleep(ctx, backoff(p.Base, p.Max, n)); serr != nil {
+ 			return serr
+ 		}
+ 	}

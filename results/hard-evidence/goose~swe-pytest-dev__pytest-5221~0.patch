@@ -1,0 +1,58 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..52ba01b
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1,3 @@
++The ``--fixtures`` option now shows the scope of each fixture, for example
++``tmpdir_factory [session scope]``. Fixtures with function scope are shown
++without a scope annotation.
+diff --git a/doc/en/builtin.rst b/doc/en/builtin.rst
+index fb16140..df865aa 100644
+--- a/doc/en/builtin.rst
++++ b/doc/en/builtin.rst
+@@ -51,9 +51,9 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+         The captured output is made available via ``capfd.readouterr()`` method
+         calls, which return a ``(out, err)`` namedtuple.
+         ``out`` and ``err`` will be ``byte`` objects.
+-    doctest_namespace
++    doctest_namespace [session scope]
+         Fixture that returns a :py:class:`dict` that will be injected into the namespace of doctests.
+-    pytestconfig
++    pytestconfig [session scope]
+         Session-scoped fixture that returns the :class:`_pytest.config.Config` object.
+ 
+         Example::
+@@ -107,9 +107,9 @@ For information about fixtures, see :ref:`fixtures`. To see a complete list of a
+ 
+         See http://docs.python.org/library/warnings.html for information
+         on warning categories.
+-    tmpdir_factory
++    tmpdir_factory [session scope]
+         Return a :class:`_pytest.tmpdir.TempdirFactory` instance for the test session.
+-    tmp_path_factory
++    tmp_path_factory [session scope]
+         Return a :class:`_pytest.tmpdir.TempPathFactory` instance for the test session.
+     tmpdir
+         Return a temporary directory path object
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..99dab99 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1342,11 +1342,12 @@ def _showfixtures_main(config, session):
+                 currentmodule = module
+         if verbose <= 0 and argname[0] == "_":
+             continue
++        tw.write(argname, green=True)
++        if fixturedef.scope != "function":
++            tw.write(" [%s scope]" % fixturedef.scope, cyan=True)
+         if verbose > 0:
+-            funcargspec = "%s -- %s" % (argname, bestrel)
+-        else:
+-            funcargspec = argname
+-        tw.line(funcargspec, green=True)
++            tw.write(" -- %s" % bestrel, yellow=True)
++        tw.write("\n")
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""
+         if doc:

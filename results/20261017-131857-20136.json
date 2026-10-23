@@ -1,0 +1,928 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-17T13:18:57-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-p3.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--agents",
+      "chanto,chanto+quiet,chanto+provenance",
+      "--tier",
+      "showcase",
+      "--tasks",
+      "analysis-config-layers,analysis-dep-pin,analysis-git-regression,data-library-loans,nontrad-ci-fix",
+      "--repeat",
+      "1",
+      "--seed",
+      "1017",
+      "--chanto-effort",
+      "high",
+      "--offline",
+      "--min-balance",
+      "19"
+    ],
+    "bench_commit": "2f180ebc7a65f840536d2e27ab652cdf4768a5ce",
+    "bench_dirty": true,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-2f180eb-prov",
+      "sha256": "74aa1e9789c6bf507c4e1a78787170cd91ee6cf3f216b2bbc1f97f2ccafaff17"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.6",
+      "chanto+quiet": "chanto 0.1.6",
+      "chanto+provenance": "chanto 0.1.6"
+    },
+    "chanto_optimize": {
+      "chanto": [],
+      "chanto+quiet": [
+        "quiet"
+      ],
+      "chanto+provenance": [
+        "provenance"
+      ]
+    },
+    "chanto_effort": "high",
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": null,
+    "seed": 1017,
+    "repeat": 1,
+    "tasks": {
+      "analysis-config-layers": "032b11c096ef9f31949cbcfcbdfed9b7b0743306b9f693af0e7191a8e18476cd",
+      "analysis-dep-pin": "dbceff89781f2cd5c6d4640aaf930daf9fcee9c0cff93def96ccbff4fc665078",
+      "analysis-git-regression": "2af5d3b4662fc1a9cfb92d703e51c1b45d26025b267be4768abbae07af54277c",
+      "data-library-loans": "a78b6e90a0415129907787d9b5c8e820b9e56c1d156d62ba1ff6654499ae954b",
+      "nontrad-ci-fix": "bf5f0184173d64b23fa27f621c590a5dd54eb0668663252eca781a54d97a087f"
+    },
+    "offline_profile_sha256": "a98c15ca0df2006172402c809a15a3fc7b7c3c76d382fa39647c19f435d5224d"
+  },
+  "results": [
+    {
+      "agent": "chanto",
+      "task": "analysis-dep-pin",
+      "rep": 0,
+      "passed": true,
+      "seconds": 16.3,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 50703,
+        "out": 2363
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto~analysis-dep-pin~0~a1b9d0e5",
+      "started_at": "2026-10-17T13:19:03-0700",
+      "ended_at": "2026-10-17T13:19:21-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.out",
+          "sha256": "94dcfae3fb12049459d70ce17b17b4bdc60a8a1973dd66f3c152bbbd8ea551a6"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.patch",
+          "sha256": "491ea3eade41853e6b70ad1fe957d53204b3b0812ac418d4877b5d4628a3f175"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.session0.json",
+          "sha256": "69c0bcd35f40165b2dee44d7a716758ed03a6bd74ace56acda3721f40c27e2a9"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.session1.json",
+          "sha256": "c5070d958a901a121e9a5ce7e1ace36ddf6d2c18c84e0a6c3a3333ffb72c6ec2"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto~analysis-dep-pin~0.session2.json",
+          "sha256": "50cadc840c78f9f0788fef65e41527c4b0ec4dd4a446178fef5a4e52c5357241"
+        }
+      }
+    },
+    {
+      "agent": "chanto+provenance",
+      "task": "analysis-dep-pin",
+      "rep": 0,
+      "passed": true,
+      "seconds": 29.7,
+      "optimize": [
+        "provenance"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 100136,
+        "out": 5139
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+provenance~analysis-dep-pin~0~5c00d78c",
+      "started_at": "2026-10-17T13:19:23-0700",
+      "ended_at": "2026-10-17T13:19:54-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.out",
+          "sha256": "b1f7b1b4ff86d60489efad7ed9d179a4db320128510b0e72275a2f3ae5e02020"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.patch",
+          "sha256": "491ea3eade41853e6b70ad1fe957d53204b3b0812ac418d4877b5d4628a3f175"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.session0.json",
+          "sha256": "4825b944384409c682cb894ac83b374197c6ab83a881021a54c4c952a50bf8a3"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.session1.json",
+          "sha256": "ec3659fa9fcd95ca159f0f8bb2b7d1624af822920e56ff76a26c61613911a67c"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.session2.json",
+          "sha256": "d361e2761ae29994d9955da3f7ebc86a26aed43c968d41dbedfeb538835938ba"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.session3.json",
+          "sha256": "42db44091e21c0f8dd88c349b60964fa62ec3b034bcd5985759c4375770c2c61"
+        },
+        "session4": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-dep-pin~0.session4.json",
+          "sha256": "b16e69141ee87f5fb8832e0d69ca13f93e14c2986b8d1cdef56d474e1d0d7314"
+        }
+      }
+    },
+    {
+      "agent": "chanto+quiet",
+      "task": "analysis-dep-pin",
+      "rep": 0,
+      "passed": true,
+      "seconds": 13.8,
+      "optimize": [
+        "quiet"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 49896,
+        "out": 1809
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+quiet~analysis-dep-pin~0~b53447a4",
+      "started_at": "2026-10-17T13:19:55-0700",
+      "ended_at": "2026-10-17T13:20:10-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.out",
+          "sha256": "83c8a542df96c0f1508f01f845e43d6051c3e1e340ee701574efc616edb3fbe8"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.patch",
+          "sha256": "491ea3eade41853e6b70ad1fe957d53204b3b0812ac418d4877b5d4628a3f175"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.session0.json",
+          "sha256": "fbffdd2b5f83253a775b6bdab4ec722ed95a8790f26aa2ae619fd3b14950a60b"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.session1.json",
+          "sha256": "9a4038b1eac80c1089af30180a4ed51537a43acb8f33f61650d5b318c5edd797"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-dep-pin~0.session2.json",
+          "sha256": "2883fa14291f144dfeac00eae528f6ccc177c652c6569d2c5f75bd3b532ee7d9"
+        }
+      }
+    },
+    {
+      "agent": "chanto+provenance",
+      "task": "analysis-git-regression",
+      "rep": 0,
+      "passed": true,
+      "seconds": 20.5,
+      "optimize": [
+        "provenance"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 77507,
+        "out": 2717
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+provenance~analysis-git-regression~0~f51dd207",
+      "started_at": "2026-10-17T13:20:12-0700",
+      "ended_at": "2026-10-17T13:20:34-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.out",
+          "sha256": "e3cbe513d6599ca0ec9c01a4ecfee9102437c0c7a48afa8fe53534f75e891b98"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.patch",
+          "sha256": "a7d27da1c343badedfe1466d1a4429bfcc25b281b4456333817da6cb95b2ae50"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.session0.json",
+          "sha256": "e44b1910622d2bc59abc40af6ede81ba3ddcb054461a5e843f61cf25ee113428"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.session1.json",
+          "sha256": "e987df9b81b9a39a582e268dccd05040335173031fa7f2fd3b5f1ac4d8c6c821"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.session2.json",
+          "sha256": "b946c5d920227c703556a5e59186b7e27a050949e03abdee0c71e183af49aff2"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-git-regression~0.session3.json",
+          "sha256": "c00aee494058ff440f7930d56cdfe44934ceeb692ea68262ff630927c95fa638"
+        }
+      }
+    },
+    {
+      "agent": "chanto+quiet",
+      "task": "analysis-git-regression",
+      "rep": 0,
+      "passed": true,
+      "seconds": 12.2,
+      "optimize": [
+        "quiet"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 38909,
+        "out": 1614
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+quiet~analysis-git-regression~0~8f11896e",
+      "started_at": "2026-10-17T13:20:37-0700",
+      "ended_at": "2026-10-17T13:20:51-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.out",
+          "sha256": "0854fda463d8dc812202fab6eaa5839b23fe0463b004fddea6bcfb929b6fa955"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.patch",
+          "sha256": "a7d27da1c343badedfe1466d1a4429bfcc25b281b4456333817da6cb95b2ae50"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.session0.json",
+          "sha256": "49103501e0c801fd6d925c5c6cd7161b86e5dc6a7eb21e81b4a78a43ea0a8e83"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.session1.json",
+          "sha256": "f5de49d005bb3b9e2becbb357dabf28b6ca8f3d1258a6489cf78d291fe49e43a"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-git-regression~0.session2.json",
+          "sha256": "b040b727a91f8e1e762d53df54fb4685cf6316d32b64b4dbdef63b7546d03f09"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "analysis-git-regression",
+      "rep": 0,
+      "passed": true,
+      "seconds": 10.1,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 36391,
+        "out": 863
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto~analysis-git-regression~0~f7edea4b",
+      "started_at": "2026-10-17T13:20:54-0700",
+      "ended_at": "2026-10-17T13:21:05-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.out",
+          "sha256": "95988e8165513559db90df6e290147608fc373c52119ad552892306a91dee429"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.patch",
+          "sha256": "a7d27da1c343badedfe1466d1a4429bfcc25b281b4456333817da6cb95b2ae50"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.session0.json",
+          "sha256": "2eac0a1246b2474321f9cba73007aeebdeb6ac915ae1860fb602bb6f2e6f83a8"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.session1.json",
+          "sha256": "3102ef14ff581e16bfc935d8a422326cdb5d7e369bc24db59b10caaf425209a8"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.session2.json",
+          "sha256": "df1f3c7912ff0dfd5c92902075c887288b56d1d97379c4fa909a91484ac540cd"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto~analysis-git-regression~0.session3.json",
+          "sha256": "bdb0e9521ca99d79990b420364471de2c2cc3c54c1a2d16b5454f35bf525b954"
+        }
+      }
+    },
+    {
+      "agent": "chanto+provenance",
+      "task": "analysis-config-layers",
+      "rep": 0,
+      "passed": true,
+      "seconds": 21.1,
+      "optimize": [
+        "provenance"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 55093,
+        "out": 3593
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+provenance~analysis-config-layers~0~9c7e55ae",
+      "started_at": "2026-10-17T13:21:07-0700",
+      "ended_at": "2026-10-17T13:21:29-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.out",
+          "sha256": "ebb59f335c495cf88960c52fd92bfdcdbdec16f9974f884a7616f6d69bc773cd"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.patch",
+          "sha256": "42f36638b378229d080018705bdae44bc5734460813c594b34379a19fb5471ae"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.session0.json",
+          "sha256": "dd6e59b051c8378f622ecb80e23a71cbb25e6580b42bd2ee15b2ff5bafc80aea"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.session1.json",
+          "sha256": "0b9d4f281eb439fb22a2e310d0255d52f9b0cbdc2b80a29355a6ff59c4ecd0e8"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.session2.json",
+          "sha256": "31e8e7640240c298ef238976d76df52a9958077d90d1dd52906ea0e59bf2c21a"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.session3.json",
+          "sha256": "b6317ae3e7772e49c6411e17c4eee3c064b582e82a5d85ad5b92954bf6189173"
+        },
+        "session4": {
+          "file": "20261017-131857-20136/chanto+provenance~analysis-config-layers~0.session4.json",
+          "sha256": "d9180933198e5ca56d6245dd1645bc5d90306ec45816dd557a0522b86f88bcf6"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "analysis-config-layers",
+      "rep": 0,
+      "passed": true,
+      "seconds": 12.3,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 28929,
+        "out": 2089
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto~analysis-config-layers~0~61baea9d",
+      "started_at": "2026-10-17T13:21:31-0700",
+      "ended_at": "2026-10-17T13:21:44-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.out",
+          "sha256": "f939ac38e176c25bcbe99c937e643adedb369783caea6a2d95e4fa29a5c2cffe"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.patch",
+          "sha256": "fc18f842d3df14160e5ddc510d9851a433ff235a18f47e78d9a92be8396c8f10"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.session0.json",
+          "sha256": "994b98cb70e7756f7518c119695b80d43d9133b9a901e41d5f807f00cf7e4530"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.session1.json",
+          "sha256": "ae96dd831deb858cf2afc65948c8a939953c88659a43cd1dd46b44ef8c0a048b"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto~analysis-config-layers~0.session2.json",
+          "sha256": "7b666de2a0a1b83d229ec2cdca749f699e07d1c9f4098edb49e786d42a85aee3"
+        }
+      }
+    },
+    {
+      "agent": "chanto+quiet",
+      "task": "analysis-config-layers",
+      "rep": 0,
+      "passed": true,
+      "seconds": 11.2,
+      "optimize": [
+        "quiet"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 28868,
+        "out": 1651
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+quiet~analysis-config-layers~0~8b752b0a",
+      "started_at": "2026-10-17T13:21:46-0700",
+      "ended_at": "2026-10-17T13:21:58-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.out",
+          "sha256": "d24bac424bd78c6246dc68889edd31a7863243feb0fbb3933ad7d238958534bc"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.patch",
+          "sha256": "fc18f842d3df14160e5ddc510d9851a433ff235a18f47e78d9a92be8396c8f10"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.session0.json",
+          "sha256": "0f46616f0fd34690f0a87b9bc8152515e6ddcf1c2eccc34284a0e959379560fe"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.session1.json",
+          "sha256": "01acab028ee99a4989cd43bf851e29d8bdfde0e651f51df000c08025917afda9"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+quiet~analysis-config-layers~0.session2.json",
+          "sha256": "8cd819408756cd07fd9f56b468ef961127aa874e72d14526b01848eb6d0e5811"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "nontrad-ci-fix",
+      "rep": 0,
+      "passed": true,
+      "seconds": 16.0,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "== test / Lint\nlint: 0 problem(s)\n== test / Generate build info\nwrote service/app/_build_info.py\n== test / Unit tests\ntest_settings_are_ci (test_app.AppTests.test_settings_are_ci) ... ok\ntest_total (test_app.AppTests.test_total) ... ok\ntest_version (test_app.AppTests.test_version) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\npipeline ok\n",
+      "tokens": {
+        "in": 48394,
+        "out": 2488
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto~nontrad-ci-fix~0~bf74af7a",
+      "started_at": "2026-10-17T13:22:00-0700",
+      "ended_at": "2026-10-17T13:22:17-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.out",
+          "sha256": "9e45afa189f98c0c843d758705665bb41034c72325762e00ed5b9fa2096b32ac"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.patch",
+          "sha256": "b376ddf032daa385ffd724fa301a10e21d341483a214d8ec6bb0147284b4fff5"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.check.txt",
+          "sha256": "9558d6481743476fe4b9601ab5de68ede053cdc5f2b27c91b841194df2f74741"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.session0.json",
+          "sha256": "ea8128df2f46b2694a9687cbd5b3e2a2f278ada6016adef4a4e12966a7f384a2"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.session1.json",
+          "sha256": "8dcf16d3d3ceb9e63943475b5e6b705081edaac9b6b1ae326f526bc3e04ff147"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto~nontrad-ci-fix~0.session2.json",
+          "sha256": "b7afd257fc3c515f21c2ae5a67ad62197a142fb8fb886096224c614472d1ea7b"
+        }
+      }
+    },
+    {
+      "agent": "chanto+quiet",
+      "task": "nontrad-ci-fix",
+      "rep": 0,
+      "passed": true,
+      "seconds": 15.6,
+      "optimize": [
+        "quiet"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "== test / Lint\nlint: 0 problem(s)\n== test / Generate build info\nwrote service/app/_build_info.py\n== test / Unit tests\ntest_settings_are_ci (test_app.AppTests.test_settings_are_ci) ... ok\ntest_total (test_app.AppTests.test_total) ... ok\ntest_version (test_app.AppTests.test_version) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\npipeline ok\n",
+      "tokens": {
+        "in": 49527,
+        "out": 2316
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+quiet~nontrad-ci-fix~0~68ea68aa",
+      "started_at": "2026-10-17T13:22:19-0700",
+      "ended_at": "2026-10-17T13:22:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.out",
+          "sha256": "69e357d8c9840e38b7cadc188829ff02de7360e8632e1e3e19bd8a57c9c22a28"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.patch",
+          "sha256": "b376ddf032daa385ffd724fa301a10e21d341483a214d8ec6bb0147284b4fff5"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.check.txt",
+          "sha256": "9558d6481743476fe4b9601ab5de68ede053cdc5f2b27c91b841194df2f74741"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.session0.json",
+          "sha256": "ed2f544e17576eedd147d77ec480fd121eb4e7b6a19af809a82508339beb6e7f"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.session1.json",
+          "sha256": "44178e3bebdc13752cc878235172e8c48691113cb8a0b51b504c8ee9a0500520"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.session2.json",
+          "sha256": "41e3efc9ceed8899a4f72e242ad39fb0e2ddc0af59a36125f39ffe8c4c9e7c9b"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto+quiet~nontrad-ci-fix~0.session3.json",
+          "sha256": "45a462d1835a7a015b809c0639937f71c68cf9aa9767d73605e5b7ba0e7c803e"
+        }
+      }
+    },
+    {
+      "agent": "chanto+provenance",
+      "task": "nontrad-ci-fix",
+      "rep": 0,
+      "passed": true,
+      "seconds": 23.4,
+      "optimize": [
+        "provenance"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "== test / Lint\nlint: 0 problem(s)\n== test / Generate build info\nwrote service/app/_build_info.py\n== test / Unit tests\ntest_settings_are_ci (test_app.AppTests.test_settings_are_ci) ... ok\ntest_total (test_app.AppTests.test_total) ... ok\ntest_version (test_app.AppTests.test_version) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\npipeline ok\n",
+      "tokens": {
+        "in": 83851,
+        "out": 3471
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+provenance~nontrad-ci-fix~0~0788ab96",
+      "started_at": "2026-10-17T13:22:37-0700",
+      "ended_at": "2026-10-17T13:23:02-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.out",
+          "sha256": "5499b541f4a6c00db3426348c73b3ed9051f73c0f2c3ddea975c406049f9f9d7"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.patch",
+          "sha256": "b376ddf032daa385ffd724fa301a10e21d341483a214d8ec6bb0147284b4fff5"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.check.txt",
+          "sha256": "9558d6481743476fe4b9601ab5de68ede053cdc5f2b27c91b841194df2f74741"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.session0.json",
+          "sha256": "149cc1496979ed76c684aaf2c0ca52eb91d00b7f970417cf4d30067146fede09"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.session1.json",
+          "sha256": "2ed0a6d34e43ea3402c4035be8bddc4779faef2f17702ac959344f1e3ec74b1b"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+provenance~nontrad-ci-fix~0.session2.json",
+          "sha256": "f8b37093ee99dc8bc0226367ee10dd65df94047699091f7931b742dd23423190"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "data-library-loans",
+      "rep": 0,
+      "passed": true,
+      "seconds": 42.4,
+      "optimize": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 97071,
+        "out": 7849
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto~data-library-loans~0~8d621f15",
+      "started_at": "2026-10-17T13:23:04-0700",
+      "ended_at": "2026-10-17T13:23:48-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.out",
+          "sha256": "38ef492360218a8358eecd09f890b4baad820b692cb133fe769721bc8997da28"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.patch",
+          "sha256": "3577b84678f32dae55dfe725d05a9a21e68b5e1505cb2f6528eb547627bdc3ac"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.session0.json",
+          "sha256": "ec8af52f04ba146a41f177b35c65082c99b12056eb4766119f450858bb8c5653"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.session1.json",
+          "sha256": "f9f885cb143199c95e6af1c1e2c8112b18d5b04494fa3958685148360ef9778a"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.session2.json",
+          "sha256": "05ff231513571a3af3cd84fb142fa5602f3ebf1245f86bc41e712a5d75f199cb"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.session3.json",
+          "sha256": "7bc2b1840be3edccb2726375854777b20837920848ccfca9069d3cc24d2209eb"
+        },
+        "session4": {
+          "file": "20261017-131857-20136/chanto~data-library-loans~0.session4.json",
+          "sha256": "fd632655391a45fd1994e4ac3647bb9d975a0c6b351d3b2476f5189399e42cf8"
+        }
+      }
+    },
+    {
+      "agent": "chanto+provenance",
+      "task": "data-library-loans",
+      "rep": 0,
+      "passed": true,
+      "seconds": 45.9,
+      "optimize": [
+        "provenance"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "all answers correct\n",
+      "tokens": {
+        "in": 147170,
+        "out": 7525
+      },
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+provenance~data-library-loans~0~c416709a",
+      "started_at": "2026-10-17T13:23:49-0700",
+      "ended_at": "2026-10-17T13:24:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.out",
+          "sha256": "5f0260308a8126d924917f8e643a43c682eb8c66bf29684c5285b96d03deaf20"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.patch",
+          "sha256": "3577b84678f32dae55dfe725d05a9a21e68b5e1505cb2f6528eb547627bdc3ac"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.check.txt",
+          "sha256": "f230624eccdc878b9117c92956a8920e0c351793c0892bb74f1a954201cf09eb"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session0.json",
+          "sha256": "9aa906386f427059d4012eecfa452a6d1c093cde9fab2a10f9512d337299312e"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session1.json",
+          "sha256": "e73a2b06fe6c5767a161d4648f7732498ab13c4f8158f0c9352c66026db7faf0"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session2.json",
+          "sha256": "110a31623ab7c89fdfd716a7b6f23d5340563561a604ebef061d6f4ba2a5e280"
+        },
+        "session3": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session3.json",
+          "sha256": "cc5a52973fcfc8f378516309b81dee71f3b3e681d18893025c12a34ec7dd13cb"
+        },
+        "session4": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session4.json",
+          "sha256": "95cfde0def260bd786beb0dc7f61f65aaf3c225a628626b9bf928f02a0cb1a6d"
+        },
+        "session5": {
+          "file": "20261017-131857-20136/chanto+provenance~data-library-loans~0.session5.json",
+          "sha256": "ed4585eed4189c28a6bb31121fe006973373c77db86508cdb0175d6019c03f7b"
+        }
+      }
+    },
+    {
+      "agent": "chanto+quiet",
+      "task": "data-library-loans",
+      "rep": 0,
+      "passed": false,
+      "seconds": 19.3,
+      "optimize": [
+        "quiet"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "wrong answers:\navg_history_loan_days: got 15.98\n",
+      "tokens": {
+        "in": 48972,
+        "out": 2543
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cached": 0
+      },
+      "meter_label": "chanto+quiet~data-library-loans~0~e001d814",
+      "started_at": "2026-10-17T13:24:38-0700",
+      "ended_at": "2026-10-17T13:24:59-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.out",
+          "sha256": "9f1e62f0738654aab8325701120d69bba3c84973b787b66f80df3d0db4dee508"
+        },
+        "patch": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.patch",
+          "sha256": "5ef92fe9a69c2880c6f33d247b6fc6a6ae3bbfae68d32be7d7283411717ac55a"
+        },
+        "check": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.check.txt",
+          "sha256": "977a36632a7fde5a1cc561ecd80c78226d3efde440f8d332f7b6b6d48243dcaa"
+        },
+        "session0": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.session0.json",
+          "sha256": "afa109796e00196b8fa63adef3accdb416af53ac8d7f5f22eeb17e4090ea3998"
+        },
+        "session1": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.session1.json",
+          "sha256": "60fbf9eca22bf657750fbb814e5bfc31eebe91fdcc2cc48a3faaf78243490057"
+        },
+        "session2": {
+          "file": "20261017-131857-20136/chanto+quiet~data-library-loans~0.session2.json",
+          "sha256": "bc4152125083dc6af4f50755c7395c92670f588ea88a4282b4d9ce607d7108d6"
+        }
+      }
+    }
+  ]
+}

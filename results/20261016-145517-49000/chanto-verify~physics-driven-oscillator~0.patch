@@ -1,0 +1,88 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..f3a256f 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,79 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _sinc(u):
++    """sin(u) / u, continuous at u = 0 (returns 1)."""
++    u2 = u * u
++    if u2 < 1e-8:
++        return 1.0 - u2 / 6.0 + u2 * u2 / 120.0
++    return math.sin(u) / u
++
++
++def _sinhc(u):
++    """sinh(u) / u, continuous at u = 0 (returns 1)."""
++    u2 = u * u
++    if u2 < 1e-8:
++        return 1.0 + u2 / 6.0 + u2 * u2 / 120.0
++    return math.sinh(u) / u
++
+ 
+ def amplitude(m, k, c, F0, omega):
+-    """Steady-state amplitude."""
+-    raise NotImplementedError
++    """Steady-state amplitude of x.
++
++    The particular solution of m x'' + c x' + k x = F0 cos(omega t) is
++    x_p(t) = X cos(omega t) + Y sin(omega t) with
++        X = F0 (k - m w^2) / D,  Y = F0 (c w) / D,
++        D = (k - m w^2)^2 + (c w)^2,
++    so the amplitude is sqrt(X^2 + Y^2) = |F0| / sqrt(D).
++    """
++    d = k - m * omega * omega
++    denom = math.hypot(d, c * omega)
++    return abs(F0) / denom
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+-    """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    """x(t) with x(0) = x0, x'(0) = v0 (transient plus steady state)."""
++    # --- steady-state (particular) solution x_p = X cos(wt) + Y sin(wt) ---
++    d = k - m * omega * omega
++    cw = c * omega
++    denom = math.hypot(d, cw)
++    # Divide through denom twice to keep the denominator from overflowing.
++    X = F0 * (d / denom) / denom
++    Y = F0 * (cw / denom) / denom
++
++    # --- homogeneous solution chosen so the initial conditions are met ---
++    # Residual values the homogeneous part must account for at t = 0.
++    a0 = x0 - X
++    b0 = v0 - Y * omega
++
++    alpha = c / (2.0 * m)          # decay rate of the envelope
++    wn2 = k / m                    # natural frequency squared
++    disc = alpha * alpha - wn2     # (c^2 - 4mk) / (4 m^2)
++    P = b0 + alpha * a0
++
++    if disc < 0.0:
++        # Underdamped: e^{-alpha t} (a0 cos(wd t) + P sin(wd t) / wd)
++        wd = math.sqrt(-disc)
++        u = wd * t
++        xh = math.exp(-alpha * t) * (a0 * math.cos(u) + P * t * _sinc(u))
++    elif disc == 0.0:
++        # Critically damped: e^{-alpha t} (a0 + P t)
++        xh = math.exp(-alpha * t) * (a0 + P * t)
++    else:
++        # Overdamped: e^{-alpha t} (a0 cosh(beta t) + P sinh(beta t) / beta)
++        beta = math.sqrt(disc)
++        u = beta * t
++        if abs(u) < 1.0:
++            # cosh and sinh(.)/beta are evaluated directly here; the
++            # combination has no cancellation for small u.
++            xh = math.exp(-alpha * t) * (a0 * math.cosh(u) + P * t * _sinhc(u))
++        else:
++            # Use decaying exponentials to avoid overflow of cosh/sinh
++            # (alpha > beta, so both exponents are negative).
++            e1 = math.exp(-(alpha - beta) * t)
++            e2 = math.exp(-(alpha + beta) * t)
++            xh = 0.5 * (e1 + e2) * a0 + 0.5 * (e1 - e2) * P / beta
++
++    return X * math.cos(omega * t) + Y * math.sin(omega * t) + xh

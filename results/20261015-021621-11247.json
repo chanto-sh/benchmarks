@@ -1,0 +1,350 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-15T02:16:21-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-hard.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--seed",
+      "210",
+      "--agents",
+      "chanto,chanto-verify,claude,codex,pi,goose",
+      "--tasks",
+      "swe-pytest-dev__pytest-5495"
+    ],
+    "bench_commit": "312dd81a941edfee1ba1cefed391936f647964e4",
+    "bench_dirty": false,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-cb06a06",
+      "sha256": "2aaf83d7b920467e87f95eab785ef1f4c65d89d5ca64aacccf60596a8140f391"
+    },
+    "agent_versions": {
+      "chanto": "chanto 0.1.0",
+      "chanto-verify": "chanto 0.1.0",
+      "claude": "2.1.300 (Claude Code)",
+      "codex": "codex-cli 0.162.1",
+      "pi": "1.1.0",
+      "goose": "1.54.0"
+    },
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 210,
+    "repeat": 1,
+    "tasks": {
+      "swe-pytest-dev__pytest-5495": "39ecee914412ac6437130d3291e3cf97602ae0df1a5115095cda3773e91e724e"
+    },
+    "offline_profile_sha256": "618d75f7edfb93b9987ff7fc2b41e3d84bb1a2b55d14d88b75f24a3fedd7340a"
+  },
+  "results": [
+    {
+      "agent": "chanto-verify",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 891.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "            \"At index 0 diff: b's' != b'e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"-b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Left contains one more item: \"+ b'eggs'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         -  \"-b'spam'\",\nE         -  \"+b'eggs'\",...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/chanto-verify/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.33 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-ti4p6khs'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-86g3a3hh'\n",
+      "tokens": {
+        "in": 5175922,
+        "out": 76601
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 106,
+        "input": 5175922,
+        "output": 76601,
+        "cached": 5084288
+      },
+      "meter_label": "chanto-verify~swe-pytest-dev__pytest-5495~0~66bb0cba",
+      "started_at": "2026-10-15T02:16:40-0700",
+      "ended_at": "2026-10-15T02:31:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/chanto-verify~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "82daf0b30d7ec97147ef915c5da2f2b7c8ebe00818bff7d0a6a3ce87837c4b81"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/chanto-verify~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "16fca73eae50e89dc1f6914ad05fe64ad5e1944fd28485c4950207ddd94d09ba"
+        },
+        "check": {
+          "file": "20261015-021621-11247/chanto-verify~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "9b15fadec5778fd0be39f8d4436cb12449b9cb615ce0b5bd3d1ace33406f7fb9"
+        },
+        "session0": {
+          "file": "20261015-021621-11247/chanto-verify~swe-pytest-dev__pytest-5495~0.session0.jsonl",
+          "sha256": "830395cda12a5b7aa8e1e425911e05c9d969b58d4311e6d1bd1c218009f376fb"
+        },
+        "session1": {
+          "file": "20261015-021621-11247/chanto-verify~swe-pytest-dev__pytest-5495~0.session1.json",
+          "sha256": "8de52e2a9c1ed5d27b0b413bb3b28b8a75334af5fa483a228762a1b32ee6a07f"
+        }
+      }
+    },
+    {
+      "agent": "claude",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 119.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ...m\", \"+ 'eggs\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"- 'spam\" != \"At index 0 diff: b's' != b'e'\"\nE         Right contains 2 more items, first extra item: \"- b'spam'\"\nE         Full diff:\nE         - [\"b'spam' == b'eggs'\", \"- 'spam\", \"+ 'eggs\"]\nE         + [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         +  'Full diff:',...\nE         \nE         ...Full output truncated (3 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/claude/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.37 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-rzy35uc7'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-jxb5dvy5'\n",
+      "tokens": {
+        "in": 29704,
+        "out": 9167
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 21,
+        "input": 562056,
+        "output": 9167,
+        "cached": 532352
+      },
+      "meter_label": "claude~swe-pytest-dev__pytest-5495~0~6820c675",
+      "started_at": "2026-10-15T02:31:53-0700",
+      "ended_at": "2026-10-15T02:33:52-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/claude~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "3a55b35f9838051210568d7c70ea3da7e74b803b80f3dba52ea9eedefbf12079"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/claude~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "9e3bb9097d22bdfebcf226b9920f46b0af802540721bf01cfaeef447c6d55e9a"
+        },
+        "check": {
+          "file": "20261015-021621-11247/claude~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "7f848f010532cc356443d6ea7728d784f44c0f00164caeb142ad17d78a894a64"
+        },
+        "session0": {
+          "file": "20261015-021621-11247/claude~swe-pytest-dev__pytest-5495~0.session0.jsonl",
+          "sha256": "771634ae08d637fd211fd4787b74cedc67daf5a0a363f588d2f98d8ac6a75a61"
+        }
+      }
+    },
+    {
+      "agent": "pi",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": " b'e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: 'At index 0 diff: 115 != 101' != \"At index 0 diff: b's' != b'e'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         -  'At index 0 diff: 115 != 101',\nE         ?  ^                 ^^^    ^^^\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         ?  ^                 ^^^^    ^ +++...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/pi/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.87 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-waon0nef'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-tqb8mwe8'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 10,
+        "input": 61339,
+        "output": 4303,
+        "cached": 52992
+      },
+      "meter_label": "pi~swe-pytest-dev__pytest-5495~0~b2e6ddb5",
+      "started_at": "2026-10-15T02:34:13-0700",
+      "ended_at": "2026-10-15T02:54:13-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/pi~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/pi~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261015-021621-11247/pi~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "6e1d94ed5a1c6af50b909c2c7f8ddfa4e4ac846159c4f00fb6ba5a1768a977f0"
+        }
+      }
+    },
+    {
+      "agent": "goose",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1142.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 81%]\n................                                                         [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/goose/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n88 passed in 4.38 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-jionbz33'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-vbshz_qh'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 81,
+        "input": 4160171,
+        "output": 73715,
+        "cached": 4125440
+      },
+      "meter_label": "goose~swe-pytest-dev__pytest-5495~0~27482cbb",
+      "started_at": "2026-10-15T02:54:36-0700",
+      "ended_at": "2026-10-15T03:13:38-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "197a4df1f4121a38644c842e9f8dcf47dc513bf98bcb55552d9eaf9f9d4aefc3"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "85c333aa433e6f6f0c0e076b042432586eba26dc9b08e34c660caa89b34d7071"
+        },
+        "check": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "99db52157950e8cf7d8334e8a83bedcd6a528cd76f456c82b45e87c7561edb9f"
+        },
+        "session0": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session0.jsonl",
+          "sha256": "4c787d964ec46b8bd15120a1a51988f8fb0dd283de35e259c25c943e02c85e46"
+        },
+        "session1": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session1.jsonl",
+          "sha256": "e9aef836a319a5815bba5b554c0ffa439f7f9459673ba0cf800b5178cdcd988d"
+        },
+        "session2": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session2.jsonl",
+          "sha256": "0794ae86f444226c93483079819970cbcd8195b5e1c3a42100a2cb9af5bae1ae"
+        },
+        "session3": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session3.jsonl",
+          "sha256": "e65991a61fea0f24d4689efbdf5e2e143bef6caa93bc093b53bdcb5fb72f5116"
+        },
+        "session4": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session4.jsonl",
+          "sha256": "e04b8222d33dc297a91a2b4bb8c338cb876d3f6c66e630a3b3285a6889f5616e"
+        },
+        "session5": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session5.jsonl",
+          "sha256": "36ebbab2090e9e61da4acd199e03d2fedc7f79f2ea776b7bbd7929c120e90dff"
+        },
+        "session6": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session6.jsonl",
+          "sha256": "bf9cd9085106bc167074c448e8e03e99a03aa40e4a84dc9b905f2a60e6ceb2b8"
+        },
+        "session7": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session7.jsonl",
+          "sha256": "ae08514fc8168c3cccc7582b508e57c893df18bcf82d1eea8b668ef4abf85588"
+        },
+        "session8": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session8.jsonl",
+          "sha256": "08c7603f5a50c5c671bfe5c3f6322f03f9466f5c42a999b6222950502209400b"
+        },
+        "session9": {
+          "file": "20261015-021621-11247/goose~swe-pytest-dev__pytest-5495~0.session9.jsonl",
+          "sha256": "4dcfbc0d341ffebdec23c1e9e2749977eb7a662381f68d9b3b1de64714481782"
+        }
+      }
+    },
+    {
+      "agent": "chanto",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 740.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "     \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"- b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Right contains 2 more items, first extra item: \"- b'spam'\"\nE         Full diff:\nE         - [\"b'spam' == b'eggs'\", \"- b'spam'\", \"+ b'eggs'\"]\nE         + [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         +  'Full diff:',...\nE         \nE         ...Full output truncated (3 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/chanto/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.32 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-c7khrop6'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-5x1zr22w'\n",
+      "tokens": {
+        "in": 2939526,
+        "out": 59581
+      },
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 62,
+        "input": 2939526,
+        "output": 59581,
+        "cached": 2908160
+      },
+      "meter_label": "chanto~swe-pytest-dev__pytest-5495~0~4a546b4d",
+      "started_at": "2026-10-15T03:13:59-0700",
+      "ended_at": "2026-10-15T03:26:20-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/chanto~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "04e677e9f9aba405a70e6d6d18f4cca7a7dcc15c1cf82e54319ad98b90349f8d"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/chanto~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "88ef2c67409e78f52f8bd51ea768c32320fca81dbb4b9a9bce5989d1a48f412b"
+        },
+        "check": {
+          "file": "20261015-021621-11247/chanto~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "99b078c3a57b3f5e8dd185ecf3fdaf64a0bd2526d1d2cc3f25cabf437c0c1667"
+        },
+        "session0": {
+          "file": "20261015-021621-11247/chanto~swe-pytest-dev__pytest-5495~0.session0.json",
+          "sha256": "7679714873ca25725f7811fbf53b26c2894965ab796a1488cf9f4230cb5ae072"
+        }
+      }
+    },
+    {
+      "agent": "codex",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 668.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "'eggs'\",\n            \"At index 0 diff: b's' != b'e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"-b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Left contains one more item: \"+ b'eggs'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         -  \"-b'spam'\",\nE         -  \"+b'eggs'\",...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/codex/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.64 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-s_cmqm30'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-hy32za9o'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 115,
+        "input": 7431300,
+        "output": 83150,
+        "cached": 0
+      },
+      "meter_label": "codex~swe-pytest-dev__pytest-5495~0~eddc1000",
+      "started_at": "2026-10-15T03:26:41-0700",
+      "ended_at": "2026-10-15T03:37:49-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261015-021621-11247/codex~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "c76ad3912c164adf7476648d77865f69643d924dbc37cb0088707098663600eb"
+        },
+        "patch": {
+          "file": "20261015-021621-11247/codex~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "19e2a6bb7cad74488552ad20ca178458abcbf4c38f61af460cb70c6a53aeb51c"
+        },
+        "check": {
+          "file": "20261015-021621-11247/codex~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "3b07cac01343a4f4ccaa528c85660d0125d8206ccf0e0a811713b98438e550a8"
+        },
+        "session0": {
+          "file": "20261015-021621-11247/codex~swe-pytest-dev__pytest-5495~0.session0.jsonl",
+          "sha256": "8627ab185f87d5da8f47339a8c85ba1c0cfe2862569b2be2621cd78c6c658b44"
+        }
+      }
+    }
+  ]
+}

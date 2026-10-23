@@ -1,0 +1,40 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 5cacc03..289e1af 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -52,6 +52,7 @@ def _is_ignored_file(
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
+ ) -> bool:
++    element = os.path.normpath(element)
+     basename = os.path.basename(element)
+     return (
+         basename in ignore_list
+diff --git a/tests/test_self.py b/tests/test_self.py
+index c18a04a..0cb4980 100644
+--- a/tests/test_self.py
++++ b/tests/test_self.py
+@@ -1314,6 +1314,23 @@ class TestRunTC:
+             code=0,
+         )
+ 
++    def test_ignore_path_recursive_with_relative_path(self):
++        """Tests that ignore-paths is matched against normalized paths.
++
++        Paths discovered from a relative argument can start with './', which
++        would otherwise prevent patterns anchored at the start from matching.
++        """
++        with _test_cwd():
++            os.chdir(join(HERE, "regrtest_data"))
++            self._runtest(
++                [
++                    join(".", "directory"),
++                    "--recursive=y",
++                    "--ignore-paths=^directory/ignored_subdirectory/.*$",
++                ],
++                code=0,
++            )
++
+     def test_recursive_current_dir(self):
+         with _test_sys_path():
+             # pytest is including directory HERE/regrtest_data to sys.path which causes

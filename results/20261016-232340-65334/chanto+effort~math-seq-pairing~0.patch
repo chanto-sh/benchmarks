@@ -1,0 +1,107 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..5d8e732 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,99 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The list is built from the right with a size-efficient pairing function on
++pairs of naturals.  Every natural number is paired exactly once, so reserving
++zero for the empty list makes the construction a bijection.
++
++The pairing function groups pairs by ``(bit_length(a), bit_length(b))``.
++Each such group is a contiguous block of keys, and the blocks are ordered by
++the sum of the two bit lengths.  Unlike Cantor pairing, the key for a pair is
++only about ``bit_length(a) + bit_length(b)`` bits long, so a list of 200 large
++values still produces a reasonably sized integer.
++"""
++
++
++def _count(length):
++    """How many non-negative ints have exactly this bit length."""
++    return 1 if length == 0 else 1 << (length - 1)
++
++
++def _base(length):
++    """The smallest int with this bit length."""
++    return 0 if length == 0 else 1 << (length - 1)
++
++
++def _start_sum(s):
++    """Number of keys used by all blocks whose bit-length sum is below s."""
++    if s <= 0:
++        return 0
++    if s == 1:
++        return 1
++    return (s + 1) << (s - 2)
++
++
++def _block_start(s, i):
++    """Start, within the blocks summing to s, of the block with first length i."""
++    if i == 0:
++        return 0
++    if s == 1:
++        return 1
++    return (i + 1) << (s - 2)
++
++
++def _pair(a, b):
++    """A bijection from pairs of non-negative ints to non-negative ints."""
++    i = a.bit_length()
++    j = b.bit_length()
++    s = i + j
++    offset = (a - _base(i)) * _count(j) + (b - _base(j))
++    return _start_sum(s) + _block_start(s, i) + offset
++
++
++def _unpair(n):
++    """Inverse of :func:`_pair`."""
++    if n == 0:
++        s = 0
++    else:
++        lo, hi = 0, n.bit_length() + 2
++        while lo < hi:
++            mid = (lo + hi + 1) // 2
++            if _start_sum(mid) <= n:
++                lo = mid
++            else:
++                hi = mid - 1
++        s = lo
++
++    within_sum = n - _start_sum(s)
++
++    lo, hi = 0, s
++    while lo < hi:
++        mid = (lo + hi + 1) // 2
++        if _block_start(s, mid) <= within_sum:
++            lo = mid
++        else:
++            hi = mid - 1
++    i = lo
++    j = s - i
++
++    offset = within_sum - _block_start(s, i)
++    count_j = _count(j)
++    a = _base(i) + offset // count_j
++    b = _base(j) + offset % count_j
++    return a, b
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    key = 0
++    for value in reversed(lst):
++        key = _pair(value, key) + 1
++    return key
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    result = []
++    while n:
++        value, n = _unpair(n - 1)
++        result.append(value)
++    return result

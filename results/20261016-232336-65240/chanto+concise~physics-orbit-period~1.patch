@@ -1,0 +1,218 @@
+diff --git a/orbit.py b/orbit.py
+index 836e62c..81ed6cb 100644
+--- a/orbit.py
++++ b/orbit.py
+@@ -1,5 +1,7 @@
+ """Orbit measurements for a test particle in a central force field."""
+ 
++import math
++
+ 
+ def newtonian(gm):
+     """Inverse-square attraction toward the origin."""
+@@ -9,6 +11,203 @@ def newtonian(gm):
+     return accel
+ 
+ 
++# Dormand-Prince 5(4) coefficients.
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0,
++     -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0,
++     49.0 / 176.0, -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++     -2187.0 / 6784.0, 11.0 / 84.0),
++)
++_B = (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0,
++      -2187.0 / 6784.0, 11.0 / 84.0, 0.0)
++_BHAT = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++         -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++_RTOL = 1e-12
++_SAFETY = 0.9
++_MIN_FACTOR = 0.2
++_MAX_FACTOR = 5.0
++_MAX_STEPS = 200000
++
++
++def _rhs(x, y, vx, vy, accel):
++    ax, ay = accel(x, y)
++    return vx, vy, ax, ay
++
++
++def _dopri_step(y, h, f, accel):
++    """One Dormand-Prince 5(4) step, with the first stage supplied (FSAL)."""
++    x, yy, vx, vy = y
++    k = [f]
++
++    for stage in range(1, 7):
++        a = _A[stage]
++        sx = x
++        sy = yy
++        svx = vx
++        svy = vy
++        for j, aij in enumerate(a):
++            if aij:
++                kj = k[j]
++                sx += h * aij * kj[0]
++                sy += h * aij * kj[1]
++                svx += h * aij * kj[2]
++                svy += h * aij * kj[3]
++        k.append(_rhs(sx, sy, svx, svy, accel))
++
++    new = [y[i] + h * sum(_B[j] * k[j][i] for j in range(7))
++           for i in range(4)]
++
++    # The seventh stage is the derivative at the new point (FSAL).
++    fnew = _rhs(new[0], new[1], new[2], new[3], accel)
++
++    err = [h * sum((_B[j] - _BHAT[j]) * k[j][i] for j in range(7))
++           for i in range(4)]
++    return new, fnew, err
++
++
++def _local_step_limit(x, y, vx, vy, ax, ay):
++    """Conservative cap that keeps a step well inside one radial phase."""
++    r = math.hypot(x, y)
++    v2 = vx * vx + vy * vy
++    ur = (x * vx + y * vy) / r
++    ar = (x * ax + y * ay) / r
++    vt2 = max(0.0, v2 - ur * ur)
++    rddot = vt2 / r + ar
++
++    scale = math.sqrt(v2) + math.sqrt(abs(ar) * r) + 1e-300
++    vt = math.sqrt(vt2)
++    candidates = []
++    # For a purely radial orbit the next closest approach is the origin
++    # itself; limiting by r/|ur| would make the step collapse there.
++    if vt > 1e-12 * scale and abs(ur) > 1e-14 * scale:
++        candidates.append(r / abs(ur))
++    if abs(rddot) > 1e-14 * (v2 / r + abs(ar) + 1e-300):
++        candidates.append(math.sqrt(r / abs(rddot)))
++    if vt > 1e-14 * scale:
++        candidates.append(r / vt)
++    if not candidates:
++        return math.inf
++    return 0.05 * min(candidates)
++
++
++def _hermite_root(g0, g1, d0, d1, h):
++    """Root in [0, 1] of the cubic Hermite interpolant of g."""
++    def poly(s):
++        s2 = s * s
++        s3 = s2 * s
++        return ((2.0 * s3 - 3.0 * s2 + 1.0) * g0
++                + (s3 - 2.0 * s2 + s) * h * d0
++                + (-2.0 * s3 + 3.0 * s2) * g1
++                + (s3 - s2) * h * d1)
++
++    lo = 0.0
++    hi = 1.0
++    for _ in range(80):
++        mid = 0.5 * (lo + hi)
++        if poly(mid) <= 0.0:
++            lo = mid
++        else:
++            hi = mid
++    return hi
++
++
+ def radial_period(r0, v0, accel):
+-    """Time between two successive closest approaches to the origin."""
+-    raise NotImplementedError
++    """Time between two successive closest approaches to the origin.
++
++    The trajectory is integrated in Cartesian coordinates from the given
++    state, so the starting point may lie anywhere on the orbit.  A closest
++    approach is a zero crossing of d(r^2)/dt from negative to positive.
++    """
++    x, y = float(r0[0]), float(r0[1])
++    vx, vy = float(v0[0]), float(v0[1])
++    r = math.hypot(x, y)
++    if r == 0.0:
++        raise ValueError("r0 must not be the origin")
++
++    ax, ay = accel(x, y)
++
++    speed = math.hypot(vx, vy)
++    ur = (x * vx + y * vy) / r
++    ar = (x * ax + y * ay) / r
++    vt2 = max(0.0, speed * speed - ur * ur)
++    rddot = vt2 / r + ar
++
++    # A circular orbit has no isolated closest approach.  Its limiting
++    # radial period is the angular period.
++    ur_scale = speed + math.sqrt(abs(ar) * r) + 1e-300
++    acc_scale = vt2 / r + abs(ar) + 1e-300
++    if (abs(ur) <= 1e-9 * ur_scale
++            and abs(rddot) <= 1e-9 * acc_scale
++            and math.sqrt(vt2) > 0.0):
++        return 2.0 * math.pi * r / math.sqrt(vt2)
++
++    # Absolute tolerances are tied to the initial length and speed scales.
++    pos_scale = max(r, 1e-300)
++    vel_scale = max(speed, math.sqrt(abs(ar) * r), 1e-300)
++    atol = (1e-12 * pos_scale, 1e-12 * pos_scale,
++            1e-12 * vel_scale, 1e-12 * vel_scale)
++
++    state = [x, y, vx, vy]
++    f = [vx, vy, ax, ay]
++
++    limit = _local_step_limit(x, y, vx, vy, ax, ay)
++    h = limit if math.isfinite(limit) else 1e-3 * pos_scale / vel_scale
++    h = min(h, 0.05 * pos_scale / vel_scale)
++    if not math.isfinite(h) or h <= 0.0:
++        h = 1e-6 * pos_scale / vel_scale
++
++    t = 0.0
++    periapses = []
++
++    for _ in range(_MAX_STEPS):
++        # Do not let a step span more than a small fraction of the local
++        # radial/angular timescale.
++        limit = _local_step_limit(state[0], state[1], state[2], state[3],
++                                  f[2], f[3])
++        if math.isfinite(limit) and h > limit:
++            h = limit
++
++        new, fnew, err = _dopri_step(state, h, f, accel)
++
++        err_norm = 0.0
++        for i in range(4):
++            sc = atol[i] + _RTOL * max(abs(state[i]), abs(new[i]))
++            err_norm = max(err_norm, abs(err[i]) / sc)
++
++        if err_norm == 0.0:
++            factor = _MAX_FACTOR
++        else:
++            factor = _SAFETY * err_norm ** -0.2
++
++        if err_norm <= 1.0:
++            # Detect a closest approach: r*d(r)/dt crosses from - to +.
++            g0 = state[0] * state[2] + state[1] * state[3]
++            g1 = new[0] * new[2] + new[1] * new[3]
++            if g0 < 0.0 and g1 >= 0.0:
++                d0 = (state[2] * state[2] + state[3] * state[3]
++                      + state[0] * f[2] + state[1] * f[3])
++                d1 = (new[2] * new[2] + new[3] * new[3]
++                      + new[0] * fnew[2] + new[1] * fnew[3])
++                s = _hermite_root(g0, g1, d0, d1, h)
++                periapses.append(t + s * h)
++                if len(periapses) == 2:
++                    return periapses[1] - periapses[0]
++
++            t += h
++            state = new
++            f = fnew
++            h *= min(_MAX_FACTOR, max(_MIN_FACTOR, factor))
++        else:
++            h *= max(0.1, min(0.9, _SAFETY * err_norm ** -0.2))
++
++        if h <= 0.0 or not math.isfinite(h):
++            break
++
++    raise ValueError("orbit does not have two successive closest approaches")

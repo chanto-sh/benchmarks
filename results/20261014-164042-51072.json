@@ -1,0 +1,1965 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "offline": true,
+  "meta": {
+    "started_at": "2026-10-14T16:40:43-0700",
+    "command": [
+      "run.py",
+      "--api",
+      "http://localhost:4000",
+      "--meter",
+      "http://localhost:4100",
+      "--meter-log",
+      "~/.local/share/chanto-bench/logs/meter-hard.jsonl",
+      "--model",
+      "bench-model",
+      "--ctx",
+      "131072",
+      "--timeout",
+      "1200",
+      "--min-balance",
+      "1",
+      "--offline",
+      "--seed",
+      "230",
+      "--agents",
+      "qwen,kilo,crush,aider",
+      "--tasks",
+      "swe-pallets__flask-4045,swe-pallets__flask-5063,swe-pylint-dev__pylint-5859,swe-pylint-dev__pylint-7080,swe-pylint-dev__pylint-7993,swe-pytest-dev__pytest-5103,swe-pytest-dev__pytest-5227,swe-pytest-dev__pytest-5495,swe-pytest-dev__pytest-6116,swe-pytest-dev__pytest-7220,swe-pytest-dev__pytest-7432,swe-pytest-dev__pytest-8365,swe-pytest-dev__pytest-9359"
+    ],
+    "bench_commit": "bcc0594a83292be866e8e6ba2071c7780097daf7",
+    "bench_dirty": false,
+    "chanto_bin": {
+      "path": "~/.local/share/chanto-bench/bin/chanto-cb06a06",
+      "sha256": "2aaf83d7b920467e87f95eab785ef1f4c65d89d5ca64aacccf60596a8140f391"
+    },
+    "agent_versions": {
+      "qwen": "0.25.1",
+      "kilo": "7.8.8",
+      "crush": "crush version v0.98.1",
+      "aider": "aider 0.86.2"
+    },
+    "model_alias": "bench-model",
+    "upstream_model": "deepseek/deepseek-flash",
+    "proxy": "LiteLLM: Current Version = 1.105.0",
+    "platform": {
+      "system": "macOS-26.3-arm64-arm-64bit",
+      "machine": "arm64",
+      "cpus": 10,
+      "python": "3.12.5"
+    },
+    "offline_sandbox": true,
+    "timeout_s": 1200,
+    "seed": 230,
+    "repeat": 1,
+    "tasks": {
+      "swe-pallets__flask-4045": "0fd436ca6329495bc4c29b7b6c37acc84ff7bf1ab067e9cc6740d6c6ddd8d916",
+      "swe-pallets__flask-5063": "ee0d656706aef14d18c9cb75965c6f8cab2aaa49d68427db83830b8740404e36",
+      "swe-pylint-dev__pylint-5859": "19ab5c9f7bf0625b2d080d3c7aa0c84d79c101070447bd8539b3547563bab026",
+      "swe-pylint-dev__pylint-7080": "4140df3bcf45f5dc399c5fd8c4c3fed489ded8741177e25fd8ee5ce5ac6e4986",
+      "swe-pylint-dev__pylint-7993": "f222cbea801661a37193abc7ee0db9756403bc09f5ca53efbc57e24b35b639c4",
+      "swe-pytest-dev__pytest-5103": "a6638f378118447c612a6c4f4d8931b01f4213ac50a96c33791a0879b03d2bfa",
+      "swe-pytest-dev__pytest-5227": "fd973e306d147be7ce429cff44b6437d10195e490e88cb0f7b60cac75321ee81",
+      "swe-pytest-dev__pytest-5495": "39ecee914412ac6437130d3291e3cf97602ae0df1a5115095cda3773e91e724e",
+      "swe-pytest-dev__pytest-6116": "38b85e185f114dce4facf442beb61a118995414b52c1ff8bdf89f54abfbfa9b6",
+      "swe-pytest-dev__pytest-7220": "dd3386202b421d0145152345a2e5d37fb449daead33e45983779e5be6500bbe1",
+      "swe-pytest-dev__pytest-7432": "19a9b04794a213a280fa1a781fe4d25ca8a23372571512debf59543b1e8d0b75",
+      "swe-pytest-dev__pytest-8365": "33098ca4fefe55c94e5c66ed0123500199dd2c3b4953e2123a2db7a3ad8f9d02",
+      "swe-pytest-dev__pytest-9359": "74169df4df555f28915ea631b7258037da89fbc586a53231d8b2580a453711d3"
+    },
+    "offline_profile_sha256": "618d75f7edfb93b9987ff7fc2b41e3d84bb1a2b55d14d88b75f24a3fedd7340a"
+  },
+  "results": [
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": false,
+      "seconds": 38.7,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "_______________\n\nself = <test_assertrewrite.TestAssertionRewrite object at 0x10b763610>\n\n    def test_unroll_expression(self):\n        def f():\n            assert all(x == 1 for x in range(10))\n    \n>       assert \"0 == 1\" in getmsg(f)\nE       AssertionError: assert '0 == 1' in 'assert False\\n +  where False = all(<generator object f.<locals>.<genexpr> at 0x10b7c9eb0>)'\nE        +  where 'assert False\\n +  where False = all(<generator object f.<locals>.<genexpr> at 0x10b7c9eb0>)' = getmsg(<function TestAssertionRewrite.test_unroll_expression.<locals>.f at 0x10b778430>)\n\ntesting/test_assertrewrite.py:663: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n1 failed, 64 passed in 4.25 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 11,
+        "input": 231541,
+        "output": 4801,
+        "cached": 203520
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-5103~0~0618a2f0",
+      "started_at": "2026-10-14T16:41:04-0700",
+      "ended_at": "2026-10-14T16:41:43-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "6a5edb13d4067a6ce57241f1682386b25ce249b4db9e47bd37a9981cb85fd612"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "ffdee18239b7c276a7faf7872e5dc0fedf45a066b198db765def9d7629d61185"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": true,
+      "seconds": 529.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................................................        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n65 passed in 4.67 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 5,
+        "input": 1465302,
+        "output": 107286,
+        "cached": 488960
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-5103~0~122fb121",
+      "started_at": "2026-10-14T16:42:06-0700",
+      "ended_at": "2026-10-14T16:50:55-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "77d22193b8117b33accf4161ccbf20de6448eb85b268208133e314fb50ed792b"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "038daeed689a6bd445c5cc59e987dc0c107df0cc45b7c8ab3ecf76135df444b2"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "1419006081f26358a2078fb0e1ea7d9cb0a5168d8f1274b7da96ed4400760f0b"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1081.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................................................        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n65 passed in 4.08 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 77,
+        "input": 5986653,
+        "output": 76775,
+        "cached": 5924992
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-5103~0~7703b0ef",
+      "started_at": "2026-10-14T16:51:20-0700",
+      "ended_at": "2026-10-14T17:09:21-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "ddc32df75be5fee707d0c44002c1b7e105a9bf711eeef0687e395fc1de198a1d"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "e94475585196d192ee6a7b7bc69401e2d9c5d52203f681c53a217755098758d3"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "14d34f3a8ffc4d4c54c786ea2e295f8d1997882fafeefa2ea364638cca091c9b"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-5103",
+      "rep": 0,
+      "passed": true,
+      "seconds": 673.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................................................        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-5103-0/.swe-results.xml -\n65 passed in 3.97 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 62,
+        "input": 5038389,
+        "output": 71524,
+        "cached": 4881536
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-5103~0~95ac2de7",
+      "started_at": "2026-10-14T17:09:43-0700",
+      "ended_at": "2026-10-14T17:20:57-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5103~0.out",
+          "sha256": "7bae9d53b7541f76f07b67a0dc4ca054094a7827251e9676023ce141ce066184"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5103~0.patch",
+          "sha256": "f11736f3bee9fe870a80cdfce98389f4994e26d43af772c9d2b627689dc25c00"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5103~0.check.txt",
+          "sha256": "b862f44a35b23e8e0de992beca28d93026f440df36f545bfcc88f01be8963494"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1000.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................                  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n55 passed in 0.16s\nv__pytest-9359-0/src/_pytest/pathlib.py:79: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-7437402a-6023-4cb2-a97b-b05e29a79f30\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-7437402a-6023-4cb2-a97b-b05e29a79f30'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 6,
+        "input": 2631952,
+        "output": 85644,
+        "cached": 1962624
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-9359~0~3d057935",
+      "started_at": "2026-10-14T17:21:18-0700",
+      "ended_at": "2026-10-14T17:37:58-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "eda6e8e01e619e2579a38ccda8048054a36b8a10cb1df31eb65a7f0dbe73ad57"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "b8aed360f144e7f949a6316621c694c112e3fa174a3acae7ad6214d0fa72424c"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "960a33d63e1dcae02517195790d2a6abe09484e39f47d90e8cc548537deacee6"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": false,
+      "seconds": 27.4,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "__________________________ test_decorator ________________________________\n\n    def test_decorator() -> None:\n        s = \"\"\"\\\n    def foo(f):\n        pass\n    \n    @foo\n    def bar():\n        pass\n        \"\"\"\n        source = getstatement(3, s)\n>       assert \"@foo\" in str(source)\nE       AssertionError: assert '@foo' in '    pass'\nE        +  where '    pass' = str(<_pytest._code.source.Source object at 0x10dc66a90>)\n\ntesting/code/test_source.py:631: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/code/test_source.py::test_decorator - AssertionError: assert '...\n1 failed, 54 passed in 0.17s\nv__pytest-9359-0/src/_pytest/pathlib.py:79: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-3054d340-66f3-45ef-81ac-d06d3dff0e73\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-3054d340-66f3-45ef-81ac-d06d3dff0e73'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 8,
+        "input": 119499,
+        "output": 3413,
+        "cached": 100992
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-9359~0~c981397b",
+      "started_at": "2026-10-14T17:38:16-0700",
+      "ended_at": "2026-10-14T17:38:43-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "6a5edb13d4067a6ce57241f1682386b25ce249b4db9e47bd37a9981cb85fd612"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "4abb5bd4b89d40f5461ed738e62cc2d9591b1651902fa4ffebce6bc71dcb1649"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1294.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................                  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n55 passed in 0.16s\nv__pytest-9359-0/src/_pytest/pathlib.py:79: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-4a8fc004-0634-495f-81a0-d3b6363f6a7a\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-4a8fc004-0634-495f-81a0-d3b6363f6a7a'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 37,
+        "input": 1321798,
+        "output": 15340,
+        "cached": 1304832
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-9359~0~4cce1d40",
+      "started_at": "2026-10-14T17:38:59-0700",
+      "ended_at": "2026-10-14T18:00:34-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "6ba51c5bfa9c6de89bf7596c4eabc49744a5bc26e71d23befb9581460c0685e7"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "422e7df1209b54c980a9333cd45c2d19212767c623433cd748748378a1a1a3c1"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "8b0d9687618840e56b0e01fd4bda14095dd4feb4959f4a61c4d927a546bc7d24"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-9359",
+      "rep": 0,
+      "passed": true,
+      "seconds": 134.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................                  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-9359-0/.swe-results.xml -\n55 passed in 0.15s\nv__pytest-9359-0/src/_pytest/pathlib.py:79: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-ff0b526d-4571-49a2-a056-07354ec506dd\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-ff0b526d-4571-49a2-a056-07354ec506dd'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 28,
+        "input": 902930,
+        "output": 14233,
+        "cached": 835968
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-9359~0~d81e62de",
+      "started_at": "2026-10-14T18:00:49-0700",
+      "ended_at": "2026-10-14T18:03:04-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-9359~0.out",
+          "sha256": "20454b76062e7c35c7b0f5fad4ce3e4ae5027846bd3229dd28f508aa3240fc96"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-9359~0.patch",
+          "sha256": "e89b84e925f03d73c341ba59ea5c994312731d5c852b9c225046a9c0c09a7a70"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-9359~0.check.txt",
+          "sha256": "a5197a1ffdcc05b36c0819daaa568a35eacce9893ee0a89222e3283081232a7d"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 35.5,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "        assert result.exit_code == 0\n>       assert \"Host\" in result.output\nE       AssertionError: assert 'Host' in 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n'\nE        +  where 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n' = <Result okay>.output\n\ntests/test_cli.py:504: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\n2 failed, 55 passed in 0.24s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 11,
+        "input": 173726,
+        "output": 3885,
+        "cached": 156160
+      },
+      "meter_label": "crush~swe-pallets__flask-5063~0~a1d901cd",
+      "started_at": "2026-10-14T18:03:18-0700",
+      "ended_at": "2026-10-14T18:03:53-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-5063~0.out",
+          "sha256": "6a5edb13d4067a6ce57241f1682386b25ce249b4db9e47bd37a9981cb85fd612"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-5063~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "9d7ee66d291f512c59a654348a2d8eca3cba8afb0653bad52ee1481060586b95"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 956.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "        assert result.exit_code == 0\n>       assert \"Host\" in result.output\nE       AssertionError: assert 'Host' in 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n'\nE        +  where 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n' = <Result okay>.output\n\ntests/test_cli.py:504: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\n2 failed, 55 passed in 0.30s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 6,
+        "input": 499685,
+        "output": 95207,
+        "cached": 9856
+      },
+      "meter_label": "aider~swe-pallets__flask-5063~0~f7fd7ce0",
+      "started_at": "2026-10-14T18:04:07-0700",
+      "ended_at": "2026-10-14T18:20:03-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-5063~0.out",
+          "sha256": "a152c1f8d33d8eabe145fd72261ba2b6648b63a55d521f66514ecf1cdc881c01"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-5063~0.patch",
+          "sha256": "fc3bf565892a8ede1cb82fa478431af3ccc70bcc65fab3ae316d9f15962efda1"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "6d1b63f8c7420d3217226626ea84c89811072e49dd18aa4647fd8f39a97c6250"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 417.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "ct)] == expect\nE           AssertionError: assert '      ' == 'static'\nE             Strings contain only whitespace, escaping them using repr()\nE             - 'static'\nE             + '      '\n\ntests/test_cli.py:453: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\nFAILED tests/test_cli.py::TestRoutes::test_simple - AssertionError: assert ' ...\nFAILED tests/test_cli.py::TestRoutes::test_sort - AssertionError: assert '   ...\n4 failed, 53 passed in 0.28s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/test_cli.py"
+      ],
+      "false_done": true,
+      "usage": {
+        "requests": 36,
+        "input": 1532790,
+        "output": 32582,
+        "cached": 1435520
+      },
+      "meter_label": "qwen~swe-pallets__flask-5063~0~a5810a0c",
+      "started_at": "2026-10-14T18:20:19-0700",
+      "ended_at": "2026-10-14T18:27:16-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-5063~0.out",
+          "sha256": "36132e7c2527ef8b38f4fee97c134add9d417ed80d6f19b6e48c95e31687e07f"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-5063~0.patch",
+          "sha256": "6683c2916ec78603a8486dbc0f638bead062d25c3c9c9fc08c5866b00b77d8cd"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "8501a4016bb46352b41f4c5dd19dfcf5e384b962dfa9ab81760312734db64fc3"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pallets__flask-5063",
+      "rep": 0,
+      "passed": false,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "\n        assert result.exit_code == 0\n>       assert \"Host\" in result.output\nE       AssertionError: assert 'Host' in 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n'\nE        +  where 'Endpoint  Methods  Rule\\n--------  -------  ----\\na         GET      /a\\nb         GET      /b\\n' = <Result okay>.output\n\ntests/test_cli.py:504: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pallets__flask-5063-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_cli.py::TestRoutes::test_subdomain - AssertionError: assert...\nFAILED tests/test_cli.py::TestRoutes::test_host - AssertionError: assert 'Hos...\n2 failed, 55 passed in 0.25s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 51,
+        "input": 2107339,
+        "output": 37814,
+        "cached": 2087552
+      },
+      "meter_label": "kilo~swe-pallets__flask-5063~0~f70ba9dd",
+      "started_at": "2026-10-14T18:27:31-0700",
+      "ended_at": "2026-10-14T18:47:31-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-5063~0.out",
+          "sha256": "71a591db2d96b43acf47acd40c89a60bff162f83e864d66f488083bfe3092930"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-5063~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-5063~0.check.txt",
+          "sha256": "81ec08cc17ccff5556b045b1674377850deb7b683070ed13b0e6c900f46128f1"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1200.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "                         [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 46.88s\nv__pytest-7432-0/src/_pytest/pathlib.py:72: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-eaf60676-c22d-4b93-9bb2-ba3460d70754\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-eaf60676-c22d-4b93-9bb2-ba3460d70754'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 14,
+        "input": 378647,
+        "output": 9600,
+        "cached": 342400
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-7432~0~bd2ecbf8",
+      "started_at": "2026-10-14T18:47:46-0700",
+      "ended_at": "2026-10-14T19:07:47-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "aa40ebe8a4042b1989b31af7cf467acc14e9b2d8fc0126a5b34056644897a027"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "e79ea26d5cc129ddb8cc229c302b59e676e66b93cfd8bc52f346b34e20ca3e20"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "5665b5755d4c8c504d1c2254f9b6d73f848dd01791372fe63b3ac03742aebe1c"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 1747.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                          [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 1.77s\nv__pytest-7432-0/src/_pytest/pathlib.py:72: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-1aa359a9-7b65-4819-9595-3afea868a224\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-1aa359a9-7b65-4819-9595-3afea868a224'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 23,
+        "input": 557931,
+        "output": 5916,
+        "cached": 528379
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-7432~0~f4fd626a",
+      "started_at": "2026-10-14T19:08:49-0700",
+      "ended_at": "2026-10-14T19:37:56-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "6195bd319e242c81f3fe73055693612151f30fa8d64c1b18d79f965194d3d379"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "4eddecc7bae532a09373c944770f0dd437d1f34d83eff1e201c41eef3efdc159"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "81220f6d3c2657be686b032492774e86c119a11a8194be5783c5ebb070672e42"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 290.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                        [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 1.79s\nv__pytest-7432-0/src/_pytest/pathlib.py:72: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-7b8428be-c91a-4afe-94a7-1ae3a81b523e\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-7b8428be-c91a-4afe-94a7-1ae3a81b523e'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 354845,
+        "output": 5907,
+        "cached": 337280
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-7432~0~8a3a89f6",
+      "started_at": "2026-10-14T19:55:37-0700",
+      "ended_at": "2026-10-14T20:00:28-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "dbc7b9b0b37f523f3cd7561afc2c29e1c06e99c58b30a736deed60f0b2f07337"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "ada256e0bff8d7da94d565503814d8ffe4c46764290d5f770613501aba0372ee"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "de3e114070f79c28f76729fe2e9b369fb54b4d4b09d39d72342aef26d5ec2785"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-7432",
+      "rep": 0,
+      "passed": true,
+      "seconds": 5704.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "                        [100%]\n=============================== warnings summary ===============================\nsrc/_pytest/junitxml.py:441\n  ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-7432-0/src/_pytest/junitxml.py:441: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-7432-0/.swe-results.xml -\n79 passed, 1 warning in 1.95s\nv__pytest-7432-0/src/_pytest/pathlib.py:72: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-67520a5f-32a5-48e5-9bd9-34e75e953930\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-67520a5f-32a5-48e5-9bd9-34e75e953930'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 4,
+        "input": 1187277,
+        "output": 28425,
+        "cached": 8192
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-7432~0~347f0302",
+      "started_at": "2026-10-14T20:08:58-0700",
+      "ended_at": "2026-10-14T21:44:03-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7432~0.out",
+          "sha256": "0610fe2aaca89569ded3837a3f015159fee76798a148e04d1f819865969f46e8"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7432~0.patch",
+          "sha256": "d842c087f44500aa0ec1f0efefbf4b47b5da77bec1f63c3f2cdd2c1a13d061c4"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7432~0.check.txt",
+          "sha256": "865e089d104e38b49a74927fffce94df3eafcc60398fa5375d538c08e0a93dd8"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": false,
+      "seconds": 483.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "pected output status 0, got 20. Below pylint output: \nE         ************* Module failing\nE         ignored_subdirectory/failing.py:1:0: C0114: Missing module docstring (missing-module-docstring)\nE         ignored_subdirectory/failing.py:1:0: W0611: Unused import re (unused-import)\nE         \nE         -----------------------------------\nE         Your code has been rated at 0.00/10\nE         \nE         \nE       assert 20 == 0\n\ntests/test_self.py:146: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_self.py::TestRunTC::test_ignore_path_recursive_current_dir\n1 failed, 120 passed in 25.49s\nhon3.9/site-packages/_pytest/pathlib.py:95: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-1c53a54a-3265-45fd-9c0a-c697ddda49f4\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-1c53a54a-3265-45fd-9c0a-c697ddda49f4'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 2,
+        "input": 948937,
+        "output": 124934,
+        "cached": 512
+      },
+      "meter_label": "aider~swe-pylint-dev__pylint-7080~0~fa6f00e6",
+      "started_at": "2026-10-14T21:44:29-0700",
+      "ended_at": "2026-10-14T21:52:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "5852308ed4ac46c2c875b823f28c41364a096145bd2a5a2cf3dc0b61b1995907"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "a1b222206f4ac34cd3a9759fb54fc263d1e8b1c6d64074064bb0a6466f3e48f2"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "54092f5390d6dacef9898404adaebb892641ed86f676a9f728531780bd71da7c"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": true,
+      "seconds": 488.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n121 passed in 21.38s\nhon3.9/site-packages/_pytest/pathlib.py:95: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-10e4116c-0f1f-414f-9483-f911cb15137b\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-10e4116c-0f1f-414f-9483-f911cb15137b'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 68,
+        "input": 5193483,
+        "output": 64027,
+        "cached": 5024256
+      },
+      "meter_label": "qwen~swe-pylint-dev__pylint-7080~0~692a6a5c",
+      "started_at": "2026-10-14T21:53:27-0700",
+      "ended_at": "2026-10-14T22:01:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "3dce6a729b53cb9e6194354e537f42eb7ec5174dd339cde641ba3e16da2a64d8"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "af64a7633ca49e237bd628e5b97ff91f57d05a82cbc975f3db5f2006c17e64ae"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "7b386cdd33d6c731943620e5effbee1968f53e1488648e2808e07c0947c17298"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": true,
+      "seconds": 993.7,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 59%]\n.................................................                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n121 passed in 21.86s\nhon3.9/site-packages/_pytest/pathlib.py:95: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-c0d06cdb-7d1e-413d-9f6c-c4b5b749366b\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-c0d06cdb-7d1e-413d-9f6c-c4b5b749366b'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 141,
+        "input": 15074443,
+        "output": 105681,
+        "cached": 14988544
+      },
+      "meter_label": "kilo~swe-pylint-dev__pylint-7080~0~0e9eb1c2",
+      "started_at": "2026-10-14T22:02:22-0700",
+      "ended_at": "2026-10-14T22:18:55-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "c442d7a6d3d2bb6b3efb29b80ea3696b21c48ce427876fc8509632211291043a"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "7a684eff73af5d48855e97dc0511d2405e9ed763a8a28f30bba03b9ae2aad38b"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "42af96c0473c9473c8c338e3f83d7eb0a24d77779d214e9940d5a5d97779bcc4"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pylint-dev__pylint-7080",
+      "rep": 0,
+      "passed": false,
+      "seconds": 47.8,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "pected output status 0, got 20. Below pylint output: \nE         ************* Module failing\nE         ignored_subdirectory/failing.py:1:0: C0114: Missing module docstring (missing-module-docstring)\nE         ignored_subdirectory/failing.py:1:0: W0611: Unused import re (unused-import)\nE         \nE         -----------------------------------\nE         Your code has been rated at 0.00/10\nE         \nE         \nE       assert 20 == 0\n\ntests/test_self.py:146: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pylint-dev__pylint-7080-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_self.py::TestRunTC::test_ignore_path_recursive_current_dir\n1 failed, 120 passed in 22.06s\nhon3.9/site-packages/_pytest/pathlib.py:95: PytestWarning: (rm_rf) error removing /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-b41fbad5-11e9-4c4f-bc13-aa5b6ab04f8a\n<class 'OSError'>: [Errno 66] Directory not empty: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/garbage-b41fbad5-11e9-4c4f-bc13-aa5b6ab04f8a'\n  warnings.warn(\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 22,
+        "input": 668021,
+        "output": 7435,
+        "cached": 628864
+      },
+      "meter_label": "crush~swe-pylint-dev__pylint-7080~0~232d0e39",
+      "started_at": "2026-10-14T22:19:45-0700",
+      "ended_at": "2026-10-14T22:20:33-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7080~0.out",
+          "sha256": "46cc1f472075b9903fcc46dce49d71f763c01f8d1670d5f20e040f7b3327de94"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7080~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7080~0.check.txt",
+          "sha256": "39f4e6e2dc143c36a2239620fcaa3d00dd260237f0bef778c5a2439bb8974cec"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 16.2,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "itxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nERROR testing/test_nodes.py::test_failure_with_changed_cwd - pytest.PytestWar...\nERROR testing/test_nodes.py::test_std_warn_not_pytestwarning - pytest.PytestW...\n10 passed, 1 warning, 2 errors in 0.12s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 12,
+        "input": 205963,
+        "output": 2226,
+        "cached": 186240
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-7220~0~2bba48dd",
+      "started_at": "2026-10-14T22:21:16-0700",
+      "ended_at": "2026-10-14T22:21:32-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "d85c941e70d5f44c93c6150b4d16288e8915fb5888c4d0c343a774160331c022"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "9bc13dec35c8bade525a5decb38ee9d14debc5f83fffcf162d7c28893aeebf5c"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 423.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "are/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-7220-0/src/_pytest/junitxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_nodes.py::test_failure_with_changed_cwd - Failed: nomatch...\n1 failed, 11 passed, 1 warning in 0.32s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 82,
+        "input": 4701927,
+        "output": 32505,
+        "cached": 4658944
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-7220~0~6670f2a7",
+      "started_at": "2026-10-14T22:21:50-0700",
+      "ended_at": "2026-10-14T22:28:53-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "742026c3520e64b29c3891c206588e4f2aab5c564cfd4f3179b2022ea55901e9"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "0e1e319949520b5841c46817ca400ae80dddb189b2ce62528defe422f24dde66"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "86e8522d9325bb15b6be85748dab9d9610bf4bf8c294edd53c75dd3e5e062087"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 400.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "e/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-7220-0/src/_pytest/junitxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_nodes.py::test_failure_with_changed_cwd - Failed: nomatch...\n1 failed, 11 passed, 1 warning in 0.14s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 4,
+        "input": 1271724,
+        "output": 117352,
+        "cached": 345088
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-7220~0~f9593f0c",
+      "started_at": "2026-10-14T22:29:12-0700",
+      "ended_at": "2026-10-14T22:35:53-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "084264d47177ffecb0204fdb3ce53f67c08b684618ce9977dc96468194e778dc"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "b8994e36b1db2ff23d412d95e552550e47426e8985e3bb236f2cd18ec139cf7f"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "fa015db9b623d13873dfe3f0016720f8b24a91061bd82c666e6bd0123c07eb11"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-7220",
+      "rep": 0,
+      "passed": false,
+      "seconds": 395.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "are/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-7220-0/src/_pytest/junitxml.py:415: PytestDeprecationWarning: The 'junit_family' default value will change to 'xunit2' in pytest 6.0. See:\n    https://docs.pytest.org/en/latest/deprecations.html#junit-family-default-value-change-to-xunit2\n  for more information.\n    _issue_warning_captured(deprecated.JUNIT_XML_DEFAULT_FAMILY, config.hook, 2)\n\n-- Docs: https://docs.pytest.org/en/latest/warnings.html\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-7220-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_nodes.py::test_failure_with_changed_cwd - Failed: nomatch...\n1 failed, 11 passed, 1 warning in 0.12s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 56,
+        "input": 2792453,
+        "output": 35387,
+        "cached": 2683520
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-7220~0~1df0d69a",
+      "started_at": "2026-10-14T22:36:12-0700",
+      "ended_at": "2026-10-14T22:42:47-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7220~0.out",
+          "sha256": "82b46c6146fa9c323f4bf43f3c1258f0e8b5304414c28f233c0863f50c09e4b3"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7220~0.patch",
+          "sha256": "78206b626629f89dfcb91ae870e9a4b55d82c0edf81d5b8d351cd31a12fc3277"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-7220~0.check.txt",
+          "sha256": "6d1a39a6d2e3491429cfa9da4563a5a17ba5a2295e07c32410daad22b4806dff"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 754.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ...am', '+ eggs'] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: '- spam' != \"At index 0 diff: b's' != b'e'\"\nE         Right contains 2 more items, first extra item: \"- b'spam'\"\nE         Full diff:\nE         - [\"b'spam' == b'eggs'\", '- spam', '+ eggs']\nE         + [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         +  'Full diff:',...\nE         \nE         ...Full output truncated (3 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 5.33 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-bvhumpbz'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-_q09xgi7'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 48,
+        "input": 3320048,
+        "output": 107445,
+        "cached": 3154432
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-5495~0~535735f3",
+      "started_at": "2026-10-14T22:43:06-0700",
+      "ended_at": "2026-10-14T22:55:40-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "1031e48ca6c35d8e06a6414cabb7de435ec24d349d0a721bc0579666111c700e"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "012aa404267cf01008fa6f63e63e328c20ea1a0381850d8f290811a67b47de1b"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "54aedb6c24eadb22fe61161a5a04926c2353e4f1f069095dd0282506b5eb1bd9"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 652.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "b'eggs'\",\n            \"At index 0 diff: b's' != b'e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: \"-b'spam'\" != \"At index 0 diff: b's' != b'e'\"\nE         Left contains one more item: \"+ b'eggs'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         -  \"-b'spam'\",\nE         -  \"+b'eggs'\",...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 4.81 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-m39w89nh'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-1l2jbzaj'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 93,
+        "input": 5587107,
+        "output": 68771,
+        "cached": 5550976
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-5495~0~7860e23b",
+      "started_at": "2026-10-14T22:56:04-0700",
+      "ended_at": "2026-10-14T23:06:56-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "58e7870999c8d125a1c05604a234c6e9264f4b42b6639f7653817d413d225d40"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "c5b3564c9dae309dad4cff1fb73a98eaf2ab766e0454014f6e499a74a70da6a4"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "85e185c5ee5ba46bd1ad6de9fd48bb747fe8a881d671ed9d561c42496d9519a7"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": false,
+      "seconds": 17.2,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "e'\",\n            \"Full diff:\",\n            \"- b'spam'\",\n            \"+ b'eggs'\",\n        ]\nE       assert [\"b'spam' == ..., \"+ b'eggs'\"] == [\"b'spam' == b..., \"+ b'eggs'\"]\nE         At index 1 diff: 'At index 0 diff: 115 != 101' != \"At index 0 diff: b's' != b'e'\"\nE         Full diff:\nE         [\"b'spam' == b'eggs'\",\nE         -  'At index 0 diff: 115 != 101',\nE         ?  ^                 ^^^    ^^^\nE         +  \"At index 0 diff: b's' != b'e'\",\nE         ?  ^                 ^^^^    ^ +++...\nE         \nE         ...Full output truncated (4 lines hidden), use '-vv' to show\n\ntesting/test_assertion.py:347: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n2 failed, 86 passed in 5.07 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-pyczuxl0'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-pqo0smio'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 8,
+        "input": 113850,
+        "output": 2426,
+        "cached": 95744
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-5495~0~a50a6351",
+      "started_at": "2026-10-14T23:07:18-0700",
+      "ended_at": "2026-10-14T23:07:35-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "617ad73e1122a4fdbcd608972414823b2664ac8c5485b5bb9f27374aa9fc6b43"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "78277f27c15fcbc1a0a6395d91f03887f2f35abae141d93628063f017d5a95d0"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-5495",
+      "rep": 0,
+      "passed": true,
+      "seconds": 233.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "........................................................................ [ 81%]\n................                                                         [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-5495-0/.swe-results.xml -\n88 passed in 4.89 seconds\nthon.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-ea7wyd80'\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py\", line 201, in main\n    cache[rtype].remove(name)\nKeyError: '/mp-yrjrgi4r'\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 5,
+        "input": 934248,
+        "output": 44653,
+        "cached": 2048
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-5495~0~73c93f48",
+      "started_at": "2026-10-14T23:07:59-0700",
+      "ended_at": "2026-10-14T23:11:52-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5495~0.out",
+          "sha256": "e9187b1a514519eb044c0a75f83a73a8779126c29227617fcb50cfa10d92b06f"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5495~0.patch",
+          "sha256": "f1846e690cc4c37a710c9c3523c299c22b49a0c2d4546835c788c2209e7a2dc3"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5495~0.check.txt",
+          "sha256": "190bad4a8b964b1900b0f6cdb623d30f5855b7624066529417971a613245e30a"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": false,
+      "seconds": 23.0,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "ed log call -------------------------------\nconftest.py                  5 WARNING  >>>>> START >>>>>\ntest_sections_single_new_line_after_test_outcome.py    6 WARNING  log message from setup of test_log_1\ntest_sections_single_new_line_after_test_outcome.py   12 WARNING  log message from test_log_1\ntest_sections_single_new_line_after_test_outcome.py    8 WARNING  log message from teardown of test_log_1\ntest_sections_single_new_line_after_test_outcome.py    9 WARNING  log message from teardown of test_log_1\nconftest.py                  8 WARNING  <<<<< END <<<<<<<\nconftest.py                  9 WARNING  <<<<< END <<<<<<<\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n3 failed, 31 passed in 1.37 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 13,
+        "input": 244619,
+        "output": 2896,
+        "cached": 222336
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-5227~0~573d3e65",
+      "started_at": "2026-10-14T23:12:14-0700",
+      "ended_at": "2026-10-14T23:12:37-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "4b343d3c698afcf57c5a605f15647209b6ab382f8d27c99e60185aac79eff1cf"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "367d374860a80fba71457fa419f34fe5cd4766858dff28525d0fae68e7506cd0"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": true,
+      "seconds": 293.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "..................................                                       [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n34 passed in 1.26 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 6,
+        "input": 2134467,
+        "output": 67667,
+        "cached": 824704
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-5227~0~64118357",
+      "started_at": "2026-10-14T23:12:55-0700",
+      "ended_at": "2026-10-14T23:17:48-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "757c2435a390098032f2c8f1a9a3be5c73de458ebf6efda8c4519b45f046e8d7"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "49714742b6d693db32f8233ad6e98c0e8f3dfb9f7ed191c28ffcd2250c803bcb"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "7c0936cd39ab9b04f67affff1de0b734597028b295ea2fad169ed3548fcea3bf"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": true,
+      "seconds": 116.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "..................................                                       [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n34 passed in 1.13 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 31,
+        "input": 942271,
+        "output": 16661,
+        "cached": 876672
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-5227~0~789ca166",
+      "started_at": "2026-10-14T23:18:07-0700",
+      "ended_at": "2026-10-14T23:20:03-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "0c7fdf3472f05750506cb1ca304fecbef83433aa10a72acdfa50048b672f4b86"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "503ff675bc857d03a7c299397d08c297cf756298896be059f9882df82e5fe530"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "e6f75aba5d38e68c576f77799b2f94981da571ffef85393f0b292e11e80f6231"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-5227",
+      "rep": 0,
+      "passed": true,
+      "seconds": 100.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "..................................                                       [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-5227-0/.swe-results.xml -\n34 passed in 1.20 seconds\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 32,
+        "input": 1178163,
+        "output": 10844,
+        "cached": 1154304
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-5227~0~b14ef3e3",
+      "started_at": "2026-10-14T23:20:21-0700",
+      "ended_at": "2026-10-14T23:22:01-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5227~0.out",
+          "sha256": "f223f897e6649030d24cdd47109e1b4abf15c01ff2dbed872993770bbfa082bf"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5227~0.patch",
+          "sha256": "e11673d0ca1be6ab5182d58c115aeb078e3e68c199a1ca15d81a1b7217e99056"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-5227~0.check.txt",
+          "sha256": "0f91cf78b7c84835e48c9e21151ee3d3ecf8b592b0866f3c17e25799ed562acb"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 14.1,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "     \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:364: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_dotted_name_not_allowed - Failed: DID N...\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n2 failed, 50 passed in 0.37s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 8,
+        "input": 120697,
+        "output": 1690,
+        "cached": 101504
+      },
+      "meter_label": "crush~swe-pallets__flask-4045~0~1e45ca18",
+      "started_at": "2026-10-14T23:22:16-0700",
+      "ended_at": "2026-10-14T23:22:30-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-4045~0.out",
+          "sha256": "ac1c7072457d5f63d8d12d6ef95790ad3953dc471d86b908ecadbbc8b978c47b"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-4045~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "e97c22e5e19da0c9d992ffdcdd924f8669b97ec0fa52c8b939a3d6a837f02c00"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 59.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "_func: t.Optional[t.Callable] = None,\n        **options: t.Any,\n    ) -> None:\n        \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:367: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n1 failed, 51 passed in 0.37s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 17,
+        "input": 494124,
+        "output": 6329,
+        "cached": 478848
+      },
+      "meter_label": "kilo~swe-pallets__flask-4045~0~848f238f",
+      "started_at": "2026-10-14T23:22:44-0700",
+      "ended_at": "2026-10-14T23:23:44-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-4045~0.out",
+          "sha256": "3fff6954f563d09f2c688106436106ed082d54c104cd142d11215de029fb67e0"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-4045~0.patch",
+          "sha256": "902f81268aaf3431737aa7eac2809b278f4e66bf66010f7ea5d6cc77e3e6c38d"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "5a5de95c1c0756ee4fa1e8ce0a7ba2575ecad7935905eed958e342737717060b"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 93.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "_func: t.Optional[t.Callable] = None,\n        **options: t.Any,\n    ) -> None:\n        \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:368: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n1 failed, 51 passed in 0.38s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 23,
+        "input": 731577,
+        "output": 12939,
+        "cached": 663552
+      },
+      "meter_label": "qwen~swe-pallets__flask-4045~0~771923ca",
+      "started_at": "2026-10-14T23:23:57-0700",
+      "ended_at": "2026-10-14T23:25:31-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-4045~0.out",
+          "sha256": "2bc0890b2fd7fb208b9966b94753f25fd0c1119ce58ae4f5ff8bbaf83352a9f2"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-4045~0.patch",
+          "sha256": "27a433f882acf83d642d5b3089493d3b2c87f5732a894026b975b014c216613d"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "877d557e8de8c615374849fba47ee68f2e371fa39fb90cd0dc5135352f46a07c"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pallets__flask-4045",
+      "rep": 0,
+      "passed": false,
+      "seconds": 141.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "func: t.Optional[t.Callable] = None,\n        **options: t.Any,\n    ) -> None:\n        \"\"\"Like :meth:`Flask.add_url_rule` but for a blueprint.  The endpoint for\n        the :func:`url_for` function is prefixed with the name of the blueprint.\n        \"\"\"\n        if endpoint:\n>           assert \".\" not in endpoint, \"Blueprint endpoints should not contain dots\"\nE           AssertionError: Blueprint endpoints should not contain dots\n\nsrc/flask/blueprints.py:372: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pallets__flask-4045-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/test_blueprints.py::test_route_decorator_custom_endpoint_with_dots\n1 failed, 51 passed in 0.44s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/test_blueprints.py"
+      ],
+      "false_done": true,
+      "usage": {
+        "requests": 5,
+        "input": 284041,
+        "output": 36954,
+        "cached": 1280
+      },
+      "meter_label": "aider~swe-pallets__flask-4045~0~bec67343",
+      "started_at": "2026-10-14T23:25:45-0700",
+      "ended_at": "2026-10-14T23:28:07-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-4045~0.out",
+          "sha256": "99f362f66485128aeb6aa3b648de01e48f4f8162b24ab08affe85a84dd5e8c16"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-4045~0.patch",
+          "sha256": "6faa19af90474ff9493f95a05945f243bc55376ecb28fa6af05e6f972a6693ea"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pallets__flask-4045~0.check.txt",
+          "sha256": "107d4d96ce42c2ec8c116243a552b260b39a0392c369c8bb555f7330ab9b0d3c"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": true,
+      "seconds": 286.6,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................................  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n71 passed in 3.42s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 28,
+        "input": 979180,
+        "output": 20544,
+        "cached": 905728
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-6116~0~4b396cc7",
+      "started_at": "2026-10-14T23:28:25-0700",
+      "ended_at": "2026-10-14T23:33:12-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "fcee439ddd81c56d3bdbe84c300985f38202be7b339c90a013792470085ec34f"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "1738be22fc86e21c1159401922c4d0f3190d60de9193019bdc7f4a98c91ed690"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "671fa0dfc2ab3a8de063459b9849b991a1322e599a5651479297f57fb17e9f12"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": false,
+      "seconds": 15.1,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "est(\"--co\")\n>       result.stdout.fnmatch_lines([\"*MyModule1*\", \"*MyModule2*\", \"*test_x*\"])\nE       Failed: remains unmatched: '*MyModule1*'\n\n~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-6116-0/testing/test_collection.py:437: Failed\n----------------------------- Captured stderr call -----------------------------\nERROR: usage: pytest.py [options] [file_or_dir] [file_or_dir] [...]\npytest.py: error: unrecognized arguments: --co\n  inifile: None\n  rootdir: /private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-user/pytest-1197/test_pytest_collect_file_from_sister_dir0\n\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n2 failed, 69 passed in 3.36s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 7,
+        "input": 95582,
+        "output": 1992,
+        "cached": 78592
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-6116~0~7b223fe5",
+      "started_at": "2026-10-14T23:33:32-0700",
+      "ended_at": "2026-10-14T23:33:47-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "6a5edb13d4067a6ce57241f1682386b25ce249b4db9e47bd37a9981cb85fd612"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "d3d9224ca1874fedf65e84f6afe4a988cee35a6efe231f1799b75034762d36ef"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": true,
+      "seconds": 970.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................................  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n71 passed in 3.48s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 305354,
+        "output": 3404,
+        "cached": 300288
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-6116~0~b26253ff",
+      "started_at": "2026-10-14T23:34:36-0700",
+      "ended_at": "2026-10-14T23:50:46-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "e72151e25ed2656531c73f4656ad01ed14df4ab1ac0e341678800ea4466f07c5"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "96b1e684b7544f79825bc6e70d991303e990e4623e3ed9408846e7470083359b"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "7fd6a4d75dc43f8d3d511a0fba8a67b0bdded8cc20f2f0c59cc384e13497dc05"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-6116",
+      "rep": 0,
+      "passed": true,
+      "seconds": 216.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".......................................................................  [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-6116-0/.swe-results.xml -\n71 passed in 3.39s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 5,
+        "input": 1520366,
+        "output": 42509,
+        "cached": 507904
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-6116~0~44576081",
+      "started_at": "2026-10-14T23:51:07-0700",
+      "ended_at": "2026-10-14T23:54:43-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-6116~0.out",
+          "sha256": "9feb2c2baedb55ef2af0d32da0a70b39aff836674d9fb3614a36bcb1550f2365"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-6116~0.patch",
+          "sha256": "682293511ae4e91a2530c2fdd2b1fb28b675f2aab4db1a37c4093be7b894400f"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-6116~0.check.txt",
+          "sha256": "a8a2bbb7a1372dcb9a1e9cd772a6cb7d011c9c088cfbd36bfb954c1d3b8274d2"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 200.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.14s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 3,
+        "input": 474946,
+        "output": 39221,
+        "cached": 4224
+      },
+      "meter_label": "aider~swe-pylint-dev__pylint-7993~0~6c413be8",
+      "started_at": "2026-10-14T23:55:09-0700",
+      "ended_at": "2026-10-14T23:58:30-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "4e524559fed557d5e1cd64d88c8551ca96be944d3a29a9cc79cd2246b96df3ef"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "5121fd905fd5b293c619ca341c73fd83f818ccce507e32a73a88fc2f0217cd01"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "46c2dd54c4611ec61839dc492960a1c871531676c8d3853162d73238f6005cfe"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 52.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.14s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/reporters/unittest_reporting.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 384880,
+        "output": 6504,
+        "cached": 365312
+      },
+      "meter_label": "crush~swe-pylint-dev__pylint-7993~0~9180349b",
+      "started_at": "2026-10-14T23:58:56-0700",
+      "ended_at": "2026-10-14T23:59:48-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "75fa7be8b53f10a8d63deaec8485d48741b0f00b825fbf785d78b35239652f49"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "8ef1d6f1db571e36001f15f1de30acfee090a41482d259a96497357944b9e624"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "41016c248772e531253697f0c51486ab99657867897ef385156e3a7f579e4d93"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 249.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.13s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/reporters/unittest_reporting.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 21,
+        "input": 681780,
+        "output": 14669,
+        "cached": 652160
+      },
+      "meter_label": "kilo~swe-pylint-dev__pylint-7993~0~3db712f7",
+      "started_at": "2026-10-15T00:00:13-0700",
+      "ended_at": "2026-10-15T00:04:23-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "1dd7168c3b9bcda7d0cd5da2dd19bb75e613e80c390282820fbee1770fa40270"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "0acc921b5cddcfdbfe1fc4373a022a71123a4a0f74f7f771e9989c02f0d613c3"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "0e5f782c1ef463aac4fcb92bd6a38a1bf3eee26414daad7c198a3dae4e00e492"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pylint-dev__pylint-7993",
+      "rep": 0,
+      "passed": true,
+      "seconds": 125.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pylint-dev__pylint-7993-0/.swe-results.xml -\n11 passed in 0.14s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/reporters/unittest_reporting.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 25,
+        "input": 867923,
+        "output": 18940,
+        "cached": 804096
+      },
+      "meter_label": "qwen~swe-pylint-dev__pylint-7993~0~d63a53fd",
+      "started_at": "2026-10-15T00:04:47-0700",
+      "ended_at": "2026-10-15T00:06:53-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7993~0.out",
+          "sha256": "a16084b6a1090595b751f18ee0afc94cc59a4b0a794ecc15534f0940fba64a7e"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7993~0.patch",
+          "sha256": "24111ce0e90f2c61099a87737f8e98a29799ac500702cf5ea11b66dfda52e5f3"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-7993~0.check.txt",
+          "sha256": "c919d10fa932c019a4dbd678bfc3a1d7a8bcd5806356a64504ad8902c67e4f4e"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": false,
+      "seconds": 77.2,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "el.'), col_offset=17, end_line=None, end_col_offset=None)\nE         \nE         Got:\nE         No message.\nE         \nE       assert 1 == 0\nE        +  where 1 = len((MessageTest(msg_id='fixme', line=2, node=None, args='???', confidence=Confidence(name='UNDEFINED', description='Warning without any associated confidence level.'), col_offset=17, end_line=None, end_col_offset=None),))\nE        +  and   0 = len([])\n\npylint/testutils/checker_test_case.py:58: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED tests/checkers/unittest_misc.py::TestFixme::test_non_alphanumeric_codetag\n1 failed, 10 passed in 0.07s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": true,
+      "usage": {
+        "requests": 4,
+        "input": 736591,
+        "output": 11424,
+        "cached": 4992
+      },
+      "meter_label": "aider~swe-pylint-dev__pylint-5859~0~c78033ee",
+      "started_at": "2026-10-15T00:07:17-0700",
+      "ended_at": "2026-10-15T00:08:34-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "cc7d0c74da9476c769e6435c21330edec97bacdc16d59706726c8db89199c20f"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "4ed0527b67c13131fb26aa285a39f4fe62e6fd17c9bdc2e796c3b2b3edd816b9"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "3cf0e3eeedb014a3ce3da8db26980c13d4a7565e7502b84bd0e1eb14614762f5"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": true,
+      "seconds": 47.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n11 passed in 0.02s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 326463,
+        "output": 3500,
+        "cached": 320128
+      },
+      "meter_label": "kilo~swe-pylint-dev__pylint-5859~0~03250f72",
+      "started_at": "2026-10-15T00:08:58-0700",
+      "ended_at": "2026-10-15T00:09:45-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "a0ea8b8eb8970913fec342dc89d40904db7e6fcf694c4f76a845002e2542db07"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "5636b0c66e7c16d93d24e0ee6790eff5e8877911f5f68a088213751c3970654a"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "12f33a11dbd2b67acbc79a02934cb3a8cbb0dab1eefe145e98f4afd92a8733aa"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": true,
+      "seconds": 55.4,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n11 passed in 0.02s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 15,
+        "input": 365689,
+        "output": 7271,
+        "cached": 321152
+      },
+      "meter_label": "qwen~swe-pylint-dev__pylint-5859~0~7a042b4a",
+      "started_at": "2026-10-15T00:10:09-0700",
+      "ended_at": "2026-10-15T00:11:04-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "4397dba049145927e5801a96b6ca8a50ce4ebe8d872d7879c0bb6d9ca005e533"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "4c795a3ae2be55013a76d1b4e43bbe99a17d2b4e4defa16f15803ce57a417de0"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "ddd08d82009588bcc5ff05295a03d2b191262df92ccf290032d1e6211888367d"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pylint-dev__pylint-5859",
+      "rep": 0,
+      "passed": true,
+      "seconds": 48.0,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "...........                                                              [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pylint-dev__pylint-5859-0/.swe-results.xml -\n11 passed in 0.03s\n",
+      "tokens": null,
+      "tampered": [
+        "tests/checkers/unittest_misc.py"
+      ],
+      "false_done": false,
+      "usage": {
+        "requests": 20,
+        "input": 403516,
+        "output": 5388,
+        "cached": 384128
+      },
+      "meter_label": "crush~swe-pylint-dev__pylint-5859~0~c4a96187",
+      "started_at": "2026-10-15T00:11:27-0700",
+      "ended_at": "2026-10-15T00:12:15-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-5859~0.out",
+          "sha256": "5a67aa838cb7ce08682c39b63cb7c2c27da6d701d1cdcd038c859b35ddc099ff"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-5859~0.patch",
+          "sha256": "c7551da0183dd7eb3dd3f382ebfc45ed6c43edc3c8542af9bf762d344c109416"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pylint-dev__pylint-5859~0.check.txt",
+          "sha256": "037ad1286a97213258e3c2a07f63563ae1f85996a7fffd82b99e70e09fdc8224"
+        }
+      }
+    },
+    {
+      "agent": "aider",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": false,
+      "seconds": 150.8,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ")\n>       assert \"pytest-of-unknown\" in str(p)\nE       AssertionError: assert 'pytest-of-unknown' in '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-3'\nE        +  where '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-3' = str(PosixPath('/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-3'))\n\ntesting/test_tmpdir.py:459: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/aider/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_tmpdir.py::test_tmp_path_factory_handles_invalid_dir_characters\n1 failed, 32 passed in 0.51s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 3,
+        "input": 639362,
+        "output": 29402,
+        "cached": 7552
+      },
+      "meter_label": "aider~swe-pytest-dev__pytest-8365~0~1d6293d0",
+      "started_at": "2026-10-15T00:12:34-0700",
+      "ended_at": "2026-10-15T00:15:04-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "d17f409bf2cf08e96c8c430061d81879476e23eb117543b63f2d9915ee91971f"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "becb900a1c67d43f5467525791bced6da8ec67df1d6ca416b940162a427d352b"
+        },
+        "check": {
+          "file": "20261014-164042-51072/aider~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "960ae2125ec2963a5682c6700f06788e4d1a12a0e850b974cce2ee7a10d1630f"
+        }
+      }
+    },
+    {
+      "agent": "crush",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": false,
+      "seconds": 14.2,
+      "exit_code": 1,
+      "timed_out": false,
+      "check_output": "r(self, mode=0o777, parents=False, exist_ok=False):\n        \"\"\"\n        Create a new directory at this given path.\n        \"\"\"\n        try:\n>           self._accessor.mkdir(self, mode)\nE           FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os/<:*?;>agnostic'\n\n/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/pathlib.py:1323: FileNotFoundError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/crush/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_tmpdir.py::test_tmp_path_factory_handles_invalid_dir_characters\n1 failed, 32 passed in 0.48s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 7,
+        "input": 88764,
+        "output": 2127,
+        "cached": 74496
+      },
+      "meter_label": "crush~swe-pytest-dev__pytest-8365~0~bc51210b",
+      "started_at": "2026-10-15T00:15:21-0700",
+      "ended_at": "2026-10-15T00:15:36-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "6a5edb13d4067a6ce57241f1682386b25ce249b4db9e47bd37a9981cb85fd612"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "check": {
+          "file": "20261014-164042-51072/crush~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "3e5fd8ef0b4a4e4bb4dff5c1275b2826aa17d7f9de3937dcf78144771e7fcc08"
+        }
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": false,
+      "seconds": 303.5,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": "()\n>       assert \"pytest-of-unknown\" in str(p)\nE       AssertionError: assert 'pytest-of-unknown' in '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-4'\nE        +  where '/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-4' = str(PosixPath('/private/var/folders/7b/6_67rkk54j3bsp04m2f2qzmc0000gn/T/pytest-of-os_______agnostic/pytest-4'))\n\ntesting/test_tmpdir.py:459: AssertionError\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/qwen/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n=========================== short test summary info ============================\nFAILED testing/test_tmpdir.py::test_tmp_path_factory_handles_invalid_dir_characters\n1 failed, 32 passed in 0.46s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": true,
+      "usage": {
+        "requests": 26,
+        "input": 953726,
+        "output": 30082,
+        "cached": 885504
+      },
+      "meter_label": "qwen~swe-pytest-dev__pytest-8365~0~a80f6762",
+      "started_at": "2026-10-15T00:15:51-0700",
+      "ended_at": "2026-10-15T00:20:55-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "d03eaae43827255c63f4e48f4b02f62c38284e76a6580e09a275dd76181071b4"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "7be5dff559f74686f34c045e32ffec40fe5bafa42791328f854121044048ff9b"
+        },
+        "check": {
+          "file": "20261014-164042-51072/qwen~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "3c4354505f7de906a90b27d8ac770604e18986fd35b25640382a106f734d76e9"
+        }
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "swe-pytest-dev__pytest-8365",
+      "rep": 0,
+      "passed": true,
+      "seconds": 45.3,
+      "exit_code": 0,
+      "timed_out": false,
+      "check_output": ".................................                                        [100%]\n- generated xml file: ~/.local/share/chanto-bench/work-resume-0/kilo/swe-pytest-dev__pytest-8365-0/.swe-results.xml -\n33 passed in 0.45s\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 16,
+        "input": 388640,
+        "output": 4628,
+        "cached": 379136
+      },
+      "meter_label": "kilo~swe-pytest-dev__pytest-8365~0~a26784b9",
+      "started_at": "2026-10-15T00:21:11-0700",
+      "ended_at": "2026-10-15T00:21:57-0700",
+      "evidence": {
+        "transcript": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-8365~0.out",
+          "sha256": "60819d087f97e98b6a9b57b7c72910b4e090be9bec003c6a8b076bca6fb3c1c7"
+        },
+        "patch": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-8365~0.patch",
+          "sha256": "892727010609601571bfafcc8fec68b36622f33c488269be62b64b473c788467"
+        },
+        "check": {
+          "file": "20261014-164042-51072/kilo~swe-pytest-dev__pytest-8365~0.check.txt",
+          "sha256": "0913484d066debe4a0df3d0b3fc5bb9b3fca64bb36a6e5882bfc8ff7849e160f"
+        }
+      }
+    }
+  ]
+}

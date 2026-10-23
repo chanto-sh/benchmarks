@@ -1,0 +1,43 @@
+diff --git a/changelog/5227.feature.rst b/changelog/5227.feature.rst
+new file mode 100644
+index 0000000..63cdcec
+--- /dev/null
++++ b/changelog/5227.feature.rst
+@@ -0,0 +1 @@
++The default log format used by the logging plugin now includes the logger name (``%(name)s``). The new default is ``%(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s``.
+diff --git a/doc/en/logging.rst b/doc/en/logging.rst
+index a535091..d81d4a6 100644
+--- a/doc/en/logging.rst
++++ b/doc/en/logging.rst
+@@ -20,15 +20,15 @@ Shows failed tests like so:
+ .. code-block:: pytest
+ 
+     ----------------------- Captured stdlog call ----------------------
+-    test_reporting.py    26 WARNING  text going to logger
++    WARNING  test_reporting:test_reporting.py:26 text going to logger
+     ----------------------- Captured stdout call ----------------------
+     text going to stdout
+     ----------------------- Captured stderr call ----------------------
+     text going to stderr
+     ==================== 2 failed in 0.02 seconds =====================
+ 
+-By default each captured log message shows the module, line number, log level
+-and message.
++By default each captured log message shows the log level, logger name, module,
++line number and message.
+ 
+ If desired the log and date format can be specified to
+ anything that the logging module supports by passing specific formatting options:
+diff --git a/src/_pytest/logging.py b/src/_pytest/logging.py
+index 757cb27..08670d2 100644
+--- a/src/_pytest/logging.py
++++ b/src/_pytest/logging.py
+@@ -15,7 +15,7 @@ from _pytest.compat import dummy_context_manager
+ from _pytest.config import create_terminal_writer
+ from _pytest.pathlib import Path
+ 
+-DEFAULT_LOG_FORMAT = "%(filename)-25s %(lineno)4d %(levelname)-8s %(message)s"
++DEFAULT_LOG_FORMAT = "%(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s"
+ DEFAULT_LOG_DATE_FORMAT = "%H:%M:%S"
+ 
+ 

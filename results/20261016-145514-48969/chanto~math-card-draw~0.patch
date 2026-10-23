@@ -1,0 +1,53 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..11b6fe8 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,20 @@
+ from fractions import Fraction
++from math import comb
++
++
++def _hypergeom_at_least(r, b, k, s):
++    """P(at least k reds when s cards are drawn without replacement from r reds and b blues)."""
++    if k <= 0:
++        return Fraction(1)
++    if k > r or k > s:
++        return Fraction(0)
++    total = comb(r + b, s)
++    if total == 0:
++        return Fraction(0)
++    favourable = 0
++    for i in range(k, min(r, s) + 1):
++        favourable += comb(r, i) * comb(b, s - i)
++    return Fraction(favourable, total)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +22,26 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++
++    n = r + b + g
++    m = min(m, n)  # cannot turn more cards than the deck holds
++    if m < 0:
++        m = 0
++
++    total = Fraction(0)
++
++    # Case: the first green is the p-th card turned (1 <= p <= m).
++    # Then the reds turned are those among the first p-1 (non-green) cards.
++    for p in range(1, m + 1):
++        # P(first p-1 cards non-green) * P(the p-th card is green)
++        non_green_prefix = Fraction(comb(n - g, p - 1), comb(n, p - 1))
++        green_here = Fraction(g, n - p + 1)
++        total += non_green_prefix * green_here * _hypergeom_at_least(r, b, k, p - 1)
++
++    # Case: no green among the first m cards; all of them are non-green.
++    no_green_prob = Fraction(comb(n - g, m), comb(n, m))
++    total += no_green_prob * _hypergeom_at_least(r, b, k, m)
++
++    return total

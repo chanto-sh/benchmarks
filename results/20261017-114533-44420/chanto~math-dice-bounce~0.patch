@@ -1,0 +1,52 @@
+diff --git a/game.py b/game.py
+index 768dec9..9c3e22a 100644
+--- a/game.py
++++ b/game.py
+@@ -3,4 +3,46 @@ from fractions import Fraction
+ 
+ def expected_turns(n, k):
+     """Exact expected number of turns from square 0 to land exactly on n."""
+-    raise NotImplementedError
++    # Transient states are 0..n-1; state n is absorbing.
++    # E[p] = 1 + (1/k) * sum_d E[next(p, d)], with E[n] = 0.
++    size = n
++    inv_k = Fraction(1, k)
++    matrix = [[Fraction(0) for _ in range(size + 1)] for _ in range(size)]
++
++    for p in range(size):
++        matrix[p][p] += 1
++        for d in range(1, k + 1):
++            q = p + d
++            if q > n:
++                q = 2 * n - q  # bounce back by the excess
++            if q < n:
++                matrix[p][q] -= inv_k
++        matrix[p][size] = 1
++
++    # Gaussian elimination with exact rational arithmetic.
++    for col in range(size):
++        pivot = next((r for r in range(col, size) if matrix[r][col] != 0), None)
++        if pivot is None:
++            raise ValueError("game matrix is singular")
++        if pivot != col:
++            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
++
++        pivot_value = matrix[col][col]
++        for c in range(col, size + 1):
++            matrix[col][c] /= pivot_value
++
++        for r in range(col + 1, size):
++            factor = matrix[r][col]
++            if factor != 0:
++                for c in range(col, size + 1):
++                    matrix[r][c] -= factor * matrix[col][c]
++
++    # Back substitution.
++    solution = [Fraction(0) for _ in range(size)]
++    for row in range(size - 1, -1, -1):
++        value = matrix[row][size]
++        for c in range(row + 1, size):
++            value -= matrix[row][c] * solution[c]
++        solution[row] = value
++
++    return solution[0]

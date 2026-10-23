@@ -1,0 +1,170 @@
+diff --git a/src/cart.js b/src/cart.js
+index 57b58f1..a09ffc3 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,23 +1,33 @@
+ const { discountFor } = require("./discounts");
+ const { taxFor } = require("./tax");
+-const { fmt } = require("./format");
++const { fmtCents } = require("./format");
++const { parseMoney, parseQuantity } = require("./money");
+ 
+ // Price a cart: { items: [{ sku, price: "19.99", qty, discountPct?, taxExempt? }], taxRate }.
+ // Returns { subtotal, discount, tax, total } as "0.00" strings (see README for the rules).
+ function checkout(cart) {
+-  let subtotal = 0;
+-  let discount = 0;
+-  let taxable = 0;
++  let subtotal = 0n;
++  let discount = 0n;
++  let taxable = 0n;
++
+   for (const item of cart.items) {
+-    const line = Number(item.price) * item.qty;
+-    const d = discountFor(line, item.discountPct || 0);
++    const line = parseMoney(item.price, `${item.sku} price`) * parseQuantity(item.qty, `${item.sku} qty`);
++    const lineDiscount = discountFor(line, item.discountPct ?? 0);
++
+     subtotal += line;
+-    discount += d;
+-    if (!item.taxExempt) taxable += line - d;
++    discount += lineDiscount;
++    if (!item.taxExempt) taxable += line - lineDiscount;
+   }
+-  const tax = taxFor(taxable, cart.taxRate || 0);
++
++  const tax = taxFor(taxable, cart.taxRate ?? 0);
+   const total = subtotal - discount + tax;
+-  return { subtotal: fmt(subtotal), discount: fmt(discount), tax: fmt(tax), total: fmt(total) };
++
++  return {
++    subtotal: fmtCents(subtotal),
++    discount: fmtCents(discount),
++    tax: fmtCents(tax),
++    total: fmtCents(total),
++  };
+ }
+ 
+ module.exports = { checkout };
+diff --git a/src/discounts.js b/src/discounts.js
+index d35ec82..0f7e084 100644
+--- a/src/discounts.js
++++ b/src/discounts.js
+@@ -1,6 +1,8 @@
+-// Per-line percentage discounts.
+-function discountFor(lineTotal, pct) {
+-  return (lineTotal * pct) / 100;
++const { percentOfRounded } = require("./money");
++
++// Per-line percentage discounts, rounded to the cent on each line (half up).
++function discountFor(lineCents, pct) {
++  return percentOfRounded(lineCents, pct);
+ }
+ 
+ module.exports = { discountFor };
+diff --git a/src/format.js b/src/format.js
+index f7f4c85..5945a7b 100644
+--- a/src/format.js
++++ b/src/format.js
+@@ -3,4 +3,14 @@ function fmt(amount) {
+   return amount.toFixed(2);
+ }
+ 
+-module.exports = { fmt };
++// Format an integer number of cents (BigInt or Number) as "1234.50".
++function fmtCents(cents) {
++  const value = typeof cents === "bigint" ? cents : BigInt(cents);
++  const negative = value < 0n;
++  const absolute = negative ? -value : value;
++  const dollars = absolute / 100n;
++  const remainder = absolute % 100n;
++  return `${negative ? "-" : ""}${dollars}.${remainder.toString().padStart(2, "0")}`;
++}
++
++module.exports = { fmt, fmtCents };
+diff --git a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..8b79359
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,63 @@
++// Exact money helpers. Amounts are integer cents represented as BigInts.
++
++const DECIMAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
++
++// Parse a decimal value into { num, scale }, where value = num / 10^scale.
++function parseDecimal(value, name) {
++  const text = (typeof value === "bigint" ? value.toString() : String(value)).trim();
++  if (!DECIMAL_RE.test(text)) {
++    throw new TypeError(`${name} must be a decimal number`);
++  }
++
++  const negative = text.startsWith("-");
++  const unsigned = text.replace(/^[+-]/, "");
++  const [whole, fraction = ""] = unsigned.split(".");
++  const digits = `${whole || "0"}${fraction}`;
++
++  return {
++    num: BigInt(`${negative ? "-" : ""}${digits}`),
++    scale: fraction.length,
++  };
++}
++
++// Prices are money amounts, so they may have at most two decimal places.
++function parseMoney(value, name = "price") {
++  const { num, scale } = parseDecimal(value, name);
++  if (scale > 2) {
++    const excess = 10n ** BigInt(scale - 2);
++    if (num % excess !== 0n) {
++      throw new RangeError(`${name} must be an exact number of cents`);
++    }
++    return num / excess;
++  }
++  return num * 10n ** BigInt(2 - scale);
++}
++
++function parseQuantity(value, name = "qty") {
++  const { num, scale } = parseDecimal(value, name);
++  if (scale !== 0) {
++    throw new RangeError(`${name} must be an integer`);
++  }
++  return num;
++}
++
++// Round numerator / denominator to the nearest integer, halves away from zero.
++function divideRoundHalfUp(numerator, denominator) {
++  const quotient = numerator / denominator;
++  const remainder = numerator % denominator;
++  if (remainder === 0n) return quotient;
++
++  const absRemainder = remainder < 0n ? -remainder : remainder;
++  if (absRemainder * 2n >= denominator) {
++    return numerator < 0n ? quotient - 1n : quotient + 1n;
++  }
++  return quotient;
++}
++
++// `pct` percent of an amount in cents, rounded to the cent (half up).
++function percentOfRounded(amountCents, pct) {
++  const { num, scale } = parseDecimal(pct, "percentage");
++  return divideRoundHalfUp(amountCents * num, 100n * 10n ** BigInt(scale));
++}
++
++module.exports = { parseMoney, parseQuantity, percentOfRounded };
+diff --git a/src/tax.js b/src/tax.js
+index 500d478..b84ae5e 100644
+--- a/src/tax.js
++++ b/src/tax.js
+@@ -1,6 +1,9 @@
+-// Sales tax on the taxable part of a cart. `rate` is a percentage, e.g. 8.25.
+-function taxFor(amount, rate) {
+-  return (amount * rate) / 100;
++const { percentOfRounded } = require("./money");
++
++// Sales tax on the taxable part of a cart, rounded to the cent once (half up).
++// `rate` is a percentage, e.g. 8.25.
++function taxFor(amountCents, rate) {
++  return percentOfRounded(amountCents, rate);
+ }
+ 
+ module.exports = { taxFor };

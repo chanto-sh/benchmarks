@@ -1,0 +1,10 @@
+I pulled a few days of temperature data from our site sensors: sensors.json lists the sensors (each has a default unit used when a reading has no "unit" field) and readings.json has the raw readings. Units are a mix of C, F and K, timestamps carry the offset of whatever gateway forwarded them, and a dead sensor reports null or -999.
+
+Can you work out the following and save it to answers.json with these keys?
+
+- "site_mean_c_2026_08_14": an object mapping each site name to its mean temperature in °C for the UTC day 2026-08-14, ignoring invalid readings, rounded to 2 decimals.
+- "hottest_site": the site with the single highest valid temperature over the whole export.
+- "invalid_readings": how many readings were null or -999.
+- "mean_humidity_pct": the average relative humidity over the export, rounded to 2 decimals.
+
+If any of these can't be answered from the files, use the string "not in data" for that key instead of guessing.

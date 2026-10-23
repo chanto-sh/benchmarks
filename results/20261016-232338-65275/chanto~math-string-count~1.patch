@@ -1,0 +1,57 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..ad33f8d 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,51 @@
+ MOD = 1_000_000_007
+ 
++# States are (last letter is A, number of C's mod 3):
++#   0, 1, 2 -> last letter is not A, C count is 0, 1, 2 mod 3
++#   3, 4, 5 -> last letter is A,     C count is 0, 1, 2 mod 3
++SIZE = 6
++
++
++def _mat_mul(a, b):
++    result = [[0] * SIZE for _ in range(SIZE)]
++    for i in range(SIZE):
++        for k in range(SIZE):
++            if a[i][k]:
++                aik = a[i][k]
++                for j in range(SIZE):
++                    result[i][j] = (result[i][j] + aik * b[k][j]) % MOD
++    return result
++
++
++def _mat_pow(matrix, exponent):
++    result = [[int(i == j) for j in range(SIZE)] for i in range(SIZE)]
++    while exponent:
++        if exponent & 1:
++            result = _mat_mul(result, matrix)
++        matrix = _mat_mul(matrix, matrix)
++        exponent >>= 1
++    return result
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    # transition[i][j] is the number of ways to go from state i to state j
++    # by appending one letter.
++    transition = [[0] * SIZE for _ in range(SIZE)]
++    for c in range(3):
++        not_a, last_a = c, 3 + c
++        next_c = (c + 1) % 3
++
++        # From a state whose last letter is not A: append A, B or C.
++        transition[not_a][last_a] += 1
++        transition[not_a][not_a] += 1
++        transition[not_a][next_c] += 1
++
++        # After an A, another A is forbidden: append B or C.
++        transition[last_a][not_a] += 1
++        transition[last_a][next_c] += 1
++
++    powered = _mat_pow(transition, n)
++    # Start in state 0 (empty code: no trailing A, zero C's).
++    # Valid codes end in any state with a C count divisible by 3.
++    return (powered[0][0] + powered[0][3]) % MOD

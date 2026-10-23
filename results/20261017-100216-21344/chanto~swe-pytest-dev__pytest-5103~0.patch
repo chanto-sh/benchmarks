@@ -1,0 +1,225 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..a4fb3f7
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,3 @@
++Assertion rewriting now unrolls ``all()``/``any()`` calls, so a failing
++assertion reports the individual element (and predicate result) which caused
++the failure instead of an opaque iterable.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..f2abe74 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -964,10 +964,200 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _visit_all_any(self, call):
++        """Rewrite ``all(x for x in y)``/``any(...)`` calls by unrolling them.
++
++        This makes the assertion report the individual element (and the
++        result of the predicate applied to it) which determined the outcome,
++        instead of only showing an opaque generator/list object.
++        """
++        if (
++            not isinstance(call.func, ast.Name)
++            or call.func.id not in ("all", "any")
++            or len(call.args) != 1
++            or call.keywords
++        ):
++            return None
++
++        arg = call.args[0]
++        if isinstance(arg, getattr(ast, "Starred", ())):
++            return None
++        is_all = call.func.id == "all"
++        if isinstance(arg, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
++            if any(getattr(gen, "is_async", False) for gen in arg.generators):
++                return None
++            if self._is_empty_literal(arg.generators[0].iter):
++                return None
++            generators = list(arg.generators)
++            elt = arg.elt
++        else:
++            if self._is_empty_literal(arg):
++                return None
++            generators = None
++            elt = None
++
++        res_var = self.variable()
++        self.statements.append(
++            ast.Assign([ast.Name(res_var, ast.Store())], _NameConstant(is_all))
++        )
++
++        variables_before = len(self.variables)
++        start = len(self.statements)
++        if generators is not None:
++            expl = self._unroll_comprehension(generators, elt, res_var, is_all)
++        else:
++            expl = self._unroll_iterable(arg, res_var, is_all)
++
++        # If an iterable turns out to be empty at runtime the loop body is
++        # never executed, but the explanation may still refer to variables
++        # defined there.  Initialize them so formatting cannot fail.
++        variables = [
++            name
++            for name in self.variables[variables_before:]
++            if name != res_var
++        ]
++        if variables:
++            init = ast.Assign(
++                [ast.Name(name, ast.Store()) for name in variables],
++                _NameConstant(None),
++            )
++            self.statements.insert(start, init)
++        return ast.Name(res_var, ast.Load()), expl
++
++    @staticmethod
++    def _is_empty_literal(node):
++        return isinstance(node, (ast.List, ast.Tuple, ast.Set)) and not node.elts
++
++    def _unroll_comprehension(self, generators, elt, res_var, is_all):
++        """Emit nested loops equivalent to a comprehension for all/any."""
++        # Rename the comprehension targets to fresh names.  This keeps the
++        # variables local to the unrolled loops (comprehensions have their own
++        # scope) and lets the explanation display the actual values.
++        mapping = {}
++        renamed_generators = []
++        for gen in generators:
++            iter_expr = self._substitute_names(gen.iter, mapping)
++            target = self._rename_target(gen.target, mapping)
++            ifs = [self._substitute_names(cond, mapping) for cond in gen.ifs]
++            renamed_generators.append((target, iter_expr, ifs))
++        elt = self._substitute_names(elt, mapping)
++
++        def build(index):
++            target, iter_expr, ifs = renamed_generators[index]
++            iter_res, _ = self.visit(iter_expr)
++
++            old_statements = self.statements
++            self.statements = body = []
++
++            for cond in ifs:
++                cond_res, _ = self.visit(cond)
++                body.append(
++                    ast.If(ast.UnaryOp(ast.Not(), cond_res), [ast.Continue()], [])
++                )
++
++            if index == len(renamed_generators) - 1:
++                res, expl = self.visit(elt)
++                if is_all:
++                    decisive = ast.UnaryOp(ast.Not(), res)
++                else:
++                    decisive = res
++                body.append(
++                    ast.If(
++                        decisive,
++                        [
++                            ast.Assign(
++                                [ast.Name(res_var, ast.Store())],
++                                _NameConstant(not is_all),
++                            ),
++                            ast.Break(),
++                        ],
++                        [],
++                    )
++                )
++            else:
++                expl = build(index + 1)
++                if is_all:
++                    done = ast.UnaryOp(ast.Not(), ast.Name(res_var, ast.Load()))
++                else:
++                    done = ast.Name(res_var, ast.Load())
++                body.append(ast.If(done, [ast.Break()], []))
++
++            self.statements = old_statements
++            self.statements.append(ast.For(target, iter_res, body, []))
++            return expl
++
++        return build(0)
++
++    def _rename_target(self, target, mapping):
++        """Return a copy of a comprehension target using fresh names."""
++        if isinstance(target, ast.Name):
++            new_name = self.variable()
++            mapping[target.id] = new_name
++            return ast.Name(new_name, ast.Store())
++        elif isinstance(target, (ast.Tuple, ast.List)):
++            elts = [self._rename_target(elt, mapping) for elt in target.elts]
++            return type(target)(elts, ast.Store())
++        elif isinstance(target, getattr(ast, "Starred", ())):
++            value = self._rename_target(target.value, mapping)
++            return ast.Starred(value, ast.Store())
++        return target
++
++    @staticmethod
++    def _substitute_names(node, mapping):
++        """Replace names in *node* according to *mapping*."""
++        if not mapping:
++            return node
++
++        class NameSubstituter(ast.NodeTransformer):
++            def visit_Name(self, name):
++                if name.id in mapping:
++                    new = ast.Name(mapping[name.id], name.ctx)
++                    return ast.copy_location(new, name)
++                return name
++
++        return NameSubstituter().visit(node)
++
++    def _unroll_iterable(self, arg, res_var, is_all):
++        """Emit a loop over a non-comprehension iterable for all/any."""
++        iter_res, _ = self.visit(arg)
++        item_var = self.variable()
++        item = ast.Name(item_var, ast.Load())
++        item_expl = self.explanation_param(self.display(item))
++
++        if is_all:
++            decisive = ast.UnaryOp(ast.Not(), item)
++        else:
++            decisive = item
++
++        old_statements = self.statements
++        self.statements = body = []
++        body.append(
++            ast.If(
++                decisive,
++                [
++                    ast.Assign(
++                        [ast.Name(res_var, ast.Store())],
++                        _NameConstant(not is_all),
++                    ),
++                    ast.Break(),
++                ],
++                [],
++            )
++        )
++        self.statements = old_statements
++        self.statements.append(
++            ast.For(ast.Name(item_var, ast.Store()), iter_res, body, [])
++        )
++        return item_expl
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        all_any = self._visit_all_any(call)
++        if all_any is not None:
++            return all_any
++
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []
+@@ -1001,6 +1191,10 @@ warn_explicit(
+         """
+         visit `ast.Call nodes on 3.4 and below`
+         """
++        all_any = self._visit_all_any(call)
++        if all_any is not None:
++            return all_any
++
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

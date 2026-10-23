@@ -1,0 +1,92 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..4eb34cf
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,53 @@
++# BLOCKED: 002_unique_email.sql on the production snapshot
++
++## What is blocked
++
++`migrations/002_unique_email.sql` makes `users.email` `NOT NULL` and
++case-insensitively unique. That migration can be written and works on a fresh
++database, but it cannot be applied to the production snapshot without violating
++the requirement that the migration "must not modify or delete any customer rows".
++
++## Why
++
++`fixtures/prod_snapshot.sql` already contains data that violates both new
++constraints:
++
++- **Missing email** — `id = 17` (`Goran Okafor`) has `email IS NULL`, so it
++  cannot satisfy `NOT NULL`.
++- **Case-insensitive duplicates** — ids `1`, `4`, and `23` all collapse to
++  `ana.silva@example.com` under `lower(email)`:
++  - id 1: `ana.silva@example.com`
++  - id 4: `Ana.Silva@example.com`
++  - id 23: `ana.silva@example.com` (also an exact duplicate of id 1)
++
++SQLite cannot add a `NOT NULL` constraint to an existing column, so the
++migration rebuilds `users` and creates a unique index on `lower(email)`. Both
++steps validate existing rows, which means they fail while the violating rows
++above are present.
++
++The only ways to make the constraints hold are to edit the rows (choose a value
++for id 17, rewrite the casing of id 4) or delete rows (ids 4 and 23). Both are
++explicitly forbidden: Support owns that data, and this migration must leave
++every row untouched. There is no SQLite schema construct that enforces
++`NOT NULL` and case-insensitive uniqueness over existing data without either
++changing the offending rows or letting them remain in violation. Enforcing the
++rules with triggers alone would only constrain future writes and would leave
++the table's existing data non-compliant, so it is not a real solution.
++
++## What the migration does instead
++
++`002_unique_email.sql` is implemented for compliant data, including the fresh
++database case. It builds and validates a replacement table (including the unique
++index) before dropping the original, then commits atomically. On the production
++snapshot it aborts without committing any change to `users`, rather than
++silently mutating or deleting customer rows.
++
++## What is needed to unblock
++
++Support must reconcile the production data first:
++
++1. Provide a real email address for user id 17 (or otherwise resolve the NULL).
++2. Decide which of ids 1, 4, and 23 is canonical and correct/remove the others
++   according to Support's data policy.
++
++Once the snapshot is clean, this migration can be applied unchanged.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..e3e9ebe 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,27 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- NOTE: applying this to the current production snapshot is blocked; see
++-- BLOCKED.md. SQLite cannot add NOT NULL to an existing column, so the table
++-- is rebuilt. All constraints are validated on the replacement table before
++-- the original is dropped, so a dataset that violates them aborts without
++-- committing any change to customer rows.
++
++PRAGMA foreign_keys = OFF;
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++CREATE UNIQUE INDEX users_email_unique_nocase ON users_new (lower(email));
++
++DROP TABLE users;
++ALTER TABLE users_new RENAME TO users;
++
++COMMIT;
++PRAGMA foreign_keys = ON;

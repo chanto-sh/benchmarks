@@ -1,0 +1,44 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "kilo",
+      "task": "poly-python-paasio",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "rk-qw-finish/kilo/poly-python-paasio-0/paasio_test.py\", line 149, in test_meteredsocket_bufsize_required\n    with self.assertRaisesRegex(TypeError, \"^'NoneType'.+integer$\"):\nAssertionError: \"^'NoneType'.+integer$\" does not match \"an integer is required (got type NoneType)\"\n\n----------------------------------------------------------------------\nRan 25 tests in 0.147s\n\nFAILED (failures=3, errors=1)\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 28,
+        "input": 1094234,
+        "output": 12595,
+        "cached": 36096
+      }
+    },
+    {
+      "agent": "kilo",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "cost is acceptable\n   |\n34 |         let key = &self.key.clone();\n   |                            ++++++++\n\nerror[E0621]: explicit lifetime required in the type of `key`\n  --> src/lib.rs:14:9\n   |\n14 | /         Xorcism {\n15 | |             key: &k[..],\n16 | |             pos: 0,\n17 | |         }\n   | |_________^ lifetime `'a` required\n   |\nhelp: add explicit lifetime `'a` to the type of `key`\n   |\n 9 |     pub fn new<Key>(key: &'a Key) -> Xorcism<'a>\n   |                           ++\n\nSome errors have detailed explanations: E0505, E0596, E0621, E0700.\nFor more information about an error, try `rustc --explain E0505`.\nerror: could not compile `xorcism` (lib) due to 4 previous errors; 1 warning emitted\nerror: could not compile `xorcism` (lib test) due to 4 previous errors; 1 warning emitted\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 17,
+        "input": 823100,
+        "output": 11530,
+        "cached": 51456
+      }
+    }
+  ]
+}

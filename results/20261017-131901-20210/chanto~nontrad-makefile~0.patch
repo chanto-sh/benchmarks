@@ -1,0 +1,32 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..e9b9ade 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,17 +2,23 @@
+ PY ?= python3
+ DATA := $(wildcard data/*.csv)
+ OUT := dist
++SUMMARY := $(OUT)/summary.json
++
++.PHONY: all build test clean
+ 
+ all: build
+ 
+-build: $(OUT)/summary.json
++build: $(SUMMARY)
+ 
+-$(OUT)/summary.json: scripts/summarize.py
++# Depend on the data directory as well as the CSVs, so that adding or removing
++# a file is noticed even if the new file's mtime is older than the summary.
++$(SUMMARY): scripts/summarize.py $(DATA) data
+ 	mkdir -p $(OUT)
+-	$(PY) scripts/summarize.py $(DATA) > $@
++	$(PY) scripts/summarize.py $(DATA) > $@.tmp || { rm -f $@.tmp; exit 1; }
++	mv $@.tmp $@
+ 
+ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)

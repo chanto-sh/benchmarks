@@ -1,0 +1,36 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..c2571cc
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,30 @@
++## Call sites
++
++- `app/admin/tools.py` — imports `query_raw` as `qr`; `purge_test_customers()` runs a `DELETE` against `customers` for addresses ending in `@example.test`.
++- `app/billing/invoices.py` — imports the module as `legacy_db`; `unpaid()` selects unpaid invoices for a customer and returns them tagged with `CURRENCY`.
++- `app/orders/service.py` — imports `query_raw` directly; `open_orders()` selects a customer's open orders, and `cancel()` updates an order's status to `cancelled`.
++
++`app/reports/export.py` calls `query_raw_v2` from `app/db/fastpath.py`; that helper is already backed by `Session` and is not a `legacy_db` call site. `app/search/index.py` already uses `Session`. The old notes' `app/inventory/stock.py` reference is stale: no such module exists.
++
++## Schema
++
++Current schema version: 14
++
++`app/db/schema.py` sets `SCHEMA_VERSION = 14`, matching the latest migration, `app/db/migrations/0014_add_refunds.py` (`VERSION = 14`). This migration does **not** need a new schema version: it only changes which client code runs the queries, with no DDL or data-shape change. The commented-out `SCHEMA_VERSION = 15` plan (dropping legacy views) stays deferred until `legacy_db` is actually removed and should not be bundled into this switch.
++
++## Environment
++
++- `ORDERS_DB_URL` — read at import time by `app/settings.py` with no default, so it is required. The session layer still needs it: `Session` falls back to `settings.DB_URL`.
++- `ORDERS_DB_POOL` — read by `app/settings.py`, optional with default `5`. The session layer still needs it: `Session` falls back to `settings.DB_POOL_SIZE`.
++- `LEGACY_DB_TIMEOUT_S` — read by `app/legacy_db.py`, optional with default `30`. Only the legacy layer uses it; the session layer does not need it, and it can be retired along with `app/legacy_db.py`.
++- `BILLING_CURRENCY` — read by `app/billing/invoices.py` through `app/util/env.py`, optional with default `EUR`. Billing still needs it, but it is unrelated to the session layer.
++
++Not listed: `ORDERS_DB_REPLICA` exists only as a commented-out line in `app/settings.py`, `DB_PASSWORD` appears only in `README.md`, and `ORDERS_TEST_MODE` is set only by tests.
++
++## Rollback
++
++- Keep `app/legacy_db.py` and `LEGACY_DB_TIMEOUT_S` deployed for the whole cutover window; do not delete or rename either until the new path has been validated.
++- To back out, revert the cutover commit (or redeploy the previous release), which restores the three legacy imports in `app/admin/tools.py`, `app/billing/invoices.py`, and `app/orders/service.py`; then redeploy/restart.
++- No database rollback is required: this switch applies no migration and makes no schema change, so the schema stays at 14. The planned v15 legacy-view drop is deliberately not part of this change, so there is no schema state to undo.
++- After reverting, confirm `ORDERS_DB_URL` is still configured; the legacy path uses `settings.DB_URL` and will fail on startup without it.
++- Do not start the cutover until the production implementation of `Session.fetch_all` is available: the copy in this repo raises `NotImplementedError`, and the legacy path above is the fallback if that implementation is not ready or misbehaves.

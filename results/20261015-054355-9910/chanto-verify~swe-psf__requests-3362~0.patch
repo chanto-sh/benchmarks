@@ -1,0 +1,16 @@
+diff --git a/requests/models.py b/requests/models.py
+index fbb3c7e..ec788a7 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -687,6 +687,11 @@ class Response(object):
+             raise StreamConsumedError()
+         elif not isinstance(chunk_size, int):
+             raise TypeError("chunk_size must be an int, it is instead a %s." % type(chunk_size))
++        # Fall back to the apparent encoding when none has been provided, so
++        # that decoded content matches ``Response.text``. This must happen
++        # before the chunks are selected so that streamed content is retained.
++        if decode_unicode and self.encoding is None:
++            self.encoding = self.apparent_encoding
+         # simulate reading small chunks of the content
+         reused_chunks = iter_slices(self._content, chunk_size)
+ 

@@ -1,0 +1,206 @@
+diff --git a/clean.py b/clean.py
+new file mode 100644
+index 0000000..98ec075
+--- /dev/null
++++ b/clean.py
+@@ -0,0 +1,200 @@
++#!/usr/bin/env python3
++"""Clean a raw customer export.
++
++Usage: python3 clean.py <input.csv> <output.csv>
++"""
++
++import csv
++import re
++import sys
++from datetime import date
++from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
++from pathlib import Path
++
++COLUMNS = ["customer_id", "name", "email", "signup_date", "country", "spend"]
++ALIASES_PATH = Path(__file__).resolve().with_name("country_aliases.csv")
++
++CUSTOMER_ID_RE = re.compile(r"^[0-9]+$")
++ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
++DMY_DATE_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
++MONTH_DATE_RE = re.compile(r"^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})$")
++SPEND_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
++
++MONTHS = {
++    "jan": 1,
++    "feb": 2,
++    "mar": 3,
++    "apr": 4,
++    "may": 5,
++    "jun": 6,
++    "jul": 7,
++    "aug": 8,
++    "sep": 9,
++    "oct": 10,
++    "nov": 11,
++    "dec": 12,
++}
++
++
++def load_aliases(path):
++    aliases = {}
++    with path.open("r", encoding="utf-8-sig", newline="") as f:
++        reader = csv.DictReader(f)
++        for row in reader:
++            alias = (row.get("alias") or "").strip().lower()
++            code = (row.get("code") or "").strip()
++            if alias:
++                aliases[alias] = code
++    return aliases
++
++
++def parse_date(value):
++    match = ISO_DATE_RE.fullmatch(value)
++    if match:
++        year, month, day = (int(part) for part in match.groups())
++        try:
++            return date(year, month, day)
++        except ValueError:
++            return None
++
++    match = DMY_DATE_RE.fullmatch(value)
++    if match:
++        day, month, year = (int(part) for part in match.groups())
++        try:
++            return date(year, month, day)
++        except ValueError:
++            return None
++
++    match = MONTH_DATE_RE.fullmatch(value)
++    if match:
++        month_name, day, year = match.groups()
++        month = MONTHS.get(month_name.lower())
++        if month is None:
++            return None
++        try:
++            return date(int(year), month, int(day))
++        except ValueError:
++            return None
++
++    return None
++
++
++def parse_spend(value):
++    """Return a Decimal rounded to cents, or None if value is not a number."""
++    if value == "":
++        return Decimal("0.00")
++
++    number = value.replace("$", "").replace(",", "").strip()
++    if not SPEND_RE.fullmatch(number):
++        return None
++
++    try:
++        amount = Decimal(number)
++        with localcontext() as ctx:
++            ctx.prec = max(28, len(number) + 10)
++            return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
++    except InvalidOperation:
++        return None
++
++
++def valid_email(value):
++    parts = value.split("@")
++    if len(parts) != 2:
++        return False
++    local, domain = parts
++    if not local:
++        return False
++    return "." in domain and not domain.startswith(".") and not domain.endswith(".")
++
++
++def clean_row(raw, aliases):
++    values = {column: (raw.get(column) or "").strip() for column in COLUMNS}
++
++    customer_id = values["customer_id"]
++    if not CUSTOMER_ID_RE.fullmatch(customer_id):
++        return None
++
++    name = re.sub(r"\s+", " ", values["name"])
++
++    email = values["email"].lower()
++    if not valid_email(email):
++        return None
++
++    signup_date = parse_date(values["signup_date"])
++    if signup_date is None:
++        return None
++
++    country = aliases.get(values["country"].lower(), "")
++
++    spend = parse_spend(values["spend"])
++    if spend is None:
++        return None
++
++    return {
++        "customer_id": str(int(customer_id)),
++        "name": name,
++        "email": email,
++        "signup_date": signup_date.isoformat(),
++        "country": country,
++        "spend": f"{spend:.2f}",
++        "_date": signup_date,
++        "_id": int(customer_id),
++    }
++
++
++def read_rows(path):
++    with path.open("r", encoding="utf-8-sig", newline="") as f:
++        reader = csv.reader(f)
++        try:
++            header = next(reader)
++        except StopIteration:
++            return
++
++        header = [column.strip() for column in header]
++        indices = {column: header.index(column) for column in COLUMNS if column in header}
++        missing = [column for column in COLUMNS if column not in indices]
++        if missing:
++            raise ValueError("missing required column(s): " + ", ".join(missing))
++
++        for row in reader:
++            yield {
++                column: row[index] if index < len(row) else ""
++                for column, index in indices.items()
++            }
++
++
++def main(argv):
++    if len(argv) != 3:
++        print(f"usage: {argv[0]} <input.csv> <output.csv>", file=sys.stderr)
++        return 2
++
++    input_path = Path(argv[1])
++    output_path = Path(argv[2])
++
++    try:
++        aliases = load_aliases(ALIASES_PATH)
++        rows = read_rows(input_path)
++        best = {}
++        for raw in rows:
++            row = clean_row(raw, aliases)
++            if row is None:
++                continue
++            previous = best.get(row["customer_id"])
++            # Rows arrive in file order; ties are won by the later row.
++            if previous is None or row["_date"] >= previous["_date"]:
++                best[row["customer_id"]] = row
++
++        with output_path.open("w", encoding="utf-8", newline="") as f:
++            writer = csv.writer(f, lineterminator="\n")
++            writer.writerow(COLUMNS)
++            for row in sorted(best.values(), key=lambda item: item["_id"]):
++                writer.writerow([row[column] for column in COLUMNS])
++    except (OSError, ValueError, csv.Error) as exc:
++        print(f"error: {exc}", file=sys.stderr)
++        return 1
++
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv))

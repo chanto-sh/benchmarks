@@ -1,0 +1,98 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..99879ac 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,36 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses the fourth-order Yoshida composition of symplectic leapfrog steps.
++    Being symplectic and time-reversible, it keeps the energy error bounded
++    over long integrations instead of accumulating a secular drift.
++    """
++    pos = [list(p) for p in positions]
++    vel = [list(v) for v in velocities]
++    if steps <= 0:
++        return pos, vel
++
++    # Yoshida's fourth-order coefficients: three leapfrog steps of lengths
++    # w1*dt, w0*dt, w1*dt.
++    cbrt2 = 2.0 ** (1.0 / 3.0)
++    w1 = 1.0 / (2.0 - cbrt2)
++    w0 = -cbrt2 * w1
++    substeps = (w1 * dt, w0 * dt, w1 * dt)
++
++    n = len(masses)
++    acc = accelerations(masses, pos, G)
++    for _ in range(steps):
++        for h in substeps:
++            half_h = 0.5 * h
++            for i in range(n):
++                vel[i][0] += half_h * acc[i][0]
++                vel[i][1] += half_h * acc[i][1]
++                pos[i][0] += h * vel[i][0]
++                pos[i][1] += h * vel[i][1]
++            acc = accelerations(masses, pos, G)
++            for i in range(n):
++                vel[i][0] += half_h * acc[i][0]
++                vel[i][1] += half_h * acc[i][1]
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..5c4a4b3 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -1,3 +1,4 @@
++import copy
+ import math
+ import unittest
+ 
+@@ -17,6 +18,45 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_long_run_eccentric_orbit(self):
++        # Equal masses on an eccentric orbit; energy error must stay bounded.
++        m = [1.0, 1.0]
++        a, e = 1.0, 0.6
++        r_peri = a * (1.0 - e)
++        v_peri = math.sqrt(2.0 * (2.0 / r_peri - 1.0 / a))
++        pos = [[-0.5 * r_peri, 0.0], [0.5 * r_peri, 0.0]]
++        vel = [[0.0, -0.5 * v_peri], [0.0, 0.5 * v_peri]]
++        e0 = energy(m, pos, vel)
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-5)
++
++    def test_three_body_energy_and_momentum(self):
++        # Figure-eight choreography.
++        m = [1.0, 1.0, 1.0]
++        pos = [[0.97000436, -0.24308753],
++               [-0.97000436, 0.24308753],
++               [0.0, 0.0]]
++        vel = [[0.4662036850, 0.4323657300],
++               [0.4662036850, 0.4323657300],
++               [-0.93240737, -0.86473146]]
++        e0 = energy(m, pos, vel)
++        p0 = [sum(mi * vi[k] for mi, vi in zip(m, vel)) for k in range(2)]
++        p, q = simulate(m, pos, vel, 0.001, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-9)
++        p1 = [sum(mi * vi[k] for mi, vi in zip(m, q)) for k in range(2)]
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-9)
++
++    def test_inputs_are_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[-0.5, 0.0], [1.0, 0.0]]
++        vel = [[0.0, -0.3], [0.0, 0.1]]
++        pos0, vel0 = copy.deepcopy(pos), copy.deepcopy(vel)
++        p, q = simulate(m, pos, vel, 0.01, 100)
++        self.assertEqual(pos, pos0)
++        self.assertEqual(vel, vel0)
++        self.assertIsNot(p, pos)
++        self.assertIsNot(q, vel)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

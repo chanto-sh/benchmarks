@@ -1,0 +1,91 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 29bd467..ce61178 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -15,6 +15,7 @@ import re
+ import sys
+ import warnings
+ from dataclasses import asdict, fields
++from string import Formatter
+ from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, TextIO, cast, overload
+ 
+ from pylint.message import Message
+@@ -70,6 +71,24 @@ MESSAGE_FIELDS = {i.name for i in fields(Message)}
+ """All fields of the Message class."""
+ 
+ 
++def _get_template_arguments(template: str) -> list[str]:
++    """Return the message fields referenced by a message template.
++
++    Escaped braces (``{{`` and ``}}``) are literal characters, so they are not
++    reported as arguments.
++    """
++    try:
++        return [
++            field_name
++            for _, field_name, _, _ in Formatter().parse(template)
++            if field_name is not None
++        ]
++    except ValueError:
++        # The template is malformed. Fall back to a best-effort search so that
++        # any recognizable arguments are still handled.
++        return [match[0] for match in re.findall(r"\{(.+?)(:.*)?\}", template)]
++
++
+ def _get_ansi_code(msg_style: MessageStyle) -> str:
+     """Return ANSI escape code corresponding to color and style.
+ 
+@@ -175,14 +194,16 @@ class TextReporter(BaseReporter):
+         self._template = template
+ 
+         # Check to see if all parameters in the template are attributes of the Message
+-        arguments = re.findall(r"\{(.+?)(:.*)?\}", template)
++        arguments = _get_template_arguments(template)
+         for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++            if argument not in MESSAGE_FIELDS:
+                 warnings.warn(
+-                    f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
++                    f"Don't recognize the argument '{argument}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?"
+                 )
+-                template = re.sub(r"\{" + argument[0] + r"(:.*?)?\}", "", template)
++                template = re.sub(
++                    r"\{" + re.escape(argument) + r"(:.*?)?\}", "", template
++                )
+         self._fixed_template = template
+ 
+     def write_message(self, msg: Message) -> None:
+diff --git a/tests/reporters/unittest_reporting.py b/tests/reporters/unittest_reporting.py
+index 37f3e5f..cb8576a 100644
+--- a/tests/reporters/unittest_reporting.py
++++ b/tests/reporters/unittest_reporting.py
+@@ -113,6 +113,28 @@ def test_template_option_non_existing(linter) -> None:
+     assert out_lines[2] == "my_mod:2::()"
+ 
+ 
++def test_template_option_with_custom_braces(linter) -> None:
++    """Test the msg-template option with escaped braces.
++
++    Escaped braces must be treated as literal characters and not as arguments.
++    """
++    output = StringIO()
++    linter.reporter.out = output
++    linter.config.msg_template = '{{ "Category": "{category}" }}'
++    linter.open()
++    with warnings.catch_warnings(record=True) as records:
++        warnings.simplefilter("always")
++        linter.set_current_module("0123")
++    assert not records
++
++    linter.add_message("C0301", line=1, args=(1, 2))
++    linter.add_message("line-too-long", line=2, args=(3, 4))
++
++    out_lines = output.getvalue().split("\n")
++    assert out_lines[1] == '{ "Category": "convention" }'
++    assert out_lines[2] == '{ "Category": "convention" }'
++
++
+ def test_deprecation_set_output(recwarn):
+     """TODO remove in 3.0."""
+     reporter = BaseReporter()

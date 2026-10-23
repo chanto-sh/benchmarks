@@ -1,0 +1,27 @@
+diff --git a/changelog/5221.feature.rst b/changelog/5221.feature.rst
+new file mode 100644
+index 0000000..8452471
+--- /dev/null
++++ b/changelog/5221.feature.rst
+@@ -0,0 +1,2 @@
++Fixtures of non-function scope are now shown with their scope in the output of
++``pytest --fixtures``, for example ``arg1 [session scope]``.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 3773578..5227766 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1342,10 +1342,11 @@ def _showfixtures_main(config, session):
+                 currentmodule = module
+         if verbose <= 0 and argname[0] == "_":
+             continue
++        funcargspec = argname
++        if fixturedef.scope != "function":
++            funcargspec += " [%s scope]" % fixturedef.scope
+         if verbose > 0:
+-            funcargspec = "%s -- %s" % (argname, bestrel)
+-        else:
+-            funcargspec = argname
++            funcargspec = "%s -- %s" % (funcargspec, bestrel)
+         tw.line(funcargspec, green=True)
+         loc = getlocation(fixturedef.func, curdir)
+         doc = fixturedef.func.__doc__ or ""

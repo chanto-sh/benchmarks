@@ -1,0 +1,30 @@
+diff --git a/ChangeLog b/ChangeLog
+index 98d71e9..0621682 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -40,6 +40,11 @@ Release date: TBA
+ * Fix a failure to respect inline disables for ``fixme`` occurring on the last line
+   of a module when pylint is launched with ``--enable=fixme``.
+ 
++* Pylint no longer prints a traceback when an unrecognized command line option is
++  passed. It now prints a user-friendly usage error and exits.
++
++  Closes #6506
++
+ * Update ``invalid-slots-object`` message to show bad object rather than its inferred value.
+ 
+   Closes #6101
+diff --git a/pylint/config/config_initialization.py b/pylint/config/config_initialization.py
+index 24e453a..f688c4c 100644
+--- a/pylint/config/config_initialization.py
++++ b/pylint/config/config_initialization.py
+@@ -81,8 +81,7 @@ def _config_initialization(
+             unrecognized_options.append(opt[1:])
+     if unrecognized_options:
+         msg = ", ".join(unrecognized_options)
+-        linter.add_message("unrecognized-option", line=0, args=msg)
+-        raise _UnrecognizedOptionError(options=unrecognized_options)
++        linter._arg_parser.error(f"Unrecognized option found: {msg}")
+ 
+     # Set the current module to configuration as we don't know where
+     # the --load-plugins key is coming from

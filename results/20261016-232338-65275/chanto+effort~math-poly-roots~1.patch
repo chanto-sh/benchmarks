@@ -1,0 +1,259 @@
+diff --git a/roots.py b/roots.py
+index d624667..d74a4c8 100644
+--- a/roots.py
++++ b/roots.py
+@@ -1,5 +1,8 @@
+ """Real roots of integer polynomials, used by the curve-fitting tool."""
+ 
++from fractions import Fraction
++from math import gcd, lcm
++
+ 
+ def evaluate(coeffs, x):
+     """Horner evaluation; coeffs are highest degree first."""
+@@ -9,24 +12,201 @@ def evaluate(coeffs, x):
+     return y
+ 
+ 
++def _trim(p):
++    """Drop leading zero coefficients (zero polynomial becomes [])."""
++    p = list(p)
++    while p and p[0] == 0:
++        p.pop(0)
++    return p
++
++
++def _derivative(p):
++    n = len(p) - 1
++    if n <= 0:
++        return []
++    return [p[i] * (n - i) for i in range(n)]
++
++
++def _divmod(a, b):
++    """Polynomial division over the rationals, highest degree first."""
++    a = _trim(Fraction(c) for c in a)
++    b = _trim(Fraction(c) for c in b)
++    if not b:
++        raise ZeroDivisionError("polynomial division by zero")
++    if not a:
++        return [], []
++
++    da, db = len(a) - 1, len(b) - 1
++    if da < db:
++        return [], a
++
++    q = [Fraction(0)] * (da - db + 1)
++    r = a[:]
++    while r and len(r) - 1 >= db:
++        shift = len(r) - 1 - db
++        coef = r[0] / b[0]
++        q[(da - db) - shift] = coef
++        for i in range(len(b)):
++            r[i] -= coef * b[i]
++        while r and r[0] == 0:
++            r.pop(0)
++    return _trim(q), r
++
++
++def _primitive(p):
++    """Scale a rational polynomial to primitive integer coefficients.
++
++    The scale factor is positive, so signs at every point are unchanged.
++    """
++    p = _trim(Fraction(c) for c in p)
++    if not p:
++        return []
++
++    den = 1
++    for c in p:
++        den = lcm(den, c.denominator)
++    ints = [c.numerator * (den // c.denominator) for c in p]
++
++    common = 0
++    for c in ints:
++        common = gcd(common, abs(c))
++    if common > 1:
++        ints = [c // common for c in ints]
++    return ints
++
++
++def _poly_gcd(a, b):
++    """GCD over the rationals, kept small with primitive remainders."""
++    a = _trim(a)
++    b = _trim(b)
++    while b:
++        _, r = _divmod(a, b)
++        a, b = b, _primitive(r)
++    return _primitive(a)
++
++
++def _square_free_part(p):
++    p = _primitive(p)
++    if len(p) <= 1:
++        return p
++    g = _poly_gcd(p, _derivative(p))
++    q, _ = _divmod(p, g)
++    return _primitive(q)
++
++
++def _sturm_sequence(p):
++    p0 = _primitive(p)
++    p1 = _primitive(_derivative(p0))
++    seq = [p0]
++    if not p1:
++        return seq
++    seq.append(p1)
++
++    while True:
++        _, r = _divmod(seq[-2], seq[-1])
++        r = _primitive(-c for c in r)
++        if not r:
++            return seq
++        seq.append(r)
++
++
++def _sign_at(p, x):
++    """Sign of p(x) for integer coefficients and rational x."""
++    x = Fraction(x)
++    a, b = x.numerator, x.denominator
++    value = 0
++    b_power = 1
++    for c in p:
++        value = value * a + c * b_power
++        b_power *= b
++    return (value > 0) - (value < 0)
++
++
++def _variations(seq, x):
++    """Number of sign changes in a Sturm sequence, ignoring zeros."""
++    variations = 0
++    previous = 0
++    for p in seq:
++        sign = _sign_at(p, x)
++        if sign == 0:
++            continue
++        if previous and sign != previous:
++            variations += 1
++        previous = sign
++    return variations
++
++
++def _sturm_count(seq, a, b):
++    """Number of distinct roots in the open interval (a, b)."""
++    if a >= b:
++        return 0
++    count = _variations(seq, a) - _variations(seq, b)
++    # The variation difference includes a root at b but not one at a.
++    if _sign_at(seq[0], b) == 0:
++        count -= 1
++    return count
++
++
++def _root_bound(p):
++    """Cauchy bound: every root has absolute value below this."""
++    lead = abs(p[0])
++    largest = max((abs(c) for c in p[1:]), default=0)
++    return Fraction(1, 1) + Fraction(largest, lead)
++
++
+ def real_roots(coeffs, lo, hi):
+     """Sorted distinct real roots of the polynomial in [lo, hi], to 1e-9.
+ 
+     coeffs: integer coefficients, highest degree first (not all zero).
+     """
+-    n = 1000
++    p = _trim(coeffs)
++    lo, hi = Fraction(lo), Fraction(hi)
++    if not p or lo > hi:
++        return []
++
++    # Multiplicities would otherwise hide roots from the Sturm count.
++    p = _square_free_part(p)
++    if len(p) <= 1:
++        return []
++
++    # No root lies outside the Cauchy bound, so clipping only shrinks work.
++    bound = _root_bound(p)
++    lo = max(lo, -bound)
++    hi = min(hi, bound)
++    if lo > hi:
++        return []
++
++    seq = _sturm_sequence(p)
+     roots = []
+-    step = (hi - lo) / n
+-    for i in range(n):
+-        a, b = lo + i * step, lo + (i + 1) * step
+-        fa, fb = evaluate(coeffs, a), evaluate(coeffs, b)
+-        if fa * fb < 0:
+-            for _ in range(100):
+-                m = (a + b) / 2
+-                fm = evaluate(coeffs, m)
+-                if fa * fm <= 0:
+-                    b, fb = m, fm
+-                else:
+-                    a, fa = m, fm
+-            roots.append((a + b) / 2)
+-    return roots
++    if _sign_at(p, lo) == 0:
++        roots.append(lo)
++    if hi != lo and _sign_at(p, hi) == 0:
++        roots.append(hi)
++
++    count = _sturm_count(seq, lo, hi)
++    if count:
++        tolerance = Fraction(1, 10**12)
++        pending = [(lo, hi, count)]
++        while pending:
++            a, b, nroots = pending.pop()
++            if nroots <= 0:
++                continue
++            if nroots == 1 and b - a <= tolerance:
++                roots.append((a + b) / 2)
++                continue
++
++            mid = (a + b) / 2
++            left_count = _sturm_count(seq, a, mid)
++            if _sign_at(p, mid) == 0:
++                roots.append(mid)
++                right_count = nroots - left_count - 1
++            else:
++                right_count = nroots - left_count
++
++            if left_count:
++                pending.append((a, mid, left_count))
++            if right_count:
++                pending.append((mid, b, right_count))
++
++    roots.sort()
++    return [float(root) for root in roots]
+diff --git a/test_roots.py b/test_roots.py
+index 9db9ea6..10569a9 100644
+--- a/test_roots.py
++++ b/test_roots.py
+@@ -20,6 +20,24 @@ class TestRoots(unittest.TestCase):
+     def test_no_roots(self):
+         self.assertEqual(real_roots([1, 0, 1], -10, 10), [])
+ 
++    def test_repeated_root(self):
++        # (x - 2)^2 (x + 1) = x^3 - 3x^2 + 4
++        self.assertRoots(real_roots([1, -3, 0, 4], -5, 5), [-1, 2])
++
++    def test_close_roots(self):
++        # Roots 1 and 1 + 1e-8.
++        p = [10**8, -(2 * 10**8 + 1), 10**8 + 1]
++        self.assertRoots(real_roots(p, 0, 2), [1, 1 + 10**-8])
++
++    def test_repeated_root_on_boundary(self):
++        # Roots -1 (simple) and 2 (double); the whole segment is [lo, hi].
++        p = [1, -3, 0, 4]
++        self.assertRoots(real_roots(p, -1, 2), [-1, 2])
++        self.assertRoots(real_roots(p, 2, 2), [2])
++
++    def test_root_at_zero(self):
++        self.assertRoots(real_roots([1, 0], -1, 1), [0])
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

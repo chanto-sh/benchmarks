@@ -1,0 +1,134 @@
+diff --git a/changelog/5103.feature.rst b/changelog/5103.feature.rst
+new file mode 100644
+index 0000000..ef2c19f
+--- /dev/null
++++ b/changelog/5103.feature.rst
+@@ -0,0 +1,3 @@
++Assertion rewriting now unrolls comprehensions passed to ``all()`` and ``any()``,
++so that the failure report shows the element which did not satisfy the
++predicate instead of an unhelpful ``<generator object ...>`` or list.
+diff --git a/src/_pytest/assertion/rewrite.py b/src/_pytest/assertion/rewrite.py
+index 2903b89..10c85a6 100644
+--- a/src/_pytest/assertion/rewrite.py
++++ b/src/_pytest/assertion/rewrite.py
+@@ -605,6 +605,19 @@ def set_location(node, lineno, col_offset):
+     return node
+ 
+ 
++def _iter_target_names(target):
++    """Yield the names bound by an assignment target of a ``for`` loop."""
++    if isinstance(target, ast.Name):
++        yield target.id
++    elif isinstance(target, (ast.Tuple, ast.List)):
++        for elt in target.elts:
++            for name in _iter_target_names(elt):
++                yield name
++    elif isinstance(target, getattr(ast, "Starred", ())):
++        for name in _iter_target_names(target.value):
++            yield name
++
++
+ class AssertionRewriter(ast.NodeVisitor):
+     """Assertion rewriting implementation.
+ 
+@@ -964,10 +977,100 @@ warn_explicit(
+         res = self.assign(ast.BinOp(left_expr, binop.op, right_expr))
+         return res, explanation
+ 
++    def _visit_all_any(self, call):
++        """Rewrite ``all``/``any`` calls over a comprehension.
++
++        ``all``/``any`` are great for asserting a predicate over an iterable,
++        but the resulting assertion message only shows the (unhelpful) result
++        of the call.  To give better reports we "unroll" the comprehension into
++        an explicit ``for`` loop which short-circuits exactly like ``all``/
++        ``any`` does, reusing the existing reports for the loop body.
++        """
++        is_all = call.func.id == "all"
++        comp = call.args[0]
++        generators = comp.generators
++        # Only the common case of a single generator is unrolled: with nested
++        # generators the values bound by the outer loops keep changing after the
++        # decision has been made, which would produce a misleading report.
++        if len(generators) != 1:
++            return None
++        gen = generators[0]
++        # ``async`` comprehensions cannot be unrolled into a plain ``for`` loop.
++        if getattr(gen, "is_async", 0):
++            return None
++        res_var = self.variable()
++        # Default result: True when no element short-circuits ``all`` and False
++        # when no element satisfies ``any``.
++        self.statements.append(
++            ast.Assign([ast.Name(res_var, ast.Store())], _NameConstant(is_all))
++        )
++        # Build the body of the loop, which evaluates the element and
++        # short-circuits as soon as the answer is known.
++        first_var = len(self.variables)
++        save_statements = self.statements
++        inner_body = []
++        self.statements = inner_body
++        try:
++            inner_res, inner_expl = self.visit(comp.elt)
++            if is_all:
++                cond = ast.UnaryOp(ast.Not(), inner_res)
++                new_value = _NameConstant(False)
++            else:
++                cond = inner_res
++                new_value = _NameConstant(True)
++            inner_body.append(
++                ast.If(
++                    cond,
++                    [
++                        ast.Assign([ast.Name(res_var, ast.Store())], new_value),
++                        ast.Break(),
++                    ],
++                    [],
++                )
++            )
++        finally:
++            self.statements = save_statements
++        # Wrap the element evaluation in the conditions of the comprehension.
++        body = inner_body
++        for condition in reversed(gen.ifs):
++            cond_body = []
++            save_statements = self.statements
++            self.statements = cond_body
++            try:
++                cond_res, _ = self.visit(condition)
++            finally:
++                self.statements = save_statements
++            cond_body.append(ast.If(cond_res, body, []))
++            body = cond_body
++        # The loop body is only executed if the iterable is non-empty; make sure
++        # the temporary variables (and the loop target) referenced by the
++        # explanation are always defined.
++        assigned = list(self.variables[first_var:])
++        assigned.extend(_iter_target_names(gen.target))
++        if assigned:
++            self.statements.append(
++                ast.Assign(
++                    [ast.Name(name, ast.Store()) for name in assigned],
++                    _NameConstant(None),
++                )
++            )
++        self.statements.append(ast.For(gen.target, gen.iter, body, []))
++        return ast.Name(res_var, ast.Load()), inner_expl
++
+     def visit_Call_35(self, call):
+         """
+         visit `ast.Call` nodes on Python3.5 and after
+         """
++        if (
++            isinstance(call.func, ast.Name)
++            and call.func.id in ("all", "any")
++            and len(call.args) == 1
++            and not call.keywords
++            and isinstance(call.args[0], (ast.GeneratorExp, ast.ListComp, ast.SetComp))
++        ):
++            result = self._visit_all_any(call)
++            if result is not None:
++                return result
+         new_func, func_expl = self.visit(call.func)
+         arg_expls = []
+         new_args = []

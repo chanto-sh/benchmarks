@@ -1,0 +1,102 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..f60dbee 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -44,6 +44,8 @@ Unreleased
+     to set the domain, which modern browsers interpret as an exact match rather than
+     a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
+     :issue:`5051`
++-   The ``flask routes`` command shows the domain (subdomain) each route is
++    registered under, and can sort by it with ``-s domain``. :issue:`5062`
+ 
+ 
+ Version 2.2.4
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..24a14d9 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -989,7 +989,7 @@ def shell_command() -> None:
+ @click.option(
+     "--sort",
+     "-s",
+-    type=click.Choice(("endpoint", "methods", "rule", "match")),
++    type=click.Choice(("endpoint", "methods", "domain", "rule", "match")),
+     default="endpoint",
+     help=(
+         'Method to sort routes by. "match" is the order that Flask will match '
+@@ -1012,26 +1012,30 @@ def routes_command(sort: str, all_methods: bool) -> None:
+         rules = sorted(rules, key=attrgetter(sort))
+     elif sort == "methods":
+         rules = sorted(rules, key=lambda rule: sorted(rule.methods))  # type: ignore
++    elif sort == "domain":
++        rules = sorted(rules, key=lambda rule: rule.subdomain or "")
+ 
+     rule_methods = [
+         ", ".join(sorted(rule.methods - ignored_methods))  # type: ignore
+         for rule in rules
+     ]
+ 
+-    headers = ("Endpoint", "Methods", "Rule")
++    headers = ("Domain", "Endpoint", "Methods", "Rule")
+     widths = (
++        max(len(rule.subdomain or "") for rule in rules),
+         max(len(rule.endpoint) for rule in rules),
+         max(len(methods) for methods in rule_methods),
+         max(len(rule.rule) for rule in rules),
+     )
+     widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}  {{3:<{3}}}".format(*widths)
+ 
+     click.echo(row.format(*headers).strip())
+     click.echo(row.format(*("-" * width for width in widths)))
+ 
+     for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++        subdomain = rule.subdomain or ""
++        click.echo(row.format(subdomain, rule.endpoint, methods, rule.rule).rstrip())
+ 
+ 
+ cli = FlaskGroup(
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 0d9625b..dd219ac 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -465,7 +465,8 @@ class TestRoutes:
+         # skip the header and match the start of each row
+         for expect, line in zip(order, output.splitlines()[2:]):
+             # do this instead of startswith for nicer pytest output
+-            assert line[: len(expect)] == expect
++            # the Domain column may be blank, so ignore leading whitespace
++            assert line.strip()[: len(expect)] == expect
+ 
+     def test_simple(self, invoke):
+         result = invoke(["routes"])
+@@ -493,6 +494,27 @@ class TestRoutes:
+         output = invoke(["routes", "--all-methods"]).output
+         assert "GET, HEAD, OPTIONS, POST" in output
+ 
++    def test_subdomain(self, runner):
++        app = Flask(__name__)
++        app.testing = True
++        app.config["SERVER_NAME"] = "test.local"
++
++        @app.route("/", subdomain="admin")
++        def index():
++            pass
++
++        @app.route("/", subdomain="test")
++        def test_index():
++            pass
++
++        cli = FlaskGroup(create_app=lambda: app)
++        result = runner.invoke(cli, ["routes"])
++        assert result.exit_code == 0
++        assert result.output.splitlines()[0].startswith("Domain")
++        rows = result.output.splitlines()[2:]
++        assert any(row.startswith("admin") and "index" in row for row in rows)
++        assert any(row.startswith("test") and "test_index" in row for row in rows)
++
+     def test_no_routes(self, invoke_no_routes):
+         result = invoke_no_routes(["routes"])
+         assert result.exit_code == 0

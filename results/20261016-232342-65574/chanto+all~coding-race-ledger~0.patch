@@ -1,0 +1,87 @@
+diff --git a/ledger.py b/ledger.py
+index 008eca8..52d2b3a 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -11,7 +11,7 @@ class Account:
+         self.name = name
+         self.balance = balance
+         self.history = []  # every applied change, in order (audit trail)
+-        self.lock = threading.Lock()
++        self.lock = threading.RLock()
+ 
+ 
+ def _record(acct, delta):
+@@ -21,28 +21,34 @@ def _record(acct, delta):
+ class Ledger:
+     def __init__(self):
+         self.accounts = {}
++        # One reentrant lock guards the account map and every balance/history
++        # update. Reentrancy lets open() call deposit() while holding it.
++        self._lock = threading.RLock()
+ 
+     def open(self, name, balance=0):
+-        acct = self.accounts[name] = Account(name)
+-        if balance:
+-            self.deposit(name, balance)
+-        return acct
++        with self._lock:
++            acct = self.accounts[name] = Account(name)
++            if balance:
++                self.deposit(name, balance)
++            return acct
+ 
+     def balance(self, name):
+-        return self.accounts[name].balance
++        with self._lock:
++            return self.accounts[name].balance
+ 
+     def deposit(self, name, amount):
+-        acct = self.accounts[name]
+-        new = acct.balance + amount
+-        _record(acct, amount)
+-        acct.balance = new
++        with self._lock:
++            acct = self.accounts[name]
++            new = acct.balance + amount
++            _record(acct, amount)
++            acct.balance = new
+ 
+     def withdraw(self, name, amount):
+         """Take money out; raises InsufficientFunds (changing nothing) if the balance is too low."""
+-        acct = self.accounts[name]
+-        if acct.balance < amount:
+-            raise InsufficientFunds(name)
+-        with acct.lock:
++        with self._lock:
++            acct = self.accounts[name]
++            if acct.balance < amount:
++                raise InsufficientFunds(name)
+             _record(acct, -amount)
+             acct.balance -= amount
+ 
+@@ -51,15 +57,15 @@ class Ledger:
+ 
+         A transfer from an account to itself is allowed and leaves the balance as it is.
+         """
+-        a, b = self.accounts[src], self.accounts[dst]
+-        with a.lock:
+-            with b.lock:
+-                if a.balance < amount:
+-                    raise InsufficientFunds(src)
+-                _record(a, -amount)
+-                a.balance -= amount
+-                _record(b, amount)
+-                b.balance += amount
++        with self._lock:
++            a, b = self.accounts[src], self.accounts[dst]
++            if a.balance < amount:
++                raise InsufficientFunds(src)
++            _record(a, -amount)
++            a.balance -= amount
++            _record(b, amount)
++            b.balance += amount
+ 
+     def total(self):
+-        return sum(a.balance for a in self.accounts.values())
++        with self._lock:
++            return sum(a.balance for a in self.accounts.values())

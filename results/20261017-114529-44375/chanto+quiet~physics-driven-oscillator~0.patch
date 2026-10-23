@@ -1,0 +1,85 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..f7b4da6 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,78 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    restoring = k - m * omega * omega
++    damping = c * omega
++    return abs(F0) / math.hypot(restoring, damping)
++
++
++def _sinc(x):
++    """sin(x) / x, continuous at x = 0."""
++    if abs(x) < 1.0e-4:
++        x2 = x * x
++        return 1.0 + x2 * (-1.0 / 6.0 + x2 * (1.0 / 120.0 - x2 / 5040.0))
++    return math.sin(x) / x
++
++
++def _expm1_ratio(z):
++    """(1 - exp(-z)) / z, continuous at z = 0."""
++    if abs(z) < 1.0e-4:
++        return 1.0 + z * (
++            -0.5 + z * (1.0 / 6.0 + z * (-1.0 / 24.0 + z * (1.0 / 120.0 - z / 720.0)))
++        )
++    return -math.expm1(-z) / z
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    if t == 0.0:
++        return x0
++
++    restoring = k - m * omega * omega
++    damping = c * omega
++    den = math.hypot(restoring, damping)
++
++    # Particular solution A cos(omega t) + B sin(omega t).
++    force = F0 / den
++    A = force * (restoring / den)
++    B = force * (damping / den)
++
++    alpha = -c / (2.0 * m)
++    disc = c * c - 4.0 * m * k
++
++    if disc < 0.0:
++        beta = math.sqrt(-disc) / (2.0 * m)
++        decay = math.exp(alpha * t)
++        u1 = decay * math.cos(beta * t)
++        u2 = decay * t * _sinc(beta * t)
++    else:
++        root = math.sqrt(disc)
++
++        # The less negative root, written without cancellation.
++        if k == 0.0:
++            r1 = 0.0
++        else:
++            r1 = -2.0 * k / (c + root)
++        delta = root / m
++        r2 = r1 - delta
++        alpha = 0.5 * (r1 + r2)
++
++        decay = math.exp(r1 * t)
++        z = delta * t
++        u1 = 0.5 * decay * (1.0 + math.exp(-z))
++        u2 = decay * t * _expm1_ratio(z)
++
++    # Homogeneous solution with unit initial displacement (U1) and unit
++    # initial velocity (U2).
++    U1 = u1 - alpha * u2
++
++    return (
++        A * math.cos(omega * t)
++        + B * math.sin(omega * t)
++        + (x0 - A) * U1
++        + (v0 - B * omega) * u2
++    )

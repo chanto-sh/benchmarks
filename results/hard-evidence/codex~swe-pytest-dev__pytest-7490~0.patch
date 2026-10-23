@@ -1,0 +1,24 @@
+diff --git a/changelog/7490.bugfix.rst b/changelog/7490.bugfix.rst
+new file mode 100644
+index 0000000..84fc8cc
+--- /dev/null
++++ b/changelog/7490.bugfix.rst
+@@ -0,0 +1 @@
++Fix regression in pytest 6.0.0 where dynamically adding an ``xfail`` marker during the test would fail the test, instead of marking it as xfailed.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 335e109..dc3ffa3 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -256,6 +256,12 @@ def pytest_runtest_call(item: Item) -> Generator[None, None, None]:
+ 
+     yield
+ 
++    # The test function may add an xfail marker during its execution, in which
++    # case it was not picked up by the evaluation above; re-evaluate it now.
++    xfailed = item._store.get(xfailed_key, None)
++    if xfailed is None:
++        item._store[xfailed_key] = evaluate_xfail_marks(item)
++
+ 
+ @hookimpl(hookwrapper=True)
+ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):

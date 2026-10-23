@@ -1,0 +1,187 @@
+diff --git a/projectile.py b/projectile.py
+index ec07546..65411a5 100644
+--- a/projectile.py
++++ b/projectile.py
+@@ -1,6 +1,179 @@
+-"""Point-mass projectile with quadratic air drag."""
++"""Point-mass projectile with quadratic air drag.
++
++The equations of motion for a point mass moving under gravity plus a
++quadratic drag force ``F = -k |v| v`` are
++
++    dx/dt = vx
++    dy/dt = vy
++    dvx/dt = -(k / m) |v| vx
++    dvy/dt = -g - (k / m) |v| vy
++
++There is no closed-form solution, so the trajectory is integrated
++numerically with an adaptive embedded Runge-Kutta (Dormand-Prince 4(5))
++scheme.  The step size is chosen to keep the local error far below the
++0.01% accuracy the range table needs, and the apex / ground-impact
++events are located afterwards to full precision by root finding on a
++single high-order step rather than being snapped to a step boundary.
++"""
++
++import math
++
++# Dormand-Prince 4(5) coefficients.
++_C = (0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0)
++_A = (
++    (),
++    (1.0 / 5.0,),
++    (3.0 / 40.0, 9.0 / 40.0),
++    (44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0),
++    (19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0),
++    (9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0,
++     -5103.0 / 18656.0),
++    (35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0,
++     11.0 / 84.0),
++)
++# 5th-order solution weights (same as the last stage row; the final
++# weight is zero because stage 7 is not reused by the 5th-order solution).
++_B5 = _A[6] + (0.0,)
++# 4th-order solution weights, used only for the embedded error estimate.
++_B4 = (5179.0 / 57600.0, 0.0, 7571.0 / 16695.0, 393.0 / 640.0,
++       -92097.0 / 339200.0, 187.0 / 2100.0, 1.0 / 40.0)
++
++# Tolerance for the local error control.  This is deliberately far tighter
++# than the 0.01% the table requires so that integration error is negligible.
++_RTOL = 1e-12
++_ATOL = 1e-14
++# Never take a larger step than this.  It keeps the single high-order step
++# used to pin down event times overwhelmingly accurate.
++_MAX_STEP = 0.02
++_MIN_STEP = 1e-12
++
++
++def _deriv(state, g, drag):
++    """Return the time derivative of (x, y, vx, vy)."""
++    _, _, vx, vy = state
++    speed = math.hypot(vx, vy)
++    a = drag * speed
++    return (vx, vy, -a * vx, -g - a * vy)
++
++
++def _rk_step(state, h, g, drag):
++    """One Dormand-Prince step; returns (5th-order state, error tuple)."""
++    ks = []
++    for i in range(7):
++        s = state
++        if i:
++            ai = _A[i]
++            s = tuple(
++                state[j] + h * sum(ai[l] * ks[l][j] for l in range(len(ai)))
++                for j in range(4)
++            )
++        ks.append(_deriv(s, g, drag))
++    y5 = tuple(
++        state[j] + h * sum(_B5[l] * ks[l][j] for l in range(7))
++        for j in range(4)
++    )
++    err = tuple(
++        h * sum((_B5[l] - _B4[l]) * ks[l][j] for l in range(7))
++        for j in range(4)
++    )
++    return y5, err
++
++
++def _error_norm(state, y5, err):
++    worst = 0.0
++    for j in range(4):
++        scale = max(abs(state[j]), abs(y5[j]))
++        value = abs(err[j]) / (_ATOL + _RTOL * scale)
++        if value > worst:
++            worst = value
++    return worst
++
++
++def _refine(t0, state, h, g, drag, index):
++    """Locate the first zero of component ``index`` in (t0, t0 + h].
++
++    ``state[index]`` and the value one step later are assumed to straddle
++    zero.  Root finding is done with a single high-order step from the
++    known state, so the located time is limited only by the accuracy of
++    that step (five orders in ``h``), not by the integration grid.
++    """
++    lo, hi = 0.0, h
++    f_lo = state[index]
++    for _ in range(200):
++        mid = 0.5 * (lo + hi)
++        f_mid = _rk_step(state, mid, g, drag)[0][index]
++        if f_lo * f_mid <= 0.0:
++            hi = mid
++        else:
++            lo, f_lo = mid, f_mid
++        if hi - lo <= 1e-14 * max(1.0, h):
++            break
++    dt = 0.5 * (lo + hi)
++    return t0 + dt, _rk_step(state, dt, g, drag)[0]
+ 
+ 
+ def flight(v0, angle_deg, mass, k, g=9.81, h0=0.0):
+-    """Return {"range": metres, "apex": metres, "time": seconds}."""
+-    raise NotImplementedError
++    """Return {"range": metres, "apex": metres, "time": seconds}.
++
++    Launch from height ``h0`` at speed ``v0`` and elevation
++    ``angle_deg`` (degrees).  Drag is quadratic, ``F = -k |v| v``.
++    """
++    if v0 < 0.0 or h0 < 0.0 or mass <= 0.0 or k < 0.0:
++        raise ValueError("require v0 >= 0, h0 >= 0, mass > 0, k >= 0")
++
++    drag = k / mass
++    theta = math.radians(angle_deg)
++    vx = v0 * math.cos(theta)
++    vy = v0 * math.sin(theta)
++
++    # Degenerate case: sitting on the ground with no upward motion.  The
++    # particle never leaves y = 0, so it never "comes back down".
++    if h0 == 0.0 and vy <= 0.0:
++        return {"range": 0.0, "apex": 0.0, "time": 0.0}
++
++    t = 0.0
++    state = (0.0, h0, vx, vy)
++    h = 1e-6
++
++    apex = h0
++    apex_found = False
++    impact_t = None
++    impact_x = 0.0
++
++    for _ in range(20_000_000):
++        y5, err = _rk_step(state, h, g, drag)
++        e = _error_norm(state, y5, err)
++
++        if e > 1.0:
++            # Reject and shrink, guarding against absurdly small steps.
++            h = max(_MIN_STEP, h * max(0.2, 0.9 * e ** -0.2))
++            continue
++
++        # --- events within the accepted step [t, t + h] ---
++        if state[1] > 0.0 and y5[1] <= 0.0:
++            # Falling back through y = 0: the ground impact ends the flight.
++            impact_t, impact_state = _refine(t, state, h, g, drag, 1)
++            impact_x = impact_state[0]
++            apex = max(apex, impact_state[1])
++            break
++
++        if not apex_found and state[3] > 0.0 and y5[3] <= 0.0:
++            # vy passes through zero on the way up: this is the apex.
++            _, apex_state = _refine(t, state, h, g, drag, 3)
++            apex = max(apex, apex_state[1])
++            apex_found = True
++
++        apex = max(apex, y5[1])
++
++        # Accept the step.
++        t += h
++        state = y5
++
++        # Grow (or gently shrink) the next step.
++        factor = 0.9 * e ** -0.2 if e > 0.0 else 5.0
++        h = min(_MAX_STEP, max(_MIN_STEP, h * factor))
++
++    if impact_t is None:
++        raise RuntimeError("projectile did not return to y = 0")
++
++    return {"range": impact_x, "apex": apex, "time": impact_t}

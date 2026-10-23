@@ -1,0 +1,75 @@
+diff --git a/stats.py b/stats.py
+index add4f59..4f46c39 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,64 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var() requires a non-empty sequence")
++
++    # Rescale by the largest magnitude so that summing cannot overflow.
++    scale = max(abs(x) for x in xs)
++    if scale == 0.0:
++        return 0.0, 0.0
++    mean = scale * (math.fsum(x / scale for x in xs) / n)
++
++    # Compute the variance from readings shifted by one of them.  The shifted
++    # values are on the scale of the spread, so the result is not polluted by
++    # the rounding of a large offset (the sum(x*x)/n - mean*mean cancellation
++    # and the bias from centring on a rounded large mean both disappear).
++    origin = xs[0]
++    shifted = [x - origin for x in xs]
++    if not all(math.isfinite(y) for y in shifted):
++        # The spread exceeds the largest representable float.
++        return mean, math.inf
++    shift_scale = max(abs(y) for y in shifted)
++    if shift_scale == 0.0:
++        return mean, 0.0
++    mean_shifted = shift_scale * (math.fsum(y / shift_scale for y in shifted) / n)
++
++    dev_scale = 0.0
++    for y in shifted:
++        dev = abs(y - mean_shifted)
++        if dev > dev_scale:
++            dev_scale = dev
++    if dev_scale == 0.0:
++        return mean, 0.0
++    if math.isinf(dev_scale):
++        return mean, math.inf
++
++    # Normalising the deviations keeps their squares finite; the final
++    # scaling reproduces the variance, overflowing only if it truly is
++    # larger than the largest representable float.
++    total = math.fsum(((y - mean_shifted) / dev_scale) ** 2 for y in shifted)
++    root = dev_scale / math.sqrt(n)
++    return mean, (root * total) * root
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == math.inf:
++        return math.inf
++    if m == -math.inf:
++        return -math.inf
++    # Shift by the maximum so every exponential is <= 1, and sum with fsum
++    # so the accumulation stays accurate for large batches.
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    if x > 0.0:
++        # log(1 + exp(x)) = x + log(1 + exp(-x)); avoids overflow in exp(x).
++        return x + math.log1p(math.exp(-x))
++    # log1p retains the small value when exp(x) is tiny, where log(1 + y)
++    # would round y away and return 0.
++    return math.log1p(math.exp(x))

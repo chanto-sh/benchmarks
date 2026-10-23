@@ -1,0 +1,25 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "pi",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "receiver `self`, which moves `data`\n   --> ~/.rustup/toolchains/1.93-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/collect.rs:310:18\n    |\n310 |     fn into_iter(self) -> Self::IntoIter;\n    |                  ^^^^\nhelp: consider further restricting type parameter `Data` with trait `Copy`\n    |\n 47 |         Data: IntoIterator<Item = u8, IntoIter = I> + core::marker::Copy,\n    |                                                     ++++++++++++++++++++\n\nSome errors have detailed explanations: E0382, E0599, E0621.\nFor more information about an error, try `rustc --explain E0382`.\nerror: could not compile `xorcism` (lib) due to 3 previous errors; 1 warning emitted\nerror: could not compile `xorcism` (lib test) due to 3 previous errors; 1 warning emitted\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 12,
+        "input": 279587,
+        "output": 10590,
+        "cached": 0
+      }
+    }
+  ]
+}

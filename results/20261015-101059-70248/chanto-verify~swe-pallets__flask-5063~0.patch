@@ -1,0 +1,94 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index e75719e..0a20362 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -44,6 +44,10 @@ Unreleased
+     to set the domain, which modern browsers interpret as an exact match rather than
+     a subdomain match. Warnings about ``localhost`` and IP addresses are also removed.
+     :issue:`5051`
++-   ``flask routes`` shows the subdomain or host each rule is registered for in a
++    ``Domain`` column when the app uses subdomain or host matching. :issue:`5062`
++-   Fix ``session_transaction`` when the test client is used with Werkzeug 2.3,
++    which requires the request path when updating cookies from a response.
+ 
+ 
+ Version 2.2.4
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index 37a15ff..76ab467 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -1018,20 +1018,47 @@ def routes_command(sort: str, all_methods: bool) -> None:
+         for rule in rules
+     ]
+ 
+-    headers = ("Endpoint", "Methods", "Rule")
+-    widths = (
+-        max(len(rule.endpoint) for rule in rules),
+-        max(len(methods) for methods in rule_methods),
+-        max(len(rule.rule) for rule in rules),
+-    )
+-    widths = [max(len(h), w) for h, w in zip(headers, widths)]
+-    row = "{{0:<{0}}}  {{1:<{1}}}  {{2:<{2}}}".format(*widths)
++    # Show the domain (host or subdomain) each rule is registered for. The
++    # column is only added when the app uses host or subdomain matching, so
++    # the output stays the same for the common case.
++    server_name = current_app.config["SERVER_NAME"]
++    host_matching = current_app.url_map.host_matching
++    domains = []
++
++    for rule in rules:
++        if host_matching:
++            domains.append(rule.host or "")
++        else:
++            subdomain = rule.subdomain or ""
++
++            if subdomain and server_name:
++                domains.append(f"{subdomain}.{server_name}")
++            else:
++                domains.append(subdomain or server_name or "")
++
++    show_domain = host_matching or server_name is not None or any(domains)
++
++    headers = ["Endpoint", "Methods", "Rule"]
++    columns = [
++        [rule.endpoint for rule in rules],
++        list(rule_methods),
++        [rule.rule for rule in rules],
++    ]
++
++    if show_domain:
++        headers.insert(0, "Domain")
++        columns.insert(0, domains)
++
++    widths = [
++        max(len(header), *(len(value) for value in values))
++        for header, values in zip(headers, columns)
++    ]
+ 
+-    click.echo(row.format(*headers).strip())
+-    click.echo(row.format(*("-" * width for width in widths)))
++    click.echo("  ".join(f"{h:<{w}}" for h, w in zip(headers, widths)).strip())
++    click.echo("  ".join("-" * width for width in widths))
+ 
+-    for rule, methods in zip(rules, rule_methods):
+-        click.echo(row.format(rule.endpoint, methods, rule.rule).rstrip())
++    for row in zip(*columns):
++        click.echo("  ".join(f"{v:<{w}}" for v, w in zip(row, widths)).rstrip())
+ 
+ 
+ cli = FlaskGroup(
+diff --git a/src/flask/testing.py b/src/flask/testing.py
+index a972a3f..db99955 100644
+--- a/src/flask/testing.py
++++ b/src/flask/testing.py
+@@ -169,7 +169,9 @@ class FlaskClient(Client):
+ 
+         if hasattr(self, "_update_cookies_from_response"):
+             self._update_cookies_from_response(
+-                ctx.request.host.partition(":")[0], resp.headers.getlist("Set-Cookie")
++                ctx.request.host.partition(":")[0],
++                ctx.request.path,
++                resp.headers.getlist("Set-Cookie"),
+             )
+         else:
+             self.cookie_jar.extract_wsgi(  # type: ignore[union-attr]

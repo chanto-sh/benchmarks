@@ -1,0 +1,105 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..c6b0313 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,90 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range(n):
++        x = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        for _ in range(50):
++            p_prev = 1.0
++            p_curr = x
++            for k in range(2, n + 1):
++                p_prev, p_curr = (
++                    p_curr,
++                    ((2 * k - 1) * x * p_curr - (k - 1) * p_prev) / k,
++                )
++            derivative = n * (x * p_curr - p_prev) / (x * x - 1.0)
++            delta = p_curr / derivative
++            x -= delta
++            if abs(delta) <= 1e-16 * max(1.0, abs(x)):
++                break
++        nodes.append(x)
++        weights.append(2.0 / ((1.0 - x * x) * derivative * derivative))
++    return nodes, weights
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(16)
++
++
++def _fresnel_c_series(z):
++    """Fresnel C(z) by its Taylor series; accurate for z <= 2."""
++    p = math.pi / 2.0
++    z4 = z * z * z * z
++    term = z
++    total = z
++    k = 1
++    while k < 200:
++        term *= -(p * p) * z4 * (4 * k - 3) / (
++            (4 * k + 1) * (2 * k) * (2 * k - 1)
++        )
++        total += term
++        if abs(term) < 1e-18:
++            break
++        k += 1
++    return total
++
++
++def _fresnel_c_quadrature(z):
++    """Fresnel C(z) by composite Gauss-Legendre quadrature.
++
++    Panels are chosen so that the phase pi*z^2/2 changes by at most pi over a
++    panel, which makes the 16-point rule extremely accurate.
++    """
++    panels = max(1, int(math.ceil(z * z)))
++    h = z / panels
++    half = 0.5 * h
++    scale = math.pi / 2.0
++    pieces = []
++    for j in range(panels):
++        mid = (j + 0.5) * h
++        subtotal = 0.0
++        for x, w in zip(_GL_NODES, _GL_WEIGHTS):
++            u = mid + half * x
++            subtotal += w * math.cos(scale * u * u)
++        pieces.append(subtotal * half)
++    return math.fsum(pieces)
++
++
++def _fresnel_c(z):
++    if z == 0.0:
++        return 0.0
++    if z <= 2.0:
++        return _fresnel_c_series(z)
++    return _fresnel_c_quadrature(z)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    With x = u^2 the integral becomes 2 * integral(cos(t*u^2), 0, sqrt(b)).
++    Scaling u turns that into a Fresnel C integral, which is evaluated by a
++    rapidly convergent series near zero and composite Gauss-Legendre
++    quadrature away from zero.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    z = math.sqrt(2.0 * t * b / math.pi)
++    return math.sqrt(2.0 * math.pi / t) * _fresnel_c(z)

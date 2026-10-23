@@ -1,0 +1,30 @@
+diff --git a/requests/utils.py b/requests/utils.py
+index 8d17b6b..7b0fed5 100644
+--- a/requests/utils.py
++++ b/requests/utils.py
+@@ -355,6 +355,10 @@ def get_encoding_from_headers(headers):
+     if 'text' in content_type:
+         return 'ISO-8859-1'
+ 
++    if 'application/json' in content_type:
++        # Assume UTF-8 based on RFC 4627: https://tools.ietf.org/html/rfc4627
++        return 'utf-8'
++
+ 
+ def stream_decode_response_unicode(iterator, r):
+     """Stream decodes a iterator."""
+diff --git a/tests/test_utils.py b/tests/test_utils.py
+index 17149d2..4e511a5 100644
+--- a/tests/test_utils.py
++++ b/tests/test_utils.py
+@@ -364,6 +364,10 @@ def test_parse_dict_header(value, expected):
+             CaseInsensitiveDict({'content-type': 'application/json; charset=utf-8'}),
+             'utf-8'
+         ),
++        (
++            CaseInsensitiveDict({'content-type': 'application/json'}),
++            'utf-8'
++        ),
+         (
+             CaseInsensitiveDict({'content-type': 'text/plain'}),
+             'ISO-8859-1'

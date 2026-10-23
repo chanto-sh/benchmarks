@@ -1,0 +1,32 @@
+diff --git a/Makefile b/Makefile
+index a1d8c9d..3a09185 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3,11 +3,20 @@ PY ?= python3
+ DATA := $(wildcard data/*.csv)
+ OUT := dist
+ 
++.PHONY: all build test clean
++
++# If a recipe fails, delete the target it was writing. Without this, a failed
++# summarize.py leaves a truncated dist/summary.json that make then treats as
++# up to date, so the next run does nothing and the bad file gets shipped.
++.DELETE_ON_ERROR:
++
+ all: build
+ 
+ build: $(OUT)/summary.json
+ 
+-$(OUT)/summary.json: scripts/summarize.py
++# Depend on the CSVs themselves (and on the directory, so adding or removing a
++# file rebuilds) rather than only on the script.
++$(OUT)/summary.json: scripts/summarize.py $(DATA) data
+ 	mkdir -p $(OUT)
+ 	$(PY) scripts/summarize.py $(DATA) > $@
+ 
+@@ -15,4 +24,4 @@ test:
+ 	$(PY) -m unittest discover -s test -v
+ 
+ clean:
+-    rm -rf $(OUT)
++	rm -rf $(OUT)

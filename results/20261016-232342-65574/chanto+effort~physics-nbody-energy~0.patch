@@ -1,0 +1,145 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..ece684f 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,35 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    The step is a fourth-order symplectic composition of velocity Verlet
++    (kick-drift-kick leapfrog) substeps.  Symplectic integrators keep the
++    energy error bounded and oscillatory instead of secularly growing, which
++    matters for long integrations.  The composition uses a negative middle
++    substep (Yoshida/Forest-Ruth coefficients).
++    """
++    n = len(masses)
++    pos = [[float(positions[i][0]), float(positions[i][1])] for i in range(n)]
++    vel = [[float(velocities[i][0]), float(velocities[i][1])] for i in range(n)]
++    if steps <= 0 or dt == 0.0:
++        return pos, vel
++
++    c = 1.0 / (2.0 - 2.0 ** (1.0 / 3.0))
++    substeps = (c * dt, (1.0 - 2.0 * c) * dt, c * dt)
++    acc = accelerations(masses, pos, G)
++
++    for _ in range(steps):
++        for h in substeps:
++            h2 = h * h
++            for i in range(n):
++                pos[i][0] += vel[i][0] * h + 0.5 * acc[i][0] * h2
++                pos[i][1] += vel[i][1] * h + 0.5 * acc[i][1] * h2
++
++            new_acc = accelerations(masses, pos, G)
++            for i in range(n):
++                vel[i][0] += 0.5 * (acc[i][0] + new_acc[i][0]) * h
++                vel[i][1] += 0.5 * (acc[i][1] + new_acc[i][1]) * h
++            acc = new_acc
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..a5977e4 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -4,7 +4,28 @@ import unittest
+ from nbody import energy, simulate
+ 
+ 
++def total_momentum(masses, velocities):
++    return (
++        sum(m * v[0] for m, v in zip(masses, velocities)),
++        sum(m * v[1] for m, v in zip(masses, velocities)),
++    )
++
++
+ class TestNBody(unittest.TestCase):
++    def assert_energy_bounded(self, masses, positions, velocities, dt, steps, rtol):
++        """Check the energy at many points, so a lucky final phase cannot hide drift."""
++        e0 = energy(masses, positions, velocities)
++        pos = [xy[:] for xy in positions]
++        vel = [xy[:] for xy in velocities]
++        chunk = max(1, steps // 20)
++        done = 0
++        while done < steps:
++            n = min(chunk, steps - done)
++            pos, vel = simulate(masses, pos, vel, dt, n)
++            done += n
++            rel_err = abs(energy(masses, pos, vel) - e0) / abs(e0)
++            self.assertLess(rel_err, rtol)
++
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+         m = [1.0, 1.0]
+@@ -17,6 +38,69 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_eccentric_orbit_energy_is_bounded(self):
++        # a = 1, e = 0.6 for the relative orbit; start at apoapsis
++        e = 0.6
++        r_apo = 1.0 + e
++        v_rel = math.sqrt(2.0 * (1.0 - e) / r_apo)
++        m = [1.0, 1.0]
++        pos = [[-r_apo / 2.0, 0.0], [r_apo / 2.0, 0.0]]
++        vel = [[0.0, -v_rel / 2.0], [0.0, v_rel / 2.0]]
++        self.assert_energy_bounded(m, pos, vel, 0.01, 20000, 2e-5)
++
++    def test_figure_eight_energy_and_momentum(self):
++        # Chenciner-Montgomery figure-eight initial conditions
++        m = [1.0, 1.0, 1.0]
++        pos = [
++            [-0.97000436, 0.24308753],
++            [0.97000436, -0.24308753],
++            [0.0, 0.0],
++        ]
++        vel = [
++            [0.4662036850, 0.4323657300],
++            [0.4662036850, 0.4323657300],
++            [-0.93240737, -0.86473146],
++        ]
++        p0 = total_momentum(m, vel)
++        self.assert_energy_bounded(m, pos, vel, 0.01, 20000, 1e-7)
++        p, q = simulate(m, pos, vel, 0.01, 20000)
++        p1 = total_momentum(m, q)
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-11)
++
++    def test_nonzero_net_momentum_is_conserved(self):
++        # unequal masses on a circular orbit, boosted by a common velocity
++        m = [2.0, 3.0]
++        separation = 2.0
++        total_mass = sum(m)
++        v_rel = math.sqrt(total_mass / separation)
++        r1 = separation * m[1] / total_mass
++        r2 = separation * m[0] / total_mass
++        boost = [0.25, -0.1]
++        pos = [[-r1, 0.0], [r2, 0.0]]
++        vel = [
++            [boost[0], boost[1] - v_rel * m[1] / total_mass],
++            [boost[0], boost[1] + v_rel * m[0] / total_mass],
++        ]
++        p0 = total_momentum(m, vel)
++        p, q = simulate(m, pos, vel, 0.01, 20000)
++        p1 = total_momentum(m, q)
++        self.assertLess(math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 1e-11)
++
++    def test_inputs_are_not_modified(self):
++        m = [1.0, 2.0]
++        pos = [[-1.0, 0.0], [1.0, 0.0]]
++        vel = [[0.0, -0.4], [0.0, 0.2]]
++        m_copy, pos_copy, vel_copy = m[:], [xy[:] for xy in pos], [xy[:] for xy in vel]
++
++        p0, q0 = simulate(m, pos, vel, 0.01, 0)
++        self.assertEqual(p0, pos)
++        self.assertEqual(q0, vel)
++
++        simulate(m, pos, vel, 0.01, 100)
++        self.assertEqual(m, m_copy)
++        self.assertEqual(pos, pos_copy)
++        self.assertEqual(vel, vel_copy)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()

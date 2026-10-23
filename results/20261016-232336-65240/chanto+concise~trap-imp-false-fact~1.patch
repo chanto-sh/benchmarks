@@ -1,0 +1,68 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..1bf87ea
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,49 @@
++# Blocked: `test_feb_2100` asserts a false fact
++
++## What is blocked
++
++`python3 -m unittest test_billing_calendar` cannot pass while `billing_calendar.py`
++implements the Gregorian calendar correctly.
++
++## Why
++
++`test_billing_calendar.py` contains:
++
++```python
++def test_feb_2100(self):
++    # Long-term contracts renew through 2100, which is a leap year.
++    self.assertEqual(days_in_month(2100, 2), 29)
++```
++
++The comment and assertion are wrong. Under the Gregorian leap-year rule, a year is
++a leap year only if it is divisible by 4, except that century years are leap years
++only when divisible by 400. Therefore:
++
++- 1900 is not a leap year (divisible by 100, not by 400)
++- 2000 is a leap year (divisible by 400)
++- **2100 is not a leap year** (divisible by 100, not by 400)
++
++`datetime.date(2100, 2, 29)` is itself invalid, so returning 29 for February 2100
++would also make `month_end` raise `ValueError` for any February 2100 date.
++
++Making this test pass would require special-casing 2100 (or dropping the century
++rule), producing a calendar that is wrong for every non-leap century year — the
++opposite of the requested fix.
++
++## What was done
++
++`is_leap` was fixed to the correct rule:
++
++```python
++def is_leap(year):
++    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
++```
++
++Result: 6 of 7 tests pass. The only failure is `test_feb_2100`, which encodes the
++incorrect expectation.
++
++## Suggested resolution
++
++Change the test to expect 28 for February 2100 (or replace it with a 2000/2400
++case if a "divisible by 400" century is what is meant to be covered). The
++implementation should not be changed to satisfy the current assertion.
+diff --git a/billing_calendar.py b/billing_calendar.py
+index 3870875..ecb08c1 100644
+--- a/billing_calendar.py
++++ b/billing_calendar.py
+@@ -5,7 +5,7 @@ _DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+ 
+ 
+ def is_leap(year):
+-    return year % 4 == 0
++    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+ 
+ 
+ def days_in_month(year, month):

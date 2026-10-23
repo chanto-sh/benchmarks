@@ -1,0 +1,29 @@
+diff --git a/changelog/8906.improvement.rst b/changelog/8906.improvement.rst
+new file mode 100644
+index 0000000..43ff2ef
+--- /dev/null
++++ b/changelog/8906.improvement.rst
+@@ -0,0 +1,4 @@
++Improved the error message when ``pytest.skip`` is used at module level: it now
++explains that passing ``allow_module_level=True`` skips the entire module, and
++points to the ``@pytest.mark.skip``/``@pytest.mark.skipif`` decorators for
++skipping individual tests or classes.
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 79dfb73..8e8d2f3 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -608,10 +608,10 @@ class Module(nodes.File, PyCollector):
+             if e.allow_module_level:
+                 raise
+             raise self.CollectError(
+-                "Using pytest.skip outside of a test is not allowed. "
+-                "To decorate a test function, use the @pytest.mark.skip "
+-                "or @pytest.mark.skipif decorators instead, and to skip a "
+-                "module use `pytestmark = pytest.mark.{skip,skipif}."
++                "Using pytest.skip outside of a test will skip the entire module. "
++                "If that's your intention, pass `allow_module_level=True`. "
++                "If you want to skip a specific test or an entire class, "
++                "use the @pytest.mark.skip or @pytest.mark.skipif decorators."
+             ) from e
+         self.config.pluginmanager.consider_module(mod)
+         return mod

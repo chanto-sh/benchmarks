@@ -1,0 +1,120 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..bd4a82a 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,112 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The encoding is a bijection built from a complete prefix code.  For a value
++``a``, with ``m = (a + 1).bit_length() - 1``, its code is::
++
++    0**m + "1" + m-bit binary value of (a - (2**m - 1))
++
++The codes have lengths ``2*m + 1`` and form a complete prefix code.  A finite
++bit string therefore splits uniquely into complete code words followed by a
++proper prefix.  Those proper prefixes are the "remainders" below.  The
++remainder rank and the first list element carry a small amount of extra
++information that makes the mapping onto all bit strings exact.
++"""
++
++
++def _value_code(value):
++    """Prefix code for one non-negative integer."""
++    m = (value + 1).bit_length() - 1
++    offset = value - ((1 << m) - 1)
++    payload = format(offset, "0%db" % m) if m else ""
++    return "0" * m + "1" + payload
++
++
++def _remainder_count(length):
++    """Number of proper prefixes of code words having the given length."""
++    return 1 << (length // 2)
++
++
++def _remainder_unrank(index):
++    """The index-th proper prefix, ordered by length and then lexicographically."""
++    length = 0
++    while True:
++        count = _remainder_count(length)
++        if index < count:
++            break
++        index -= count
++        length += 1
++
++    if index == 0:
++        return "0" * length
++
++    index -= 1
++    min_zeros = (length + 1) // 2
++    for zeros in range(length - 1, min_zeros - 1, -1):
++        payload_length = length - zeros - 1
++        block = 1 << payload_length
++        if index < block:
++            if payload_length:
++                return ("0" * zeros + "1"
++                        + format(index, "0%db" % payload_length))
++            return "0" * zeros + "1"
++        index -= block
++
++    raise ValueError("remainder index out of range")
++
++
++def _remainder_rank(bits):
++    """Inverse of _remainder_unrank."""
++    length = len(bits)
++    base = 0
++    for k in range(length):
++        base += 1 << (k // 2)
++
++    if "1" not in bits:
++        return base
++
++    zeros = bits.index("1")
++    payload_length = length - zeros - 1
++    payload = int(bits[zeros + 1:], 2) if payload_length else 0
++    return base + (1 << payload_length) + payload
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        bits = ""
++    elif len(lst) == 1:
++        bits = _remainder_unrank(lst[0] + 1)
++    else:
++        bits = "".join(_value_code(value) for value in lst[1:])
++        bits += _remainder_unrank(lst[0])
++
++    return int("1" + bits, 2) - 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    bits = bin(n + 1)[3:]
++    values = []
++    pos = 0
++    end = len(bits)
++
++    while pos < end:
++        one = bits.find("1", pos)
++        if one < 0:
++            break
++
++        m = one - pos
++        payload_start = one + 1
++        if payload_start + m > end:
++            break
++
++        payload = int(bits[payload_start:payload_start + m], 2) if m else 0
++        values.append((1 << m) - 1 + payload)
++        pos = payload_start + m
++
++    remainder = _remainder_rank(bits[pos:])
++    if values:
++        return [remainder] + values
++    if remainder:
++        return [remainder - 1]
++    return []

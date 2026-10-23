@@ -1,0 +1,79 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..6688b64 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,64 @@
+ import math
+ 
+ 
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = []
++    weights = []
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        while True:
++            p1 = 1.0
++            p2 = 0.0
++            for j in range(1, n + 1):
++                p3 = p2
++                p2 = p1
++                p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
++            pp = n * (z * p1 - p2) / (z * z - 1.0)
++            z1 = z
++            z = z1 - p1 / pp
++            if abs(z - z1) < 1e-15:
++                break
++        nodes.append(z)
++        weights.append(2.0 / ((1.0 - z * z) * pp * pp))
++
++    for i in range(n // 2):
++        nodes.append(-nodes[i])
++        weights.append(weights[i])
++    return tuple(nodes), tuple(weights)
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(16)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 removes the endpoint singularity and gives
++
++        2 * integral from 0 to sqrt(b) of cos(t*u**2) du.
++
++    The smooth integral is evaluated with composite 16-point Gauss-Legendre
++    quadrature.  Panels are kept short enough that the phase changes by at
++    most pi/4 across a panel, which resolves the oscillations for large t*b.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if t == 0.0:
++        return 2.0 * math.sqrt(b)
++
++    u_max = math.sqrt(b)
++    panels = max(1, math.ceil(2.0 * t * b / (math.pi / 4.0)))
++    h = u_max / panels
++    half_h = 0.5 * h
++
++    total = 0.0
++    for i in range(panels):
++        center = (i + 0.5) * h
++        panel_sum = 0.0
++        for z, w in zip(_GL_NODES, _GL_WEIGHTS):
++            u = center + half_h * z
++            panel_sum += w * math.cos(t * u * u)
++        total += panel_sum
++
++    # Each panel contributes h/2 times its Gauss sum, and the substitution
++    # contributes another factor of 2, so the factors cancel.
++    return h * total

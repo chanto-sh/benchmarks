@@ -1,0 +1,78 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..d501c03
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,4 @@
++Fix a crash when an invalid regular expression is provided for a configuration
++option. Pylint now emits a proper error message instead of a traceback.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..9ad57b0 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,19 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regex_transformer(value: str) -> Pattern[str]:
++    """Transforms a string into a compiled regular expression."""
++    try:
++        return re.compile(value)
++    except re.error as e:
++        raise argparse.ArgumentTypeError(f"Invalid regular expression: {e}") from e
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -112,7 +120,7 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+         patterns.append(
+-            re.compile(
++            _regex_transformer(
+                 str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+                 + "|"
+                 + pathlib.PureWindowsPath(pattern).as_posix()
+@@ -130,7 +138,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regex_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,
+diff --git a/tests/config/test_config.py b/tests/config/test_config.py
+index 47891ae..c9de424 100644
+--- a/tests/config/test_config.py
++++ b/tests/config/test_config.py
+@@ -126,3 +126,20 @@ def test_argument_separator(capsys: CaptureFixture) -> None:
+     Run(["--", str(EMPTY_MODULE)], exit=False)
+     output = capsys.readouterr()
+     assert not output.err
++
++
++def test_invalid_regex(capsys: CaptureFixture) -> None:
++    """Check that we correctly error on an invalid regular expression.
++
++    Reported in https://github.com/PyCQA/pylint/issues/7228.
++    """
++    with pytest.raises(SystemExit):
++        Run(
++            [
++                str(EMPTY_MODULE),
++                r"--function-rgx=[\p{Han}a-z_][\p{Han}a-z0-9_]{2,30}$",
++            ],
++            exit=False,
++        )
++    output = capsys.readouterr()
++    assert "Invalid regular expression: bad escape \\p" in output.err

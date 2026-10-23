@@ -1,0 +1,107 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..c5b9113
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,5 @@
++Fix a crash when an invalid regular expression is provided for a ``*-rgx``
++or ``*-patterns`` option. Pylint now reports a readable error message instead
++of raising a ``re.error`` traceback.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..ea8b0d1 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -99,11 +99,41 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++class _RegexpArgumentError(argparse.ArgumentTypeError, re.error):
++    """Raised when an option value is not a valid regular expression.
++
++    Subclasses :class:`argparse.ArgumentTypeError` so that argparse can
++    turn it into a readable error message, as well as :class:`re.error`
++    for compatibility with callers expecting the error raised by
++    :func:`re.compile`.
++    """
++
++
++def _regex_transformer(value: str) -> Pattern[str]:
++    """Compile a string into a regular expression.
++
++    Raise an ``argparse.ArgumentTypeError`` instead of letting a
++    ``re.error`` escape, so that an invalid user-supplied regular
++    expression results in a readable error message rather than a
++    traceback.
++    """
++    try:
++        return re.compile(value)
++    except re.error as exc:
++        raise _RegexpArgumentError(
++            f"Invalid regex value '{value}': {exc} (Invalid regular expression)"
++        ) from exc
++
++
++# ``_regexp_transformer`` is an alias kept so that either spelling can be used.
++_regexp_transformer = _regex_transformer
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -112,7 +142,7 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+         patterns.append(
+-            re.compile(
++            _regex_transformer(
+                 str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+                 + "|"
+                 + pathlib.PureWindowsPath(pattern).as_posix()
+@@ -130,7 +160,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regex_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,
+diff --git a/pylint/config/option.py b/pylint/config/option.py
+index 5043fe7..d1250de 100644
+--- a/pylint/config/option.py
++++ b/pylint/config/option.py
+@@ -19,11 +19,25 @@ def _csv_validator(_, name, value):
+     return utils._check_csv(value)
+ 
+ 
++class _RegexpValidationError(re.error, optparse.OptionValueError):
++    """Raised when a regular expression cannot be compiled.
++
++    Inherits from both :class:`re.error` (so that callers relying on the
++    exception raised by :func:`re.compile` keep working) and
++    :class:`optparse.OptionValueError` (the expected validation error).
++    """
++
++
+ # pylint: disable=unused-argument
+ def _regexp_validator(_, name, value):
+     if hasattr(value, "pattern"):
+         return value
+-    return re.compile(value)
++    try:
++        return re.compile(value)
++    except re.error as exc:
++        raise _RegexpValidationError(
++            f"Invalid regex value '{value}': {exc} (Invalid regular expression)"
++        ) from exc
+ 
+ 
+ # pylint: disable=unused-argument

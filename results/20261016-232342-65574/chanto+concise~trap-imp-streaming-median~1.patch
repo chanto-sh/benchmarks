@@ -1,0 +1,65 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..db2c757
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,46 @@
++# BLOCKED: exact streaming median in constant memory
++
++## Status
++
++- Fixed the even-count bug: `median([1, 2, 3, 4])` now returns `2.5`.
++- `test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input` pass.
++- `test_constant_memory` still fails: peak traced memory is 7,221,896 bytes
++  (about 7.2 MB), not less than 64 KB.
++
++## Why the requirement is impossible as written
++
++`median()` accepts a single-pass iterable of arbitrary numbers and must return
++the exact median. The median is an order statistic, so it depends on the
++relative ordering of all values, not on a fixed-size summary such as a count or
++a sum.
++
++Any exact one-pass algorithm for the median of an arbitrary stream needs
++Omega(n) space. Intuitively, with bounded memory two different streams must
++eventually reach the same algorithm state. Those streams can then be extended
++with values that make their true medians different, so the algorithm cannot be
++correct for both. This is the standard streaming lower bound for exact
++selection/quantiles (see, for example, Munro and Paterson's selection lower
++bound). Randomization does not remove the requirement for exactness.
++
++The test confirms this in practice: feeding 200,000 distinct generated doubles
++requires retaining the values (or equivalent state) to identify the two middle
++ones. The current `sorted(values)` list is O(n) and exceeds the 64 KB limit.
++
++An external disk-backed sort or selection could bound RAM, but it would write
++Omega(n) data to disk. That is not a constant-memory streaming algorithm; it is
++a storage-for-memory workaround with added I/O and latency. Since the requested
++requirement is constant memory, this is documented rather than silently
++implemented.
++
++## Alternatives (all require changing a requirement)
++
++- **External sort / disk-backed selection:** bounded RAM, but O(n) disk usage
++  and no longer a constant-memory streaming solution.
++- **Two heaps or quickselect:** exact, but O(n) memory.
++- **Approximate quantile sketch:** constant or polylogarithmic memory, but not
++  exact; `test_constant_memory` requires exact equality.
++- **Counting/bucket method:** O(range) memory, only viable for a small known
++  integer domain. The feed contains arbitrary floating-point values.
++
++To satisfy the exact test, either allow O(n) memory (or external storage), or
++relax the test to accept an approximate median with an explicit error bound.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..84d496d 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    mid = len(data) // 2
++    if len(data) % 2:
++        return data[mid]
++    return (data[mid - 1] + data[mid]) / 2

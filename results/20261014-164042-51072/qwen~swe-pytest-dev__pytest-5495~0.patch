@@ -1,0 +1,75 @@
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..7977a1f 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -89,6 +89,10 @@ def istext(x):
+     return isinstance(x, str)
+ 
+ 
++def isbytes(x):
++    return isinstance(x, bytes)
++
++
+ def isdict(x):
+     return isinstance(x, dict)
+ 
+@@ -127,6 +131,8 @@ def assertrepr_compare(config, op, left, right):
+         if op == "==":
+             if istext(left) and istext(right):
+                 explanation = _diff_text(left, right, verbose)
++            elif isbytes(left) and isbytes(right):
++                explanation = _diff_text(left, right, verbose)
+             else:
+                 if issequence(left) and issequence(right):
+                     explanation = _compare_eq_sequence(left, right, verbose)
+@@ -181,7 +187,7 @@ def _diff_text(left, right, verbose=0):
+         This is done using repr() which then needs post-processing to fix the encompassing quotes and un-escape
+         newlines and carriage returns (#429).
+         """
+-        r = str(repr(binary_text)[1:-1])
++        r = str(repr(binary_text)[2:-1])
+         r = r.replace(r"\n", "\n")
+         r = r.replace(r"\r", "\r")
+         return r
+diff --git a/testing/test_assertion_bytes.py b/testing/test_assertion_bytes.py
+new file mode 100644
+index 0000000..b069706
+--- /dev/null
++++ b/testing/test_assertion_bytes.py
+@@ -0,0 +1,36 @@
++"""Regression tests for byte-string assertion explanations.
++
++Historically ``bytes`` operands were treated as generic sequences, so a
++failing comparison reported the ASCII ordinal of the first differing byte,
++e.g. ``Right contains 2 more items, first extra item: 52`` (``52`` is ``"4"``).
++Byte strings are now diffed as text, like ``str``.
++"""
++import _pytest.assertion.util as util
++
++
++class _Config:
++    def __init__(self, verbose=0):
++        self._verbose = verbose
++
++    def getoption(self, name):
++        assert name == "verbose"
++        return self._verbose
++
++
++def _callequal(left, right, verbose=0):
++    return util.assertrepr_compare(_Config(verbose), "==", left, right)
++
++
++def test_bytes_diff_is_readable():
++    lines = _callequal(b"spam", b"eggs")
++    assert lines is not None
++    assert "- spam" in lines
++    assert "+ eggs" in lines
++
++
++def test_bytes_diff_does_not_report_ordinals():
++    for left, right in [(b"", b"42"), (b"", b"1")]:
++        lines = _callequal(left, right)
++        assert lines is not None
++        assert not any("more items" in line for line in lines)
++        assert not any("extra item" in line for line in lines)

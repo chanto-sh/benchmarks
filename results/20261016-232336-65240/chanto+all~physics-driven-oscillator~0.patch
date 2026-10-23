@@ -1,0 +1,102 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..ca58d25 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,95 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _steady_state_coefficients(m, k, c, F0, omega):
++    """Return A, B, |D| where x_p(t) = A cos(omega t) + B sin(omega t)."""
++    real = k - m * omega * omega
++    imag = c * omega
++    den = real * real + imag * imag
++    if den == 0.0:
++        raise ValueError("no steady-state solution at exact undamped resonance")
++    return F0 * real / den, F0 * imag / den, math.sqrt(den)
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    real = k - m * omega * omega
++    imag = c * omega
++    den = real * real + imag * imag
++    if den == 0.0:
++        raise ValueError("no steady-state solution at exact undamped resonance")
++    return abs(F0) / math.sqrt(den)
++
++
++def _homogeneous_factors(alpha, z, t):
++    """Return E, S such that x_h(t) = x_h(0) E + (x_h'(0) + alpha*x_h(0)) S.
++
++    Here z = k/m - (c/(2m))**2.  The representation
++
++        x_h = exp(-alpha*t) * (C cos(beta*t) + Q sin(beta*t)/beta)
++
++    with beta**2 = z is valid for oscillatory, critical and overdamped
++    motion.  The two factors below are entire functions of z*t**2, so no
++    special case is needed close to critical damping.
++    """
++    u = z * t * t
++
++    # Near critical damping (or short times), use the Taylor series.  This
++    # avoids subtracting nearly equal roots/exponentials.
++    if abs(u) <= 1.0:
++        csum = 1.0
++        ssum = 1.0
++        cterm = 1.0
++        sterm = 1.0
++        n = 1
++        while True:
++            # (-u)^n / (2n)! and (-u)^n / (2n+1)!
++            cterm *= -u / ((2 * n - 1) * (2 * n))
++            sterm *= -u / ((2 * n) * (2 * n + 1))
++            csum += cterm
++            ssum += sterm
++            if abs(cterm) <= 1e-18 and abs(sterm) <= 1e-18:
++                break
++            n += 1
++        decay = math.exp(-alpha * t)
++        return decay * csum, decay * t * ssum
++
++    decay = math.exp(-alpha * t)
++
++    if z > 0.0:
++        beta = math.sqrt(z)
++        phase = beta * t
++        return decay * math.cos(phase), decay * math.sin(phase) / beta
++
++    # Overdamped: combine exp(-alpha*t) with cosh/sinh directly so that the
++    # result remains finite even when alpha*t is large.
++    gamma = math.sqrt(-z)
++    ep = math.exp(-(alpha - gamma) * t)
++    em = math.exp(-(alpha + gamma) * t)
++    return 0.5 * (ep + em), (ep - em) / (2.0 * gamma)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, B, _ = _steady_state_coefficients(m, k, c, F0, omega)
++
++    if t == 0.0:
++        return x0
++
++    alpha = c / (2.0 * m)
++    z = k / m - alpha * alpha
++
++    # Initial value and initial slope of the homogeneous part.
++    c0 = x0 - A
++    q0 = (v0 - B * omega) + alpha * c0
++
++    E, S = _homogeneous_factors(alpha, z, t)
++
++    return (
++        A * math.cos(omega * t)
++        + B * math.sin(omega * t)
++        + c0 * E
++        + q0 * S
++    )

@@ -1,0 +1,75 @@
+diff --git a/oscillator.py b/oscillator.py
+index 5fd3d5d..43001b7 100644
+--- a/oscillator.py
++++ b/oscillator.py
+@@ -1,11 +1,68 @@
+ """Driven damped harmonic oscillator: m x'' + c x' + k x = F0 cos(omega t)."""
+ 
++import math
++
++
++def _particular(m, k, c, F0, omega):
++    """Coefficients (A, B) of the steady state x_p = A cos(w t) + B sin(w t).
++
++    Substituting x_p into the ODE gives the 2x2 system
++
++        (k - m w^2) A + (c w) B = F0
++        -(c w) A + (k - m w^2) B = 0
++
++    whose solution is A = F0 D / (D^2 + E^2), B = F0 E / (D^2 + E^2) with
++    D = k - m w^2 and E = c w.
++    """
++    D = k - m * omega * omega
++    E = c * omega
++    hyp = math.hypot(D, E)
++    # Divided by hyp twice to stay overflow/underflow safe for extreme parameters.
++    A = F0 * (D / hyp) / hyp
++    B = F0 * (E / hyp) / hyp
++    return A, B
++
+ 
+ def amplitude(m, k, c, F0, omega):
+     """Steady-state amplitude."""
+-    raise NotImplementedError
++    D = k - m * omega * omega
++    E = c * omega
++    return abs(F0) / math.hypot(D, E)
+ 
+ 
+ def displacement(m, k, c, F0, omega, x0, v0, t):
+     """x(t) with x(0) = x0, x'(0) = v0."""
+-    raise NotImplementedError
++    A, B = _particular(m, k, c, F0, omega)
++    xp = A * math.cos(omega * t) + B * math.sin(omega * t)
++
++    # Homogeneous part is built from the initial mismatch between the full
++    # motion and the particular solution, then evolved with the natural modes.
++    alpha = c / (2.0 * m)              # decay rate of the envelope
++    S = x0 - A                         # homogeneous displacement at t = 0
++    T = v0 - B * omega                 # homogeneous velocity at t = 0
++    disc = c * c - 4.0 * m * k         # discriminant of m r^2 + c r + k = 0
++
++    if disc < 0.0:
++        # Underdamped (includes the undamped case c = 0): complex roots
++        # -alpha +/- i wd.  Written as cos/sin so it stays accurate as
++        # wd -> 0 and reduces smoothly to the critical case.
++        wd = math.sqrt(-disc) / (2.0 * m)
++        env = math.exp(-alpha * t)
++        xh = env * (S * math.cos(wd * t) + ((T + alpha * S) / wd) * math.sin(wd * t))
++    elif disc > 0.0:
++        # Overdamped: real roots -alpha +/- beta.  Written with the decaying
++        # exponentials e^{-(alpha -/+ beta) t} (both in [0, 1]) so neither the
++        # envelope exp(-alpha t) (underflow) nor cosh(beta t) (overflow) can
++        # produce 0 * inf = nan at large t.  The sinh term uses expm1 to stay
++        # accurate as beta -> 0, i.e. as the system approaches critical damping.
++        beta = math.sqrt(disc) / (2.0 * m)
++        ec = math.exp(-(alpha - beta) * t)
++        es = math.exp(-(alpha + beta) * t)
++        env_cosh = 0.5 * (ec + es)
++        env_sinh_over_beta = 0.5 * ec * (-math.expm1(-2.0 * beta * t)) / beta
++        xh = S * env_cosh + (T + alpha * S) * env_sinh_over_beta
++    else:
++        # Critically damped: repeated root -alpha.
++        xh = math.exp(-alpha * t) * (S + (T + alpha * S) * t)
++
++    return xh + xp

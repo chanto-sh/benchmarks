@@ -1,0 +1,23 @@
+diff --git a/changelog/5495.bugfix.rst b/changelog/5495.bugfix.rst
+new file mode 100644
+index 0000000..17c7ab3
+--- /dev/null
++++ b/changelog/5495.bugfix.rst
+@@ -0,0 +1,4 @@
++Fixed a confusing assertion rewriting message for byte strings: byte strings
++are no longer compared as a sequence of integers, so the failure explanation
++now shows the full diff instead of reporting the ordinal value of the first
++extra byte.
+diff --git a/src/_pytest/assertion/util.py b/src/_pytest/assertion/util.py
+index 762e576..8cca952 100644
+--- a/src/_pytest/assertion/util.py
++++ b/src/_pytest/assertion/util.py
+@@ -82,7 +82,7 @@ def _format_lines(lines):
+ 
+ 
+ def issequence(x):
+-    return isinstance(x, Sequence) and not isinstance(x, str)
++    return isinstance(x, Sequence) and not isinstance(x, (str, bytes))
+ 
+ 
+ def istext(x):

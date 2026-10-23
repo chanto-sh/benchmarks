@@ -1,0 +1,77 @@
+diff --git a/stats.py b/stats.py
+index add4f59..e8930fc 100644
+--- a/stats.py
++++ b/stats.py
+@@ -5,17 +5,66 @@ import math
+ def mean_var(xs):
+     """(mean, population variance) of a non-empty sequence of floats."""
+     n = len(xs)
+-    s = sum(xs)
+-    s2 = sum(x * x for x in xs)
+-    mean = s / n
+-    return mean, s2 / n - mean * mean
++    if n == 0:
++        raise ValueError("mean_var requires at least one value")
++
++    # Prefer exact summation; fall back to shifted/scaled sums when the
++    # total itself would overflow.
++    try:
++        mean = math.fsum(xs) / n
++    except OverflowError:
++        ref = xs[0]
++        try:
++            delta = math.fsum(x - ref for x in xs)
++        except OverflowError:
++            delta = math.inf
++        if math.isfinite(delta):
++            mean = ref + delta / n
++        else:
++            scale = max(abs(x) for x in xs)
++            if scale == 0.0:
++                return 0.0, 0.0
++            mean = scale * (math.fsum(x / scale for x in xs) / n)
++
++    # Work relative to a nearby origin so that subtracting a large offset
++    # does not discard the small spread, then scale the squared deviations
++    # so their sum cannot overflow before the division by n.
++    ref = xs[0]
++    try:
++        dmean = math.fsum(x - ref for x in xs) / n
++    except OverflowError:
++        dscale = max(abs(x - ref) for x in xs)
++        if math.isinf(dscale):
++            return mean, math.inf
++        dmean = dscale * (math.fsum((x - ref) / dscale for x in xs) / n)
++    if not math.isfinite(dmean):
++        return mean, math.inf
++
++    dmax = max(abs((x - ref) - dmean) for x in xs)
++    if dmax == 0.0:
++        return mean, 0.0
++    if math.isinf(dmax):
++        return mean, math.inf
++
++    s = math.fsum((((x - ref) - dmean) / dmax) ** 2 for x in xs) / n
++    frac, exp = math.frexp(dmax)
++    try:
++        var = math.ldexp(frac * frac * s, 2 * exp)
++    except OverflowError:
++        var = math.inf
++    return mean, var
+ 
+ 
+ def logsumexp(xs):
+     """log(sum(exp(x) for x in xs)) for a non-empty sequence."""
+-    return math.log(sum(math.exp(x) for x in xs))
++    m = max(xs)
++    if m == math.inf:
++        return math.inf
++    if m == -math.inf:
++        return -math.inf
++    return m + math.log(math.fsum(math.exp(x - m) for x in xs))
+ 
+ 
+ def softplus(x):
+     """log(1 + exp(x))."""
+-    return math.log(1 + math.exp(x))
++    return max(x, 0.0) + math.log1p(math.exp(-abs(x)))

@@ -1,0 +1,99 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..e30be5b
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,80 @@
++# BLOCKED: exact median cannot run in constant memory
++
++## Summary
++
++The new requirement in `test_stats_stream.py::test_constant_memory` is unsatisfiable
++as written. It asks `median()` to compute the **exact** median of a **one-pass**
++stream of 200,000 arbitrary `float`s while keeping the traced peak allocation
++**under 64 KB**. Exactness and constant memory are jointly impossible in the
++single-pass model; no amount of code can satisfy both. I did not fake it.
++
++## What is impossible, and why
++
++Computing the exact median of a stream is the order-statistic selection problem
++in the streaming (limited-storage) model. The classical lower bound is due to
++Munro & Paterson, *Selection and sorting with limited storage* (Theoretical
++Computer Science, 1980): selecting the k-th of n items using **p passes** over
++the data requires **Ω(n^(1/p))** storage. For a single pass (p = 1) that is
++**Ω(n)** space — linear in the feed size, which is exactly the OOM the ingest
++workers are hitting.
++
++Intuition: a bounded-memory machine keeps only a fixed-size summary of what it
++has seen, and the exact median depends on the global order of *all* n elements.
++An adversary can always place one more element so that the median lands in a gap
++the summary never recorded, so any constant-memory summary can be fooled. In
++other words, the function the test demands (the exact average of the two middle
++order statistics of 200,000 arbitrary reals) carries Θ(n) information; you cannot
++transmit Θ(n) information through an O(1) channel.
++
++The numbers make this concrete. The budget is 64 KB, which holds at most
++**8,192** IEEE-754 doubles — but there are **200,000** values whose exact order
++must be resolved. And the current implementation's peak for this very input is:
++
++- `sorted(feed())` peak traced allocation ≈ **7,054 KB** (~7 MB), i.e. ~110× the budget,
++  while still being exact.
++
++## Why the usual escapes do not apply
++
++- **Approximate sketches** (t-digest, Greenwald–Khanna, reservoir sampling) are
++  O(1)-ish memory but are **not exact**, so `assertEqual(got, want)` fails.
++  Deprioritising exactness is a product decision, not something I can make in code.
++- **Multi-pass selection** (count-and-pivot) can reach O(1) memory only with
++  Θ(log n) passes over re-readable data. `feed()` returns a **generator**, which is
++  exhausted after one pass; re-reading would require materialising the stream,
++  which is the very thing we must not do. It would also be O(n log n) time.
++- **Storing the data outside `tracemalloc`'s view** (e.g. numpy's allocator, a temp
++  file) would make the assertion pass while still using O(n) memory/disk — a
++  workaround that defeats the goal and would hide the production OOM. I deliberately
++  did not do this.
++
++## What I changed instead
++
++I fixed the genuinely fixable, independently-reported bug: `median([1, 2, 3, 4])`
++returned `3` instead of `2.5`. `median()` now averages the two middle values for an
++even-length input, and is otherwise unchanged:
++
++```python
++n = len(data)
++if n % 2:
++    return data[n // 2]
++return (data[n // 2 - 1] + data[n // 2]) / 2
++```
++
++`test_odd`, `test_even`, `test_empty_raises`, and `test_generator_input` pass.
++`test_constant_memory` still fails — unavoidably — on both the memory bound and, as
++a direct consequence, exactness at that memory budget.
++
++## What I need from the team (unblock path)
++
++This is a requirements conflict, not a coding task. Please pick one:
++
++1. **Relax exactness** and accept a bounded-memory streaming quantile estimator
++   (specify the allowable error / the algorithm). This is the realistic fix for the OOM.
++2. **Relax the memory bound** to O(n) (i.e. keep exactness) — then the current
++   implementation already meets exactness and only the 64 KB assertion must change.
++3. **Give `median()` a re-iterable source** and accept a multi-pass, O(1)-memory
++   exact algorithm (Θ(log n) passes, O(n log n) time). Not compatible with the
++   one-shot generator `feed()` as currently written.
++
++Until one of these is chosen, `test_constant_memory` cannot be made green without
++weakening the test or hiding memory, neither of which I will do.
+diff --git a/stats_stream.py b/stats_stream.py
+index eaa8c4d..d2c75c5 100644
+--- a/stats_stream.py
++++ b/stats_stream.py
+@@ -7,4 +7,7 @@ def median(values):
+     data = sorted(values)
+     if not data:
+         raise ValueError("median of empty data")
+-    return data[len(data) // 2]
++    n = len(data)
++    if n % 2:
++        return data[n // 2]
++    return (data[n // 2 - 1] + data[n // 2]) / 2

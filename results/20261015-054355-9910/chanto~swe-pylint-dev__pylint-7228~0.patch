@@ -1,0 +1,232 @@
+diff --git a/doc/whatsnew/fragments/7228.bugfix b/doc/whatsnew/fragments/7228.bugfix
+new file mode 100644
+index 0000000..2eebbd8
+--- /dev/null
++++ b/doc/whatsnew/fragments/7228.bugfix
+@@ -0,0 +1,7 @@
++Pylint now reports a clean error, instead of crashing with a traceback, when a
++configuration option expecting a regular expression (for example
++``function-rgx``) contains an invalid pattern such as ``\p{Han}``. The optional
++``regex`` module is used as a fallback when it is installed, allowing those
++patterns to work.
++
++Closes #7228
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 3c29515..16b908d 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -15,14 +15,25 @@ import pathlib
+ import re
+ import sys
+ from collections.abc import Callable
+-from typing import Any, Pattern, Sequence, Tuple, Union
++from typing import Any, Pattern, Sequence, Tuple, Union, cast
+ 
+ from pylint import interfaces
+ from pylint import utils as pylint_utils
+ from pylint.config.callback_actions import _CallbackAction, _ExtendAction
+ from pylint.config.deprecation_actions import _NewNamesAction, _OldNamesAction
++from pylint.config.exceptions import _InvalidRegexpError
+ from pylint.constants import PY38_PLUS
+ 
++try:
++    # The ``regex`` module supports more advanced patterns than the standard
++    # library ``re`` module (for instance ``\p{Han}``). It is optional and is
++    # used as a fallback when the standard library can't compile a pattern.
++    import regex
++
++    _HAS_REGEX = True
++except ImportError:  # pragma: no cover
++    _HAS_REGEX = False
++
+ if sys.version_info >= (3, 8):
+     from typing import Literal
+ else:
+@@ -99,11 +110,34 @@ def _py_version_transformer(value: str) -> tuple[int, ...]:
+     return version
+ 
+ 
++def _regexp_transformer(pattern: str) -> Pattern[str]:
++    """Transforms a string into a compiled regular expression.
++
++    A clean error is raised if the pattern is invalid. The optional ``regex``
++    module is used as a fallback so that patterns that the standard library
++    ``re`` module can't handle (e.g. ``\\p{Han}``) still work when it is
++    installed.
++    """
++    try:
++        return re.compile(pattern)
++    except re.error as exc:
++        if _HAS_REGEX:
++            try:
++                return cast(Pattern[str], regex.compile(pattern))
++            except Exception as regex_exc:  # pylint: disable=broad-except
++                raise _InvalidRegexpError(
++                    f"Invalid regular expression '{pattern}': {regex_exc}"
++                ) from regex_exc
++        raise _InvalidRegexpError(
++            f"Invalid regular expression '{pattern}': {exc}"
++        ) from exc
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+-        patterns.append(re.compile(pattern))
++        patterns.append(_regexp_transformer(pattern))
+     return patterns
+ 
+ 
+@@ -112,7 +146,7 @@ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     patterns: list[Pattern[str]] = []
+     for pattern in _csv_transformer(value):
+         patterns.append(
+-            re.compile(
++            _regexp_transformer(
+                 str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
+                 + "|"
+                 + pathlib.PureWindowsPath(pattern).as_posix()
+@@ -130,7 +164,7 @@ _TYPE_TRANSFORMERS: dict[str, Callable[[str], _ArgumentTypes]] = {
+     "non_empty_string": _non_empty_string_transformer,
+     "path": _path_transformer,
+     "py_version": _py_version_transformer,
+-    "regexp": re.compile,
++    "regexp": _regexp_transformer,
+     "regexp_csv": _regexp_csv_transfomer,
+     "regexp_paths_csv": _regexp_paths_csv_transfomer,
+     "string": pylint_utils._unquote,
+diff --git a/pylint/config/exceptions.py b/pylint/config/exceptions.py
+index cb4fc1f..50931ce 100644
+--- a/pylint/config/exceptions.py
++++ b/pylint/config/exceptions.py
+@@ -4,6 +4,19 @@
+ 
+ from __future__ import annotations
+ 
++import argparse
++import re
++
++
++class _InvalidRegexpError(argparse.ArgumentTypeError, re.error, ValueError):
++    """Raised when a regular expression option can't be compiled.
++
++    ``argparse`` only turns ``TypeError``, ``ValueError`` and
++    ``ArgumentTypeError`` into a clean error message. Deriving from
++    ``re.error`` as well keeps backwards compatibility for callers (and
++    tests) that expect the original exception to be raised.
++    """
++
+ 
+ class UnrecognizedArgumentAction(Exception):
+     """Raised if an ArgumentManager instance tries to add an argument for which the
+diff --git a/pylint/config/option.py b/pylint/config/option.py
+index 5043fe7..ea0bc47 100644
+--- a/pylint/config/option.py
++++ b/pylint/config/option.py
+@@ -12,6 +12,7 @@ import warnings
+ from re import Pattern
+ 
+ from pylint import utils
++from pylint.config.exceptions import _InvalidRegexpError
+ 
+ 
+ # pylint: disable=unused-argument
+@@ -23,7 +24,10 @@ def _csv_validator(_, name, value):
+ def _regexp_validator(_, name, value):
+     if hasattr(value, "pattern"):
+         return value
+-    return re.compile(value)
++    try:
++        return re.compile(value)
++    except re.error as exc:
++        raise _InvalidRegexpError(str(exc)) from exc
+ 
+ 
+ # pylint: disable=unused-argument
+@@ -38,13 +42,16 @@ def _regexp_paths_csv_validator(
+         return value
+     patterns = []
+     for val in _csv_validator(_, name, value):
+-        patterns.append(
+-            re.compile(
+-                str(pathlib.PureWindowsPath(val)).replace("\\", "\\\\")
+-                + "|"
+-                + pathlib.PureWindowsPath(val).as_posix()
++        try:
++            patterns.append(
++                re.compile(
++                    str(pathlib.PureWindowsPath(val)).replace("\\", "\\\\")
++                    + "|"
++                    + pathlib.PureWindowsPath(val).as_posix()
++                )
+             )
+-        )
++        except re.error as exc:
++            raise _InvalidRegexpError(str(exc)) from exc
+     return patterns
+ 
+ 
+diff --git a/setup.cfg b/setup.cfg
+index 2c13527..a46f5ea 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -92,3 +92,6 @@ ignore_missing_imports = True
+ 
+ [mypy-colorama]
+ ignore_missing_imports = True
++
++[mypy-regex]
++ignore_missing_imports = True
+diff --git a/tests/config/test_regexp_error.py b/tests/config/test_regexp_error.py
+new file mode 100644
+index 0000000..d23442f
+--- /dev/null
++++ b/tests/config/test_regexp_error.py
+@@ -0,0 +1,46 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++# Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
++
++"""Tests for the handling of invalid regular expressions in the configuration."""
++
++from __future__ import annotations
++
++import argparse
++from os.path import abspath, dirname, join
++from pathlib import Path
++
++import pytest
++
++from pylint.config.argument import _regexp_transformer
++from pylint.testutils._run import _Run as Run
++
++HERE = abspath(dirname(__file__))
++EMPTY_MODULE = join(HERE, "..", "regrtest_data", "empty.py")
++
++
++def test_regexp_transformer_invalid_raises_clean_error() -> None:
++    """An invalid regexp raises an ``ArgumentTypeError`` instead of crashing."""
++    with pytest.raises(argparse.ArgumentTypeError):
++        _regexp_transformer("[\\p{Han}]")
++
++
++def test_regexp_transformer_valid() -> None:
++    """A valid regexp is compiled as usual."""
++    assert _regexp_transformer("foo.*").pattern == "foo.*"
++
++
++def test_invalid_regexp_on_command_line() -> None:
++    """An invalid regexp passed on the command line does not crash pylint."""
++    with pytest.raises(SystemExit) as ex:
++        Run([EMPTY_MODULE, "--function-rgx=[\\p{Han}]"])
++    assert ex.value.code == 2
++
++
++def test_invalid_regexp_in_rcfile(tmp_path: Path) -> None:
++    """An invalid regexp in a pylintrc file is reported cleanly."""
++    rcfile = tmp_path / "pylintrc"
++    rcfile.write_text("[MASTER]\nfunction-rgx=[\\p{Han}a-z_]\n")
++    with pytest.raises(SystemExit) as ex:
++        Run([EMPTY_MODULE, f"--rcfile={rcfile}"])
++    assert ex.value.code == 2

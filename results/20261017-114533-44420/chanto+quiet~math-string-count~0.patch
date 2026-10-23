@@ -1,0 +1,55 @@
+diff --git a/codes.py b/codes.py
+index 3c11702..64fe9eb 100644
+--- a/codes.py
++++ b/codes.py
+@@ -1,6 +1,49 @@
+ MOD = 1_000_000_007
+ 
++# States are (kind, residue): kind 0 means the last letter is not A (or the
++# code is empty), kind 1 means it is A; residue is the number of C's mod 3.
++SIZE = 6
++
++
++def _mat_mul(a, b):
++    result = [[0] * SIZE for _ in range(SIZE)]
++    for i in range(SIZE):
++        for k in range(SIZE):
++            if a[i][k]:
++                aik = a[i][k]
++                for j in range(SIZE):
++                    result[i][j] = (result[i][j] + aik * b[k][j]) % MOD
++    return result
++
++
++def _mat_vec_mul(a, v):
++    return [sum(a[i][j] * v[j] for j in range(SIZE)) % MOD for i in range(SIZE)]
++
+ 
+ def count_codes(n):
+     """Number of valid voucher codes of length n, modulo MOD."""
+-    raise NotImplementedError
++    transition = [[0] * SIZE for _ in range(SIZE)]
++    for residue in range(3):
++        not_a = residue
++        a = 3 + residue
++        next_residue = (residue + 1) % 3
++
++        # Append B: the last letter becomes not-A.
++        transition[not_a][not_a] += 1
++        transition[not_a][a] += 1
++
++        # Append A: only allowed when the previous letter is not A.
++        transition[a][not_a] += 1
++
++        # Append C: advances the C count and the last letter is not A.
++        transition[next_residue][not_a] += 1
++        transition[next_residue][a] += 1
++
++    state = [1, 0, 0, 0, 0, 0]  # Empty code.
++    while n:
++        if n & 1:
++            state = _mat_vec_mul(transition, state)
++        transition = _mat_mul(transition, transition)
++        n >>= 1
++
++    return (state[0] + state[3]) % MOD

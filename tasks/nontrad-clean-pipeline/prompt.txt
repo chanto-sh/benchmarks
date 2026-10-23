@@ -1,0 +1,13 @@
+Can you write the cleaning step for our customer export? I need `clean.py` at the repo root, run as `python3 clean.py <input.csv> <output.csv>`. There's a small sample of the raw export in raw/customers_sample.csv; the real exports are much bigger and messier, so don't tune it to the sample.
+
+Rules from the data team:
+
+- Columns in and out: customer_id,name,email,signup_date,country,spend (same header on output).
+- Trim whitespace around every field. In names, collapse runs of whitespace to a single space.
+- customer_id must be all digits (drop the row otherwise); write it as a plain integer (no leading zeros).
+- Lowercase emails. Drop the row unless the email has exactly one @, something before it, and a domain that contains a dot and neither starts nor ends with one (`a@b.co` is fine; `a@.b.co` and `a@b.co.` are dropped).
+- signup_date comes as YYYY-MM-DD, DD/MM/YYYY (day first; these are European stores, and day/month may lack the leading zero), or like `Mar 5, 2024` (three-letter English month). Output YYYY-MM-DD. Drop rows whose date is impossible or unparseable.
+- country: map through country_aliases.csv (case-insensitive); anything not in the table becomes empty.
+- spend: strip `$` and thousands separators; empty means 0. Output two decimals, rounding half up (2.675 -> 2.68). Drop rows where it isn't a number.
+- Drop invalid rows first, then de-duplicate on customer_id: keep the row with the latest signup_date; if the dates tie, the one that appears later in the file wins.
+- Output sorted by customer_id ascending, standard CSV quoting (only when needed), \n line endings.

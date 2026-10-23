@@ -1,0 +1,45 @@
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..dbe0d9b
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,39 @@
++# Retiring `legacy_db.query_raw`
++
++Migration plan for moving off `app/legacy_db.py` onto `app/db/session.py`.
++
++## Call sites
++
++- `app/orders/service.py` — imports `query_raw` from `app.legacy_db` and uses it for both order reads (`open_orders`) and writes (`cancel`).
++- `app/billing/invoices.py` — imports the `app.legacy_db` module and calls `legacy_db.query_raw` to read unpaid invoices for a customer.
++- `app/admin/tools.py` — imports `query_raw` as `qr` and calls it to delete test customers.
++
++## Schema
++
++Current schema version: 14
++
++This migration does not need a new schema version. It is a code-level swap of
++the connection layer only and changes no tables or indexes. The next version
++number (15) is already reserved for a separate follow-up: dropping the legacy
++views once `legacy_db` is fully gone.
++
++## Environment
++
++- `ORDERS_DB_URL` — read by `app/settings.py` (required; `os.environ[...]`); used as the connection URL. The new session layer still needs it (`Session` defaults to `settings.DB_URL`).
++- `ORDERS_DB_POOL` — read by `app/settings.py` as `DB_POOL_SIZE` (default `5`). The new session layer still needs it (`Session` defaults to `settings.DB_POOL_SIZE`).
++- `LEGACY_DB_TIMEOUT_S` — read by `app/legacy_db.py` (default `30`) as the old driver's connect timeout. The new session layer does not use it; it can be dropped once `legacy_db` is removed.
++- `BILLING_CURRENCY` — read by `app/billing/invoices.py` via `app/util/env.env` (default `EUR`) for invoice output formatting. Unrelated to the connection layer and still needed after the switch.
++
++## Rollback
++
++The switch is a wiring change, not a data migration, so rollback is a revert.
++Land it behind a single deployable change so we can back it out without a
++schema step:
++
++1. Keep `app/legacy_db.py` in the tree and untouched until the new code has run
++   in production; do not delete it in the same change that switches callers.
++2. If the switch misbehaves, revert the commit(s) that repoint the call sites to
++   `app/db/session.py` and redeploy. The legacy path becomes active again with
++   no database action required, since no schema version was consumed.
++3. Only delete `legacy_db.py` and start the version 15 work (dropping the legacy
++   views) once the session layer has been stable in production.

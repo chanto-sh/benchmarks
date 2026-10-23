@@ -1,0 +1,20 @@
+diff --git a/.ci/pipeline.yml b/.ci/pipeline.yml
+index 05eca23..ef6c163 100644
+--- a/.ci/pipeline.yml
++++ b/.ci/pipeline.yml
+@@ -8,11 +8,12 @@ jobs:
+   test:
+     env:
+       TZ: UTC
++      APP_SETTINGS: ci
+     steps:
+       - name: Lint
+         run: python3 tools/lint.py service/app
+-      - name: Unit tests
+-        working-directory: services
+-        run: python3 -m unittest discover -s tests -v
+       - name: Generate build info
+         run: python3 tools/gen_build_info.py service/app/_build_info.py
++      - name: Unit tests
++        working-directory: service
++        run: python3 -m unittest discover -s tests -v

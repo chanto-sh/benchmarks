@@ -1,0 +1,52 @@
+diff --git a/odds.py b/odds.py
+index ac2cbba..204507a 100644
+--- a/odds.py
++++ b/odds.py
+@@ -1,4 +1,12 @@
+ from fractions import Fraction
++from math import comb, factorial
++
++
++def _falling(n, k):
++    """Number of ordered ways to draw k distinct cards from n: n! / (n-k)!."""
++    if k < 0 or k > n:
++        return 0
++    return factorial(n) // factorial(n - k)
+ 
+ 
+ def p_at_least(r, b, g, k, m):
+@@ -6,4 +14,33 @@ def p_at_least(r, b, g, k, m):
+ 
+     The deal stops at the first green card or after m cards, whichever is first.
+     """
+-    raise NotImplementedError
++    if k <= 0:
++        return Fraction(1)
++    if k > r or m <= 0:
++        return Fraction(0)
++
++    n = r + b + g
++    m = min(m, n)
++
++    # Case 1: the first green appears at position t <= m.  The t-1 cards
++    # before it contain j reds and t-1-j blues, and the t-th card is green.
++    total = Fraction(0)
++    for t in range(1, m + 1):
++        prefix = t - 1
++        denominator = _falling(n, t)
++        lo = max(k, prefix - b)
++        hi = min(r, prefix)
++        for j in range(lo, hi + 1):
++            ways = comb(prefix, j) * _falling(r, j) * _falling(b, prefix - j) * g
++            if ways:
++                total += Fraction(ways, denominator)
++
++    # Case 2: no green among the first m cards, so the deal stops after m.
++    if m <= r + b:
++        denominator = _falling(n, m)
++        for j in range(k, min(r, m) + 1):
++            ways = comb(m, j) * _falling(r, j) * _falling(b, m - j)
++            if ways:
++                total += Fraction(ways, denominator)
++
++    return total

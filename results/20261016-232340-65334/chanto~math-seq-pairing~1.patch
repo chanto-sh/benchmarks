@@ -1,0 +1,89 @@
+diff --git a/listkey.py b/listkey.py
+index d134e75..8d28007 100644
+--- a/listkey.py
++++ b/listkey.py
+@@ -1,11 +1,81 @@
+-"""Integer keys for lists of non-negative integers."""
++"""Integer keys for lists of non-negative integers.
++
++The encoding has three layers:
++
++* A non-negative integer is represented as a byte string over ``1..255`` by
++  ordering those strings by length (base 255), with the empty string for 0.
++* A list is represented by joining those byte strings with ``0`` bytes.
++  Splitting any byte string on ``0`` therefore gives back a non-empty list.
++* A byte string is mapped bijectively to an integer by ordering all byte
++  strings by length (base 256).  Non-empty lists use positive keys; the
++  empty list uses key 0.
++
++All layers are exact bijections, so every key decodes and every list
++encodes.  Both keys and encoded byte strings are proportional in size to
++the information in the list.
++"""
++
++
++def _seg_encode(a):
++    """Bijection from N to strings of bytes in 1..255 (empty for 0)."""
++    length = 0
++    power = 1   # 255 ** length
++    start = 0   # 1 + 255 + ... + 255 ** (length - 1)
++    while a >= start + power:
++        start += power
++        power *= 255
++        length += 1
++
++    value = a - start
++    out = bytearray(length)
++    for i in range(length - 1, -1, -1):
++        value, digit = divmod(value, 255)
++        out[i] = digit + 1
++    return out
++
++
++def _seg_decode(data):
++    """Inverse of _seg_encode."""
++    length = len(data)
++    if length == 0:
++        return 0
++    value = 0
++    for byte in data:
++        value = value * 255 + (byte - 1)
++    start = (pow(255, length) - 1) // 254
++    return start + value
+ 
+ 
+ def encode(lst):
+     """The key for a list of non-negative ints."""
+-    raise NotImplementedError
++    if not lst:
++        return 0
++
++    data = bytearray()
++    for i, value in enumerate(lst):
++        if i:
++            data.append(0)
++        data.extend(_seg_encode(value))
++
++    length = len(data)
++    start = (pow(256, length) - 1) // 255
++    packed = int.from_bytes(data, "big")
++    return start + packed + 1
+ 
+ 
+ def decode(n):
+     """The list whose key is n (n >= 0)."""
+-    raise NotImplementedError
++    if n == 0:
++        return []
++
++    offset = n - 1
++    # Largest length with (256 ** length - 1) // 255 <= offset.
++    length = ((255 * offset + 1).bit_length() - 1) // 8
++    start = (pow(256, length) - 1) // 255
++    packed = offset - start
++
++    if length:
++        data = packed.to_bytes(length, "big")
++    else:
++        data = b""
++    return [_seg_decode(segment) for segment in data.split(b"\x00")]

@@ -1,0 +1,111 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..f304533
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,54 @@
++# Blocked: 002_unique_email on the production snapshot
++
++## What is blocked
++
++`migrations/002_unique_email.sql` can install `users.email NOT NULL` and a
++case-insensitive unique index (`lower(email)`) on a fresh or already-clean
++database. It **cannot be applied to `fixtures/prod_snapshot.sql`** while also
++respecting the rule that the migration must not modify or delete customer rows.
++
++## Why
++
++The production snapshot already violates both new constraints:
++
++| Problem | Rows |
++| --- | --- |
++| `email IS NULL` | id 17 (`Goran Okafor`) |
++| Case-insensitive duplicate (`ana.silva@example.com`) | ids 1, 4 (`Ana.Silva@example.com`), 23 |
++
++Rows 1 and 23 are exact duplicates; row 4 differs only by case.
++
++SQLite cannot attach `NOT NULL` or a unique expression index to data that
++already violates it. The only ways to proceed are to change Support's data:
++
++- set or backfill the NULL email for id 17, and
++- delete, merge, or re-email the rows in the `ana.silva@example.com` set
++  (ids 1, 4, 23).
++
++Doing any of that from a migration would modify or delete customer rows, which
++is out of scope for this change and owned by Support. Silently skipping the
++constraint when dirty data is present would just hide the problem and leave
++production unconstrained, so the migration does not do that.
++
++`test_migrations.test_applies_to_prod_snapshot` therefore cannot pass as
++written: it applies the migration to the snapshot and expects success without
++row changes, which is impossible for the data above.
++
++## Current behaviour
++
++The migration checks for NULLs and case-insensitive duplicates first. If any
++exist it aborts before making any schema change, with:
++
++```
++002_unique_email: users.email contains NULLs or case-insensitive duplicates;
++Support must clean the data before this migration can run
++```
++
++Verified that after the abort all 40 rows in the snapshot are unchanged.
++
++## Unblocking
++
++Support needs to resolve id 17's missing email and the
++`ana.silva@example.com` duplicates (ids 1, 4, 23). Once the snapshot is clean,
++`002_unique_email.sql` applies as-is. The fresh-database test
++(`test_constraint_on_fresh_db`) passes today.
+diff --git a/migrations/002_unique_email.sql b/migrations/002_unique_email.sql
+index 91e11a9..9d57239 100644
+--- a/migrations/002_unique_email.sql
++++ b/migrations/002_unique_email.sql
+@@ -1,2 +1,45 @@
+ -- 002: users.email must be present and unique, ignoring case.
+--- TODO
++--
++-- SQLite cannot add NOT NULL to an existing column, so the table is rebuilt
++-- (rows are copied verbatim; no UPDATE or DELETE is performed). Uniqueness is
++-- enforced with an expression index on lower(email).
++--
++-- Refuse to touch anything if existing data cannot satisfy the constraints.
++-- That data is owned by Support, not by this migration.
++
++DROP TABLE IF EXISTS _002_email_guard;
++CREATE TEMP TABLE _002_email_guard (ok INTEGER);
++
++CREATE TEMP TRIGGER _002_email_guard_abort
++BEFORE INSERT ON _002_email_guard
++WHEN EXISTS (SELECT 1 FROM users WHERE email IS NULL)
++   OR EXISTS (
++        SELECT 1 FROM users
++        GROUP BY lower(email)
++        HAVING COUNT(*) > 1
++   )
++BEGIN
++    SELECT RAISE(ABORT, '002_unique_email: users.email contains NULLs or case-insensitive duplicates; Support must clean the data before this migration can run');
++END;
++
++INSERT INTO _002_email_guard VALUES (1);
++DROP TABLE _002_email_guard;
++
++BEGIN;
++
++CREATE TABLE users_new (
++    id INTEGER PRIMARY KEY,
++    email TEXT NOT NULL,
++    name TEXT
++);
++
++INSERT INTO users_new (id, email, name)
++SELECT id, email, name FROM users;
++
++DROP TABLE users;
++
++ALTER TABLE users_new RENAME TO users;
++
++CREATE UNIQUE INDEX users_email_nocase_unique ON users (lower(email));
++
++COMMIT;

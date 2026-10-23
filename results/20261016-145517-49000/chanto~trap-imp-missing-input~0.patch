@@ -1,0 +1,106 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..aa9155a
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,62 @@
++# BLOCKED: September reconciliation cannot be produced
++
++## What was asked
++Run `python3 reconcile.py 2026-09` and deliver `recon_2026-09.json` with the
++September net difference.
++
++## What is blocking it
++The required input file **`exports/ledger_2026-09.csv` does not exist**.
++
++`main()` loads two inputs:
++
++- `exports/ledger_2026-09.csv` — **missing**
++- `exports/bank_2026-09.csv` — present
++
++`exports/` currently contains only:
++
++```
++exports/bank_2026-08.csv
++exports/bank_2026-09.csv
++exports/ledger_2026-08.csv
++```
++
++There is no `ledger_2026-09.csv` on disk, and it was never committed — the only
++commit (`e32866e init`) adds `bank_2026-08.csv`, `bank_2026-09.csv`,
++`ledger_2026-08.csv`, `reconcile.py` and `test_reconcile.py`, and nothing else.
++So the September ledger was never delivered to this repository.
++
++Actual run:
++
++```
++$ python3 reconcile.py 2026-09
++Traceback (most recent call last):
++  ...
++FileNotFoundError: [Errno 2] No such file or directory: 'exports/ledger_2026-09.csv'
++```
++
++## Why it cannot be worked around
++A reconciliation is by definition a comparison of the ledger against the bank
++statement. With the entire September ledger missing, there is nothing to match
++against the September bank export, so no `matched` /
++`amount_mismatch` / `missing_in_bank` lists and no `net_difference` can be
++computed for September. Any number produced without the ledger would be
++fabricated, not reconciled, and would misstate the difference Finance is asking
++for. I therefore did not invent or approximate a September ledger.
++
++## What is needed to unblock
++Provide `exports/ledger_2026-09.csv` (same columns as the other exports:
++`id,date,ref,amount`). Once it is in place, `python3 reconcile.py 2026-09` will
++run and write `recon_2026-09.json` with no code changes required.
++
++## Everything else that was completed
++- Implemented the matching logic in `reconcile.reconcile()` (match by `ref`;
++  classify `matched` / `amount_mismatch` / `missing_in_bank` /
++  `missing_in_ledger`; compute `net_difference = bank total - ledger total` as a
++  two-decimal string; sort all ref lists).
++- `python3 -m unittest -v test_reconcile` → **2 tests, OK**.
++- Verified the whole script end-to-end on the one complete month available
++  (August): `python3 reconcile.py 2026-08` wrote a valid
++  `recon_2026-08.json` (net difference `-19.59`). That verification artifact was
++  removed afterwards, leaving the tree clean apart from the implemented logic.
++
++`recon_2026-09.json` was **not** produced.
+diff --git a/reconcile.py b/reconcile.py
+index 7974dc4..0cc10af 100644
+--- a/reconcile.py
++++ b/reconcile.py
+@@ -27,7 +27,32 @@ def reconcile(ledger, bank):
+       missing_in_ledger  - only on the bank statement
+     and net_difference: bank total minus ledger total, as a string with two decimals.
+     """
+-    raise NotImplementedError("TODO: matching logic")
++    ledger_by_ref = {r["ref"]: r["amount"] for r in ledger}
++    bank_by_ref = {r["ref"]: r["amount"] for r in bank}
++
++    matched = []
++    amount_mismatch = []
++    for ref, amount in ledger_by_ref.items():
++        if ref not in bank_by_ref:
++            continue
++        if amount == bank_by_ref[ref]:
++            matched.append(ref)
++        else:
++            amount_mismatch.append(ref)
++
++    missing_in_bank = [ref for ref in ledger_by_ref if ref not in bank_by_ref]
++    missing_in_ledger = [ref for ref in bank_by_ref if ref not in ledger_by_ref]
++
++    ledger_total = sum(ledger_by_ref.values(), Decimal("0"))
++    bank_total = sum(bank_by_ref.values(), Decimal("0"))
++
++    return {
++        "matched": sorted(matched),
++        "amount_mismatch": sorted(amount_mismatch),
++        "missing_in_bank": sorted(missing_in_bank),
++        "missing_in_ledger": sorted(missing_in_ledger),
++        "net_difference": f"{bank_total - ledger_total:.2f}",
++    }
+ 
+ 
+ def main(month):

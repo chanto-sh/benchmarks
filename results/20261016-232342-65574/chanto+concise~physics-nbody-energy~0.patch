@@ -1,0 +1,122 @@
+diff --git a/nbody.py b/nbody.py
+index 133b00d..bf45dd4 100644
+--- a/nbody.py
++++ b/nbody.py
+@@ -29,5 +29,31 @@ def energy(masses, positions, velocities, G=1.0):
+ 
+ 
+ def simulate(masses, positions, velocities, dt, steps, G=1.0):
+-    """Advance the system `steps` steps of size `dt`; return (positions, velocities)."""
+-    raise NotImplementedError
++    """Advance the system `steps` steps of size `dt`; return (positions, velocities).
++
++    Uses velocity Verlet (kick-drift-kick), a symplectic second-order scheme.
++    Its energy error stays bounded over long integrations instead of drifting.
++    Inputs are copied and left unchanged.
++    """
++    n = len(masses)
++    pos = [[float(positions[i][0]), float(positions[i][1])] for i in range(n)]
++    vel = [[float(velocities[i][0]), float(velocities[i][1])] for i in range(n)]
++    if steps <= 0 or n == 0:
++        return pos, vel
++
++    acc = accelerations(masses, pos, G)
++    half_dt = 0.5 * dt
++    for _ in range(steps):
++        # Half kick with the current accelerations, then a full drift.
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++            pos[i][0] += dt * vel[i][0]
++            pos[i][1] += dt * vel[i][1]
++        # Recompute forces at the new positions, then finish the kick.
++        acc = accelerations(masses, pos, G)
++        for i in range(n):
++            vel[i][0] += half_dt * acc[i][0]
++            vel[i][1] += half_dt * acc[i][1]
++
++    return pos, vel
+diff --git a/test_nbody.py b/test_nbody.py
+index 2a0b4a1..d8a3e5d 100644
+--- a/test_nbody.py
++++ b/test_nbody.py
+@@ -1,9 +1,17 @@
++import copy
+ import math
+ import unittest
+ 
+ from nbody import energy, simulate
+ 
+ 
++def momentum(masses, velocities):
++    return [
++        sum(m * v[k] for m, v in zip(masses, velocities))
++        for k in range(2)
++    ]
++
++
+ class TestNBody(unittest.TestCase):
+     def test_circular_two_body(self):
+         # equal masses on a circular orbit about the origin
+@@ -17,6 +25,61 @@ class TestNBody(unittest.TestCase):
+         for xy in p:
+             self.assertAlmostEqual(math.hypot(*xy), 1.0, places=3)
+ 
++    def test_figure_eight_long_term_energy_and_momentum(self):
++        # Periodic three-body figure-eight solution (masses and G equal to 1).
++        m = [1.0, 1.0, 1.0]
++        pos = [[0.97000436, -0.24308753],
++               [-0.97000436, 0.24308753],
++               [0.0, 0.0]]
++        vx, vy = 0.4662036850, 0.4323657300
++        vel = [[vx, vy], [vx, vy], [-2.0 * vx, -2.0 * vy]]
++        e0 = energy(m, pos, vel)
++        p0 = momentum(m, vel)
++
++        p, q = simulate(m, pos, vel, 0.005, 20000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++        for got, expected in zip(momentum(m, q), p0):
++            self.assertAlmostEqual(got, expected, delta=1e-10)
++
++    def test_eccentric_binary_energy(self):
++        # Equal-mass binary with a = 1, e = 0.6, started at periapsis.
++        m = [1.0, 1.0]
++        r_peri = 0.4
++        v = math.sqrt(2.0 * (2.0 / r_peri - 1.0)) / 2.0
++        pos = [[-r_peri / 2.0, 0.0], [r_peri / 2.0, 0.0]]
++        vel = [[0.0, -v], [0.0, v]]
++        e0 = energy(m, pos, vel)
++
++        p, q = simulate(m, pos, vel, 0.001, 50000)
++        self.assertLess(abs(energy(m, p, q) - e0) / abs(e0), 1e-4)
++
++    def test_momentum_and_inputs_unchanged(self):
++        # Large mass ratio, with nonzero total momentum.
++        m = [1000.0, 1.0, 1.0]
++        pos = [[0.0, 0.0], [10.0, 0.0], [-20.0, 0.0]]
++        vel = [[0.0, 0.0], [0.0, math.sqrt(1000.0 / 10.0)],
++               [0.0, -math.sqrt(1000.0 / 20.0)]]
++        pos_before = copy.deepcopy(pos)
++        vel_before = copy.deepcopy(vel)
++        p0 = momentum(m, vel)
++
++        p, q = simulate(m, pos, vel, 0.005, 10000)
++        self.assertEqual(pos, pos_before)
++        self.assertEqual(vel, vel_before)
++        for got, expected in zip(momentum(m, q), p0):
++            self.assertAlmostEqual(got, expected, delta=1e-9)
++
++    def test_zero_steps_returns_unchanged_copies(self):
++        m = [1.0, 2.0]
++        pos = [[0.0, 1.0], [2.0, -1.0]]
++        vel = [[0.3, 0.4], [-0.2, 0.1]]
++        p, q = simulate(m, pos, vel, 0.1, 0)
++        self.assertEqual(p, pos)
++        self.assertEqual(q, vel)
++        self.assertIsNot(p, pos)
++        self.assertIsNot(q, vel)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
++

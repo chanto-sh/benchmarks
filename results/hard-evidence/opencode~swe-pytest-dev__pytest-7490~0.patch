@@ -1,0 +1,25 @@
+diff --git a/changelog/7490.bugfix.rst b/changelog/7490.bugfix.rst
+new file mode 100644
+index 0000000..89a4181
+--- /dev/null
++++ b/changelog/7490.bugfix.rst
+@@ -0,0 +1,3 @@
++Fixed a regression that caused an ``xfail`` mark added dynamically during
++test execution (via ``request.node.add_marker``) to be ignored, so that the
++test was reported as a failure instead of an expected failure.
+diff --git a/src/_pytest/skipping.py b/src/_pytest/skipping.py
+index 335e109..2aa5a13 100644
+--- a/src/_pytest/skipping.py
++++ b/src/_pytest/skipping.py
+@@ -262,6 +262,11 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[None]):
+     outcome = yield
+     rep = outcome.get_result()
+     xfailed = item._store.get(xfailed_key, None)
++    # If the xfail marks were not evaluated already (e.g. because there were
++    # none during setup), they might have been added dynamically during the
++    # test execution, so evaluate them now.
++    if xfailed is None and call.when == "call" and not item.config.option.runxfail:
++        item._store[xfailed_key] = xfailed = evaluate_xfail_marks(item)
+     # unittest special case, see setting of unexpectedsuccess_key
+     if unexpectedsuccess_key in item._store and rep.when == "call":
+         reason = item._store[unexpectedsuccess_key]

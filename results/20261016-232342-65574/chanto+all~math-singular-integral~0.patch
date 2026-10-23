@@ -1,0 +1,110 @@
+diff --git a/detector.py b/detector.py
+index e9376bf..6ede7e3 100644
+--- a/detector.py
++++ b/detector.py
+@@ -2,17 +2,95 @@
+ import math
+ 
+ 
++# Composite Gauss-Legendre panels are split so the phase s**2 changes by at
++# most this much per panel.
++_PHASE_STEP = math.pi / 2.0
++_SERIES_LIMIT = 2.0
++
++
++def _gauss_legendre(n):
++    """Return the nodes and weights of the n-point Gauss-Legendre rule."""
++    nodes = [0.0] * n
++    weights = [0.0] * n
++    for i in range((n + 1) // 2):
++        z = math.cos(math.pi * (i + 0.75) / (n + 0.5))
++        for _ in range(100):
++            p1, p2 = 1.0, 0.0
++            for j in range(1, n + 1):
++                p3 = p2
++                p2 = p1
++                p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
++            pp = n * (z * p1 - p2) / (z * z - 1.0)
++            z1 = z
++            z = z1 - p1 / pp
++            if abs(z - z1) <= 1e-15:
++                break
++        weight = 2.0 / ((1.0 - z * z) * pp * pp)
++        nodes[i] = -z
++        nodes[n - 1 - i] = z
++        weights[i] = weight
++        weights[n - 1 - i] = weight
++    return nodes, weights
++
++
++_GL_NODES, _GL_WEIGHTS = _gauss_legendre(16)
++
++
++def _fresnel_cos_series(a):
++    """Integral of cos(s**2) from 0 to a, using its Taylor series."""
++    a2 = a * a
++    a4 = a2 * a2
++    term = a
++    total = a
++    k = 0
++    while True:
++        term *= -a4 * (4 * k + 1) / ((2 * k + 1) * (2 * k + 2) * (4 * k + 5))
++        total += term
++        k += 1
++        if abs(term) < 1e-17:
++            return total
++
++
++def _fresnel_cos_quadrature(a):
++    """Integral of cos(s**2) from 0 to a, using phase-aligned panels."""
++    panels = max(1, math.ceil(a * a / _PHASE_STEP))
++    contributions = []
++    left = 0.0
++    for k in range(1, panels + 1):
++        right = a if k == panels else math.sqrt(k * _PHASE_STEP)
++        half = 0.5 * (right - left)
++        middle = 0.5 * (right + left)
++        total = 0.0
++        for node, weight in zip(_GL_NODES, _GL_WEIGHTS):
++            s = middle + half * node
++            total += weight * math.cos(s * s)
++        contributions.append(total * half)
++        left = right
++    return math.fsum(contributions)
++
++
++def _fresnel_cos_integral(a):
++    """Integral of cos(s**2) from 0 to a."""
++    if a == 0.0:
++        return 0.0
++    if a <= _SERIES_LIMIT:
++        return _fresnel_cos_series(a)
++    return _fresnel_cos_quadrature(a)
++
++
+ def response(t, b):
+     """Integral of cos(t*x) / sqrt(x) for x from 0 to b.
+ 
+-    Composite Simpson's rule. The integrand blows up at 0, so we start just
+-    past it.
++    Substituting x = u**2 turns the integrand into 2*cos(t*u**2), and then
++    s = sqrt(t)*u reduces the problem to a Fresnel integral.
+     """
+-    a = 1e-9
+-    n = 10000
+-    h = (b - a) / n
+-    f = lambda x: math.cos(t * x) / math.sqrt(x)
+-    s = f(a) + f(b)
+-    for i in range(1, n):
+-        s += (4 if i % 2 else 2) * f(a + i * h)
+-    return s * h / 3
++    if b == 0.0:
++        return 0.0
++
++    tb = t * b
++    if t == 0.0 or tb < 1e-8:
++        # The correction is O((t*b)**2), far below the required accuracy.
++        return 2.0 * math.sqrt(b)
++
++    a = math.sqrt(tb)
++    return 2.0 * _fresnel_cos_integral(a) / math.sqrt(t)

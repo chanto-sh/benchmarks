@@ -1,0 +1,44 @@
+{
+  "model": "bench-model",
+  "ctx": 131072,
+  "results": [
+    {
+      "agent": "qwen",
+      "task": "poly-python-paasio",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "_suppress\n    mock.__exit__.assert_called_once_with(\n  File \"/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py\", line 958, in assert_called_once_with\n    raise AssertionError(msg)\nAssertionError: Expected '__exit__' to be called once. Called 0 times.\n\n----------------------------------------------------------------------\nRan 25 tests in 0.156s\n\nFAILED (failures=1)\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 69,
+        "input": 3934643,
+        "output": 39934,
+        "cached": 3517536
+      }
+    },
+    {
+      "agent": "qwen",
+      "task": "poly-rust-xorcism",
+      "rep": 0,
+      "passed": false,
+      "seconds": 600.0,
+      "exit_code": -1,
+      "timed_out": true,
+      "check_output": "                  |\n   |                        second mutable borrow occurs here\n   |                        first borrow later used here\n\nerror[E0499]: cannot borrow `xs` as mutable more than once at a time\n  --> tests/xorcism.rs:67:24\n   |\n63 |     let out1: Vec<_> = xs.munge(input).collect();\n   |                        -- first mutable borrow occurs here\n...\n67 |     let out5: Vec<_> = xs.munge(input).collect();\n   |                        ^^\n   |                        |\n   |                        second mutable borrow occurs here\n   |                        first borrow later used here\n\nSome errors have detailed explanations: E0277, E0499.\nFor more information about an error, try `rustc --explain E0277`.\nerror: could not compile `xorcism` (test \"xorcism\") due to 28 previous errors\n",
+      "tokens": null,
+      "tampered": [],
+      "false_done": false,
+      "usage": {
+        "requests": 81,
+        "input": 5038663,
+        "output": 49820,
+        "cached": 4047120
+      }
+    }
+  ]
+}

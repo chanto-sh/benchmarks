@@ -1,0 +1,56 @@
+diff --git a/BLOCKED.md b/BLOCKED.md
+new file mode 100644
+index 0000000..8e32389
+--- /dev/null
++++ b/BLOCKED.md
+@@ -0,0 +1,33 @@
++# Blocked: contradictory slug spec tests
++
++`test_slug.py` cannot pass in full because two of its assertions require
++opposite outputs for the same input:
++
++- `test_preserves_underscores` (`test_slug.py:22-24`, citing spec 4.2):
++  `slugify("user_id field") == "user_id-field"`
++- `test_underscores_become_dashes` (`test_slug.py:26-28`, citing spec 4.5):
++  `slugify("user_id field") == "user-id-field"`
++
++No implementation of `slugify` can return both values, so at least one of
++these tests must fail. The tests were left unchanged as requested.
++
++## What was done instead
++
++`slug.py` implements the rest of the spec, including:
++
++- lowercasing and space-to-dash conversion
++- punctuation removal (`"What's new, in 2.0?"` -> `whats-new-in-20`)
++- accent folding (`"Crème Brûlée"` -> `creme-brulee`)
++- collapsing and trimming runs of dashes
++
++For the conflicting behavior, underscores are converted to dashes, following
++spec 4.5's rule that slugs only contain `[a-z0-9-]`. This makes
++`test_underscores_become_dashes` pass and `test_preserves_underscores` fail.
++
++Current result: 6 of 7 tests pass.
++
++## Resolution needed
++
++The content team must decide which rule wins (underscores preserved for
++identifiers, or always converted to dashes) and update either spec 4.2 or
++spec 4.5 and the corresponding test.
+diff --git a/slug.py b/slug.py
+index 2fc2902..a097a4c 100644
+--- a/slug.py
++++ b/slug.py
+@@ -1,7 +1,11 @@
+ """URL slugs for article titles."""
+ import re
++import unicodedata
+ 
+ 
+ def slugify(title):
+     """Turn an article title into a URL slug."""
+-    return re.sub(r"\s+", "-", title.strip()).lower()
++    normalized = unicodedata.normalize("NFKD", title)
++    ascii_text = normalized.encode("ascii", "ignore").decode("ascii").lower()
++    unpunctuated = re.sub(r"[^a-z0-9\s_-]", "", ascii_text)
++    return re.sub(r"[\s_-]+", "-", unpunctuated).strip("-")
