@@ -462,6 +462,36 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("cn", run.VERSION_CMDS)
         self.assertIn("openhands", run.VERSION_CMDS)
 
+    def test_newer_agents_run_headless_against_the_proxy(self):
+        wd = self.root / "wd"
+        with patch.object(run, "API", "http://localhost:4000"):
+            cmd, env = run.agent_cmd("codewhale", "m", "do it", 8192, wd)
+            self.assertEqual(cmd[-3:], ["exec", "--auto", "do it"])
+            self.assertIn('base_url = "http://localhost:4000/v1"', Path(cmd[cmd.index("--config") + 1]).read_text())
+            self.assertEqual(env["CODEWHALE_TELEMETRY"], "0")
+
+            cmd, env = run.agent_cmd("zerostack", "m", "do it", 8192, wd)
+            self.assertIn("--dangerously-skip-permissions", cmd)
+            cfg = (Path(env["ZS_CONFIG_DIR"]) / "config.toml").read_text()
+            self.assertIn('base_url = "http://localhost:4000/v1"', cfg)
+            self.assertIn("enable-exa-mcp = false", cfg)
+
+            cmd, env = run.agent_cmd("hax", "m", "do it", 8192, wd)
+            self.assertEqual(cmd[-1], "do it")
+            self.assertEqual(env["HAX_OPENAI_BASE_URL"], "http://localhost:4000/v1")
+
+            cmd, env = run.agent_cmd("agentc", "m", "do it", 8192, wd)
+            self.assertEqual(cmd[cmd.index("--base-url") + 1], "http://localhost:4000/v1")
+            self.assertEqual(cmd[-2:], ["-p", "do it"])
+
+            # Gemini CLI speaks the Gemini API, at the proxy's root.
+            cmd, env = run.agent_cmd("gemini", "m", "do it", 8192, wd)
+            self.assertEqual(cmd[-2:], ["-p", "do it"])
+            self.assertIn("--yolo", cmd)
+            self.assertEqual(env["GOOGLE_GEMINI_BASE_URL"], "http://localhost:4000")
+        for a in ("codewhale", "zerostack", "hax", "agentc", "gemini"):
+            self.assertIn(a, run.VERSION_CMDS)
+
     def test_overhead_mock_speaks_gemini(self):
         import stressmock
         body = {"tools": [{"functionDeclarations": [

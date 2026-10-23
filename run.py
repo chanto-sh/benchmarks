@@ -52,7 +52,8 @@ CHECKOUT_NAMES = "|".join(sorted({"bench", "[^/]*benchmarks", re.sub(r"([.^$*+?(
 NPM_BIN = Path(os.environ.get("BENCH_NPM_BIN", BENCH_HOME / "agents/node_modules/.bin"))
 # cline ships its launcher outside .bin, so name it directly.
 CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "bin" / "cline"))
-# Agents shipped as standalone binaries (opencode, goose), pinned and checksummed.
+# Agents shipped as standalone binaries (opencode, goose, codewhale, zerostack, hax,
+# agentc), pinned and checksummed.
 BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", BENCH_HOME / "bin"))
 # Python agents installed with `uv tool install`, each in its own environment.
 UV_TOOLS = Path.home() / ".local/share/uv/tools"
@@ -278,6 +279,56 @@ model_id = "{model}"
         return [agent_exe("openhands"), "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
             "HOME": str(h), "LLM_MODEL": f"openai/{model}", "LLM_BASE_URL": v1, "LLM_API_KEY": API_KEY,
             "OPENHANDS_SUPPRESS_BANNER": "1"}
+    if agent == "codewhale":
+        # A named OpenAI-compatible provider in its own CODEWHALE_HOME; `exec
+        # --auto` is its headless mode with tool use auto-approved. Telemetry
+        # (on by default) and the update check are switched off.
+        h = home("codewhale")
+        cfg = h / "config.toml"
+        cfg.write_text(f'provider = "bench"\ndefault_text_model = "{model}"\n\n[providers.bench]\nkind = "openai-compatible"\n'
+                       f'base_url = "{v1}"\napi_key = "{API_KEY}"\nmodel = "{model}"\n')
+        return [agent_exe("codewhale"), "--config", str(cfg), "--provider", "bench", "--model", model, "exec", "--auto", prompt], {
+            "HOME": str(h), "CODEWHALE_HOME": str(h / ".codewhale"), "CODEWHALE_CONFIG_PATH": str(cfg),
+            "CODEWHALE_TELEMETRY": "0", "CODEWHALE_NO_UPDATE_CHECK": "1"}
+    if agent == "zerostack":
+        # A custom OpenAI-compatible provider in its own config and data dirs;
+        # --dangerously-skip-permissions approves every tool call. Its default
+        # Exa web-search MCP server (a remote service) is turned off.
+        h = home("zerostack")
+        cfg = h / "config"
+        cfg.mkdir(exist_ok=True)
+        (cfg / "config.toml").write_text(
+            f'context_window = {ctx}\nenable-exa-mcp = false\n\n[custom_providers.bench]\nprovider_type = "openai"\nbase_url = "{v1}"\n'
+            f'api_key_env = "BENCH_API_KEY"\nmodel = "{model}"\n')
+        return [agent_exe("zerostack"), "-p", "--no-session", "--dangerously-skip-permissions", "--provider", "bench",
+                "--model", model, prompt], {
+            "HOME": str(h), "ZS_CONFIG_DIR": str(cfg), "ZS_DATA_DIR": str(h / "data"), "BENCH_API_KEY": API_KEY}
+    if agent == "hax":
+        # hax has no permission prompts; its openai-compatible provider is
+        # configured from HAX_* variables, with XDG dirs kept in its own home.
+        h = home("hax")
+        return [agent_exe("hax"), "-p", "--no-session", "--provider=openai-compatible", f"--model={model}", prompt], {
+            "HAX_OPENAI_BASE_URL": v1, "HAX_OPENAI_API_KEY": API_KEY, "HAX_CONTEXT_LIMIT": str(ctx),
+            "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"), "XDG_CACHE_HOME": str(h / "cache"),
+            "XDG_DATA_HOME": str(h / "data")}
+    if agent == "agentc":
+        h = home("agentc")
+        return [agent_exe("agentc"), "--provider", "openai", "--base-url", v1, "--api-key", API_KEY, "--model", model,
+                "--no-session", "--no-mcp", "--offline", "--approve", "-p", prompt], {
+            "HOME": str(h), "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"),
+            "XDG_CACHE_HOME": str(h / "cache"), "XDG_DATA_HOME": str(h / "data")}
+    if agent == "gemini":
+        # Gemini CLI speaks only the Gemini API; GOOGLE_GEMINI_BASE_URL points
+        # it at the endpoint. --yolo approves every tool; its own HOME keeps
+        # ~/.gemini apart, with telemetry and update checks off.
+        h = home("gemini")
+        (h / ".gemini").mkdir(exist_ok=True)
+        (h / ".gemini" / "settings.json").write_text(json.dumps({
+            "security": {"auth": {"selectedType": "gemini-api-key"}, "folderTrust": {"enabled": False}},
+            "privacy": {"usageStatisticsEnabled": False}, "telemetry": {"enabled": False},
+            "general": {"disableAutoUpdate": True, "disableUpdateNag": True}}))
+        return [str(nb / "gemini"), "--yolo", "-m", model, "-p", prompt], {
+            "HOME": str(h), "GEMINI_API_KEY": API_KEY, "GOOGLE_GEMINI_BASE_URL": API}
     raise SystemExit(f"agent {agent} has no hosted (--api) configuration")
 
 
@@ -876,12 +927,14 @@ def run_task(agent, task, model, ctx, timeout, rep):
 ARTIFACTS = None
 
 VERSION_CMDS = {
-    **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands")},
+    **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands",
+                                                 "codewhale", "zerostack", "hax", "agentc")},
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],
     "forge": [str(NPM_BIN / "forge"), "--version"],
     "cline": [str(CLINE_BIN), "--version"],
     "cn": [str(NPM_BIN / "cn"), "--version"],
+    "gemini": [str(NPM_BIN / "gemini"), "--version"],
 }
 
 
