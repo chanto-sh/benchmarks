@@ -6,7 +6,7 @@
 #   ./install-agents.sh            # everything
 #   ./install-agents.sh npm        # or just one group: npm, uv, bin
 #   ./install-agents.sh hax        # or one binary agent: goose, opencode,
-#                                  # codewhale, zerostack, hax, agentc
+#                                  # codewhale, zerostack, hax
 #
 # Needs npm, uv, curl and tar (plus unzip on macOS). Chanto itself comes from a
 # sibling checkout (../chanto, `cargo build --release`), not from here.
@@ -51,7 +51,7 @@ install_uv() {
 # against a pinned SHA-256:
 #   Goose 1.54.0;
 #   opencode 2.0.22 (checksums from the opencode Homebrew formula for 2.0.22);
-#   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1, agentc 0.8.0 (checksums
+#   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1 (checksums
 #   cross-checked against each release's own SHA-256 manifest).
 platform() {
     case "$(uname -s)/$(uname -m)" in
@@ -143,22 +143,7 @@ install_hax() {
     chmod +x "$PREFIX/bin/hax"
 }
 
-install_agentc() {
-    case "$plat" in
-        darwin-arm64) a=macos-arm64; sha=25b2258dd4cb2c92c991b33a5d9e8ef168b4b5652f11e65ab880fefb042ac75e ;;
-        darwin-x64) a=macos-x86_64; sha=b5ace9fd2f383505bf6796813966811a9115f12b2bfc1f4505c74ed60ce5c594 ;;
-        linux-arm64) a=linux-aarch64; sha=e88290c716bb83f5e134911ab72cdd94673abd5f93d9c23dd7910d56ab94143a ;;
-        linux-x64) a=linux-x86_64; sha=c680eed56cadbeeb3ff5cc1f7776195b53045d3974edabf66ac50fe73da0a970 ;;
-    esac
-    f="agentc-$a.tar.gz"
-    fetch "https://github.com/abird-ai/agentc/releases/download/v0.8.0/$f" "$dl/$f" "$sha"
-    tar -xzf "$dl/$f" -C "$PREFIX/bin" "./agentc-$a"
-    mv "$PREFIX/bin/agentc-$a" "$PREFIX/bin/agentc"
-    rm -f "$dl/$f"
-    chmod +x "$PREFIX/bin/agentc"
-}
-
-bin_agents="goose opencode codewhale zerostack hax agentc"
+bin_agents="goose opencode codewhale zerostack hax"
 
 install_bin() {
     bin_setup

@@ -480,16 +480,12 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(cmd[-1], "do it")
             self.assertEqual(env["HAX_OPENAI_BASE_URL"], "http://localhost:4000/v1")
 
-            cmd, env = run.agent_cmd("agentc", "m", "do it", 8192, wd)
-            self.assertEqual(cmd[cmd.index("--base-url") + 1], "http://localhost:4000/v1")
-            self.assertEqual(cmd[-2:], ["-p", "do it"])
-
             # Gemini CLI speaks the Gemini API, at the proxy's root.
             cmd, env = run.agent_cmd("gemini", "m", "do it", 8192, wd)
             self.assertEqual(cmd[-2:], ["-p", "do it"])
             self.assertIn("--yolo", cmd)
             self.assertEqual(env["GOOGLE_GEMINI_BASE_URL"], "http://localhost:4000")
-        for a in ("codewhale", "zerostack", "hax", "agentc", "gemini"):
+        for a in ("codewhale", "zerostack", "hax", "gemini"):
             self.assertIn(a, run.VERSION_CMDS)
 
     def test_overhead_mock_speaks_gemini(self):

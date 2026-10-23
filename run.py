@@ -52,8 +52,8 @@ CHECKOUT_NAMES = "|".join(sorted({"bench", "[^/]*benchmarks", re.sub(r"([.^$*+?(
 NPM_BIN = Path(os.environ.get("BENCH_NPM_BIN", BENCH_HOME / "agents/node_modules/.bin"))
 # cline ships its launcher outside .bin, so name it directly.
 CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "bin" / "cline"))
-# Agents shipped as standalone binaries (opencode, goose, codewhale, zerostack, hax,
-# agentc), pinned and checksummed.
+# Agents shipped as standalone binaries (opencode, goose, codewhale, zerostack,
+# hax), pinned and checksummed.
 BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", BENCH_HOME / "bin"))
 # Python agents installed with `uv tool install`, each in its own environment.
 UV_TOOLS = Path.home() / ".local/share/uv/tools"
@@ -311,12 +311,6 @@ model_id = "{model}"
             "HAX_OPENAI_BASE_URL": v1, "HAX_OPENAI_API_KEY": API_KEY, "HAX_CONTEXT_LIMIT": str(ctx),
             "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"), "XDG_CACHE_HOME": str(h / "cache"),
             "XDG_DATA_HOME": str(h / "data")}
-    if agent == "agentc":
-        h = home("agentc")
-        return [agent_exe("agentc"), "--provider", "openai", "--base-url", v1, "--api-key", API_KEY, "--model", model,
-                "--no-session", "--no-mcp", "--offline", "--approve", "-p", prompt], {
-            "HOME": str(h), "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"),
-            "XDG_CACHE_HOME": str(h / "cache"), "XDG_DATA_HOME": str(h / "data")}
     if agent == "gemini":
         # Gemini CLI speaks only the Gemini API; GOOGLE_GEMINI_BASE_URL points
         # it at the endpoint. --yolo approves every tool; its own HOME keeps
@@ -928,7 +922,7 @@ ARTIFACTS = None
 
 VERSION_CMDS = {
     **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands",
-                                                 "codewhale", "zerostack", "hax", "agentc")},
+                                                 "codewhale", "zerostack", "hax")},
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],
     "forge": [str(NPM_BIN / "forge"), "--version"],

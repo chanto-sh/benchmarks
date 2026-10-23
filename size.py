@@ -5,8 +5,8 @@
 
 Measured from the benchmark's own installs (install-agents.sh), the same ones
 cputurn.py runs:
-  - native binaries (Chanto, Goose, opencode, Codewhale, zerostack, hax,
-    agentc): the executable;
+  - native binaries (Chanto, Goose, opencode, Codewhale, zerostack, hax): the
+    executable;
   - npm agents: the agent's package plus every dependency it pulls in, walked
     through agents/package-lock.json with Node's resolution rules and measured
     in one `du` pass, so a file npm links into two places counts once;
@@ -45,7 +45,6 @@ AGENTS = {
     "codewhale": ("Codewhale", "Rust", "bin", run.BIN_DIR / "codewhale"),
     "zerostack": ("zerostack", "Rust", "bin", run.BIN_DIR / "zerostack"),
     "hax": ("hax", "C", "bin", run.BIN_DIR / "hax"),
-    "agentc": ("agentc", "C", "bin", run.BIN_DIR / "agentc"),
     "gemini": ("Gemini CLI", "Node", "npm", "@google/gemini-cli"),
 }
 # Agents whose install runs on a separately installed runtime. The others
