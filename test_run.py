@@ -462,6 +462,20 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("cn", run.VERSION_CMDS)
         self.assertIn("openhands", run.VERSION_CMDS)
 
+    def test_overhead_mock_speaks_gemini(self):
+        import stressmock
+        body = {"tools": [{"functionDeclarations": [
+            {"name": "write_file", "parametersJsonSchema": {"type": "object", "properties": {"file_path": {"type": "string"}}}},
+            {"name": "read_file", "parametersJsonSchema": {"type": "object", "properties": {"file_path": {"type": "string"}},
+                                                           "required": ["file_path"]}}]}],
+                "contents": [{"role": "user", "parts": [{"text": "Summarize the conversation so far"}]}]}
+        self.assertEqual(stressmock.pick(body)[0], "read_file")
+        self.assertTrue(stressmock.is_summary(body))
+        # Structured output (Gemini CLI's side calls) gets schema-valid JSON.
+        side = {"generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": {
+            "type": "object", "properties": {"next_speaker": {"type": "string", "enum": ["user", "model"]}}}}}
+        self.assertEqual(json.loads(stressmock.structured_json(side)), {"next_speaker": "user"})
+
     def test_overhead_mock_fills_closed_set_arguments(self):
         import stressmock
         # OpenHands' terminal tool requires a security_risk from a fixed list.
