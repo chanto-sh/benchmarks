@@ -1,4 +1,4 @@
-# Chanto benchmarks — agent notes
+# Chanto benchmarks: agent notes
 
 ## Commands
 - Runner tests: `python3 -m unittest -v test_run` (add `BENCH_SANDBOX_SMOKE=1` for the real sandbox check: sandbox-exec on macOS, bubblewrap on Linux)

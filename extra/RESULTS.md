@@ -1,4 +1,4 @@
-# Extra benchmarks — results
+# Extra benchmarks: results
 
 Run on 2026-10-18 on a 10-core arm64 macOS box. Task-solving ran `deepseek/deepseek-flash`
 through one LiteLLM proxy; every agent got the same model and `--ctx 131072`.
@@ -38,7 +38,7 @@ Paired on the same task and rep:
 | opencode | 118 | 7 | 15 | 82 | 14 | 0.13 |
 
 Read this honestly: **no agent is significantly better than `chanto` on this
-set** — every paired sign test has p > 0.05, and the CIs overlap. The clear,
+set**: every paired sign test has p > 0.05, and the CIs overlap. The clear,
 measurable differences are in work done, not solve rate:
 
 - `chanto` solves slightly fewer tasks but uses **44% fewer input tokens than

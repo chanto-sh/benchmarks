@@ -207,7 +207,7 @@ variant unless a task was re-run after a grader or Chanto fix. Input/output
 tokens are what the meter counted at the proxy; cost is those tokens at list
 price with cache hits at 0.1x (DeepSeek V4 Flash: $0.14/M in, $0.28/M out).
 
-### Phase 1 — beyond tier, 4 variants, 2 reps (34 tasks)
+### Phase 1: beyond tier, 4 variants, 2 reps (34 tasks)
 
 | variant | pass | false "done" | input | output | mean time | cost |
 |---|---|---|---|---|---|---|
@@ -221,7 +221,7 @@ false "done"s. `effort` costs *more*: it spends the extra tokens on reasoning,
 so input grows. Everything is within noise for 2 reps, so none of these is on by
 default.
 
-### Phase 2 — SWE hard tier, `chanto` vs `+outline` (25 tasks, 1 rep)
+### Phase 2: SWE hard tier, `chanto` vs `+outline` (25 tasks, 1 rep)
 
 | variant | pass | false "done" | input | output | mean time | cost |
 |---|---|---|---|---|---|---|
@@ -234,7 +234,7 @@ net: four lost (`swe-pytest-dev__pytest-5103`, `-5221`, `-8365` and
 `git diff` and the failing-test output are what stop the model from guessing,
 and the outline alone isn't enough. Off by default.
 
-### Phase 3 — beyond + showcase, `chanto` vs `+quiet` vs `+provenance` (47 tasks, 1 rep)
+### Phase 3: beyond + showcase, `chanto` vs `+quiet` vs `+provenance` (47 tasks, 1 rep)
 
 | variant | coding (34) | showcase (13) | total | false "done" | input | output | mean time | cost |
 |---|---|---|---|---|---|---|---|---|
@@ -250,7 +250,7 @@ fewer tokens, but not reliably enough to turn on.
 What failed, and why:
 
 - `physics-heat-cfl` (baseline and `+provenance`): max error 0.0084 against a
-  0.005 tolerance, reported as done — a known tolerance-sensitive physics task.
+  0.005 tolerance, reported as done. A known tolerance-sensitive physics task.
 - `coding-feature-tags` (`+quiet` and `+provenance`): a genuine false "done" on
   a task that asks for new tests.
 - `nontrad-migration-doc`: failed for **all three** variants. The provenance
