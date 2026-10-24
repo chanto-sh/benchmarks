@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Generic looping mock for measuring agents' per-turn overhead. Speaks both
-OpenAI /v1/chat/completions and Anthropic /v1/messages (JSON or SSE). On each
+"""Generic looping mock for measuring agents' per-turn overhead. Speaks OpenAI
+/v1/chat/completions, OpenAI /v1/responses, Anthropic /v1/messages and Gemini
+models/<m>:generateContent / :streamGenerateContent (JSON or SSE). On each
 request it inspects the agent's advertised tools, calls a safe read/list/shell
 tool so the agent executes and comes back, and after --turns calls returns plain
 text so the agent stops. The file argument varies per turn so loop-detection
@@ -16,15 +17,24 @@ PREF = ("shell", "bash", "exec", "run_command", "read_file", "read", "cat",
 
 def tools_of(body):
     out = []
+    tools = []
     for t in body.get("tools") or []:
+        # Gemini groups its functions under one tool's functionDeclarations.
+        if isinstance(t, dict) and isinstance(t.get("functionDeclarations"), list):
+            tools += t["functionDeclarations"]
+        else:
+            tools.append(t)
+    for t in tools:
         if not isinstance(t, dict):
             continue
         if "function" in t:                       # OpenAI chat
             f = t["function"]; params = f.get("parameters") or {}
         elif "input_schema" in t:                  # Anthropic
             f = t; params = t.get("input_schema") or {}
-        elif "name" in t and "parameters" in t:    # OpenAI Responses (flattened)
+        elif "name" in t and "parameters" in t:    # OpenAI Responses (flattened), Gemini
             f = t; params = t.get("parameters") or {}
+        elif "name" in t and "parametersJsonSchema" in t:  # Gemini
+            f = t; params = t.get("parametersJsonSchema") or {}
         else:
             continue
         out.append((f.get("name", ""), params.get("properties") or {}, params.get("required") or []))
@@ -129,6 +139,8 @@ def _fill_schema(schema):
     typ = schema.get("type")
     if isinstance(typ, list):
         typ = next((t for t in typ if t != "null"), "string")
+    if isinstance(typ, str):
+        typ = typ.lower()                     # Gemini's responseSchema says OBJECT, STRING...
     if typ == "object":
         props = schema.get("properties") or {}
         req = schema.get("required") or list(props.keys())
@@ -137,7 +149,9 @@ def _fill_schema(schema):
         items = schema.get("items")
         return [_fill_schema(items)] if isinstance(items, dict) else []
     if typ in ("number", "integer"):
-        return 1
+        # The lowest value allowed: side calls score things like "confidence
+        # the session is looping" (Gemini CLI), and the scenario never is.
+        return schema.get("minimum", 0)
     if typ == "boolean":
         return True
     enum = schema.get("enum")
@@ -150,6 +164,10 @@ def structured_json(body):
     satisfies the schema, so the agent accepts it instead of retrying forever."""
     if body.get("tools"):
         return None
+    gc = body.get("generationConfig") or {}
+    if isinstance(gc, dict) and gc.get("responseMimeType") == "application/json":
+        # Gemini's structured output (e.g. Gemini CLI's next-speaker check).
+        return json.dumps(_fill_schema(gc.get("responseJsonSchema") or gc.get("responseSchema") or {"type": "object"}))
     rf = body.get("response_format") or body.get("text", {}).get("format")
     if not isinstance(rf, dict):
         return None
@@ -163,10 +181,10 @@ def structured_json(body):
 
 def _last_text(body):
     """Text of the final message (the instruction), for both wire shapes."""
-    for key in ("messages", "input"):
+    for key in ("messages", "input", "contents"):
         seq = body.get(key)
         if isinstance(seq, list) and seq and isinstance(seq[-1], dict):
-            c = seq[-1].get("content")
+            c = seq[-1].get("content", seq[-1].get("parts"))
             if isinstance(c, str):
                 return c
             if isinstance(c, list):
@@ -239,6 +257,8 @@ class H(http.server.BaseHTTPRequestHandler):
         pt = max(1, ln // 4)
         if "/messages" in self.path:               # Anthropic
             self._anthropic(n, tool, stream, pt, text)
+        elif ":generateContent" in self.path or ":streamGenerateContent" in self.path:  # Gemini
+            self._gemini(n, tool, ":streamGenerateContent" in self.path, pt, text)
         elif "/responses" in self.path:             # OpenAI Responses (codex)
             self._responses(n, tool, pt, text)
         else:                                       # OpenAI chat (default)
@@ -303,6 +323,20 @@ class H(http.server.BaseHTTPRequestHandler):
                 ("response.completed", {"type": "response.completed", "response": done_resp}),
             ]
         self._sse([f"event: {e}\ndata: {json.dumps(d)}\n\n" for e, d in evs])
+
+    def _gemini(self, n, tool, stream, pt, text="done."):
+        if tool:
+            name, props, req, is_shell = tool
+            part = {"functionCall": {"id": f"call_{n}", "name": name, "args": args_for(props, req, n, is_shell)}}
+        else:
+            part = {"text": text}
+        resp = {"candidates": [{"content": {"role": "model", "parts": [part]}, "finishReason": "STOP", "index": 0}],
+                "usageMetadata": {"promptTokenCount": pt, "candidatesTokenCount": 5, "totalTokenCount": pt + 5},
+                "modelVersion": "fake", "responseId": f"r{n}"}
+        if stream:
+            self._sse([f"data: {json.dumps(resp)}\r\n\r\n"])
+        else:
+            self._send(200, json.dumps(resp).encode(), "application/json")
 
     def _anthropic(self, n, tool, stream, pt, text="done."):
         usage = {"input_tokens": pt, "output_tokens": 5}
