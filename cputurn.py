@@ -9,15 +9,16 @@ and scheduling, CPU time counts only work, so it is the honest "overhead".
 
 Nothing is instrumented or rebuilt. CPU is read from the kernel's rusage from
 OUTSIDE each process, identically for every runtime (Rust/Node/Bun/Python):
-  - /usr/bin/time -l wraps the agent and reports user+sys for the process and
-    its reaped children (one number, the headline metric);
+  - wait4() on the agent reports user+sys for the process and every child it
+    reaped (one number, the headline metric; what `/usr/bin/time` prints, and
+    the same call on macOS and Linux);
   - a 60 ms poll of `ps -o pid,ppid,time` over the process tree tracks each
     pid's max cumulative CPU and sums them (a cross-check that also catches
     short-lived tool children). The two should agree within noise.
 
     python3 cputurn.py [agents...] [--reps 3] [--turns 40] [--blob-kb 50]
 
-Reports median [min-max] across reps of: turns completed, CPU ms/turn (time -l),
+Reports median [min-max] across reps of: turns completed, CPU ms/turn (wait4),
 CPU ms/turn (ps-tree), and — for reference — wall-gap ms/turn.
 
 CAVEAT: the instant mock returns canned tool-calls, never real text, so some
@@ -36,7 +37,6 @@ spec = importlib.util.spec_from_file_location("benchrun", ROOT / "run.py")
 run = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(run)
 
-TIME_BIN = "/usr/bin/time"
 
 
 def start_mock(turns, log):
@@ -96,17 +96,20 @@ def sample_tree_cpu(root, seen):
     return total_rss
 
 
-def parse_time_l(stderr):
-    """`/usr/bin/time -l` → (user+sys) seconds, or None."""
-    u = re.search(r"([\d.]+)\s+real\s+([\d.]+)\s+user\s+([\d.]+)\s+sys", stderr)
-    if u:
-        return float(u.group(2)) + float(u.group(3))
-    user = re.search(r"([\d.]+)\s+user", stderr)
-    sysm = re.search(r"([\d.]+)\s+sys", stderr)
-    if user and sysm:
-        return float(user.group(1)) + float(sysm.group(1))
-    return None
-
+def wait_rusage(p, timeout):
+    """Reap `p` with wait4 and return its user+sys CPU seconds, covering the
+    agent and every child it reaped. Killed after `timeout` seconds, and still
+    measured."""
+    deadline = time.time() + timeout
+    while True:
+        pid, status, ru = os.wait4(p.pid, os.WNOHANG)
+        if pid:
+            p.returncode = os.waitstatus_to_exitcode(status)
+            return ru.ru_utime + ru.ru_stime
+        if time.time() > deadline:
+            p.kill()
+            deadline = float("inf")
+        time.sleep(0.005)
 
 def one_run(agent, home, turns, blob_kb):
     log = home / f"{agent}.jsonl"
@@ -147,15 +150,15 @@ def one_run(agent, home, turns, blob_kb):
             env.pop(k, None)
     if agent == "openhands":
         # With tmux on PATH, OpenHands runs its shell in a tmux server that
-        # detaches from the process tree, so neither `time -l` nor the ps-tree
+        # detaches from the process tree, so neither wait4 nor the ps-tree
         # poll would see that CPU. Without it, OpenHands runs commands as plain
         # child processes, like every other agent here, and all of it counts.
         env["PATH"] = os.pathsep.join(d for d in env.get("PATH", "").split(os.pathsep)
                                       if d and not os.access(os.path.join(d, "tmux"), os.X_OK))
-    # Wrap in `/usr/bin/time -l` for whole-process rusage; the wrapper's own CPU
-    # is negligible and its child is the agent.
-    tcmd = [TIME_BIN, "-l"] + list(cmd)
-    errf = home / f"{agent}.time.err"
+    # CPU comes from wait4 on the agent itself (see wait_rusage), so nothing
+    # wraps it.
+    tcmd = list(cmd)
+    errf = home / f"{agent}.stderr"
     # forge uses rustyline, which opens /dev/tty and fails ("Device not
     # configured") without a controlling terminal, so give it a PTY that is one
     # (setsid + TIOCSCTTY) and drain the master, or it blocks.
@@ -193,8 +196,11 @@ def one_run(agent, home, turns, blob_kb):
         seen = {}
         peak_rss = [0]
 
+        done = threading.Event()
+
         def poll():
-            while p.poll() is None:
+            # Not p.poll(): reaping the agent here would lose its rusage.
+            while not done.is_set():
                 r = sample_tree_cpu(p.pid, seen)
                 if r > peak_rss[0]:
                     peak_rss[0] = r
@@ -202,10 +208,8 @@ def one_run(agent, home, turns, blob_kb):
 
         th = threading.Thread(target=poll)
         th.start()
-        try:
-            p.wait(timeout=240)
-        except subprocess.TimeoutExpired:
-            p.kill()
+        cpu_time = wait_rusage(p, 240)
+        done.set()
         th.join()
     if mfd is not None:
         try:
@@ -219,7 +223,6 @@ def one_run(agent, home, turns, blob_kb):
     if nturns < 2:
         return {"turns": nturns, "cpu_time": None, "cpu_tree": None, "wall": None}
     gaps = [(ts[i + 1] - ts[i]) * 1000 for i in range(len(ts) - 1)]
-    cpu_time = parse_time_l(errf.read_text())
     cpu_tree = sum(seen.values())
     return {
         "turns": nturns,
@@ -250,14 +253,12 @@ def main():
     ap.add_argument("--turns", type=int, default=40)
     ap.add_argument("--blob-kb", type=int, default=50)
     a = ap.parse_args()
-    if not Path(TIME_BIN).exists():
-        sys.exit(f"{TIME_BIN} not found (this driver assumes macOS/BSD `time -l`)")
     home = Path(tempfile.mkdtemp(prefix="cputurn-"))
     (home / "work").mkdir()
     run.WORK = home / "work"
     run.API_KEY = "x"
     print(f"CPU/turn: {a.turns} turns, {a.blob_kb} KB/turn, {a.reps} reps (model instant, CPU excl. model)\n")
-    hdr = f"{'agent':10} {'turns':>6} {'reps':>4}  {'CPU ms/turn (time-l)':>30}  {'peak RSS MB':>22}"
+    hdr = f"{'agent':10} {'turns':>6} {'reps':>4}  {'CPU ms/turn (wait4)':>30}  {'peak RSS MB':>22}"
     print(hdr)
     print("-" * len(hdr))
     for agent in a.agents:

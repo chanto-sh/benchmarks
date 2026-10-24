@@ -5,11 +5,12 @@
 #
 #   ./install-agents.sh            # everything
 #   ./install-agents.sh npm        # or just one group: npm, uv, bin
-#   ./install-agents.sh hax        # or one binary agent: goose, opencode,
-#                                  # codewhale, zerostack, hax
+#   ./install-agents.sh hax        # or one binary agent: chanto, goose,
+#                                  # opencode, codewhale, zerostack, hax
 #
-# Needs npm, uv, curl and tar (plus unzip on macOS). Chanto itself comes from a
-# sibling checkout (../chanto, `cargo build --release`), not from here.
+# Needs npm, uv, curl and tar (plus unzip on macOS). `./install-agents.sh chanto`
+# installs the pinned Chanto release, which reproduce.py measures; run.py
+# otherwise uses a sibling checkout's build (../chanto, `cargo build --release`).
 set -eu
 
 PREFIX=${BENCH_HOME:-$HOME/.local/share/chanto-bench}
@@ -49,6 +50,7 @@ install_uv() {
 
 # Standalone binaries, each a GitHub release (or official build) checked
 # against a pinned SHA-256:
+#   Chanto 0.1.3 (checksums from the release's signed SHA256SUMS);
 #   Goose 1.54.0;
 #   opencode 2.0.22 (checksums from the opencode Homebrew formula for 2.0.22);
 #   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1 (checksums
@@ -69,6 +71,24 @@ bin_setup() {
     plat=$(platform)
     dl="$PREFIX/downloads"
     mkdir -p "$dl" "$PREFIX/bin"
+}
+
+CHANTO_VERSION=0.1.3
+
+install_chanto() {
+    case "$plat" in
+        darwin-arm64) t=aarch64-apple-darwin; sha=b94c2d071b444033cb1b3aecbb706114e29e29204b519850049853801ee0b02a ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=070a71231ad45b0bff63540be80b532e2ddf42966172a39857a626ba0076eb74 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=db9a39fbc7dee361290d4f540834f60ed781dee2c5c3b3b78eb9307fb81ff048 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=79d48498b6c39f6f363c06d68fbae038409221fbda8bf6a29576ed67f3d6b89d ;;
+    esac
+    f=chanto-v$CHANTO_VERSION-$t.tar.gz
+    fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
+    tar -xzf "$dl/$f" -C "$dl" "chanto-v$CHANTO_VERSION-$t/chanto"
+    rm -f "$PREFIX/bin/chanto"
+    cat "$dl/chanto-v$CHANTO_VERSION-$t/chanto" > "$PREFIX/bin/chanto"
+    rm -rf "$dl/$f" "$dl/chanto-v$CHANTO_VERSION-$t"
+    chmod +x "$PREFIX/bin/chanto"
 }
 
 install_goose() {
@@ -143,7 +163,7 @@ install_hax() {
     chmod +x "$PREFIX/bin/hax"
 }
 
-bin_agents="goose opencode codewhale zerostack hax"
+bin_agents="chanto goose opencode codewhale zerostack hax"
 
 install_bin() {
     bin_setup

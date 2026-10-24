@@ -7,6 +7,34 @@ same model, and every raw result behind the published numbers.
 - [RESULTS.md](RESULTS.md): results, with the versions and files behind each table
 - [AUDIT.md](AUDIT.md): what a run records and how to check a result yourself
 
+## Reproduce the overhead numbers
+
+One command installs every agent at the version [RESULTS.md](RESULTS.md)
+reports, measures each one against a local mock model, and prints the table:
+
+```sh
+git clone https://github.com/chanto-sh/benchmarks.git chanto-benchmarks
+cd chanto-benchmarks
+python3 reproduce.py --quick   # Chanto, hax, zerostack, Goose, Codewhale, opencode: a few minutes
+python3 reproduce.py           # all 18 agents (needs npm and uv): about an hour
+```
+
+It needs Python 3.9+, curl and tar on macOS or Linux, and no API key: the mock
+answers every request at once, asking the agent to read the next 40 KB file,
+for 40 turns. So the CPU time measured is the agent's own work, read from the
+kernel (user + sys of the agent and everything it starts), and memory is the
+peak resident set of its whole process tree. Each agent runs 10 times; the
+table shows medians and each agent's ratio to Chanto. Absolute numbers depend
+on the machine, so compare the ratios. Every install is pinned and
+checksum-verified (`install-agents.sh`), Chanto included, as its release
+binary.
+
+The table is also saved to `results/overhead-<date>.txt`, with the versions,
+machine, settings and every run's raw numbers. To get numbers from machines
+nobody here controls, fork this repository and run the **reproduce** workflow
+(Actions → reproduce → Run workflow): it runs the same command on GitHub's
+macOS and Linux runners and puts the table in the run's summary.
+
 ## Run it
 
 Clone this next to a Chanto checkout and build Chanto. The runner uses
