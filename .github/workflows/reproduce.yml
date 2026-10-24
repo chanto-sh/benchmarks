@@ -1,0 +1,58 @@
+# Reproduces the published overhead numbers on GitHub's own machines. Anyone
+# can run it from a fork (Actions → reproduce → Run workflow) and get numbers
+# from hardware nobody here controls; each run's table is in its summary and
+# its results file is an artifact. Pull requests that change the measuring
+# code run the quick version, so it keeps working on both platforms.
+name: reproduce
+on:
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: Only the native binaries (minutes) instead of every agent (over an hour)
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - reproduce.py
+      - cputurn.py
+      - size.py
+      - stressmock.py
+      - install-agents.sh
+      - .github/workflows/reproduce.yml
+
+permissions:
+  contents: read
+
+jobs:
+  overhead:
+    name: overhead (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    env:
+      QUICK: ${{ github.event_name == 'pull_request' || inputs.quick }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - if: env.QUICK != 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - if: env.QUICK != 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: |
+          if [ "$QUICK" = true ]; then python3 reproduce.py --quick; else python3 reproduce.py; fi
+      - if: always()
+        run: |
+          for f in results/overhead-*.txt; do
+            [ -f "$f" ] || continue
+            { echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: overhead-${{ matrix.os }}
+          path: results/overhead-*.txt
+          if-no-files-found: ignore

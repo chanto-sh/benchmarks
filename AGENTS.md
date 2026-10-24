@@ -4,6 +4,7 @@
 - Runner tests: `python3 -m unittest -v test_run` (add `BENCH_SANDBOX_SMOKE=1` for the real sandbox check: sandbox-exec on macOS, bubblewrap on Linux)
 - A run: `python3 run.py --agents chanto,opencode --model <model> [--tasks a,b] [--tier hard]`; `--estimate` projects cost and runs nothing
 - Report from raw results: `python3 run.py --report results/<files>.json`
+- Overhead numbers: `python3 reproduce.py [--quick]` installs the pinned agents (Chanto as its release), runs `cputurn.py` and `size.py` with the published settings, and saves `results/overhead-<date>.txt`; the settings live in `reproduce.py`
 - The Chanto binary comes from a sibling checkout (`../chanto/target/release/chanto`); `CHANTO_REPO` or `BENCH_CHANTO_BIN` point elsewhere
 - Enable the hooks once per clone: `git config core.hooksPath .githooks`; don't bypass them with `--no-verify`
 
