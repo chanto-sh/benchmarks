@@ -111,6 +111,25 @@ def wait_rusage(p, timeout):
             deadline = float("inf")
         time.sleep(0.005)
 
+def path_without(path, exe, shims):
+    """PATH with `exe` hidden. A directory holding it is swapped for a shim
+    directory of links to everything else in it, rather than dropped: on Linux
+    tmux lives in /usr/bin, and dropping that would hide bash too."""
+    out = []
+    for i, d in enumerate(path.split(os.pathsep)):
+        if not d or not os.access(os.path.join(d, exe), os.X_OK):
+            out.append(d)
+            continue
+        shim = shims / str(i)
+        if not shim.is_dir():
+            shim.mkdir(parents=True)
+            for e in os.scandir(d):
+                if e.name != exe:
+                    os.symlink(e.path, shim / e.name)
+        out.append(str(shim))
+    return os.pathsep.join(d for d in out if d)
+
+
 def one_run(agent, home, turns, blob_kb):
     log = home / f"{agent}.jsonl"
     log.write_text("")
@@ -153,8 +172,7 @@ def one_run(agent, home, turns, blob_kb):
         # detaches from the process tree, so neither wait4 nor the ps-tree
         # poll would see that CPU. Without it, OpenHands runs commands as plain
         # child processes, like every other agent here, and all of it counts.
-        env["PATH"] = os.pathsep.join(d for d in env.get("PATH", "").split(os.pathsep)
-                                      if d and not os.access(os.path.join(d, "tmux"), os.X_OK))
+        env["PATH"] = path_without(env.get("PATH", ""), "tmux", home / "path-without-tmux")
     # CPU comes from wait4 on the agent itself (see wait_rusage), so nothing
     # wraps it.
     tcmd = list(cmd)
