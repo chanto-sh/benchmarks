@@ -3,7 +3,7 @@
 
     python3 reproduce.py             # every agent RESULTS.md compares (needs npm and uv)
     python3 reproduce.py --quick     # the native binaries only (needs curl and tar)
-    python3 reproduce.py --agents chanto,hax,zerostack
+    python3 reproduce.py --agents chanto,hax,zerostack   # any subset, extras included
 
 It installs each agent at the version RESULTS.md reports (install-agents.sh:
 pinned, checksum-verified; Chanto as its release binary), drives each one
@@ -26,11 +26,16 @@ TURNS = 40  # model requests per run, each asking to read one more file
 BLOB_KB = 40  # size of each file (hax refuses files over 50 KB)
 REPS = 10  # runs per agent; the table shows the median
 
-# Every agent RESULTS.md compares, and what installs it.
-NATIVE = ["chanto", "hax", "zerostack", "goose", "codewhale", "opencode"]
+# Every agent RESULTS.md compares (coding agents with at least 5,000 GitHub
+# stars), and what installs it.
+NATIVE = ["chanto", "goose", "codewhale", "opencode"]
 NPM = ["forge", "pi", "crush", "claude", "qwen", "codex", "gemini", "cline", "cn", "kilo"]
 UV = ["aider", "openhands"]
-ALL = NATIVE + NPM + UV
+PUBLISHED = NATIVE + NPM + UV
+# Native agents that still run here but aren't in the published table, since
+# they're below that bar: only measured when --agents names them.
+EXTRA = ["hax", "zerostack"]
+ALL = PUBLISHED + EXTRA
 
 
 def sh(cmd, **kw):
@@ -61,7 +66,7 @@ def install(agents):
         groups.append("npm")
     if any(a in UV for a in agents):
         groups.append("uv")
-    groups += [a for a in agents if a in NATIVE]
+    groups += [a for a in agents if a in NATIVE + EXTRA]
     for g in groups:
         sh([str(ROOT / "install-agents.sh"), g])
 
@@ -74,7 +79,7 @@ def main():
     ap.add_argument("--no-install", action="store_true", help="use what's already installed")
     ap.add_argument("--chanto", help="measure this Chanto binary instead of the pinned release")
     a = ap.parse_args()
-    agents = a.agents.split(",") if a.agents else NATIVE if a.quick else ALL
+    agents = a.agents.split(",") if a.agents else NATIVE if a.quick else PUBLISHED
     unknown = [x for x in agents if x not in ALL]
     if unknown:
         sys.exit(f"unknown agents: {', '.join(unknown)} (choose from {', '.join(ALL)})")
@@ -91,6 +96,8 @@ def main():
     def installed(agent):
         if agent == "chanto":
             return chanto.exists()
+        if agent == "cline":  # its launcher isn't in node_modules/.bin
+            return run.CLINE_BIN.is_file()
         return Path(run.agent_exe(agent)).is_file()
 
     missing = [x for x in agents if not installed(x)]
@@ -115,6 +122,13 @@ def main():
             print(f"\r  {agent:10} {i + 1}/{a.reps}", end="", flush=True)
         raw[agent] = runs
         print(f"\r  {agent:10} done{' ' * 8}", flush=True)
+        if not runs:
+            # Show why, or a "did not run" row is all anyone gets to go on.
+            err = work / f"{agent}.stderr"
+            tail = err.read_text(errors="replace").strip().splitlines()[-20:] if err.exists() else []
+            print(f"  {agent} made no measurable run; the last lines of its stderr:", file=sys.stderr)
+            for l in tail or ["(empty)"]:
+                print(f"    {l}", file=sys.stderr)
     shutil.rmtree(work, ignore_errors=True)
 
     lock_file = size.NPM_ROOT / "package-lock.json"
