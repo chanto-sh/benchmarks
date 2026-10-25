@@ -41,11 +41,15 @@ install_npm() {
     (cd "$PREFIX/agents" && npm ci --no-audit --no-fund)
 }
 
-# Python agents, as uv tools (~/.local/share/uv/tools).
+# Python agents, as uv tools (~/.local/share/uv/tools). Both run on Python
+# 3.12, which uv downloads if needed; left to choose, uv takes the newest
+# interpreter it finds, and on a machine with a newer Python than the agents'
+# compiled dependencies support (macos-latest ships 3.15) the install fails
+# building them from source.
 install_uv() {
     need uv
-    uv tool install --force aider-chat==0.86.2
-    uv tool install --force openhands==1.16.0
+    uv tool install --force --python 3.12 aider-chat==0.86.2
+    uv tool install --force --python 3.12 openhands==1.16.0
 }
 
 # Standalone binaries, each a GitHub release (or official build) checked
