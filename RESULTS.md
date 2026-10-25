@@ -1,5 +1,65 @@
 # Benchmark results
 
+## Per-turn overhead: 16 agents, mock model (October 25)
+
+Measured October 25, 2026 by the [reproduce workflow, run 40164648883](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883)
+on GitHub's own runners, from commit `be7952e` ([#3](https://github.com/chanto-sh/benchmarks/pull/3)): `python3 reproduce.py`, 16
+coding agents with at least 5,000 GitHub stars, each run 10 times; the table
+shows medians. Each number is in the summary of that run, under its OS.
+
+- **macOS**: `macos-latest`, Apple M1 (Virtual), 3 cores, 7 GB RAM, macOS (Darwin 25.6.0), arm64
+- **Linux**: `ubuntu-latest`, AMD EPYC 9V45, 4 cores, 16 GB RAM, Linux 6.17 (Azure), x86_64
+
+Versions: Chanto 0.1.4; Aider 0.86.2; Claude Code 2.1.302; Cline 3.0.70; Codewhale 0.10.1; Codex 0.162.1; Continue CLI 1.5.47; Crush 0.98.1; Forge 2.13.21; Gemini CLI 0.65.0; Goose 1.54.0; Kilo Code 7.8.8; OpenHands CLI 1.16.0; opencode 2.0.22; Pi 1.1.0; Qwen Code 0.25.1. The model is a local mock (`stressmock.py`), not a real one.
+
+| agent | runtime | CPU ms/turn, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103946) | CPU ms/turn, [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103832) | peak MB, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103946) | peak MB, [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103832) | install MB, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103946) / [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883#summary-121083103832) |
+|---|---|--:|--:|--:|--:|--:|
+| **Chanto** | Rust | **4.9** | **3.3** | **23** | **23** | 25 / 30 |
+| Goose | Rust | 15.3 | 11.2 | 168 | 145 | 269 / 308 |
+| Forge | Rust | 15.9 | 11.8 | 86 | 83 | 111 / 131 |
+| Crush | Go | 24.6 | 13.2 | 181 | 179 | 130 / 132 |
+| Pi | Node | 18.4 | 14.2 | 178 | 176 | 158 / 164 |
+| Codewhale | Rust | 38.6 | 21.0 | 124 | 175 | 86 / 105 |
+| Claude Code | Node | 52.8 | 43.0 | 364 | 346 | 268 / 566 |
+| Codex | Rust | 61.7 | 43.3 | 202 | 345 | 344 / 453 |
+| Qwen Code | Node | 73.0 | 52.1 | 245 | 243 | 151 / 172 |
+| Gemini CLI | Node | 79.9 | 52.5 | 529 | 511 | 105 / 105 |
+| Continue CLI | Node | 85.8 | 55.4 | 335 | 310 | 83 / 84 |
+| Cline | Node | 109.7 | 76.9 | 622 | 577 | 363 / 406 |
+| Aider | Python | 111.0 | 80.6 | 256 | 244 | 688 / 607 |
+| opencode | Bun | 104.9 | 98.6 | 526 | 491 | 180 / 204 |
+| OpenHands | Python | 252.7 | 202.3 | 345 | 314 | 630 / 620 |
+| Kilo Code | Node | 283.8 | 215.7 | 941 | 892 | 341 / 1,246 |
+
+An instant mock model answers every request with a tool call that reads the
+next 40 KB file, for 40 turns, so the context keeps growing. CPU is user + sys
+time of the agent's whole process tree divided by the number of model
+requests; peak memory is the largest resident set of that tree, sampled every
+60 ms; install MB is what the pinned install puts on disk (Node and Python,
+where needed, aren't counted). Sorted by Linux CPU. Raw files, with every run's
+numbers: [`results/overhead-20261025-052453.txt`](results/overhead-20261025-052453.txt)
+(macOS) and [`results/overhead-20261025-052036.txt`](results/overhead-20261025-052036.txt)
+(Linux).
+
+What isn't quite like for like:
+
+- Aider has no tool loop, so it's driven through its chat input, one model request per message.
+- OpenHands runs shell commands inside a tmux server when tmux is installed, and that server sits outside the measured process tree. tmux is hidden from it here, so its commands run as ordinary child processes and all of its CPU counts.
+- The macOS runner is a 3-core virtual machine and varies more between runs than the Linux one: Aider, OpenHands, Codex and Gemini CLI had standard deviations of 20–70% of their medians there. The raw files list every run.
+- Agents with fewer than 5,000 GitHub stars aren't in the table. `reproduce.py --agents hax,zerostack` still measures two of them.
+
+Reproduce it: [README: Reproduce the overhead numbers](README.md#reproduce-the-overhead-numbers),
+or in short:
+
+```sh
+git clone https://github.com/chanto-sh/benchmarks.git
+cd benchmarks
+python3 reproduce.py --quick   # 4 native agents, about 5 minutes; needs only Python 3, curl and tar
+python3 reproduce.py           # all 16; also needs Node 22+ with npm, and uv; 15–30 minutes
+```
+
+To run it on GitHub's machines instead, fork this repository and run the
+**reproduce** workflow ([how](README.md#run-it-on-githubs-machines-from-a-fork)).
 
 ## Prompt caching, adaptive effort, deferred tools, token classifier (October 20)
 
@@ -564,38 +624,6 @@ Generation speed is the same for everyone (about 11 tok/s), so the differences c
 ## Auto-mode classifier
 
 `classifier_eval.py` checks 14 labelled actions: 7 should be allowed and 7 blocked (force-push to main, deleting outside the project, exfiltrating `.env`, deleting production S3/k8s resources, editing shell profiles, reading SSH keys). With the same model, it scores **13/14 with mean latency 6.4 s**. The one miss is a `/tmp` write, which the static rules allow before the classifier is ever consulted. Common project-local commands skip the classifier entirely through static rules.
-
-## Per-turn overhead: 14 agents, mock model (October 2026)
-
-Versions: Chanto 0.1.12; Aider 0.86.2; Claude Code 2.1.302; Cline 3.0.70; Codex 0.162.1; Continue CLI 1.5.47; Crush 0.98.1; Forge 2.13.21; Goose 1.54.0; Kilo Code 7.8.8; OpenHands CLI 1.16.0; opencode 2.0.22; Pi 1.1.0; Qwen Code 0.25.1. The model is a local mock (`stressmock.py`), not a real one.
-
-Each agent's own cost per turn, with the model taken out. An instant mock model answers every request with a tool call that reads the next 50 KB file, for 40 turns, so the context keeps growing. CPU is the agent's whole process tree (`/usr/bin/time -l`, user + sys) divided by the number of model requests; peak memory is the largest resident set of the process tree, sampled every 60 ms. Each agent ran 10 times; the table shows medians.
-
-| agent | runtime | CPU ms per turn | peak memory MB |
-|---|---|---|---|
-| **Chanto** | Rust | **4.8** | **32** |
-| Forge | Rust | 11.8 | 105 |
-| Pi | Node | 11.8 | 194 |
-| Goose | Rust | 17.8 | 170 |
-| Crush | Go | 19.8 | 188 |
-| Claude Code | Node | 34.1 | 390 |
-| Qwen Code | Node | 44.5 | 258 |
-| Codex | Rust | 44.6 | 217 |
-| Cline | Node | 56.1 | 821 |
-| Continue CLI | Node | 62.2 | 348 |
-| opencode | Bun | 65.6 | 583 |
-| Aider | Python | 125.8 | 256 |
-| Kilo Code | Node | 177.6 | 1,145 |
-| OpenHands | Python | 200.5 | 415 |
-
-Machine: MacBook Pro (MacBookPro18,2), Apple M1 Max, 32 GB, macOS 26.3. Raw output, with the exact version string and install path of every agent: `results/cputurn-20261023-060251.txt`. Every agent ran from the benchmark's own pinned install, not from the machine's PATH.
-
-What isn't quite like for like:
-
-- Aider has no tool loop, so it's driven through its chat input, one model request per message.
-- OpenHands runs shell commands inside a tmux server when tmux is installed, and that server sits outside the measured process tree. tmux is hidden from it here, so its commands run as ordinary child processes and all of its CPU counts.
-- Codex varied more between runs than the others (27% coefficient of variation, against 1–10%).
-- The mock was fixed for this run, so these numbers replace the October chart rather than extend it. Claude Code's token-count calls used to be counted as turns, which roughly halved its per-turn figure. The mock also mistook Claude Code's `ExitPlanMode` for a finish tool. Required arguments limited to listed values now get one of those values, which OpenHands needs. `results/cputurn-20261022-224014.txt` is an earlier run of Chanto, Continue and OpenHands before the first two fixes.
 
 ## Performance of Chanto itself (October 2026)
 
