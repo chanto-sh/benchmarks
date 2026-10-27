@@ -1,7 +1,8 @@
 # Chanto benchmarks: agent notes
 
 ## Commands
-- Runner tests: `python3 -m unittest -v test_run` (add `BENCH_SANDBOX_SMOKE=1` for the real sandbox check: sandbox-exec on macOS, bubblewrap on Linux)
+- Runner tests: `python3 -m unittest -v test_run` (add `BENCH_SANDBOX_SMOKE=1` for the real sandbox check: a fake agent under sandbox-exec on macOS, bubblewrap on Linux)
+- Runs are isolated by default (one root, HOME and sandbox per run, docs/sandbox.md); `CHANTO_BENCH_ISOLATION=off` is for debugging only, and `--report` refuses its results
 - A run: `python3 run.py --agents chanto,opencode --model <model> [--tasks a,b] [--tier hard]`; `--estimate` projects cost and runs nothing
 - Report from raw results: `python3 run.py --report results/<files>.json`
 - Overhead numbers: `python3 reproduce.py [--quick]` installs the pinned agents (Chanto as its release), runs `cputurn.py` and `size.py` with the published settings, and saves `results/overhead-<date>.txt`; the settings live in `reproduce.py`
@@ -10,7 +11,7 @@
 
 ## Conventions
 - `results/` is the record behind published numbers: never edit or delete a result file. A run that has to be excluded moves to `results/void/` and AUDIT.md says why.
-- A task's hidden tests (`tasks/<name>/pristine/`, `hidden/`) must stay unreadable to agents. The sandbox hides this repository and the Chanto sources; keep `offline_hidden` and the checkout-name rules in `run.py` covering any new place task data can live.
+- A task's hidden tests (`tasks/<name>/pristine/`, `hidden/`) must stay unreadable to agents. The sandbox reads only the run root, the agent's install and system and toolchain paths, and also hides this repository and the Chanto sources inside those; keep `offline_hidden` and the checkout-name rules in `run.py` covering any new place task data can live, and `offtask_hits` matching new ways to reach it.
 - Every published number names the exact versions behind it. Runs record them in `meta.agent_versions` (add new agents to `VERSION_CMDS`); each RESULTS.md section has a `Versions:` line listing every agent and the model, taken from the cited result files. Runs made outside `run.py` (like `cputurn.py`) save a raw file under `results/` with the versions, command, machine and date in its header. If a version wasn't recorded, say so; never fill it in from memory. chanto.sh shows agent names only and links here for versions.
 - Agent versions are pinned in `agents/package.json` and its lockfile (npm agents) and in `install-agents.sh` (uv tools, and binaries with their SHA-256). Changing a version means updating those, rerunning what you publish, and recording the new versions; never mix versions within one published table.
 - Changing a task changes its digest in later results' `meta.tasks`, so add a task rather than editing a published one.

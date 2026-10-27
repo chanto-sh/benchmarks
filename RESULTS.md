@@ -1,5 +1,29 @@
 # Benchmark results
 
+## Methodology: isolation
+
+From this change on, every task run is isolated
+([docs/sandbox.md](docs/sandbox.md)): each agent, task and repetition gets its
+own temporary root with a fresh `HOME` and `TMPDIR`, a checkout with no git
+history past the task's base commit and a prebuilt virtualenv with package
+indexes off, and runs in an OS sandbox (`sandbox-exec` on macOS, bubblewrap on
+Linux) that can read only that root, its own install and system and toolchain
+paths, and can connect only to the model proxy. Each result file records the
+mode (`isolation`) and what each run's transcript shows it reaching for outside
+its task (`offtask_hits`), and `run.py --report` won't tabulate runs made
+without isolation.
+
+The pass-rate tables below were all measured before this. Most used the older
+`--offline` sandbox, which hid a list of known places but shared work folders
+and config homes between runs. The SWE-bench tables are the most exposed: in
+the hard tier's transcripts, agents listed other agents' workspaces, read
+package caches and other environments, downloaded newer releases, searched git
+history and the whole disk, and fetched the upstream fix from GitHub. The hard
+tier's table is labelled below and is being re-run under isolation; the other
+tables with SWE-bench tasks (phase 2 of the optimization A/B and the mixed hard
+set) were measured the same way. The overhead numbers use a mock model and no
+tasks, so isolation doesn't affect them.
+
 ## Per-turn overhead: 16 agents, mock model (October 25)
 
 Measured October 25, 2026 by the [reproduce workflow, run 40164648883](https://github.com/chanto-sh/benchmarks/actions/runs/40164648883)
@@ -387,6 +411,14 @@ The table counts the latest valid run of each task and mode: 4 tasks
 Every original result file is kept in `results/`.
 
 ## Hard tier: 25 SWE-bench Lite tasks, 11 agents (October 2026)
+
+> **Measured without isolation, being re-run.** Runs shared work folders and
+> config homes, and their transcripts show agents reaching for other agents'
+> workspaces, package caches and other environments, newer releases, git
+> history past the task's base commit, the upstream fix on GitHub and the whole
+> disk ([methodology](#methodology-isolation)). Any agent's solve rate here may
+> be inflated. The tables in this section, including the two `--verify`
+> re-runs below, are kept as measured until the isolated re-run replaces them.
 
 Versions: Chanto 0.1.0; Aider 0.86.2; Claude Code 2.1.300; Codex 0.162.1; Crush 0.98.1; Goose 1.54.0; Kilo Code 7.8.8; opencode 2.0.22; Pi 1.1.0; Qwen Code 0.25.1. The October 13 shards record no versions; the rest of the run used the same installs.
 

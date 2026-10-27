@@ -20,12 +20,19 @@ per agent-and-task run.
   grader).
 - `bench_commit` and `bench_dirty`: the benchmark's own commit, and whether it
   had uncommitted changes.
+- `isolation`: how the runs were isolated (`sandbox-exec`, `bwrap`, or `off`),
+  also at the top of the file. Files from before it was recorded, and files
+  with `off`, were measured without isolation; `run.py --report` refuses them.
 - `seed`, `timeout_s`, `offline_sandbox`, `offline_profile_sha256`, the platform
   and the exact `command`.
 
 Each run entry has pass or fail, wall time, exit code, timeout, *false "done"*
 (it claimed success but the check failed), any edited test files, token usage
-metered at the proxy, a `meter_label`, start and end times, and `evidence`.
+metered at the proxy, a `meter_label`, start and end times, `evidence`, its
+`isolation` and `offtask_hits`: what its transcript shows it reaching for outside
+its task (other runs' files, installed packages, package downloads, git history,
+whole-disk searches, the upstream repository on GitHub). See
+[docs/sandbox.md](docs/sandbox.md#detecting-off-task-access).
 
 **Published evidence** is each run's `.patch`: the change the agent made, new
 files included, captured before grading, in `results/<stamp>-<pid>/`, and the
@@ -92,8 +99,13 @@ Everything excluded is listed here.
 - **One model for all.** Every agent uses the same model through LiteLLM. That
   separates the agent from the model, but agents built for one model family
   (Claude Code, Codex) run outside their home setup.
-- **The sandbox.** `--offline` uses `sandbox-exec` on macOS and bubblewrap on
-  Linux; their rules differ in detail. The October 2026 hard tier ran on macOS.
+- **Isolation.** Each run has its own root and HOME and runs under
+  `sandbox-exec` on macOS or bubblewrap on Linux; their rules differ in detail,
+  and what neither can stop is listed in [docs/sandbox.md](docs/sandbox.md#what-it-doesnt-stop).
+  The October 2026 hard tier predates this: it ran on macOS with the older
+  `--offline` sandbox, which shared work folders and config homes between runs
+  and only hid a list of known places, so its table is labelled as measured
+  without isolation.
 - **The author's own tool.** Chanto was developed alongside this benchmark, and
   its prompts were tuned on earlier tiers, not on the SWE-bench hard tier.
   Independent reruns are the real test.
@@ -108,6 +120,6 @@ Everything excluded is listed here.
 ```sh
 ./proxy.sh deepseek/deepseek-flash      # one model for every agent
 python3 run.py --api http://localhost:4000 --meter http://localhost:4100 \
-  --model bench-model --offline --timeout 1200 --seed 121 \
+  --model bench-model --timeout 1200 --seed 121 \
   --agents chanto,claude,codex,opencode --tasks "$(paste -sd, hard-tasks.txt)"
 ```
