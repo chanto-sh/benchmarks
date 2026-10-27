@@ -925,7 +925,7 @@ OFFTASK_PATTERNS = [
     ("package download", re.compile(r"\bpip3?\s+download\b|\bpip3?\s+index\b|\bpip3?\s+install\s+[^\n]*(?:-U\b|--upgrade\b)"
                                     r"|\buv\s+pip\s+install\b|\bpip3?\s+install\s+[^\n]*(?:git\+|https?://)")),
     ("package host", re.compile(r"(?:pypi\.org|files\.pythonhosted\.org)[^\s\"'\\]*")),
-    ("git history", re.compile(r"\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--?[\w.=-]+\s+)*(?:fsck|fetch|clone|pull)\b[^\n]{0,160}|--lost-found|--batch-all-objects"
+    ("git history", re.compile(r"\bgit\s+(?:--?[\w.=-]+\s+(?:[^\s-]\S*\s+)?){0,4}(?:fsck|fetch|clone|pull)\b[^\n]{0,160}|--lost-found|--batch-all-objects"
                                r"|\bgit\s+remote\s+add\b|\bgit\s+(?:log|rev-list)\s+[^\n]*--(?:all|reflog)\b")),
     ("whole-disk search", re.compile(r"\b(?:find|fd|rg|grep\s+-[a-zA-Z]*r[a-zA-Z]*|ls\s+-[a-zA-Z]*R[a-zA-Z]*|du)\s+/(?:\s|$|\"|')"
                                      r"|\bmdfind\b|\blocate\s")),

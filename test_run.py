@@ -763,7 +763,7 @@ probe home-write sh -c 'echo z > "$HOME/h" && grep -q z "$HOME/h"'
 
         def fake_agent(agent, model, prompt, ctx, wd=None):
             return ["/bin/sh", str(script)], {
-                "SIBLING": str(sibling), "OTHER_LOG": str(other_log), "TASK_DIR": str(task), "OUTSIDE": str(self.root),
+                "SIBLING": str(sibling), "OTHER_LOG": str(other_log), "TASK_DIR": str(task), "OUTSIDE": str(other_log.parent),
                 "FAKE_PROXY": proxy, "FUTURE": future_file.read_text().strip()}
 
         with patch.object(run, "OFFLINE", True), patch.object(run, "API", proxy), \
@@ -778,7 +778,7 @@ probe home-write sh -c 'echo z > "$HOME/h" && grep -q z "$HOME/h"'
             "sibling-list", "sibling-read", "other-transcript", "hidden-tests", "write-outside", "github-ip", "github-name",
             "system-packages", "future-object", "future-content", "future-log", "lost-found")})
         self.assertEqual(verdicts, expected, out)
-        self.assertFalse((self.root / "planted").exists())
+        self.assertFalse((other_log.parent / "planted").exists())
         self.assertEqual(result["isolation"], "sandbox-exec" if sys.platform == "darwin" else "bwrap")
         # The attempts still show: the sibling run's path and the git history probe.
         kinds = {h["kind"] for h in result["offtask_hits"]}
