@@ -132,12 +132,23 @@ python3 run.py --api http://localhost:4000 --agents chanto,opencode,claude,codex
 ```
 
 `--tasks` picks tasks by name or glob, `--tier` by tier, and `--estimate` prints
-the expected tokens, cost and time without running anything. `--offline` runs
-each agent in a sandbox that hides this repository, the Chanto sources and
-package caches, so agents can't read hidden tests or earlier runs
-([docs/sandbox.md](docs/sandbox.md)).
+the expected tokens, cost and time without running anything.
 
-`python3 -m unittest -v test_run` tests the runner itself.
+Every run is isolated, so it sees only its own task
+([docs/sandbox.md](docs/sandbox.md)). Each agent, task and repetition gets its
+own temporary root with a fresh `HOME` and `TMPDIR`, a checkout with no git
+history past the task's base commit, and a prebuilt virtualenv with package
+indexes switched off. The agent runs in an OS sandbox, `sandbox-exec` on macOS
+or bubblewrap on Linux, that can read only that root, its own install and
+system and toolchain paths, and can connect only to the model proxy on
+localhost. So no run can read another agent's workspace, a newer release with
+the fix, the upstream repository or this repository's hidden tests. After each
+run the transcript is checked for attempts anyway, recorded as `offtask_hits`.
+`CHANTO_BENCH_ISOLATION=off` turns the sandbox off for debugging; result files
+record the mode, and `--report` refuses runs made without it.
+
+`python3 -m unittest -v test_run` tests the runner itself;
+`BENCH_SANDBOX_SMOKE=1` adds a run of a fake agent under the real sandbox.
 
 ## Tasks
 

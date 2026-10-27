@@ -1,14 +1,15 @@
-"""Runner regressions; opt into real macOS SBPL checks with BENCH_SANDBOX_SMOKE=1."""
+"""Runner regressions; BENCH_SANDBOX_SMOKE=1 adds the real sandbox check (sandbox-exec on macOS, bubblewrap on Linux)."""
 import contextlib
 import io
 import hashlib
+import http.server
 import json
 import os
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -41,39 +42,160 @@ class RunnerTests(unittest.TestCase):
         (task / "prompt.txt").write_text("Do nothing")
         (task / "check.sh").write_text(check)
 
-    def test_profile_protects_writes_and_escapes_paths(self):
-        wd = run.WORK / 'space "quote" \\ slash'
-        home = run.WORK / ".homes/chanto"
+    def test_profile_reads_only_the_run_root_installs_and_system(self):
+        root = run.WORK / 'runs/space "quote" \\ slash'
+        install = self.root / "agents"
         binary = run.CHANTO_REPO / "target/release/chanto"
-        profile = run.offline_profile(wd, home, binary)
-        # Neither this repository (hidden tests, past runs) nor the Chanto sources.
-        for hidden in (run.ROOT, run.CHANTO_REPO):
-            self.assertIn(f'(deny file-read-data file-write* (subpath {json.dumps(str(hidden))}))', profile)
-        for path in (wd, home):
-            self.assertIn(f'(allow file-read* file-read-data file-write* (subpath {json.dumps(str(path.resolve()))}))', profile)
-        self.assertIn(f'(allow file-read* file-read-data (literal {json.dumps(str(binary.resolve()))}))', profile)
-        self.assertNotIn('(allow file-write* (literal', profile)
-        # Installed packages and other bench data could hold the upstream fix.
+        profile = run.offline_profile(root, [install], binary)
+        q = lambda p: json.dumps(str(Path(p).resolve()))
+        # Nothing is readable or writable unless allowed, and the network is
+        # localhost only.
+        for rule in ("(deny file-read-data)", "(deny file-write*)", "(deny network*)",
+                     '(allow network-outbound (remote ip "localhost:*"))', "(deny appleevent-send)"):
+            self.assertIn(rule, profile)
+        self.assertNotIn('"*:*"', profile)
+        self.assertIn(f"(allow file-read* file-read-data file-write* (subpath {q(root)}))", profile)
+        self.assertIn(f"(allow file-read* file-read-data (subpath {q(install)}))", profile)
+        self.assertIn(f"(allow file-read* file-read-data (literal {q(binary)}))", profile)
+        self.assertIn('(allow file-read-data (subpath "/usr"))', profile)
+        # Only the run root is writable (and devices).
+        writes = [l for l in profile.splitlines() if l.startswith("(allow") and "file-write*" in l]
+        self.assertEqual(writes, ['(allow file-write* (subpath "/dev"))',
+                                  f"(allow file-read* file-read-data file-write* (subpath {q(root)}))"])
+        # This repository, the Chanto sources, bench data and installed packages
+        # stay hidden even where a system or toolchain path covers them.
+        for hidden in (run.ROOT, run.CHANTO_REPO, Path.home() / ".local/share/chanto-bench"):
+            self.assertIn(f"(deny file-read-data file-write* (subpath {q(hidden)}))", profile)
         self.assertIn('(deny file-read-data file-write* (regex #"/(site|dist)-packages(/|$)"))', profile)
-        # A copy of this repository under another name hides the same tasks and runs.
         names = run.CHECKOUT_NAMES
         self.assertIn(f'(deny file-read-data file-write* (regex #"/({names})/(tasks|results)(/|$)"))', profile)
-        self.assertIn(f'(deny file-read-data file-write* (regex #"/({names})/swebench-[^/]*\\.json$"))', profile)
-        self.assertIn(f'(deny file-read-data file-write* (subpath {json.dumps(str((Path.home() / ".local/share/chanto-bench").resolve()))}))', profile)
-        self.assertLess(profile.index(f'/({run.CHECKOUT_NAMES})/(tasks|results)'), profile.index('(allow file-read* file-read-data file-write*'))
-        self.assertLess(profile.index('site|dist'), profile.index('(allow file-read* file-read-data file-write*'))
-        self.assertLess(profile.index('(deny file-read-data'), profile.index('(allow file-read* file-read-data file-write*'))
+        # Order matters: later rules win.
+        first_allow = profile.index("(allow file-read* file-read-data")
+        self.assertLess(profile.index("site|dist"), first_allow)
+        self.assertLess(profile.index('(allow file-read-data (subpath "/usr"))'), profile.index("(deny file-read-data file-write*"))
+        # Parents are listable by name (getcwd needs it), siblings are not.
+        self.assertIn(f"(allow file-read-data (literal {q(Path(root).resolve().parent)}))", profile)
+        self.assertNotIn(f"(subpath {q(Path(root).resolve().parent)})", profile)
 
     def test_public_benchmark_tasks_keep_system_packages_readable(self):
-        wd, home = run.WORK / "wd", run.WORK / ".homes/chanto"
-        keep = run.offline_profile(wd, home, keep_site_packages=True)
-        hide = run.offline_profile(wd, home)
-        allow = '(allow file-read* file-read-data (regex #"/(site|dist)-packages(/|$)"))'
+        root = run.WORK / "runs/r-1"
+        keep = run.offline_profile(root, keep_site_packages=True)
+        hide = run.offline_profile(root)
         deny = '(deny file-read-data file-write* (regex #"/(site|dist)-packages(/|$)"))'
-        self.assertIn(allow, keep)
         self.assertNotIn(deny, keep)
         self.assertIn(deny, hide)
-        self.assertNotIn(allow, hide)
+
+    def test_each_agent_reads_only_its_own_install(self):
+        with tempfile.TemporaryDirectory() as d:
+            npm, bins, uv = Path(d) / "npm/node_modules/.bin", Path(d) / "bin", Path(d) / "uv"
+            npm.mkdir(parents=True); bins.mkdir(); (bins / "goose").touch()
+            with patch.object(run, "NPM_BIN", npm), patch.object(run, "BIN_DIR", bins), patch.object(run, "UV_TOOLS", uv):
+                self.assertEqual(run.agent_installs("aider"), [uv / "aider-chat"])
+                self.assertEqual(run.agent_installs("openhands"), [uv / "openhands"])
+                self.assertEqual(run.agent_installs("goose"), [bins])
+                self.assertEqual(run.agent_installs("claude"), [Path(d) / "npm"])
+                self.assertEqual(run.agent_installs("chanto"), [])
+
+    def test_isolation_mode_from_the_environment(self):
+        with patch.object(run.sys, "platform", "darwin"):
+            self.assertEqual(run.isolation_mode({}), "sandbox-exec")
+            self.assertEqual(run.isolation_mode({"CHANTO_BENCH_ISOLATION": "on"}), "sandbox-exec")
+            self.assertEqual(run.isolation_mode({"CHANTO_BENCH_ISOLATION": "off"}), "off")
+            with self.assertRaises(SystemExit):
+                run.isolation_mode({"CHANTO_BENCH_ISOLATION": "maybe"})
+        with patch.object(run.sys, "platform", "linux"):
+            self.assertEqual(run.isolation_mode({}), "bwrap")
+
+    def test_each_run_gets_a_fresh_root_home_and_tmpdir(self):
+        self.task()
+        seen = []
+        show = ("import os, json; print(json.dumps({k: os.environ[k] for k in "
+                "('HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'PIP_NO_INDEX')})); print(os.getcwd())")
+        with patch.object(run, "agent_cmd", return_value=([sys.executable, "-c", show], {})):
+            for rep in (0, 1):
+                r = run.run_task("fake", "tiny", "model", 100, 30, rep)
+                env_line, cwd = (run.WORK / "fake" / f"tiny-{rep}.out").read_text().splitlines()
+                seen.append((json.loads(env_line), cwd))
+                self.assertEqual(r["isolation"], "off")
+                self.assertEqual(r["offtask_hits"], [])
+                self.assertTrue((run.WORK / "fake" / f"tiny-{rep}.patch").exists())
+        (env0, cwd0), (env1, cwd1) = seen
+        root0 = Path(cwd0).parent
+        self.assertEqual(Path(env0["HOME"]), root0 / "home")
+        self.assertEqual(Path(env0["TMPDIR"]), root0 / "tmp")
+        self.assertTrue(env0["XDG_CONFIG_HOME"].startswith(env0["HOME"]))
+        self.assertEqual(env0["PIP_NO_INDEX"], "1")
+        self.assertNotEqual(root0, Path(cwd1).parent)
+        # The roots are gone afterwards; the transcript and patch stay.
+        self.assertFalse(root0.exists())
+        self.assertEqual(list((run.WORK / "runs").iterdir()), [])
+
+    def test_checkout_is_sealed_at_the_base_commit(self):
+        wd = self.root / "ws"
+        wd.mkdir()
+        git = lambda *a: subprocess.run(["git", "-c", "user.email=b@b", "-c", "user.name=b", *a], cwd=wd, check=True,
+                                        capture_output=True, text=True).stdout
+        (wd / "a.py").write_text("base\n")
+        git("init", "-q"); git("add", "-A"); git("commit", "-qm", "base")
+        (wd / "a.py").write_text("FUTURE_FIX\n")
+        git("commit", "-qam", "fix")
+        future = git("rev-parse", "HEAD").strip()
+        git("tag", "upstream-fix"); git("update-ref", "refs/remotes/origin/main", "HEAD")
+        git("remote", "add", "origin", "https://github.com/example/upstream.git")
+        git("reset", "-q", "--hard", "HEAD~1")
+        info = run.seal_checkout(wd)
+        self.assertEqual(info["commits"], 1)
+        self.assertEqual(git("remote"), "")
+        self.assertNotEqual(subprocess.run(["git", "cat-file", "-e", future], cwd=wd, capture_output=True).returncode, 0)
+        everything = subprocess.run(["git", "cat-file", "--batch-all-objects", "--batch"], cwd=wd, capture_output=True).stdout
+        self.assertNotIn(b"FUTURE_FIX", everything)
+        git("fsck", "--lost-found")
+        self.assertEqual(list((wd / ".git").glob("lost-found/*/*")), [])
+
+    def test_offtask_hits_flag_what_isolation_is_for(self):
+        root = (self.root / "work/runs/r-abcdefgh").resolve()
+        (run.TASKS / "swe-x").mkdir(parents=True)
+        (run.TASKS / "swe-x/instance.json").write_text(json.dumps({"repo": "pytest-dev/pytest"}))
+        transcript = "\n".join([
+            f"$ ls {root}/swe-x-0",  # its own root: fine
+            f"$ cat {root.parent}/r-zyxwvuts/swe-x-0/src/_pytest/main.py",  # a sibling run
+            "$ ls ~/.local/share/chanto-bench/work-hard-2/claude/swe-x-0",
+            "$ pip download pytest==8.0 -d /tmp/x",
+            "$ git fsck --lost-found",
+            "$ find / -name 'python.py' 2>/dev/null",
+            "WebFetch https://github.com/pytest-dev/pytest/pull/5103.diff",
+            "$ curl https://api.github.com/repos/foo/bar/commits",
+            "$ cat /Users/someone/IdeaProjects/other/notes.txt",
+            "$ cat /usr/local/lib/python3.9/site-packages/_pytest/main.py",  # a newer pytest
+            f"$ cat {root}/swe-x-0/.venv/lib/python3.9/site-packages/_pytest/main.py",  # the task's own venv
+            "see https://github.com/pytest-dev/pytest/issues/5000",  # quoted by the prompt
+        ])
+        hits = run.offtask_hits([transcript], root, "swe-x", prompt="https://github.com/pytest-dev/pytest/issues/5000")
+        kinds = {h["kind"] for h in hits}
+        self.assertEqual(kinds, {"bench data", "package download", "git history", "whole-disk search", "web",
+                                 "upstream repo", "path outside run root", "installed package"})
+        self.assertEqual([h["text"] for h in hits if h["kind"] == "installed package"],
+                         ["/usr/local/lib/python3.9/site-packages/_pytest/main.py"])
+        texts = " ".join(h["text"] for h in hits)
+        self.assertIn("r-zyxwvuts", texts)
+        self.assertIn("/Users/someone/IdeaProjects/other/notes.txt", texts)
+        self.assertNotIn("issues/5000", texts)
+        self.assertNotIn("r-abcdefgh", texts)
+        # A clean transcript, and the run's own long path wrapped over two lines, are clean.
+        wrapped = f"cd {str(root)[:30]}\n    {str(root)[30:]}/swe-x-0 && pytest -q\n1 passed"
+        self.assertEqual(run.offtask_hits([wrapped, "$ pytest testing/test_main.py"], root, "swe-x"), [])
+
+    def test_report_refuses_unisolated_runs(self):
+        results = [{"agent": "chanto", "task": "a", "rep": 0, "passed": True, "seconds": 1, "timed_out": False}]
+        f = self.root / "r.json"
+        for data in ({"isolation": "off"}, {"offline": True}, {}):
+            with self.subTest(data=data):
+                f.write_text(json.dumps({"model": "m", "ctx": 1, **data, "results": results}))
+                with self.assertRaisesRegex(SystemExit, "without isolation"):
+                    run.report([str(f)])
+                self.assertIn("**Measured without isolation**", run.report([str(f)], unisolated=True))
+        f.write_text(json.dumps({"model": "m", "ctx": 1, "isolation": "sandbox-exec", "results": results}))
+        self.assertNotIn("without isolation", run.report([str(f)]))
 
     def test_config_restored_on_success_and_failure(self):
         config = run.home("chanto") / "config.toml"
@@ -97,17 +219,16 @@ class RunnerTests(unittest.TestCase):
                     else:
                         self.assertEqual(config.read_bytes(), previous)
 
-    def test_config_restored_after_invocation_timeout_or_launch_error(self):
+    def test_sandbox_launch_timeout_or_error_leaves_no_run_root(self):
         self.task()
-        config = run.home("chanto") / "config.toml"
-        previous = b"# preserved\n[sandbox]\nenabled = true\n"
         popen = subprocess.Popen
         for launch_error in (False, True):
-            config.write_bytes(previous)
 
             def launch(cmd, *args, **kwargs):
                 if cmd[0] == "sandbox-exec":
-                    self.assertEqual(config.read_text(), "[sandbox]\nenabled = false\n")
+                    # Chanto's own sandbox is off inside the run's fresh home.
+                    home = Path(kwargs["cwd"]).parent / "home"
+                    self.assertEqual((home / "config.toml").read_text(), "[sandbox]\nenabled = false\n")
                     if launch_error:
                         raise OSError("launch failed")
                     cmd = cmd[3:]  # Exercise lifetime management without a real sandbox.
@@ -120,7 +241,8 @@ class RunnerTests(unittest.TestCase):
                 else:
                     result = run.run_task("chanto", "tiny", "model", 100, 0.1, 0)
                     self.assertTrue(result["timed_out"])
-            self.assertEqual(config.read_bytes(), previous)
+                    self.assertEqual(result["isolation"], "sandbox-exec")
+            self.assertEqual(list((run.WORK / "runs").iterdir()), [])
 
     def test_unsupported_platform_before_setup(self):
         # Linux without bubblewrap and socat can't run offline.
@@ -321,21 +443,21 @@ class RunnerTests(unittest.TestCase):
         ]
         self.assertEqual(run.paired(results, "chanto"), [("other", 3, 1, 1, 1.0)])
         f = self.root / "r.json"
-        f.write_text(json.dumps({"model": "m", "ctx": 1, "meta": {"upstream_model": "up/model"}, "results": results + results[:1]}))
+        f.write_text(json.dumps({"model": "m", "ctx": 1, "isolation": "bwrap", "meta": {"upstream_model": "up/model"}, "results": results + results[:1]}))
         text = run.report([str(f), str(f)])
         self.assertIn("`up/model` (as `m`)", text)
         self.assertIn("| other | 3 | 1 | 1 | 1.00 (not significant) |", text)
         self.assertIn("**2/3**", text)  # a run listed twice counts once
         # Totals only count tasks every agent ran.
         extra = results + [{"agent": "chanto", "task": "d", "rep": 0, "passed": True, "seconds": 1, "timed_out": False}]
-        f.write_text(json.dumps({"model": "m", "ctx": 1, "results": extra}))
+        f.write_text(json.dumps({"model": "m", "ctx": 1, "isolation": "bwrap", "results": extra}))
         text = run.report([str(f)])
         self.assertIn("Totals cover the 3 tasks every agent ran; 1 runs", text)
         self.assertIn("**2/3**", text)
         # Showcase tasks get their own totals and stay out of the coding score and pairing.
         show = results + [{"agent": a, "task": "data-x", "rep": 0, "passed": True, "seconds": 1, "timed_out": False}
                           for a in ("chanto", "other")]
-        f.write_text(json.dumps({"model": "m", "ctx": 1, "results": show}))
+        f.write_text(json.dumps({"model": "m", "ctx": 1, "isolation": "bwrap", "results": show}))
         text = run.report([str(f)])
         head, tail = text.split("Showcase tier (1 tasks")
         self.assertIn("**2/3**", head)
@@ -374,7 +496,7 @@ class RunnerTests(unittest.TestCase):
                     "errored": claimed is False, "clean_exit_fail": fd}
         results = [mk("chanto", True, fd=True), mk("aider", None, fd=True), mk("forge", False)]
         f = self.root / "r.json"
-        f.write_text(json.dumps({"model": "m", "ctx": 1, "results": results}))
+        f.write_text(json.dumps({"model": "m", "ctx": 1, "isolation": "bwrap", "results": results}))
         text = run.report([str(f)])
         row = lambda a: next(l for l in text.splitlines() if l.startswith(f"| {a} |")).split("|")
         # chanto really claimed success and failed; aider prints no signal, so
@@ -407,15 +529,16 @@ class RunnerTests(unittest.TestCase):
         self.task()
         for offline in (False, True):
             for budget in (False, True):
-                with self.subTest(offline=offline, budget=budget):
+                with self.subTest(offline=offline, budget=budget), \
+                        patch.dict(os.environ, {"CHANTO_BENCH_ISOLATION": "on" if offline else "off"}):
                     for f in run.RESULTS.glob("*.json"):
                         f.unlink()
                     out = run.WORK / "chanto/tiny-0.out"
                     out.parent.mkdir(parents=True, exist_ok=True)
                     out.write_text("budget exhausted" if budget else "done")
                     result = {"passed": not budget, "seconds": 0, "timed_out": False, "agent": "chanto"}
-                    argv = ["run.py", "--tasks", "tiny"] + (["--offline"] if offline else [])
-                    with patch.object(sys, "argv", argv), patch.object(run.sys, "platform", "darwin"), patch.object(run, "run_task", return_value=result), contextlib.redirect_stdout(io.StringIO()):
+                    argv = ["run.py", "--tasks", "tiny"]
+                    with patch.object(sys, "argv", argv), patch.object(run.sys, "platform", "darwin"), patch.object(run, "run_task", return_value=result), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                         if budget:
                             with self.assertRaises(SystemExit):
                                 run.main()
@@ -423,6 +546,9 @@ class RunnerTests(unittest.TestCase):
                             run.main()
                     data = json.loads(next(run.RESULTS.glob("*.json")).read_text())
                     self.assertEqual(data["offline"], offline)
+                    # Isolation is on unless turned off, and every file says which.
+                    self.assertEqual(data["isolation"], "sandbox-exec" if offline else "off")
+                    self.assertEqual(data["meta"]["isolation"], data["isolation"])
                     self.assertEqual(data.get("aborted"), "out of budget" if budget else None)
                     self.assertEqual(len(data["results"]), 0 if budget else 1)
                     # Each result file says exactly what ran.
@@ -569,147 +695,97 @@ class RunnerTests(unittest.TestCase):
         with patch.object(sys, "argv", ["run.py", "--tasks", "tiny", "--agents", "chanto+nope"]), self.assertRaises(SystemExit):
             run.main()
 
-    @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("BENCH_SANDBOX_SMOKE") == "1", "opt-in macOS sandbox smoke")
-    def test_macos_sandbox_smoke(self):
-        hidden = self.root / 'protected "quote" \\ slash'
-        hidden.mkdir()
-        wd = hidden / "work/current"
-        home = hidden / "work/.homes/chanto"
-        wd.mkdir(parents=True)
-        home.mkdir(parents=True)
-        for d in (wd / ".venv/lib/site-packages", hidden.parent / "site-packages"):
-            d.mkdir(parents=True, exist_ok=True)
-            (d / "mod.py").write_text("ok")
-        secret = hidden / "grading-input"
-        secret.write_text("original")
-        binary = hidden / "binary"
-        # The Chanto sources are hidden as well as this repository.
-        (hidden / "chanto").mkdir()
-        sibling = hidden / "chanto" / "main.rs"
-        # A script run with sh, not a copy of /bin/echo: macOS 26 kills copied
-        # system binaries, and exec of a new unsigned script hangs in a sandbox.
-        binary.write_text('#!/bin/sh\necho "$1"\n')
-        binary.chmod(0o755)
-        sibling.write_text("hidden")
-        hidden, wd, home = hidden.resolve(), wd.resolve(), home.resolve()
-        with patch.object(run, "ROOT", hidden), patch.object(run, "CHANTO_REPO", hidden / "chanto"), \
-                patch.object(run, "WORK", hidden / "work"):
-            profile = run.offline_profile(wd, home, binary)
-        script = '''
-import pathlib, socket, subprocess, sys
-secret, sibling, binary, wd, home, port = sys.argv[1:]
-import os
-assert os.getcwd() == wd, os.getcwd()
-# The task's own venv is readable; packages installed elsewhere aren't.
-assert (pathlib.Path(wd) / ".venv/lib/site-packages/mod.py").read_text() == "ok"
-try:
-    (pathlib.Path(wd).parents[2] / "site-packages/mod.py").read_text()
-except PermissionError:
-    pass
-else:
-    raise AssertionError("outside site-packages readable")
-for path in (secret, sibling):
-    for operation in (lambda: pathlib.Path(path).read_text(), lambda: pathlib.Path(path).write_text("tampered")):
-        try:
-            operation()
-        except PermissionError:
-            pass
-        else:
-            raise AssertionError("protected access succeeded: " + path)
-for path in (wd, home):
-    p = pathlib.Path(path) / "allowed"
-    p.write_text("ok")
-    assert p.read_text() == "ok"
-assert subprocess.check_output(["/bin/sh", binary, "ok"]).strip() == b"ok"
-try:
-    pathlib.Path(binary).write_text("tampered")
-except PermissionError:
-    pass
-else:
-    raise AssertionError("binary writable")
-with socket.create_connection(("127.0.0.1", int(port)), timeout=2):
-    pass
-try:
-    socket.create_connection(("1.1.1.1", 443), timeout=2)
-except PermissionError:
-    pass
-else:
-    raise AssertionError("external connection not denied")
-'''
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            listener.listen()
-            result = subprocess.run(["sandbox-exec", "-p", profile, sys.executable, "-c", script,
-                                     str(secret), str(sibling), str(binary), str(wd), str(home), str(listener.getsockname()[1])],
-                                    capture_output=True, text=True, timeout=10, cwd=wd)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(secret.read_text(), "original")
+    @unittest.skipUnless(os.environ.get("BENCH_SANDBOX_SMOKE") == "1" and (sys.platform == "darwin" or sys.platform.startswith("linux")),
+                         "opt-in sandbox smoke: sandbox-exec on macOS, bubblewrap and socat on Linux")
+    def test_isolated_run_sees_only_its_own_task(self):
+        """One fake agent (a shell script) through run_task under the real
+        sandbox: it reaches its checkout, its HOME and the proxy, and nothing
+        else: not a sibling run, not the hidden tests, not GitHub, and not the
+        upstream fix that the task's history had before it was sealed."""
+        # A sibling run and another agent's transcript, as a concurrent shard would leave them.
+        sibling = run.WORK / "runs/r-sibling0"
+        sibling.mkdir(parents=True)
+        (sibling / "secret.txt").write_text("the other run's patch")
+        other_log = run.WORK / "other/tiny-0.out"
+        other_log.parent.mkdir(parents=True)
+        other_log.write_text("another agent's transcript")
+        # A SWE-style task whose checkout first holds the upstream fix in its
+        # history (a later commit, tag, remote ref and reflog), as a clone would.
+        task = run.TASKS / "swe-tiny"
+        (task / "files").mkdir(parents=True)
+        (task / "files/a.py").write_text("x = 1\n")
+        (task / "prompt.txt").write_text("Fix it")
+        (task / "check.sh").write_text("exit 0\n")
+        future_file = self.root / "future"
+        (task / "setup.sh").write_text(
+            "set -e\ngit init -q\ngit add -A\ngit -c user.email=b@b -c user.name=b commit -qm base\n"
+            "echo FUTURE_FIX > a.py\ngit -c user.email=b@b -c user.name=b commit -qam upstream-fix\n"
+            'git rev-parse HEAD > "$FUTURE_FILE"\ngit tag fix\ngit update-ref refs/remotes/origin/main HEAD\n'
+            "git remote add origin https://github.com/example/upstream.git\ngit reset -q --hard HEAD~1\n")
+        agent_dir = self.root / "agent"
+        agent_dir.mkdir()
+        script = agent_dir / "fake-agent.sh"
+        script.write_text(r"""#!/bin/sh
+probe() { name=$1; shift; echo "$ $*"; if "$@" >/dev/null 2>&1; then echo "REACHED $name"; else echo "BLOCKED $name"; fi; }
+probe sibling-list ls "$SIBLING"
+probe sibling-read cat "$SIBLING/secret.txt"
+probe other-transcript cat "$OTHER_LOG"
+probe hidden-tests cat "$TASK_DIR/check.sh"
+probe write-outside sh -c "echo x > '$OUTSIDE/planted'"
+probe github-ip python3 -c "import socket; socket.create_connection(('140.82.112.3', 443), timeout=5)"
+probe github-name python3 -c "import socket; socket.create_connection(('github.com', 443), timeout=5)"
+probe system-packages python3 -c "import os, site, sys; ps = [p for p in site.getsitepackages() if os.path.isdir(p)]; sys.exit(0 if any(os.listdir(p) for p in ps) else 1)"
+probe proxy python3 -c "import sys, urllib.request as u; sys.exit(0 if u.build_opener(u.ProxyHandler({})).open(sys.argv[1], timeout=5).read() == b'proxy-ok' else 1)" "$FAKE_PROXY"
+probe future-object git cat-file -e "$FUTURE"
+probe future-content sh -c "git cat-file --batch-all-objects --batch | grep -a -q FUTURE_FIX"
+probe future-log sh -c "git log --all --reflog --format=%s | grep -q upstream-fix"
+probe lost-found sh -c "git fsck --lost-found; grep -r -a -q FUTURE_FIX .git/lost-found"
+probe own-file grep -q "x = 1" a.py
+probe own-write sh -c "echo y > own.txt && grep -q y own.txt"
+probe home-write sh -c 'echo z > "$HOME/h" && grep -q z "$HOME/h"'
+""")
+        script.chmod(0o755)
 
+        class Proxy(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"proxy-ok")
 
-    @unittest.skipUnless(sys.platform.startswith("linux") and os.environ.get("BENCH_SANDBOX_SMOKE") == "1", "opt-in Linux sandbox smoke (needs bwrap, socat)")
-    def test_linux_sandbox_smoke(self):
-        import site
-        hidden = self.root / "protected"
-        wd = hidden / "work/current"
-        home = hidden / "work/.homes/chanto"
-        wd.mkdir(parents=True)
-        home.mkdir(parents=True)
-        secret = hidden / "grading-input"
-        secret.write_text("original")
-        # The Chanto sources are hidden as well as this repository.
-        (hidden / "chanto").mkdir()
-        sibling = hidden / "chanto" / "main.rs"
-        sibling.write_text("hidden")
-        binary = hidden / "binary"
-        binary.write_text('#!/bin/sh\necho "$1"\n')
-        binary.chmod(0o755)
-        packages = next((p for p in site.getsitepackages() if Path(p).is_dir() and os.listdir(p)), "")
-        hidden, wd, home = hidden.resolve(), wd.resolve(), home.resolve()
-        script = """
-import os, pathlib, socket, subprocess, sys
-secret, sibling, binary, wd, home, port, packages = sys.argv[1:]
-assert os.getcwd() == wd, os.getcwd()
-for path, what in ((secret, "bench data"), (sibling, "Chanto sources")):
-    try:
-        pathlib.Path(path).read_text()
-    except OSError:
-        pass
-    else:
-        raise AssertionError(what + " readable")
-if packages:
-    assert os.listdir(packages) == [], "installed packages visible"
-for path in (wd, home):
-    p = pathlib.Path(path) / "allowed"
-    p.write_text("ok")
-    assert p.read_text() == "ok"
-assert subprocess.check_output(["/bin/sh", binary, "ok"]).strip() == b"ok"
-with socket.create_connection(("127.0.0.1", int(port)), timeout=5):
-    pass
-try:
-    socket.create_connection(("1.1.1.1", 443), timeout=3)
-except OSError:
-    pass
-else:
-    raise AssertionError("external connection not denied")
-"""
-        sock_dir = Path(tempfile.mkdtemp(prefix="bench-net-test-"))
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            listener.listen()
-            port = listener.getsockname()[1]
-            bridge = subprocess.Popen(["socat", f"UNIX-LISTEN:{sock_dir}/{port}.sock,fork,unlink-early", f"TCP:127.0.0.1:{port}"],
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            try:
-                time.sleep(0.3)
-                with patch.object(run, "ROOT", hidden), patch.object(run, "CHANTO_REPO", hidden / "chanto"), \
-                        patch.object(run, "WORK", hidden / "work"), patch.object(run, "AGENT_INSTALLS", []):
-                    cmd = run.offline_linux(wd, home, [sys.executable, "-c", script, str(secret), str(sibling), str(binary), str(wd), str(home), str(port), packages],
-                                            [port], sock_dir, binary)
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=wd)
-            finally:
-                bridge.kill()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(secret.read_text(), "original")
+            def log_message(self, *a):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        proxy = f"http://127.0.0.1:{server.server_address[1]}"
+
+        def fake_agent(agent, model, prompt, ctx, wd=None):
+            return ["/bin/sh", str(script)], {
+                "SIBLING": str(sibling), "OTHER_LOG": str(other_log), "TASK_DIR": str(task), "OUTSIDE": str(self.root),
+                "FAKE_PROXY": proxy, "FUTURE": future_file.read_text().strip()}
+
+        with patch.object(run, "OFFLINE", True), patch.object(run, "API", proxy), \
+                patch.object(run, "agent_cmd", side_effect=fake_agent), \
+                patch.object(run, "agent_installs", return_value=[agent_dir]), \
+                patch.dict(os.environ, {"FUTURE_FILE": str(future_file)}):
+            result = run.run_task("fake", "swe-tiny", "model", 100, 120, 0)
+        out = (run.WORK / "fake/swe-tiny-0.out").read_text()
+        verdicts = dict(reversed(line.split(" ", 1)) for line in out.splitlines() if line.startswith(("REACHED ", "BLOCKED ")))
+        expected = {name: "REACHED" for name in ("proxy", "own-file", "own-write", "home-write")}
+        expected.update({name: "BLOCKED" for name in (
+            "sibling-list", "sibling-read", "other-transcript", "hidden-tests", "write-outside", "github-ip", "github-name",
+            "system-packages", "future-object", "future-content", "future-log", "lost-found")})
+        self.assertEqual(verdicts, expected, out)
+        self.assertFalse((self.root / "planted").exists())
+        self.assertEqual(result["isolation"], "sandbox-exec" if sys.platform == "darwin" else "bwrap")
+        # The attempts still show: the sibling run's path and the git history probe.
+        kinds = {h["kind"] for h in result["offtask_hits"]}
+        self.assertTrue({"bench data", "git history"} <= kinds, result["offtask_hits"])
+        # Only the sibling is left: this run's root was cleaned up.
+        self.assertEqual([p.name for p in (run.WORK / "runs").iterdir()], ["r-sibling0"])
+
 
 if __name__ == "__main__":
     unittest.main()

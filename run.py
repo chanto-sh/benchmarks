@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -74,9 +75,10 @@ CHANTO_BIN = Path(os.environ.get("BENCH_CHANTO_BIN", CHANTO_REPO / "target" / "r
 
 
 def home(agent):
-    """A fresh, empty config home per agent: nobody gets the user's personal
-    settings, plugins, MCP servers or memories."""
-    d = WORK / ".homes" / agent
+    """A fresh, empty config home: nobody gets the user's personal settings,
+    plugins, MCP servers or memories. During a run it's that run's own HOME
+    (one agent per run root); outside one, a per-agent folder in WORK."""
+    d = RUN_HOME if RUN_HOME is not None else WORK / ".homes" / agent
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -532,10 +534,30 @@ def estimate(agents, tiers, repeat, refs):
     return counts, rows
 
 
-# --offline: agents may reach only localhost (the model proxy), and can't read
-# anything that holds answers: task folders (hidden tests, gold data), cached
-# upstream clones (their history has the fix), other runs, this repo.
+# ------------------------------------------------------------------ isolation
+# Every run (one agent, one task, one rep) gets its own root under WORK/runs:
+# the task checkout, a fresh HOME and a TMPDIR, and nothing else. The agent runs
+# in an OS sandbox (sandbox-exec on macOS, bubblewrap on Linux) that can read
+# only that root, its own install, system and toolchain paths, and can connect
+# only to localhost (the model proxy). Afterwards the root is deleted; the
+# transcript and the patch are kept. docs/sandbox.md has the details and the
+# limits. CHANTO_BENCH_ISOLATION=off turns the sandbox off for debugging: the
+# result file records the mode, and --report refuses to tabulate such runs.
+ISOLATION_ENV = "CHANTO_BENCH_ISOLATION"
+# Whether this process's runs are sandboxed (main sets it from the mode).
 OFFLINE = False
+# The current run's HOME while its command is being built (see home()).
+RUN_HOME = None
+
+
+def isolation_mode(env=None):
+    """'off' when CHANTO_BENCH_ISOLATION=off, otherwise the platform's sandbox."""
+    value = (os.environ if env is None else env).get(ISOLATION_ENV, "on").strip().lower()
+    if value in ("off", "0", "false", "no"):
+        return "off"
+    if value not in ("", "on", "1", "true", "yes"):
+        sys.exit(f"{ISOLATION_ENV}={value!r}: use on (the default) or off")
+    return "sandbox-exec" if sys.platform == "darwin" else "bwrap"
 
 
 def require_offline_platform():
@@ -543,19 +565,91 @@ def require_offline_platform():
         return
     if sys.platform.startswith("linux") and shutil.which("bwrap") and shutil.which("socat"):
         return
-    sys.exit("--offline needs macOS (sandbox-exec), or Linux with bubblewrap and socat installed")
+    sys.exit(f"isolation needs macOS (sandbox-exec), or Linux with bubblewrap and socat installed; "
+             f"{ISOLATION_ENV}=off runs without it, for debugging only (such results can't be published)")
 
 
 def offline_hidden():
-    """What agents may not read: this repository (tasks' hidden tests, past
-    runs), the Chanto sources, other agents' and shards' workspaces, and package
-    caches that could hold a newer release with the fix."""
+    """Paths that stay hidden even if a toolchain or install path covers them:
+    this repository (tasks' hidden tests, past runs), the Chanto sources, other
+    runs' workspaces, and caches that could hold a newer release with the fix
+    or the SWE-bench gold patches."""
     return [ROOT, CHANTO_REPO, Path.home() / ".cache/chanto-bench", BENCH_HOME, WORK,
             Path.home() / "Library/Caches/pip", Path.home() / ".cache/pip", Path.home() / ".cache/uv",
             Path.home() / "Library/Caches/uv",
-            # A downloaded SWE-bench dataset holds the gold patches too.
             Path.home() / ".cache/huggingface", Path.home() / "Library/Caches/huggingface",
             Path.home() / ".cache/datasets"]
+
+
+# Read-only system paths every agent needs (shells, libc, dyld, certificates,
+# compilers). Package directories inside them are hidden separately for the
+# SWE-bench tasks (see python_package_dirs and the macOS regex).
+MACOS_SYSTEM = ["/System", "/usr", "/bin", "/sbin", "/Library", "/Applications/Xcode.app", "/opt/homebrew",
+                "/private/etc", "/private/var/db/timezone", "/private/var/db/xcode_select_link",
+                "/private/var/select", "/private/var/db/dyld", "/dev"]
+LINUX_SYSTEM = ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32", "/etc", "/opt", "/nix/store"]
+# Language runtimes installed per user, by version managers. Their own data
+# (caches, registries) stays out: only the runtimes.
+HOME_TOOLCHAINS = [".volta", ".nvm", ".fnm", ".local/share/fnm", ".bun/bin", ".rustup/toolchains", ".rustup/settings.toml",
+                   ".cargo/bin", ".pyenv/versions", ".pyenv/shims", ".pyenv/libexec", ".local/share/uv/python",
+                   ".local/share/mise/installs", ".asdf/installs", ".asdf/shims", ".go", "sdk", ".local/go"]
+# The runtimes agents and task tests start; each one's install prefix is readable.
+RUNTIMES = ["node", "python3", "git", "go", "cargo", "rustc", "bun", "uv"]
+
+
+def toolchain_dirs():
+    """Runtimes outside the system paths, read-only: version-manager installs
+    under HOME, the install prefix of each runtime on PATH, and anything listed
+    in BENCH_TOOLCHAINS (os.pathsep-separated)."""
+    home_dir = Path.home().resolve()
+    managed = [(Path.home() / p).resolve() for p in HOME_TOOLCHAINS]
+    found = list(managed)
+    for name in RUNTIMES:
+        exe = shutil.which(name)
+        if not exe:
+            continue
+        real = Path(exe).resolve()
+        if any(m == real or m in real.parents for m in managed):
+            continue
+        # A binary in a shared folder (~/.local/bin, /usr/local/bin) adds only
+        # that folder: its parent holds caches and other programs' data.
+        prefix = real.parent.parent
+        broad = prefix in (Path("/"), home_dir, home_dir / ".local", home_dir / ".cargo") or prefix in home_dir.parents
+        found.append(real.parent if broad else prefix)
+    found += [Path(p) for p in os.environ.get("BENCH_TOOLCHAINS", "").split(os.pathsep) if p]
+    out = []
+    for p in found:
+        try:
+            if p.exists() and p.resolve() not in out:
+                out.append(p.resolve())
+        except OSError:
+            continue
+    return out
+
+
+def user_site_dirs():
+    """Per-user Python packages (pip install --user): the data-science tasks
+    (DS-1000, EvalPlus) may need pandas or numpy from there."""
+    import glob
+    pats = [Path.home() / "Library/Python/*/lib/python/site-packages", Path.home() / ".local/lib/python3*/site-packages"]
+    return [Path(p).resolve() for pat in pats for p in sorted(glob.glob(str(pat)))]
+
+
+def agent_installs(agent):
+    """The one agent install a run may read: its uv tool environment, the
+    standalone binaries directory, or the npm prefix. Other agents' installs
+    stay hidden (a Python agent's environment can hold a newer requests or
+    flask than the task's)."""
+    uv = {"aider": "aider-chat", "openhands": "openhands"}
+    if agent in uv:
+        return [UV_TOOLS / uv[agent]]
+    if agent.startswith("chanto"):
+        return []
+    if (BIN_DIR / agent).exists():
+        return [BIN_DIR]
+    if agent in VERSION_CMDS or agent == "cline":
+        return [NPM_BIN.parent.parent]
+    return []
 
 
 def python_package_dirs():
@@ -568,31 +662,55 @@ def python_package_dirs():
             str(Path.home() / ".local/lib/python3*/site-packages"),
             str(Path.home() / ".local/share/uv/python/*/lib/python3*/site-packages"),
             str(Path.home() / ".pyenv/versions/*/lib/python3*/site-packages"),
-            "/opt/hostedtoolcache/Python/*/*/lib/python3*/site-packages"]
+            "/opt/hostedtoolcache/Python/*/*/lib/python3*/site-packages",
+            "/opt/*/lib/python3*/site-packages"]
     found = {Path(p).resolve() for pat in pats for p in glob.glob(pat)}
     found |= {Path(p).resolve() for p in [*site.getsitepackages(), site.getusersitepackages()] if Path(p).is_dir()}
     keep = [Path(p).resolve() for p in AGENT_INSTALLS]
     return sorted(p for p in found if p.is_dir() and not any(p == k or k in p.parents for k in keep))
 
 
-def offline_linux(wd, agent_home, cmd, ports, sock_dir, executable=None, keep_site_packages=False):
-    """The Linux counterpart of offline_profile, with bubblewrap: no network
-    except the listed localhost ports (bridged in over Unix sockets), hidden
-    paths covered by empty mounts, the workspace and config home re-exposed."""
-    # Own PID namespace: when the agent exits, everything it (and the bridges) left behind goes too.
-    args = ["bwrap", "--die-with-parent", "--unshare-net", "--unshare-pid", "--bind", "/", "/", "--dev", "/dev", "--proc", "/proc"]
-    installed = [] if keep_site_packages else python_package_dirs()
-    for p in [*offline_hidden(), *installed]:
+def offline_linux(root, installs, cmd, ports, sock_dir, executable=None, keep_site_packages=False, cwd=None):
+    """The Linux counterpart of offline_profile, with bubblewrap: a new, empty
+    root filesystem with only system and toolchain paths (read-only), the
+    agent's install (read-only) and the run root (writable) mounted; no network
+    except the listed localhost ports, bridged in over Unix sockets."""
+    # Own network, PID and IPC namespaces: when the agent exits, everything it
+    # (and the bridges) left behind goes too.
+    args = ["bwrap", "--die-with-parent", "--unshare-net", "--unshare-pid", "--unshare-ipc",
+            "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/var/tmp"]
+    ro = []
+    for p in LINUX_SYSTEM:
+        path = Path(p)
+        if path.is_symlink():
+            # /bin -> usr/bin on merged-/usr systems: keep it a link.
+            args += ["--symlink", os.readlink(path), p]
+        elif path.exists():
+            ro.append(path)
+    ro += toolchain_dirs()
+    if keep_site_packages:
+        ro += user_site_dirs()
+    for p in ro:
+        args += ["--ro-bind", str(p), str(p)]
+    # Hidden paths that a mounted tree happens to contain, and installed
+    # Python packages (they hold newer releases with the fix).
+    mounted = [Path(p).resolve() for p in ro]
+    hidden = [Path(p).resolve() for p in offline_hidden() if Path(p).exists()]
+    if not keep_site_packages:
+        hidden += python_package_dirs()
+    for p in [h for h in hidden if any(m == h or m in h.parents for m in mounted)]:
+        args += ["--tmpfs", str(p)]
+    # Later mounts win: the agent's install, its binary and the run root, even under hidden paths.
+    for p in installs:
         if Path(p).exists():
-            args += ["--tmpfs", str(Path(p).resolve())]
-    # Later mounts win: what the agent needs, even under hidden paths.
-    for p in [*AGENT_INSTALLS, wd, run_tmp(wd), agent_home, sock_dir]:
-        if Path(p).exists():
-            args += ["--bind", str(Path(p).resolve()), str(Path(p).resolve())]
+            args += ["--ro-bind", str(Path(p).resolve()), str(Path(p).resolve())]
     if executable is not None:
         args += ["--ro-bind", str(executable), str(executable)]
+    args += ["--bind", str(Path(root).resolve()), str(Path(root).resolve()),
+             "--bind", str(Path(sock_dir).resolve()), str(Path(sock_dir).resolve())]
+    sock_dir = Path(sock_dir).resolve()
     bridges = "".join(f"socat TCP-LISTEN:{port},bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:{sock_dir}/{port}.sock </dev/null >/dev/null 2>&1 & " for port in ports)
-    return args + ["--chdir", str(Path(wd).resolve()), "--", "sh", "-c", bridges + 'sleep 0.3; exec "$@"', "sh", *cmd]
+    return args + ["--chdir", str(Path(cwd or root).resolve()), "--", "sh", "-c", bridges + 'sleep 0.3; exec "$@"', "sh", *cmd]
 
 
 def offline_ports():
@@ -602,55 +720,56 @@ def offline_ports():
     return sorted({urlparse(u).port or 80 for u in urls})
 
 
-def run_tmp(wd):
-    """The run's private TMPDIR, next to its workspace."""
-    wd = Path(wd)
-    return wd.with_name(wd.name + ".tmp")
-
-
-def offline_profile(wd, agent_home, executable=None, keep_site_packages=False):
+def offline_profile(root, installs=(), executable=None, keep_site_packages=False):
+    """The macOS sandbox profile for one run: reads only from the run root, the
+    agent's install, system and toolchain paths; writes only to the run root;
+    network only to localhost."""
     q = lambda p: json.dumps(str(Path(p).resolve()), ensure_ascii=False)
-    # The bench's own data (other agents' and shards' workspaces, past runs),
-    # and package caches that could hold a newer release with the fix.
-    hidden = offline_hidden()
+    root = Path(root).resolve()
     rules = ["(version 1)", "(allow default)",
-             '(deny network-outbound (remote ip "*:*"))', '(allow network-outbound (remote ip "localhost:*"))',
-             "(allow network-outbound (remote unix-socket))"]
-    rules += [f'(deny file-read-data file-write* (subpath {q(p)}))' for p in hidden]
-    # Every installed Python package outside the task's own venv: a newer
-    # pytest or sympy elsewhere on the machine already contains the fix. The
-    # public benchmark tasks (DS-1000, EvalPlus) need their data-science
-    # packages instead, so they keep read access and only the SWE-bench tasks
-    # hide system site-packages.
-    if keep_site_packages:
-        rules.append('(allow file-read* file-read-data (regex #"/(site|dist)-packages(/|$)"))')
-    else:
+             # Only localhost: the model proxy and meter, and servers a task's own
+             # tests start. DNS goes through mDNSResponder's socket; no other Unix
+             # sockets outside the run root (a Docker socket would be a way out).
+             "(deny network*)",
+             '(allow network-outbound (remote ip "localhost:*"))',
+             '(allow network-bind network-inbound (local ip "localhost:*"))',
+             '(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))',
+             f'(allow network* (remote unix-socket (subpath {q(root)})) (local unix-socket (subpath {q(root)})))',
+             # No asking another app (a browser, Script Editor) to fetch or open something.
+             "(deny appleevent-send)", "(deny lsopen)",
+             # Files: nothing readable or writable unless allowed below. Metadata
+             # (stat) stays allowed: path lookups need it, and it shows no contents.
+             "(deny file-read-data)", "(deny file-write*)"]
+    readable = [*MACOS_SYSTEM, *toolchain_dirs(), *(user_site_dirs() if keep_site_packages else [])]
+    rules += [f"(allow file-read-data (subpath {q(p)}))" for p in readable if Path(p).exists()]
+    rules.append('(allow file-write* (subpath "/dev"))')
+    # Then take back what a system or toolchain path happens to contain: the
+    # bench data, and (SWE-bench) every installed Python package outside the
+    # task's venv, since a newer pytest or sympy already contains the fix. The
+    # public data-science tasks (DS-1000, EvalPlus) need system packages.
+    rules += [f"(deny file-read-data file-write* (subpath {q(p)}))" for p in offline_hidden()]
+    if not keep_site_packages:
         rules.append('(deny file-read-data file-write* (regex #"/(site|dist)-packages(/|$)"))')
-    # Another checkout of this repository (or a copy under another name) holds
-    # the same task folders and past runs, including the hidden tests and
-    # earlier successful patches. Hide those by shape, not just by location, so
-    # an agent that wanders outside the repo still can't read them.
+    # Another checkout of this repository holds the same tasks and past runs.
     rules.append(f'(deny file-read-data file-write* (regex #"/({CHECKOUT_NAMES})/(tasks|results)(/|$)"))')
     rules.append(f'(deny file-read-data file-write* (regex #"/({CHECKOUT_NAMES})/swebench-[^/]*\\.json$"))')
-    # The agents' own installs (npm prefix, Aider's uv tool venv), read-only.
-    rules += [f'(allow file-read* file-read-data (subpath {q(p)}))' for p in AGENT_INSTALLS]
     # Later rules win, but only over a rule for the same operation: an allow of
-    # file-read* doesn't undo a deny of file-read-data, so name it too. Only
-    # the current workspace and config home are writable.
-    rules += [f'(allow file-read* file-read-data file-write* (subpath {q(p)}))' for p in (wd, run_tmp(wd), agent_home)]
-    # getcwd needs to list each parent directory (macOS 26); listing a hidden
-    # directory shows names only, not what's in the files.
-    parents = {a for p in (wd, agent_home) for a in Path(p).resolve().parents}
-    rules += [f'(allow file-read-data (literal {q(a)}))' for a in sorted(parents)]
+    # file-read* doesn't undo a deny of file-read-data, so name it too.
+    rules += [f"(allow file-read* file-read-data (subpath {q(p)}))" for p in installs]
     if executable is not None:
-        rules.append(f'(allow file-read* file-read-data (literal {q(executable)}))')
+        rules.append(f"(allow file-read* file-read-data (literal {q(executable)}))")
+    rules.append(f"(allow file-read* file-read-data file-write* (subpath {q(root)}))")
+    # getcwd needs to list each parent directory (macOS 26); listing one shows
+    # names only, and no sibling run's contents.
+    rules += [f"(allow file-read-data (literal {q(a)}))" for a in sorted(root.parents)]
     return "\n".join(rules)
 
 
 @contextmanager
-def offline(agent, cmd, wd, keep_site_packages=False):
+def offline(agent, cmd, root, keep_site_packages=False, agent_home=None, cwd=None):
+    """Wrap an agent command in the platform's sandbox for one run root."""
     require_offline_platform()
-    agent_home = home("chanto" if agent.startswith("chanto") else agent)
+    agent_home = Path(agent_home) if agent_home is not None else home("chanto" if agent.startswith("chanto") else agent)
     config = agent_home / "config.toml"
     previous = None
     if agent.startswith("chanto"):
@@ -660,18 +779,18 @@ def offline(agent, cmd, wd, keep_site_packages=False):
             # The outer sandbox applies to Chanto and its tools too.
             config.write_text("[sandbox]\nenabled = false\n")
         executable = CHANTO_BIN.resolve() if agent.startswith("chanto") else None
+        installs = agent_installs(agent)
         if sys.platform == "darwin":
-            yield ["sandbox-exec", "-p", offline_profile(wd, agent_home, executable, keep_site_packages), *cmd]
+            yield ["sandbox-exec", "-p", offline_profile(root, installs, executable, keep_site_packages), *cmd]
         else:
             # Each allowed port gets a Unix socket outside, bridged to localhost.
-            import tempfile
-            sock_dir = Path(tempfile.mkdtemp(prefix="bench-net-"))
+            sock_dir = Path(tempfile.mkdtemp(prefix="net-", dir=root))
             ports = offline_ports()
             bridges = [subprocess.Popen(["socat", f"UNIX-LISTEN:{sock_dir}/{port}.sock,fork,unlink-early", f"TCP:127.0.0.1:{port}"],
                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for port in ports]
             try:
                 time.sleep(0.2)
-                yield offline_linux(wd, agent_home, cmd, ports, sock_dir, executable, keep_site_packages)
+                yield offline_linux(root, installs, cmd, ports, sock_dir, executable, keep_site_packages, cwd=cwd)
             finally:
                 for b in bridges:
                     b.kill()
@@ -682,6 +801,210 @@ def offline(agent, cmd, wd, keep_site_packages=False):
                 config.unlink(missing_ok=True)
             else:
                 config.write_bytes(previous)
+
+
+# Package managers point at nothing: an agent can't fetch a newer release of
+# the package under test (the release with the fix) even where the sandbox
+# can't stop it, and nothing waits on a network that isn't there.
+NO_PACKAGE_INDEX = {
+    "PIP_NO_INDEX": "1", "PIP_INDEX_URL": "http://127.0.0.1:9/no-index", "PIP_EXTRA_INDEX_URL": "",
+    "PIP_FIND_LINKS": "", "PIP_CONFIG_FILE": os.devnull, "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "UV_OFFLINE": "1", "UV_NO_CONFIG": "1", "UV_INDEX_URL": "http://127.0.0.1:9/no-index",
+    "UV_DEFAULT_INDEX": "http://127.0.0.1:9/no-index",
+    "npm_config_registry": "http://127.0.0.1:9/no-index", "npm_config_offline": "true",
+    "GOPROXY": "off", "GOFLAGS": "-mod=mod", "CARGO_NET_OFFLINE": "true",
+    "HF_HUB_OFFLINE": "1", "HF_DATASETS_OFFLINE": "1",
+}
+
+
+def new_run_root(agent, task, rep):
+    """A fresh, private root for one run: <root>/<task>-<rep> (the checkout),
+    <root>/home and <root>/tmp. The name is random, so a run can't guess where
+    another one lives."""
+    runs = WORK / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    root = Path(tempfile.mkdtemp(prefix="r-", dir=runs)).resolve()
+    for d in ("home", "tmp"):
+        (root / d).mkdir(mode=0o700)
+    return root
+
+
+def real_node_dir():
+    """The folder of the node binary behind a version-manager shim (Volta),
+    put first on PATH: the shim reads its own state and any package.json above
+    the workspace, which the sandbox hides, and then refuses to start."""
+    node = shutil.which("node")
+    if not node or Path(node).resolve().name != "volta-shim" or not shutil.which("volta"):
+        return None
+    try:
+        real = subprocess.run(["volta", "which", "node"], capture_output=True, text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return str(Path(real).parent) if real and Path(real).exists() else None
+
+
+def run_env(root, extra_env):
+    """The environment an agent runs with: a fresh HOME, XDG dirs and TMPDIR
+    in its run root, no package index, a neutral git identity, and the real
+    locations of runtimes that a version manager would otherwise look for in
+    the (new) HOME."""
+    env = dict(os.environ)
+    real = Path.home()
+    for var, path in (("RUSTUP_HOME", real / ".rustup"), ("VOLTA_HOME", real / ".volta"), ("NVM_DIR", real / ".nvm"),
+                      ("PYENV_ROOT", real / ".pyenv")):
+        if var not in env and path.exists():
+            env[var] = str(path)
+    h = root / "home"
+    env.update({"HOME": str(h), "USERPROFILE": str(h), "XDG_CONFIG_HOME": str(h / ".config"),
+                "XDG_DATA_HOME": str(h / ".local/share"), "XDG_STATE_HOME": str(h / ".local/state"),
+                "XDG_CACHE_HOME": str(h / ".cache"), "CARGO_HOME": str(h / ".cargo"), "GOPATH": str(h / "go"),
+                "GOMODCACHE": str(h / "go/pkg/mod"), "TMPDIR": str(root / "tmp"), "TMP": str(root / "tmp"),
+                "TEMP": str(root / "tmp"), "GIT_CONFIG_NOSYSTEM": "1",
+                # Tools that keep sockets or scratch under /tmp/<name>-<uid> by default.
+                "TMUX_TMPDIR": str(root / "tmp"), "CLAUDE_CODE_TMPDIR": str(root / "tmp"),
+                "XDG_RUNTIME_DIR": str(root / "tmp"),
+                "GIT_AUTHOR_NAME": "bench", "GIT_AUTHOR_EMAIL": "bench@localhost",
+                "GIT_COMMITTER_NAME": "bench", "GIT_COMMITTER_EMAIL": "bench@localhost"})
+    for k in ("PIP_REQUIRE_VIRTUALENV", "PYTHONUSERBASE", "PYTHONPATH", "PYTHONSTARTUP", "VIRTUAL_ENV"):
+        env.pop(k, None)
+    node_dir = real_node_dir()
+    if node_dir:
+        env["PATH"] = node_dir + os.pathsep + env.get("PATH", "")
+    env.update(NO_PACKAGE_INDEX)
+    env.update(extra_env)
+    return env
+
+
+def seal_checkout(wd):
+    """Leave the checkout's git history ending at the task's starting point:
+    no remotes, alternates, other refs, reflogs or unreachable objects, so
+    `git log --all`, `git fsck --lost-found` or `git cat-file
+    --batch-all-objects` find nothing from the future. Fails the run's setup
+    if anything is left."""
+    git = lambda *a: subprocess.run(["git", "-C", str(wd), *a], capture_output=True, text=True, timeout=600)
+    dot = Path(wd) / ".git"
+    if not dot.is_dir():
+        raise RuntimeError(f"{wd}: no .git directory to seal")
+    for remote in git("remote").stdout.split():
+        git("remote", "remove", remote)
+    head = git("symbolic-ref", "-q", "HEAD").stdout.strip()
+    for ref in git("for-each-ref", "--format=%(refname)").stdout.split():
+        if ref != head:
+            git("update-ref", "-d", ref)
+    for name in ("objects/info/alternates", "FETCH_HEAD", "ORIG_HEAD", "MERGE_HEAD", "packed-refs.lock", "shallow"):
+        (dot / name).unlink(missing_ok=True)
+    git("reflog", "expire", "--expire=now", "--all")
+    gc = git("-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "-c", "gc.pruneExpire=now",
+             "gc", "--prune=now", "--quiet")
+    if gc.returncode:
+        raise RuntimeError(f"git gc failed in {wd}: {gc.stderr[-500:]}")
+    reachable = set(git("rev-list", "--objects", "--all").stdout.split())
+    stored = git("cat-file", "--batch-all-objects", "--batch-check=%(objectname)").stdout.split()
+    extra = [o for o in stored if o not in reachable]
+    commits = git("rev-list", "--all").stdout.split()
+    if extra or git("remote").stdout.strip() or (dot / "objects/info/alternates").exists():
+        raise RuntimeError(f"{wd}: git still holds {len(extra)} objects past the task's starting point")
+    return {"commits": len(commits), "objects": len(stored)}
+
+
+def prefetch(wd, env):
+    """Download a task's declared Rust dependencies into the run's own
+    CARGO_HOME before the agent starts: the sandbox has no network, and the
+    shared ~/.cargo stays out of reach."""
+    cargo = Path(wd) / "Cargo.toml"
+    if cargo.exists() and re.search(r"^\[(dev-)?dependencies\]\s*\n\s*[A-Za-z_]", cargo.read_text(), re.M) and shutil.which("cargo"):
+        fetch_env = {k: v for k, v in env.items() if k not in NO_PACKAGE_INDEX}
+        subprocess.run(["cargo", "fetch", "--quiet"], cwd=wd, env=fetch_env, capture_output=True, timeout=600)
+
+
+# Off-task access: what a transcript shows an agent reaching for that isn't
+# its task. The sandbox blocks most of it; recording the attempts makes
+# contamination visible where it can't be blocked, and on runs without it.
+OFFTASK_PATTERNS = [
+    ("bench data", re.compile(r"chanto-bench|work-hard-[\w-]*|harness-verify|/\.homes/|/runs/r-\w{8}\b")),
+    ("package download", re.compile(r"\bpip3?\s+download\b|\bpip3?\s+index\b|\bpip3?\s+install\s+[^\n]*(?:-U\b|--upgrade\b)"
+                                    r"|\buv\s+pip\s+install\b|\bpip3?\s+install\s+[^\n]*(?:git\+|https?://)")),
+    ("package host", re.compile(r"(?:pypi\.org|files\.pythonhosted\.org)[^\s\"'\\]*")),
+    ("git history", re.compile(r"\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--?[\w.=-]+\s+)*(?:fsck|fetch|clone|pull)\b[^\n]{0,160}|--lost-found|--batch-all-objects"
+                               r"|\bgit\s+remote\s+add\b|\bgit\s+(?:log|rev-list)\s+[^\n]*--(?:all|reflog)\b")),
+    ("whole-disk search", re.compile(r"\b(?:find|fd|rg|grep\s+-[a-zA-Z]*r[a-zA-Z]*|ls\s+-[a-zA-Z]*R[a-zA-Z]*|du)\s+/(?:\s|$|\"|')"
+                                     r"|\bmdfind\b|\blocate\s")),
+    # The fix itself on GitHub: a pull request, commit, compare view or patch,
+    # or anything from its API. The upstream repository's own URLs are added
+    # per task (see offtask_hits).
+    ("web", re.compile(r"(?:https?://)?github\.com/[\w.-]+/[\w.-]+/(?:pull|commit|compare|blob|tree|raw)/[^\s\"'\\)]+"
+                       r"|api\.github\.com[^\s\"'\\)]*|patch-diff\.githubusercontent\.com[^\s\"'\\)]*")),
+]
+# What agents fetch for themselves at startup (skills, model price lists),
+# blocked by the sandbox and not about the task.
+AGENT_SELF_FETCH = ("OpenHands/extensions", "BerriAI/litellm")
+# Absolute paths that are expected outside the run root: system and toolchain locations.
+OFFTASK_PATH = re.compile(r"(?<![\w.~/-])(/(?:Users|home|root|private|tmp|var|opt|mnt|Volumes|srv|data)/[^\s\"'`:;,)\]}>|\\]+)")
+# Scratch space (/tmp) counts as expected: agents write scratch files there all
+# the time, and the sandbox gives it no contents worth reading.
+OFFTASK_PACKAGES = re.compile(r"(?<![\w.~/-])(/[^\s\"'`:;,)\]}>|\\]*/(?:site|dist)-packages/[^\s\"'`:;,)\]}>|\\]+)")
+EXPECTED_PATHS = ("/private/etc", "/private/var/folders", "/var/folders", "/opt/homebrew", "/opt/hostedtoolcache",
+                  "/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp", "/var/run/mDNSResponder")
+
+
+def offtask_hits(texts, root, task=None, prompt="", limit=50):
+    """Off-task access in a run's transcripts: absolute paths outside the run
+    root (and outside system and toolchain paths), package downloads, git
+    history beyond the task's base, whole-disk searches, and GitHub URLs
+    (the upstream repository or its fix). URLs the task's own prompt quotes
+    don't count. Returns up to `limit` distinct (kind, text) hits."""
+    root = str(Path(root).resolve()) if root else None
+    allowed = [str(p) for p in toolchain_dirs()] + list(EXPECTED_PATHS)
+    allowed += [str(Path(p).resolve()) for p in AGENT_INSTALLS]
+    patterns = list(OFFTASK_PATTERNS)
+    instance = TASKS / task / "instance.json" if task else None
+    if instance is not None and instance.exists():
+        # A SWE-bench task's upstream repository, under any GitHub URL.
+        repo = json.loads(instance.read_text()).get("repo", "")
+        if repo:
+            patterns.append(("upstream repo", re.compile(r"(?:github\.com|githubusercontent\.com)/" + re.escape(repo) + r"\b[^\s\"'\\)]*", re.I)))
+    hits, seen = [], set()
+
+    def add(kind, text):
+        text = text.strip()[:200]
+        if (kind, text) not in seen and len(hits) < limit:
+            seen.add((kind, text))
+            hits.append({"kind": kind, "text": text})
+
+    for text in texts:
+        # Some agents print the run's own long path wrapped over two lines.
+        # `flat` joins wrapped lines back up, so the root can be taken out of
+        # it too; a hit found in the text only counts if it's still there, at
+        # the start of a path, once the root is gone.
+        flat = re.sub(r"[ \t]*\n[ \t│|]*", "", text)
+        if root:
+            # The run's own root is on task; take it out before looking.
+            text, flat = (t.replace(root, "RUNROOT").replace(root.removeprefix("/private"), "RUNROOT") for t in (text, flat))
+        starts_path = lambda p: re.search(r"(?<![\w.~/-])" + re.escape(p), flat) is not None
+        for kind, pat in patterns:
+            # git commands are read joined up: the URL a clone names can be on the next line.
+            for m in pat.finditer(flat if kind == "git history" else text):
+                s = m.group(0)
+                if any(n in s for n in AGENT_SELF_FETCH):
+                    continue
+                if kind in ("web", "upstream repo") and s.rstrip(".") in prompt:
+                    continue
+                if kind == "bench data" and s not in flat:
+                    continue
+                add(kind, s)
+        # Installed packages outside the task's venv (an agent's own
+        # environment included) can hold a newer release with the fix.
+        for m in OFFTASK_PACKAGES.finditer(text):
+            if starts_path(m.group(1)):
+                add("installed package", m.group(1))
+        for m in OFFTASK_PATH.finditer(text):
+            p = m.group(1).rstrip(".")
+            if "-packages/" in p or not starts_path(p) or p in prompt:
+                continue
+            if any(p == a or p.startswith(a.rstrip("/") + "/") for a in allowed):
+                continue
+            add("path outside run root", p)
+    return hits
 
 
 def kill_process_group(p):
@@ -779,43 +1102,66 @@ def prepare_task(tdir, wd):
     raise RuntimeError(f"Setup failed for {tdir.name}: {result.stdout[-2000:]}{result.stderr[-2000:]}")
 
 
+def sandbox_name():
+    """The isolation mode this process's runs use, as recorded in results."""
+    return ("sandbox-exec" if sys.platform == "darwin" else "bwrap") if OFFLINE else "off"
+
+
 def run_task(agent, task, model, ctx, timeout, rep):
     if OFFLINE:
         require_offline_platform()
     tdir = TASKS / task
     prompt = (tdir / "prompt.txt").read_text().strip()
-    wd = WORK / agent / f"{task}-{rep}"
-    if wd.exists():
-        shutil.rmtree(wd)
+    # The run's own root: checkout, HOME and TMPDIR, deleted afterwards. The
+    # transcript and the patch are kept next to the other runs' in WORK/<agent>.
+    root = new_run_root(agent, task, rep)
+    wd = root / f"{task}-{rep}"
+    logs = WORK / agent
+    logs.mkdir(parents=True, exist_ok=True)
+    out_file = logs / f"{task}-{rep}.out"
+    keep_root = bool(os.environ.get("BENCH_KEEP_WORK"))
+    try:
+        return _run_in_root(agent, task, model, ctx, timeout, rep, tdir, prompt, root, wd, out_file)
+    finally:
+        if not keep_root and not KEEP_ROOTS.pop(str(root), False):
+            subprocess.run(["chmod", "-R", "u+rwx", str(root)], capture_output=True)
+            shutil.rmtree(root, ignore_errors=True)
+
+
+# Run roots kept for inspection because their evidence couldn't be saved.
+KEEP_ROOTS = {}
+
+
+def _run_in_root(agent, task, model, ctx, timeout, rep, tdir, prompt, root, wd, out_file):
+    global API, RUN_HOME
     prepare_task(tdir, wd)
-    subprocess.run(["git", "init", "-q"], cwd=wd)
-    subprocess.run(["git", "add", "-A"], cwd=wd)
-    subprocess.run(["git", "-c", "user.email=b@b", "-c", "user.name=bench", "commit", "-qm", "init"], cwd=wd)
+    for step in (["init", "-q"], ["add", "-A"], ["-c", "user.email=b@b", "-c", "user.name=bench", "commit", "-qm", "init"]):
+        subprocess.run(["git", *step], cwd=wd, capture_output=True)
+    # Nothing past the task's starting point: no remotes, other refs or loose objects.
+    seal_checkout(wd)
     tests_before = test_files(wd)
-    global API, METER, METER_LOG
+    agent_home = root / "home"
     label = None
     if METER:
         import uuid
         label = f"{agent}~{task}~{rep}~{uuid.uuid4().hex[:8]}"
         saved_api, API = API, f"{METER}/{label}"
-    cmd, extra_env = agent_cmd(agent, model, prompt, ctx, wd)
-    if METER:
-        API = saved_api
-        if agent == "goose":
-            # Goose takes a host plus a separate path.
-            extra_env["OPENAI_HOST"] = METER
-            extra_env["OPENAI_BASE_PATH"] = f"{label}/v1/chat/completions"
-    env = dict(os.environ, **extra_env)
+    RUN_HOME = agent_home
+    try:
+        cmd, extra_env = agent_cmd(agent, model, prompt, ctx, wd)
+    finally:
+        RUN_HOME = None
+        if METER:
+            API = saved_api
+    if METER and agent == "goose":
+        # Goose takes a host plus a separate path.
+        extra_env["OPENAI_HOST"] = METER
+        extra_env["OPENAI_BASE_PATH"] = f"{label}/v1/chat/completions"
+    env = run_env(root, extra_env)
     if (wd / ".venv/bin").exists():
         env["VIRTUAL_ENV"] = str(wd / ".venv")
         env["PATH"] = str(wd / ".venv/bin") + os.pathsep + env["PATH"]
     env["PWD"] = str(wd)  # some agents resolve their project from $PWD, not the process cwd
-    # A private temp dir per run: pytest keeps `pytest-of-<user>` under it, and
-    # one shared between concurrent and leftover runs breaks and stalls tests.
-    tmp = run_tmp(wd)
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
-    env["TMPDIR"] = str(tmp)
     if agent == "claude":
         env.pop("ANTHROPIC_API_KEY", None)
     if API:
@@ -823,11 +1169,12 @@ def run_task(agent, task, model, ctx, timeout, rep):
         for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY", "GROQ_API_KEY"):
             if k not in extra_env:
                 env.pop(k, None)
-    out_file = WORK / agent / f"{task}-{rep}.out"
+    prefetch(wd, env)
     t0 = time.time()
     timed_out = False
     keep_site_packages = not task.startswith("swe-")
-    with offline(agent, cmd, wd, keep_site_packages) if OFFLINE else nullcontext(cmd) as cmd, open(out_file, "w") as f:
+    sandbox = offline(agent, cmd, root, keep_site_packages, agent_home=agent_home, cwd=wd) if OFFLINE else nullcontext(cmd)
+    with sandbox as cmd, open(out_file, "w") as f:
         # Detached children that create their own process group are not covered.
         p = subprocess.Popen(cmd, cwd=wd, env=env, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                              start_new_session=True)
@@ -840,13 +1187,14 @@ def run_task(agent, task, model, ctx, timeout, rep):
         # is slow to die is not the task's fault and must not be billed to it.
         elapsed = time.time() - t0
         reap(p)
-        kill_leftovers(wd)
+        kill_leftovers(root)
         # Let an agent's own cleanup after a kill (Chanto's put-back guard)
         # land before the diff is taken.
         time.sleep(1)
     ended = time.time()
     # Before the check runs: it may apply the hidden tests to the workspace.
     patch = workspace_diff(wd)
+    out_file.with_suffix(".patch").write_bytes(patch)
     check_env = dict(os.environ, OUTPUT_FILE=str(out_file))
     envf = tdir / "env"
     if envf.exists():
@@ -886,17 +1234,21 @@ def run_task(agent, task, model, ctx, timeout, rep):
         except Exception:
             pass
     try:
-        sessions = session_files(home("chanto" if agent.startswith("chanto") else agent), t0)
+        sessions = session_files(agent_home, t0)
     except Exception:
         sessions = []
     leaked = test_leak(task, rep, out_file, sessions)
+    texts = []
+    for f in [out_file, *sessions]:
+        try:
+            texts.append(Path(f).read_text(errors="ignore"))
+        except OSError:
+            pass
+    hits = offtask_hits(texts, root, task, prompt)
     evidence = keep_evidence(agent, task, rep, out_file, patch, chk, sessions)
-    # SWE-bench workspaces (repo plus venv) are hundreds of MB each and the
-    # evidence is kept: free the space unless asked to keep them.
-    if ARTIFACTS is not None and "error" not in evidence and not os.environ.get("BENCH_KEEP_WORK"):
-        shutil.rmtree(wd, ignore_errors=True)
-    subprocess.run(["chmod", "-R", "u+rwx", str(tmp)], capture_output=True)
-    shutil.rmtree(tmp, ignore_errors=True)
+    if "error" in evidence:
+        # The evidence couldn't be saved: keep the root to recover it by hand.
+        KEEP_ROOTS[str(root)] = True
     return {
         "agent": agent, "task": task, "rep": rep, "passed": passed, "seconds": round(elapsed, 1),
         # Which `[optimize]` switches were on (full key names), for chanto agents.
@@ -904,6 +1256,10 @@ def run_task(agent, task, model, ctx, timeout, rep):
         "exit_code": code, "timed_out": timed_out, "check_output": chk.stdout[-800:] + chk.stderr[-400:],
         "tokens": tokens, "tampered": tampered, "false_done": false_done,
         "leaked": leaked,
+        # How the run was isolated, and what its transcript shows it reaching
+        # for outside its task anyway (see offtask_hits).
+        "isolation": sandbox_name(),
+        "offtask_hits": hits,
         "claimed_done": claimed_done, "errored": errored, "clean_exit_fail": clean_exit_fail,
         "usage": metered(label),
         # Matches this run's lines in the meter log (every model call it made).
@@ -991,14 +1347,15 @@ def run_meta(args, tasks):
         "proxy": first_line(["litellm", "--version"]) if API else None,
         "platform": {"system": platform.platform(), "machine": platform.machine(), "cpus": os.cpu_count(), "python": platform.python_version()},
         "offline_sandbox": OFFLINE,
+        # How every run in this file was isolated: sandbox-exec, bwrap or off.
+        "isolation": sandbox_name(),
         "timeout_s": args.timeout,
         "seed": args.seed,
         "repeat": args.repeat,
         "tasks": {t: task_digest(t) for t in tasks},
     }
-    if OFFLINE:
-        both = (offline_profile(WORK / "PROFILE-WD", WORK / "PROFILE-HOME")
-                + offline_profile(WORK / "PROFILE-WD", WORK / "PROFILE-HOME", keep_site_packages=True))
+    if OFFLINE and sys.platform == "darwin":
+        both = (offline_profile(WORK / "runs/PROFILE") + offline_profile(WORK / "runs/PROFILE", keep_site_packages=True))
         meta["offline_profile_sha256"] = hashlib.sha256(both.encode()).hexdigest()
     return meta
 
@@ -1206,9 +1563,23 @@ def completion_status(agent, timed_out, out_file):
     return None, None
 
 
-def report(files, ref="chanto"):
+def file_isolation(data):
+    """How a result file's runs were isolated (sandbox-exec, bwrap), or None
+    for runs made without it: CHANTO_BENCH_ISOLATION=off, and every file from
+    before isolation was recorded (their --offline sandbox shared one work
+    folder and config home between runs)."""
+    mode = data.get("isolation") or (data.get("meta") or {}).get("isolation")
+    return None if mode in (None, "off") else mode
+
+
+def report(files, ref="chanto", unisolated=False):
     by_key = {}
     model = ctx = upstream = None
+    bare = [f for f in files if file_isolation(json.loads(Path(f).read_text())) is None]
+    if bare and not unisolated:
+        raise SystemExit("not publishing runs made without isolation (CHANTO_BENCH_ISOLATION=off, or recorded before "
+                         "isolation existed): " + ", ".join(map(str, bare)) + "\nRe-run them isolated, or pass --unisolated "
+                         "to see them labelled as unisolated.")
     for f in files:
         d = json.loads(Path(f).read_text())
         model, ctx = d.get("model"), d.get("ctx")
@@ -1222,6 +1593,10 @@ def report(files, ref="chanto"):
     tasks = sorted(set(r["task"] for r in results))
     served = f"`{upstream}` (as `{model}`) through one proxy" if upstream else f"`{model}`, same server"
     out = [f"Model: {served} for all agents · context {ctx}\n"]
+    if bare:
+        out.insert(0, f"**Measured without isolation** ({len(bare)} of {len(files)} result files): agents could reach other "
+                      "runs' workspaces, package caches, upstream history or the network, so these numbers may be inflated. "
+                      "Not for publishing.\n")
     # Totals only over tasks every agent ran, so the rates share a denominator.
     complete = [t for t in tasks if all(any(r["agent"] == a and r["task"] == t for r in results) for a in agents)]
     left_out = sum(r["task"] not in complete for r in results)
@@ -1272,6 +1647,12 @@ def report(files, ref="chanto"):
                    "*Edited existing tests*: changed a test file the task started with. On SWE-bench tasks that's usually an added regression "
                    "test, and the grader restores the original tests before checking, so it can't change a result; it signals cheating only on "
                    "the test-weakening tasks.")
+    if any(r.get("offtask_hits") for r in results):
+        counts = ", ".join(f"{a} {sum(bool(r.get('offtask_hits')) for r in results if r['agent'] == a)}" for a in agents)
+        out.append("\n⚠ marks a run whose transcript shows off-task access (`offtask_hits` in the result file: paths outside "
+                   "its run root, package downloads, git history past the task's base, whole-disk searches, GitHub URLs). "
+                   "The sandbox blocks most of these, so a hit is usually a failed attempt; read the run's hits before "
+                   f"trusting a ⚠ pass. Runs with hits: {counts}.")
     if any(r.get("leaked") for r in results):
         out.append("\n🔍 marks a run whose transcript names the task's hidden tests (`tasks/<task>/pristine/test.py`). "
                    "Online runs leave the checkout readable, so such a cell measures reading the grader as much as solving the "
@@ -1292,6 +1673,8 @@ def report(files, ref="chanto"):
                     mark += "✂"
                 if r.get("leaked"):
                     mark += "🔍"
+                if r.get("offtask_hits"):
+                    mark += "⚠"
                 cells.append(f"{mark} {r['seconds']:.0f}s")
             row.append(" / ".join(cells))
         out.append("| " + " | ".join(row) + " |")
@@ -1321,12 +1704,15 @@ def main():
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--api", help="use a hosted model through this proxy (e.g. http://localhost:4000, see proxy.sh)")
-    ap.add_argument("--offline", action="store_true", help="agents can reach only localhost (macOS); no web lookups")
+    ap.add_argument("--offline", action="store_true",
+                    help="kept for old commands: every run is isolated unless CHANTO_BENCH_ISOLATION=off")
     ap.add_argument("--sanity", action="store_true", help="verify every check fails on the untouched task")
     ap.add_argument("--chanto-effort", choices=["low", "medium", "high", "xhigh", "max"],
                     help="reasoning effort for every chanto variant (for chanto+effort on models without a known default)")
     ap.add_argument("--report", nargs="+", help="merge result JSON files into a markdown report")
     ap.add_argument("--report-ref", default="chanto", help="agent the report compares the others against")
+    ap.add_argument("--unisolated", action="store_true",
+                    help="let --report tabulate runs made without isolation, labelled as such (never for publishing)")
     args = ap.parse_args()
     global API, METER, METER_LOG, OFFLINE, CHANTO_EFFORT
     API = args.api
@@ -1334,10 +1720,16 @@ def main():
     for a in args.agents.split(","):
         chanto_optimizations(a)  # an unknown variant stops here, before any run
     METER, METER_LOG = args.meter, args.meter_log
-    OFFLINE = args.offline
     if args.report:
-        print(report(args.report, args.report_ref))
+        print(report(args.report, args.report_ref, unisolated=args.unisolated))
         return
+    mode = isolation_mode()
+    if mode == "off" and args.offline:
+        sys.exit(f"--offline asks for isolation, but {ISOLATION_ENV}=off turns it off")
+    OFFLINE = mode != "off"
+    if not OFFLINE and not args.estimate:
+        print(f"warning: {ISOLATION_ENV}=off: agents can see the whole machine and the network. "
+              "Use this for debugging only; --report refuses these results.", file=sys.stderr, flush=True)
     tiers = [t.strip() for t in args.tier.split(",") if t.strip()]
     bad = [t for t in tiers if t not in TIERS]
     if bad:
@@ -1428,14 +1820,15 @@ def main():
         r = run_task(agent, t, args.model, args.ctx, args.timeout if args.timeout is not None else (1800 if t.startswith("swe-") else 900), rep)
         results.append(r)
         print(f"{agent:14} {t:22} {'PASS' if r['passed'] else 'FAIL'} {r['seconds']:7.1f}s"
-              f"{' (timeout)' if r['timed_out'] else ''}{' (read hidden tests)' if r.get('leaked') else ''}", flush=True)
-        res_file.write_text(redact(json.dumps({"model": args.model, "ctx": args.ctx, "offline": OFFLINE, "meta": meta, "results": results}, indent=2)))
+              f"{' (timeout)' if r['timed_out'] else ''}{' (read hidden tests)' if r.get('leaked') else ''}"
+              f"{' (off-task: ' + str(len(r['offtask_hits'])) + ')' if r.get('offtask_hits') else ''}", flush=True)
+        res_file.write_text(redact(json.dumps({"model": args.model, "ctx": args.ctx, "offline": OFFLINE, "isolation": sandbox_name(), "meta": meta, "results": results}, indent=2)))
         # Out of credit or quota: every later run would fail instantly, so stop
         # rather than record them as failures.
         out = (WORK / agent / f"{t}-{rep}.out").read_text(errors="ignore")[-20000:]
         if not r["passed"] and OUT_OF_BUDGET.search(out):
             results.pop()
-            res_file.write_text(redact(json.dumps({"model": args.model, "ctx": args.ctx, "offline": OFFLINE, "meta": meta, "results": results, "aborted": "out of budget"}, indent=2)))
+            res_file.write_text(redact(json.dumps({"model": args.model, "ctx": args.ctx, "offline": OFFLINE, "isolation": sandbox_name(), "meta": meta, "results": results, "aborted": "out of budget"}, indent=2)))
             print(f"\nStopped: the model provider reports no budget left ({OUT_OF_BUDGET.search(out).group(0)!r}). "
                   f"{len(results)} completed runs kept in {res_file}.", flush=True)
             sys.exit(2)
