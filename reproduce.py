@@ -31,7 +31,11 @@ REPS = 10  # runs per agent; the table shows the median
 NATIVE = ["chanto", "goose", "codewhale", "opencode"]
 NPM = ["forge", "pi", "crush", "claude", "qwen", "codex", "gemini", "cline", "cn", "kilo"]
 UV = ["aider", "openhands"]
-PUBLISHED = NATIVE + NPM + UV
+# Added after the October 25 table (each over 5,000 stars): measured in every
+# full run, but not in --quick, which stays the original four for speed.
+NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter"]
+NEW_UV = ["mini", "vibe"]
+PUBLISHED = NATIVE + NPM + UV + NEW_NATIVE + NEW_UV
 # Native agents that still run here but aren't in the published table, since
 # they're below that bar: only measured when --agents names them.
 EXTRA = ["hax", "zerostack"]
@@ -64,9 +68,9 @@ def install(agents):
     groups = []
     if any(a in NPM for a in agents):
         groups.append("npm")
-    if any(a in UV for a in agents):
+    if any(a in UV + NEW_UV for a in agents):
         groups.append("uv")
-    groups += [a for a in agents if a in NATIVE + EXTRA]
+    groups += [a for a in agents if a in NATIVE + EXTRA + NEW_NATIVE]
     for g in groups:
         sh([str(ROOT / "install-agents.sh"), g])
 

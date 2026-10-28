@@ -46,6 +46,12 @@ AGENTS = {
     "zerostack": ("zerostack", "Rust", "bin", run.BIN_DIR / "zerostack"),
     "hax": ("hax", "C", "bin", run.BIN_DIR / "hax"),
     "gemini": ("Gemini CLI", "Node", "npm", "@google/gemini-cli"),
+    "jcode": ("jcode", "Rust", "bin", run.BIN_DIR / "jcode"),
+    "reasonix": ("DeepSeek-Reasonix", "Go", "bin", run.BIN_DIR / "reasonix"),
+    "omp": ("oh-my-pi", "Bun", "bin", run.BIN_DIR / "omp"),
+    "interpreter": ("Open Interpreter", "Rust", "bin", run.BIN_DIR / "interpreter"),
+    "mini": ("mini-swe-agent", "Python", "uv", run.UV_TOOLS / "mini-swe-agent"),
+    "vibe": ("Mistral Vibe", "Python", "uv", run.UV_TOOLS / "mistral-vibe"),
 }
 # Agents whose install runs on a separately installed runtime. The others
 # (Claude Code and Kilo Code included) ship their runtime inside the executable.
