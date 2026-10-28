@@ -1363,6 +1363,22 @@ def run_meta(args, tasks):
     return meta
 
 
+def hosted_context(alias):
+    """The context window of the model behind the proxy alias, as LiteLLM
+    reports it, so every agent is given the model's real window."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(f"{API}/model/info", headers={"Authorization": f"Bearer {API_KEY}"})
+        data = json.load(urllib.request.urlopen(req, timeout=15))
+    except Exception as e:
+        sys.exit(f"couldn't ask the proxy for {alias}'s context window ({e}); pass --ctx")
+    info = next((m.get("model_info") or {} for m in data.get("data", []) if m.get("model_name") == alias), {})
+    ctx = info.get("max_input_tokens") or info.get("max_tokens")
+    if not ctx:
+        sys.exit(f"the proxy doesn't know {alias}'s context window; pass --ctx")
+    return int(ctx)
+
+
 def upstream_model(alias):
     """Ask the LiteLLM proxy which provider model the alias is routed to."""
     import urllib.request
@@ -1694,7 +1710,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agents", default="chanto")
     ap.add_argument("--model", default="qwen3.8-bench")
-    ap.add_argument("--ctx", type=int, default=32768)
+    ap.add_argument("--ctx", type=int, help="context window given to every agent (default: the hosted model's, "
+                    "from the proxy; 32768 for a local model)")
     ap.add_argument("--tasks", default="")
     ap.add_argument("--tier", default=",".join(CODING_TIERS),
                     help="bands: core,medium,hard,beyond (the default, all coding) and the opt-in showcase")
@@ -1723,6 +1740,8 @@ def main():
     for a in args.agents.split(","):
         chanto_optimizations(a)  # an unknown variant stops here, before any run
     METER, METER_LOG = args.meter, args.meter_log
+    if args.ctx is None and not args.report and not args.estimate:
+        args.ctx = hosted_context(args.model) if API else 32768
     if args.report:
         print(report(args.report, args.report_ref, unisolated=args.unisolated))
         return

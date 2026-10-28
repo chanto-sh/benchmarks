@@ -695,6 +695,19 @@ class RunnerTests(unittest.TestCase):
         with patch.object(sys, "argv", ["run.py", "--tasks", "tiny", "--agents", "chanto+nope"]), self.assertRaises(SystemExit):
             run.main()
 
+    def test_hosted_context_comes_from_the_proxy(self):
+        """Every agent gets the hosted model's own window, not the local default."""
+        info = {"data": [{"model_name": "other", "model_info": {"max_input_tokens": 8}},
+                         {"model_name": "bench-model", "model_info": {"max_input_tokens": 1000000}}]}
+        with patch.object(run, "API", "http://proxy"), \
+                patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(info).encode())):
+            self.assertEqual(run.hosted_context("bench-model"), 1000000)
+        unknown = {"data": [{"model_name": "bench-model", "model_info": {}}]}
+        with patch.object(run, "API", "http://proxy"), \
+                patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(unknown).encode())), \
+                self.assertRaises(SystemExit):
+            run.hosted_context("bench-model")
+
     def test_run_roots_are_outside_home(self):
         """Config discovery walking up from a run must not reach the real HOME."""
         default = Path(tempfile.gettempdir()).resolve() / "chanto-bench-runs"
