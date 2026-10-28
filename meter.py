@@ -17,12 +17,29 @@ import argparse
 import os
 import http.client
 import json
+import re
 import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOCK = threading.Lock()
+# What the meter forwards: an absolute path on the upstream, nothing that could
+# name another host (`//host`, a scheme) or break the request line.
+SAFE_PATH = re.compile(r"(?!.*//)/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*")
+# A header name (an HTTP token) and a header value (visible ASCII, spaces and
+# tabs): nothing that could end the header or the response head early.
+HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+HEADER_VALUE = re.compile(r"[\t\x20-\x7e]*")
+# A label as it may appear in a dump file name.
+UNSAFE_LABEL_CHARS = re.compile(r"[^A-Za-z0-9._~-]")
+
+
+def safe_label(label):
+    """The label with anything outside a plain file name replaced, never empty
+    and never a dot name, so a dump can't land outside --dump."""
+    name = UNSAFE_LABEL_CHARS.sub("_", label)[:120].strip(".") or "unlabelled"
+    return name
 
 
 def generated_chars(obj):
@@ -80,6 +97,9 @@ class Handler(BaseHTTPRequestHandler):
         label = urllib.parse.unquote(parts[0]) if len(parts) == 2 else "unlabelled"
         path = "/" + (parts[1] if len(parts) == 2 else parts[0])
         body = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+        if not SAFE_PATH.fullmatch(path):
+            self.send_error(400, "bad path")
+            return
         if body and path.split("?")[0].endswith("/chat/completions"):
             try:
                 req = json.loads(body)
@@ -92,12 +112,15 @@ class Handler(BaseHTTPRequestHandler):
         conn = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=600)
         headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length", "accept-encoding")}
         headers["Content-Length"] = str(len(body))
-        conn.request(self.command, path, body=body, headers=headers)
+        conn.request(self.command, SAFE_PATH.fullmatch(path).group(0), body=body, headers=headers)
         resp = conn.getresponse()
         self.send_response(resp.status)
         for k, v in resp.getheaders():
-            if k.lower() not in ("transfer-encoding", "content-length", "connection"):
-                self.send_header(k, v)
+            # Never echo a header that could split the response.
+            name, value = HEADER_NAME.fullmatch(k), HEADER_VALUE.fullmatch(v)
+            if not name or not value or k.lower() in ("transfer-encoding", "content-length", "connection"):
+                continue
+            self.send_header(name.group(0), value.group(0))
         self.send_header("Transfer-Encoding", "chunked")
         self.end_headers()
         acc = {"input": 0, "output": 0, "cached": 0}
@@ -159,7 +182,9 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps(rec) + "\n")
             if self.dump_dir:
                 # Request and raw response per call, for looking at what a model actually produced.
-                stem = os.path.join(self.dump_dir, f"{label.replace('/', '_')}-{rec['t']:.3f}")
+                stem = os.path.join(self.dump_dir, f"{safe_label(label)}-{rec['t']:.3f}")
+                if os.path.dirname(os.path.abspath(stem)) != os.path.abspath(self.dump_dir):
+                    return
                 with open(stem + ".req.json", "wb") as f:
                     f.write(body)
                 with open(stem + ".resp", "wb") as f:
