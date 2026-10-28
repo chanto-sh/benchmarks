@@ -336,7 +336,9 @@ model_id = "{model}"
             'default_model = "bench"\n[telemetry]\ncli_metrics = "off"\n[sandbox]\nbash = "off"\n'
             f'[[providers]]\nname = "bench"\nkind = "openai"\nbase_url = "{v1}"\nmodel = "{model}"\n'
             f'api_key_env = "BENCH_API_KEY"\ncontext_window = {ctx}\n')
-        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d), "BENCH_API_KEY": API_KEY}
+        # Provider keys come only from <Reasonix home>/.env, not the environment.
+        (d / ".env").write_text(f"BENCH_API_KEY={API_KEY}\n")
+        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d)}
     if agent == "mini":
         # mini-swe-agent: one `bash` tool, no compaction (so no context window to
         # set). litellm 1.106.2 imports the optional `mcp` package for any request
