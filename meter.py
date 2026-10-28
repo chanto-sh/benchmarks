@@ -27,6 +27,10 @@ LOCK = threading.Lock()
 # What the meter forwards: an absolute path on the upstream, nothing that could
 # name another host (`//host`, a scheme) or break the request line.
 SAFE_PATH = re.compile(r"(?!.*//)/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*")
+# A header name (an HTTP token) and a header value (visible ASCII, spaces and
+# tabs): nothing that could end the header or the response head early.
+HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+HEADER_VALUE = re.compile(r"[\t\x20-\x7e]*")
 # A label as it may appear in a dump file name.
 UNSAFE_LABEL_CHARS = re.compile(r"[^A-Za-z0-9._~-]")
 
@@ -112,11 +116,11 @@ class Handler(BaseHTTPRequestHandler):
         resp = conn.getresponse()
         self.send_response(resp.status)
         for k, v in resp.getheaders():
-            # http.client already rejects most of these; never echo a header
-            # that could split the response.
-            if k.lower() in ("transfer-encoding", "content-length", "connection") or any(c in k + v for c in "\r\n\0"):
+            # Never echo a header that could split the response.
+            name, value = HEADER_NAME.fullmatch(k), HEADER_VALUE.fullmatch(v)
+            if not name or not value or k.lower() in ("transfer-encoding", "content-length", "connection"):
                 continue
-            self.send_header(k, v)
+            self.send_header(name.group(0), value.group(0))
         self.send_header("Transfer-Encoding", "chunked")
         self.end_headers()
         acc = {"input": 0, "output": 0, "cached": 0}
