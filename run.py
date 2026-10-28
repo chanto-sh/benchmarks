@@ -41,6 +41,10 @@ TASKS = ROOT / "tasks"
 # (install-agents.sh installs into the same place).
 BENCH_HOME = Path(os.environ.get("BENCH_HOME", Path.home() / ".local/share/chanto-bench"))
 WORK = Path(os.environ.get("BENCH_WORK", BENCH_HOME / "work"))
+# Run roots go outside HOME: agents look for config in every folder above their
+# working directory, and one that reaches a denied ~/.claude or ~/.config can
+# fail to start (opencode does) instead of skipping it.
+RUNS = Path(os.environ.get("BENCH_RUNS", Path(tempfile.gettempdir()).resolve() / "chanto-bench-runs"))
 RESULTS = ROOT / "results"
 # The Chanto checkout under test: its release binary by default, and like this
 # repository it's hidden from the agents. A sibling clone unless set.
@@ -535,7 +539,7 @@ def estimate(agents, tiers, repeat, refs):
 
 
 # ------------------------------------------------------------------ isolation
-# Every run (one agent, one task, one rep) gets its own root under WORK/runs:
+# Every run (one agent, one task, one rep) gets its own root under RUNS:
 # the task checkout, a fresh HOME and a TMPDIR, and nothing else. The agent runs
 # in an OS sandbox (sandbox-exec on macOS, bubblewrap on Linux) that can read
 # only that root, its own install, system and toolchain paths, and can connect
@@ -821,9 +825,8 @@ def new_run_root(agent, task, rep):
     """A fresh, private root for one run: <root>/<task>-<rep> (the checkout),
     <root>/home and <root>/tmp. The name is random, so a run can't guess where
     another one lives."""
-    runs = WORK / "runs"
-    runs.mkdir(parents=True, exist_ok=True)
-    root = Path(tempfile.mkdtemp(prefix="r-", dir=runs)).resolve()
+    RUNS.mkdir(parents=True, exist_ok=True)
+    root = Path(tempfile.mkdtemp(prefix="r-", dir=RUNS)).resolve()
     for d in ("home", "tmp"):
         (root / d).mkdir(mode=0o700)
     return root

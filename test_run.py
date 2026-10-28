@@ -28,7 +28,7 @@ class RunnerTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        for name, value in {"WORK": self.root / "work", "TASKS": self.root / "tasks",
+        for name, value in {"WORK": self.root / "work", "RUNS": self.root / "work" / "runs", "TASKS": self.root / "tasks",
                             "RESULTS": self.root / "results", "API": None, "METER": None,
                             "OFFLINE": False, "CHANTO_EFFORT": None}.items():
             p = patch.object(run, name, value)
@@ -694,6 +694,13 @@ class RunnerTests(unittest.TestCase):
                           "chanto+quiet": ["quiet"], "chanto+provenance": ["provenance"]})
         with patch.object(sys, "argv", ["run.py", "--tasks", "tiny", "--agents", "chanto+nope"]), self.assertRaises(SystemExit):
             run.main()
+
+    def test_run_roots_are_outside_home(self):
+        """Config discovery walking up from a run must not reach the real HOME."""
+        default = Path(tempfile.gettempdir()).resolve() / "chanto-bench-runs"
+        self.assertNotIn(Path.home().resolve(), default.parents)
+        root = run.new_run_root("fake", "tiny", 0)
+        self.assertEqual(root.parent, run.RUNS.resolve())
 
     @unittest.skipUnless(os.environ.get("BENCH_SANDBOX_SMOKE") == "1" and (sys.platform == "darwin" or sys.platform.startswith("linux")),
                          "opt-in sandbox smoke: sandbox-exec on macOS, bubblewrap and socat on Linux")
