@@ -31,9 +31,10 @@ REPS = 10  # runs per agent; the table shows the median
 NATIVE = ["chanto", "goose", "codewhale", "opencode"]
 NPM = ["forge", "pi", "crush", "claude", "qwen", "codex", "gemini", "cline", "cn", "kilo"]
 UV = ["aider", "openhands"]
-# Added after the October 25 table (each over 5,000 stars): measured in every
+# Added after the October 25 table (each over 5,000 stars, except fx at 3,600,
+# included for its native, small-footprint design): measured in every
 # full run, but not in --quick, which stays the original four for speed.
-NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter"]
+NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter", "grok", "fx"]
 NEW_UV = ["mini", "vibe"]
 PUBLISHED = NATIVE + NPM + UV + NEW_NATIVE + NEW_UV
 # Native agents that still run here but aren't in the published table, since

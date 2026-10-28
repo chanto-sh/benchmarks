@@ -7,7 +7,7 @@
 #   ./install-agents.sh npm        # or just one group: npm, uv, bin
 #   ./install-agents.sh hax        # or one binary agent: chanto, goose,
 #                                  # opencode, codewhale, zerostack, hax,
-#                                  # jcode, reasonix, omp, interpreter
+#                                  # jcode, reasonix, omp, interpreter, grok, fx
 #
 # Needs npm, uv, curl and tar (plus unzip on macOS). `./install-agents.sh chanto`
 # installs the pinned Chanto release, which reproduce.py measures; run.py
@@ -62,8 +62,9 @@ install_uv() {
 #   Chanto 0.1.7 (checksums from the release's signed SHA256SUMS);
 #   Goose 1.54.0;
 #   opencode 2.0.22 (checksums from the opencode Homebrew formula for 2.0.22);
-#   jcode 0.99.1, DeepSeek-Reasonix 2.54.0, oh-my-pi 18.13.3, Open Interpreter 0.0.56
-#   (checksums from each GitHub release's own SHA-256 digests);
+#   jcode 0.99.1, DeepSeek-Reasonix 2.54.0, oh-my-pi 18.13.3, Open Interpreter 0.0.56,
+#   fx 0.0.15 (checksums from each GitHub release's own SHA-256 digests);
+#   Grok Build 1.0.70 (see install_grok);
 #   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1 (checksums
 #   cross-checked against each release's own SHA-256 manifest).
 platform() {
@@ -240,7 +241,41 @@ install_interpreter() {
     chmod +x "$PREFIX/bin/interpreter"
 }
 
-bin_agents="chanto goose opencode codewhale zerostack hax jcode reasonix omp interpreter"
+# fx ships a tarball per platform with its own .sha256 next to it.
+install_fx() {
+    case "$plat" in
+        darwin-arm64) f=fx-macos-aarch64.tar.gz; sha=9f7dcae1f42080d8a668ff8fec172d90d071a52540255776479bf973bc5a349b ;;
+        darwin-x64) f=fx-macos-x86_64.tar.gz; sha=dfa5199908150c19a9c8adc90f72bccefbe17d6740eddd0240f3b943ccdaf610 ;;
+        linux-arm64) f=fx-linux-aarch64.tar.gz; sha=1c06e770aa87e39c6a4807d6a42fc5508d051e4a381fb2c35e0728fc1f41d461 ;;
+        linux-x64) f=fx-linux-x86_64.tar.gz; sha=52def957321dc482c635ed613a4fff3489202b0374b6ccc6dc823e65736bbf26 ;;
+    esac
+    fetch "https://github.com/vercel-labs/fx/releases/download/v0.0.15/$f" "$dl/$f" "$sha"
+    mkdir -p "$dl/fx" && tar -xzf "$dl/$f" -C "$dl/fx" fx
+    rm -f "$PREFIX/bin/fx"
+    cat "$dl/fx/fx" > "$PREFIX/bin/fx"
+    rm -rf "$dl/$f" "$dl/fx"
+    chmod +x "$PREFIX/bin/fx"
+}
+
+# Grok Build ships bare executables from x.ai with no published checksums (its
+# own installer checks none). These were pinned when the same bytes came from
+# both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
+# build is also signed by xAI (team 5Y6N3AJ54S).
+install_grok() {
+    case "$plat" in
+        darwin-arm64) p=macos-aarch64; sha=5c8a688251bf61e35370b828b6a353b0a20fcc3f64000de8a91d426039f29cec ;;
+        darwin-x64) p=macos-x86_64; sha=d9ecd462f1f3c3b40a7a131944987ee7ed1c38069b7009cc4107398ab767f484 ;;
+        linux-arm64) p=linux-aarch64; sha=3aa36883574b263088e5addffe241f55430e8daaee1a0c4934b02180007a9761 ;;
+        linux-x64) p=linux-x86_64; sha=22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9 ;;
+    esac
+    fetch "https://x.ai/cli/grok-1.0.70-$p" "$dl/grok" "$sha"
+    rm -f "$PREFIX/bin/grok"
+    cat "$dl/grok" > "$PREFIX/bin/grok"
+    rm -f "$dl/grok"
+    chmod +x "$PREFIX/bin/grok"
+}
+
+bin_agents="chanto goose opencode codewhale zerostack hax jcode reasonix omp interpreter grok fx"
 
 install_bin() {
     bin_setup
