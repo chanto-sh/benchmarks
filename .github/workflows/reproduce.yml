@@ -2,7 +2,9 @@
 # can run it from a fork (Actions → reproduce → Run workflow) and get numbers
 # from hardware nobody here controls; each run's table is in its summary and
 # its results file is an artifact. Pull requests that change the measuring
-# code run the quick version, so it keeps working on both platforms.
+# code run the quick version, so it keeps working on both platforms; those
+# that change what gets installed (the agents' lockfile, install-agents.sh or
+# the agents' configs in run.py) run every agent.
 name: reproduce
 on:
   workflow_dispatch:
@@ -18,6 +20,8 @@ on:
       - size.py
       - stressmock.py
       - install-agents.sh
+      - run.py
+      - agents/**
       - .github/workflows/reproduce.yml
 
 permissions:
@@ -32,19 +36,38 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
-    env:
-      QUICK: ${{ github.event_name == 'pull_request' || inputs.quick }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - if: env.QUICK != 'true'
+      # Quick unless asked otherwise; a PR measures every agent when it changes
+      # what gets installed.
+      - name: Scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          QUICK_INPUT: ${{ inputs.quick }}
+        run: |
+          quick=$QUICK_INPUT
+          if [ "$EVENT" = pull_request ]; then
+            quick=true
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            if git diff --name-only FETCH_HEAD HEAD | grep -qE '^(agents/|install-agents\.sh$|run\.py$)'; then
+              quick=false
+            fi
+          fi
+          echo "quick=$quick" >> "$GITHUB_OUTPUT"
+          echo "quick: $quick"
+      - if: steps.scope.outputs.quick != 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - if: env.QUICK != 'true'
+      - if: steps.scope.outputs.quick != 'true'
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: |
+      - env:
+          QUICK: ${{ steps.scope.outputs.quick }}
+        run: |
           if [ "$QUICK" = true ]; then python3 reproduce.py --quick; else python3 reproduce.py; fi
       # Only this run's results file: the published ones are in the checkout too.
       - if: always()
