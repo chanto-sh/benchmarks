@@ -62,14 +62,15 @@ CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "b
 BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", BENCH_HOME / "bin"))
 # Python agents installed with `uv tool install`, each in its own environment.
 UV_TOOLS = Path.home() / ".local/share/uv/tools"
-AGENT_INSTALLS = [NPM_BIN.parent.parent, BIN_DIR, UV_TOOLS / "aider-chat", UV_TOOLS / "openhands"]
+AGENT_INSTALLS = [NPM_BIN.parent.parent, BIN_DIR, UV_TOOLS / "aider-chat", UV_TOOLS / "openhands",
+                  UV_TOOLS / "mini-swe-agent", UV_TOOLS / "mistral-vibe"]
 
 
 def agent_exe(name):
     """The benchmark's own pinned install of an agent: the npm prefix, the
     binaries directory, or its uv tool environment. A copy on the user's PATH is
     only the fallback, so a global upgrade can't change what a run measures."""
-    tool = {"aider": "aider-chat"}.get(name, name)
+    tool = {"aider": "aider-chat", "mini": "mini-swe-agent", "vibe": "mistral-vibe"}.get(name, name)
     for p in (NPM_BIN / name, BIN_DIR / name, UV_TOOLS / tool / "bin" / name):
         if p.exists():
             return str(p)
@@ -317,6 +318,81 @@ model_id = "{model}"
             "HAX_OPENAI_BASE_URL": v1, "HAX_OPENAI_API_KEY": API_KEY, "HAX_CONTEXT_LIMIT": str(ctx),
             "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"), "XDG_CACHE_HOME": str(h / "cache"),
             "XDG_DATA_HOME": str(h / "data")}
+    if agent == "jcode":
+        # `jcode run` works in-process, with no approval step. Telemetry is on by
+        # default; the sandbox would block it anyway, but don't let it try.
+        d = home("jcode")
+        (d / "config.toml").write_text(
+            f'[providers.bench]\ntype = "openai-compatible"\nbase_url = "{v1}"\n'
+            f'api_key_env = "BENCH_API_KEY"\ndefault_model = "{model}"\n'
+            f'models = [{{ id = "{model}", context_window = {ctx} }}]\n')
+        return [agent_exe("jcode"), "run", "--no-update", "--provider-profile", "bench", "-m", model, prompt], {
+            "JCODE_HOME": str(d), "BENCH_API_KEY": API_KEY, "JCODE_NO_TELEMETRY": "1"}
+    if agent == "reasonix":
+        # Its own bash sandbox nests sandbox-exec, which the run's sandbox
+        # refuses: every command would fail while the run still exits 0.
+        d = home("reasonix")
+        (d / "config.toml").write_text(
+            'default_model = "bench"\n[telemetry]\ncli_metrics = "off"\n[sandbox]\nbash = "off"\n'
+            f'[[providers]]\nname = "bench"\nkind = "openai"\nbase_url = "{v1}"\nmodel = "{model}"\n'
+            f'api_key_env = "BENCH_API_KEY"\ncontext_window = {ctx}\n')
+        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d), "BENCH_API_KEY": API_KEY}
+    if agent == "mini":
+        # mini-swe-agent: one `bash` tool, no compaction (so no context window to
+        # set). litellm 1.106.2 imports the optional `mcp` package for any request
+        # with tools unless told not to. JSON is valid YAML; -c wants .yaml.
+        d = home("mini")
+        (d / "bench.yaml").write_text(json.dumps({
+            "model": {"model_name": f"openai/{model}", "cost_tracking": "ignore_errors",
+                      "model_kwargs": {"api_base": v1, "api_key": API_KEY, "_skip_mcp_handler": True}},
+            "agent": {"mode": "yolo", "confirm_exit": False, "cost_limit": 0, "step_limit": 250}}))
+        return [agent_exe("mini"), "-c", "mini.yaml", "-c", str(d / "bench.yaml"), "--yolo", "--exit-immediately",
+                "-o", str(d / "traj.json"), "-t", prompt], {
+            "MSWEA_GLOBAL_CONFIG_DIR": str(d / "mswea"), "MSWEA_CONFIGURED": "true", "MSWEA_SILENT_STARTUP": "1",
+            "MSWEA_COST_TRACKING": "ignore_errors", "LITELLM_LOCAL_MODEL_COST_MAP": "True"}
+    if agent == "vibe":
+        # Without VIBE_TEST_DISABLE_KEYRING, Vibe reads keys through
+        # /usr/bin/security, outside the run's HOME.
+        d = home("vibe") / ".vibe"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "config.toml").write_text(
+            f'active_model = "{model}"\nenable_telemetry = false\nenable_otel = false\nenable_update_checks = false\n'
+            'enable_auto_update = false\nenable_notifications = false\nenable_connectors = false\n'
+            'experimental_enable_model_catalog = false\n\n'
+            f'[[providers]]\nname = "bench"\napi_base = "{v1}"\napi_key_env_var = "BENCH_API_KEY"\n'
+            'api_style = "openai"\nbackend = "generic"\n\n'
+            f'[models.{json.dumps(model)}]\nname = "{model}"\nprovider = "bench"\nalias = "{model}"\n'
+            f'max_context_length = {ctx}\n')
+        return [agent_exe("vibe"), "-p", prompt, "--auto-approve", "--trust", "--output-dir", str(d / "out")], {
+            "VIBE_HOME": str(d), "BENCH_API_KEY": API_KEY, "VIBE_TEST_DISABLE_KEYRING": "1"}
+    if agent == "omp":
+        # oh-my-pi reads models.yml (JSON is valid YAML) from PI_CODING_AGENT_DIR.
+        # Its background model-catalog refresh can't be turned off; offline it
+        # fails and the run carries on.
+        d = home("omp") / "agent"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "models.yml").write_text(json.dumps({"providers": {"bench": {
+            "baseUrl": v1, "api": "openai-completions", "apiKey": API_KEY, "auth": "apiKey",
+            "models": [{"id": model, "contextWindow": ctx}]}}}))
+        (d / "config.yml").write_text(json.dumps({
+            "startup": {"checkUpdate": False, "setupWizard": False},
+            "marketplace": {"autoUpdate": "off"}, "telemetry": {"otlpExportEnabled": False},
+            "providers": {"cacheWarming": "off"}, "memory": {"backend": "off"},
+            "ttsr": {"judge": "off"}, "lsp": {"enabled": False}, "tools": {"approvalMode": "yolo"}}))
+        return [agent_exe("omp"), "-p", "--no-session", "--no-title", "--no-lsp", "--approval-mode=yolo",
+                "--model", f"bench/{model}", prompt], {"PI_CODING_AGENT_DIR": str(d)}
+    if agent == "interpreter":
+        # Open Interpreter is a Codex fork; chat wire API, since its chat route
+        # sends DeepSeek's reasoning_content back on tool-call turns.
+        (home("interpreter") / "config.toml").write_text(
+            f'model_provider = "bench"\nmodel_context_window = {ctx}\ncheck_for_update_on_startup = false\n'
+            '[analytics]\nenabled = false\n'
+            '[features]\napps = false\nplugins = false\nremote_plugin = false\nplugin_sharing = false\n'
+            'in_app_updates = false\ntool_suggest = false\n'
+            f'[model_providers.bench]\nname = "bench"\nbase_url = "{v1}"\nenv_key = "BENCH_API_KEY"\nwire_api = "chat"\n')
+        return [agent_exe("interpreter"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox",
+                "--skip-git-repo-check", "--ephemeral", prompt], {
+            "INTERPRETER_HOME": str(home("interpreter")), "BENCH_API_KEY": API_KEY}
     if agent == "gemini":
         # Gemini CLI speaks only the Gemini API; GOOGLE_GEMINI_BASE_URL points
         # it at the endpoint. --yolo approves every tool; its own HOME keeps
@@ -644,7 +720,7 @@ def agent_installs(agent):
     standalone binaries directory, or the npm prefix. Other agents' installs
     stay hidden (a Python agent's environment can hold a newer requests or
     flask than the task's)."""
-    uv = {"aider": "aider-chat", "openhands": "openhands"}
+    uv = {"aider": "aider-chat", "openhands": "openhands", "mini": "mini-swe-agent", "vibe": "mistral-vibe"}
     if agent in uv:
         return [UV_TOOLS / uv[agent]]
     if agent.startswith("chanto"):
@@ -1281,7 +1357,9 @@ ARTIFACTS = None
 
 VERSION_CMDS = {
     **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands",
-                                                 "codewhale", "zerostack", "hax")},
+                                                 "codewhale", "zerostack", "hax", "jcode", "reasonix", "vibe", "omp",
+                                                 "interpreter")},
+    "mini": [agent_exe("mini"), "--help"],
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],
     "forge": [str(NPM_BIN / "forge"), "--version"],

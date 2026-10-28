@@ -6,7 +6,8 @@
 #   ./install-agents.sh            # everything
 #   ./install-agents.sh npm        # or just one group: npm, uv, bin
 #   ./install-agents.sh hax        # or one binary agent: chanto, goose,
-#                                  # opencode, codewhale, zerostack, hax
+#                                  # opencode, codewhale, zerostack, hax,
+#                                  # jcode, reasonix, omp, interpreter
 #
 # Needs npm, uv, curl and tar (plus unzip on macOS). `./install-agents.sh chanto`
 # installs the pinned Chanto release, which reproduce.py measures; run.py
@@ -41,7 +42,7 @@ install_npm() {
     (cd "$PREFIX/agents" && npm ci --no-audit --no-fund)
 }
 
-# Python agents, as uv tools (~/.local/share/uv/tools). Both run on Python
+# Python agents, as uv tools (~/.local/share/uv/tools). All run on Python
 # 3.12, which uv downloads if needed; left to choose, uv takes the newest
 # interpreter it finds, and on a machine with a newer Python than the agents'
 # compiled dependencies support (macos-latest ships 3.15) the install fails
@@ -50,6 +51,10 @@ install_uv() {
     need uv
     uv tool install --force --python 3.12 aider-chat==0.86.2
     uv tool install --force --python 3.12 openhands==1.16.0
+    # mini-swe-agent's litellm stays at the release the proxy pins (1.106.2):
+    # 1.107.0 shipped a credential stealer, and later ones aren't vetted here.
+    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.106.2
+    uv tool install --force --python 3.12 mistral-vibe==3.0.3
 }
 
 # Standalone binaries, each a GitHub release (or official build) checked
@@ -57,6 +62,8 @@ install_uv() {
 #   Chanto 0.1.4 (checksums from the release's signed SHA256SUMS);
 #   Goose 1.54.0;
 #   opencode 2.0.22 (checksums from the opencode Homebrew formula for 2.0.22);
+#   jcode 0.99.1, DeepSeek-Reasonix 2.54.0, oh-my-pi 18.13.3, Open Interpreter 0.0.56
+#   (checksums from each GitHub release's own SHA-256 digests);
 #   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1 (checksums
 #   cross-checked against each release's own SHA-256 manifest).
 platform() {
@@ -167,7 +174,73 @@ install_hax() {
     chmod +x "$PREFIX/bin/hax"
 }
 
-bin_agents="chanto goose opencode codewhale zerostack hax"
+install_jcode() {
+    case "$plat" in
+        darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=3623164d518b0c9d443ab07052084244b379e8a3377037db67d2382220f4ed14 ;;
+        darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=d7d53c40b1e105926e06df5aa02c0f082616d602bbd20e0c318248ce3fdad4c9 ;;
+        linux-arm64) f=jcode-linux-aarch64.tar.gz; sha=f66ffbaf7c4c0124f45d6c8616571146deb8509b8beef2e8c0d76cc35dda9b91 ;;
+        linux-x64) f=jcode-linux-x86_64.tar.gz; sha=0b2a612de97c6e01ae6de1c0cff555b3460cf8364d1a11d2f8649fc0c9d7a1e6 ;;
+    esac
+    fetch "https://github.com/1jehuang/jcode/releases/download/v0.99.1/$f" "$dl/$f" "$sha"
+    mkdir -p "$dl/jcode" && tar -xzf "$dl/$f" -C "$dl/jcode"
+    # On Linux the plain name is a launcher script for the .bin next to it (it
+    # only adds its own folder to LD_LIBRARY_PATH; the archive has no libraries).
+    src="$dl/jcode/$(basename "$f" .tar.gz)"
+    [ -f "$src.bin" ] && src="$src.bin"
+    rm -f "$PREFIX/bin/jcode"
+    cat "$src" > "$PREFIX/bin/jcode"
+    rm -rf "$dl/$f" "$dl/jcode"
+    chmod +x "$PREFIX/bin/jcode"
+}
+
+install_reasonix() {
+    case "$plat" in
+        darwin-arm64) f=reasonix-darwin-arm64.tar.gz; sha=be4e185703c1a3f95f140bbb785ce4861d5008689916fe892ed2683424a9fe10 ;;
+        darwin-x64) f=reasonix-darwin-amd64.tar.gz; sha=6b5d36a6564e818452fe28f291816dde458319c3f4ab7409e91074f234a66a3e ;;
+        linux-arm64) f=reasonix-linux-arm64.tar.gz; sha=05ed53becb3cd2bb91f961065690b6c90d0af8e10e7279e8bed4a499441d8397 ;;
+        linux-x64) f=reasonix-linux-amd64.tar.gz; sha=52b834fbbf2c05d69efad8b88366d535df31cbe3433c1f0d65fe939180220c3d ;;
+    esac
+    fetch "https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.54.0/$f" "$dl/$f" "$sha"
+    mkdir -p "$dl/reasonix" && tar -xzf "$dl/$f" -C "$dl/reasonix" reasonix
+    rm -f "$PREFIX/bin/reasonix"
+    cat "$dl/reasonix/reasonix" > "$PREFIX/bin/reasonix"
+    rm -rf "$dl/$f" "$dl/reasonix"
+    chmod +x "$PREFIX/bin/reasonix"
+}
+
+# oh-my-pi ships bare executables (a Bun single-file build).
+install_omp() {
+    case "$plat" in
+        darwin-arm64) f=omp-darwin-arm64; sha=b449d0d0d779a0b2e655f0ce41d5c414a253de71c67b3affc30a6528fc967314 ;;
+        darwin-x64) f=omp-darwin-x64; sha=cfd47dc46d028bbdfc220ccb1fdd40af7a82a4e182cb3c2fd1d66a8c20d90326 ;;
+        linux-arm64) f=omp-linux-arm64; sha=981f08df6c6344356b31aa696fdd810b8b5fa8c8851ba926d3940e793d47cc3a ;;
+        linux-x64) f=omp-linux-x64; sha=42d39fa8996fed9f999e26306e60e2fdbea0c0de0d0b2d68feba275f44c41d04 ;;
+    esac
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.13.3/$f" "$dl/$f" "$sha"
+    rm -f "$PREFIX/bin/omp"
+    cat "$dl/$f" > "$PREFIX/bin/omp"
+    rm -f "$dl/$f"
+    chmod +x "$PREFIX/bin/omp"
+}
+
+# Open Interpreter is a Codex fork and keeps Codex's asset names.
+install_interpreter() {
+    case "$plat" in
+        darwin-arm64) t=aarch64-apple-darwin; sha=837570739cf7cd13e0d5b88cc18d6aea33e31eba3682844218fdb050640deee2 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=9f998b2b61c60e60e3c5e8d6006bdda44884175c19ac518eccc0f5d8a7a10689 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=a3bb3e37cd4a29f35bbd0021c4fbebec5a858a159edb1c09775f209becb53810 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=c0f76523f8585a3bd8985638bf8861d70ab86fb9e9b02c6bf96a54680458fe0b ;;
+    esac
+    f=codex-$t.tar.gz
+    fetch "https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.56/$f" "$dl/$f" "$sha"
+    mkdir -p "$dl/interpreter" && tar -xzf "$dl/$f" -C "$dl/interpreter"
+    rm -f "$PREFIX/bin/interpreter"
+    cat "$dl/interpreter/codex-$t" > "$PREFIX/bin/interpreter"
+    rm -rf "$dl/$f" "$dl/interpreter"
+    chmod +x "$PREFIX/bin/interpreter"
+}
+
+bin_agents="chanto goose opencode codewhale zerostack hax jcode reasonix omp interpreter"
 
 install_bin() {
     bin_setup
