@@ -63,12 +63,12 @@ python3 reproduce.py --quick   # Chanto, Goose, Codewhale, opencode: about 5 min
 and for every agent in the table:
 
 ```sh
-python3 reproduce.py           # all 22 agents: 20–40 minutes
+python3 reproduce.py           # all 24 agents: 20–40 minutes
 ```
 
 | | `--quick` | full |
 |---|---|---|
-| Agents | the 4 standalone binaries | all 22: the 16 in the table, plus jcode, DeepSeek-Reasonix, oh-my-pi, Open Interpreter, mini-swe-agent and Mistral Vibe |
+| Agents | the 4 standalone binaries | all 24: the 16 in the table, plus jcode, DeepSeek-Reasonix, oh-my-pi, Open Interpreter, Grok Build, fx, mini-swe-agent and Mistral Vibe |
 | Needs | Python 3.9+, curl, tar (and unzip on macOS) | the same, plus Node 22+ with npm, and [uv](https://docs.astral.sh/uv/) |
 | Runtime | about 5 minutes | 20–40 minutes (9 on GitHub's Linux runner and 13 on its macOS one before the six were added) |
 | Disk | about 700 MB | up to 6 GB |

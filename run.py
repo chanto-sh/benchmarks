@@ -336,7 +336,9 @@ model_id = "{model}"
             'default_model = "bench"\n[telemetry]\ncli_metrics = "off"\n[sandbox]\nbash = "off"\n'
             f'[[providers]]\nname = "bench"\nkind = "openai"\nbase_url = "{v1}"\nmodel = "{model}"\n'
             f'api_key_env = "BENCH_API_KEY"\ncontext_window = {ctx}\n')
-        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d), "BENCH_API_KEY": API_KEY}
+        # Provider keys come only from <Reasonix home>/.env, not the environment.
+        (d / ".env").write_text(f"BENCH_API_KEY={API_KEY}\n")
+        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d)}
     if agent == "mini":
         # mini-swe-agent: one `bash` tool, no compaction (so no context window to
         # set). litellm 1.106.2 imports the optional `mcp` package for any request
@@ -393,6 +395,40 @@ model_id = "{model}"
         return [agent_exe("interpreter"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox",
                 "--skip-git-repo-check", "--ephemeral", prompt], {
             "INTERPRETER_HOME": str(home("interpreter")), "BENCH_API_KEY": API_KEY}
+    if agent == "grok":
+        # Grok Build: its lock directory must be 0700 or it's ignored. It also
+        # makes an empty /tmp/sessions/<id>/ per run (hard-coded, not TMPDIR).
+        # The session title call is routed to the bench model too; it can't be
+        # turned off.
+        d = home("grok")
+        locks = d / "locks"
+        locks.mkdir(exist_ok=True)
+        os.chmod(locks, 0o700)
+        (d / "config.toml").write_text(
+            '[cli]\nauto_update = false\n'
+            '[features]\ntelemetry = false\nfeedback = false\nremote_fetch = false\n'
+            'title_refresh = false\nturn_summary = false\nsession_recap = false\n'
+            '[models]\ndefault = "bench"\nsession_summary = "bench"\n'
+            f'[model.bench]\nmodel = "{model}"\nbase_url = "{v1}"\nname = "bench"\n'
+            f'env_key = "BENCH_API_KEY"\napi_backend = "chat_completions"\ncontext_window = {ctx}\n')
+        return [agent_exe("grok"), "-p", prompt, "-m", "bench", "--always-approve", "--no-auto-update",
+                "--output-format", "json"], {
+            "GROK_HOME": str(d), "BENCH_API_KEY": API_KEY, "GROK_TELEMETRY_ENABLED": "0",
+            "GROK_FILE_LOCK_SLOT_DIR": str(locks)}
+    if agent == "fx":
+        # fx reads $HOME/.fx (no home variable of its own).
+        d = home("fx")
+        (d / ".fx").mkdir(parents=True, exist_ok=True)
+        (d / ".fx" / "settings.json").write_text(json.dumps({
+            "provider": "bench",
+            "providers": {"bench": {"protocol": "openai-chat-completions", "base_url": v1,
+                                    "auth": {"type": "bearer", "env": "BENCH_API_KEY"},
+                                    "model_metadata": {model: {"context_window": ctx, "supports_tool_use": True}}}},
+            "models": {"bench": model}, "permission_mode": "full-access", "yolo_acknowledged": True,
+            "auto_upgrade": False, "session_titles": False}))
+        return [agent_exe("fx"), "ask", "--full-access", "--model", model, "--json", "--", prompt], {
+            "HOME": str(d), "BENCH_API_KEY": API_KEY, "FX_AUTO_UPGRADE": "0", "FX_NO_OPEN_BROWSER": "1",
+            "FX_DISABLE_KEYCHAIN": "1", "FX_HERDR": "0"}
     if agent == "gemini":
         # Gemini CLI speaks only the Gemini API; GOOGLE_GEMINI_BASE_URL points
         # it at the endpoint. --yolo approves every tool; its own HOME keeps
@@ -1358,7 +1394,7 @@ ARTIFACTS = None
 VERSION_CMDS = {
     **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands",
                                                  "codewhale", "zerostack", "hax", "jcode", "reasonix", "vibe", "omp",
-                                                 "interpreter")},
+                                                 "interpreter", "grok", "fx")},
     "mini": [agent_exe("mini"), "--help"],
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],

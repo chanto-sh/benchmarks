@@ -50,6 +50,8 @@ AGENTS = {
     "reasonix": ("DeepSeek-Reasonix", "Go", "bin", run.BIN_DIR / "reasonix"),
     "omp": ("oh-my-pi", "Bun", "bin", run.BIN_DIR / "omp"),
     "interpreter": ("Open Interpreter", "Rust", "bin", run.BIN_DIR / "interpreter"),
+    "grok": ("Grok Build", "Rust", "bin", run.BIN_DIR / "grok"),
+    "fx": ("fx", "Zig", "bin", run.BIN_DIR / "fx"),
     "mini": ("mini-swe-agent", "Python", "uv", run.UV_TOOLS / "mini-swe-agent"),
     "vibe": ("Mistral Vibe", "Python", "uv", run.UV_TOOLS / "mistral-vibe"),
 }
