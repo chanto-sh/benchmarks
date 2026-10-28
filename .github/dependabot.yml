@@ -9,3 +9,14 @@ updates:
     commit-message:
       prefix: ci
       include: scope
+  # The pinned npm agents. Version updates stay off (the agents' versions are
+  # what the results report and change in reviewed PRs); security updates
+  # still open PRs for vulnerable dependencies in the lockfile.
+  - package-ecosystem: npm
+    directory: /agents
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: chore
+      include: scope

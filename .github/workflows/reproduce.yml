@@ -36,6 +36,8 @@ jobs:
       QUICK: ${{ github.event_name == 'pull_request' || inputs.quick }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - if: env.QUICK != 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -44,15 +46,17 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: |
           if [ "$QUICK" = true ]; then python3 reproduce.py --quick; else python3 reproduce.py; fi
+      # Only this run's results file: the published ones are in the checkout too.
       - if: always()
         run: |
-          for f in results/overhead-*.txt; do
-            [ -f "$f" ] || continue
+          mkdir -p "$RUNNER_TEMP/overhead"
+          git ls-files --others --exclude-standard -- 'results/overhead-*.txt' | while read -r f; do
             { echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            cp "$f" "$RUNNER_TEMP/overhead/"
           done
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: overhead-${{ matrix.os }}
-          path: results/overhead-*.txt
+          path: ${{ runner.temp }}/overhead/
           if-no-files-found: ignore
