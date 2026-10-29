@@ -39,6 +39,10 @@ case "$BENCH_UPSTREAM" in
   openrouter/qwen/qwen3.5-9b) cost_in=0.0000001; cost_out=0.00000015 ;;
   *) cost_in=0; cost_out=0 ;;
 esac
-cfg="$(mktemp -t bench-litellm).yaml"
+# The config and its no_search.py hook go in one directory: LiteLLM loads
+# callbacks from beside the config file.
+dir="$(mktemp -d -t bench-litellm)"
+cfg="$dir/litellm.yaml"
 sed -e "s/__COST_IN__/$cost_in/" -e "s/__COST_OUT__/$cost_out/" "$(dirname "$0")/litellm.yaml" > "$cfg"
+cp "$(dirname "$0")/no_search.py" "$dir/"
 exec litellm --config "$cfg" --port "${BENCH_PROXY_PORT:-4000}"

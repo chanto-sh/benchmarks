@@ -12,5 +12,8 @@ litellm_settings:
   drop_params: true          # each Chanto sends its own extras; drop what the upstream can't take
   num_retries: 8             # rate limits (429) back off and retry the same way for every agent
   request_timeout: 300
+  # No server-side web search or fetch: the sandbox can't block a search the
+  # upstream runs for the agent (no_search.py, next to this file).
+  callbacks: no_search.proxy_handler_instance
 general_settings:
   master_key: sk-bench-local
