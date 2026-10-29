@@ -177,7 +177,10 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
         env = {"ANTHROPIC_BASE_URL": API, "ANTHROPIC_AUTH_TOKEN": API_KEY, "ANTHROPIC_API_KEY": "", "ANTHROPIC_MODEL": model,
                "ANTHROPIC_DEFAULT_HAIKU_MODEL": model, "ANTHROPIC_DEFAULT_SONNET_MODEL": model, "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
                "CLAUDE_CODE_SUBAGENT_MODEL": model, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CONFIG_DIR": str(home("claude"))}
-        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
+        # Its WebSearch runs at the model provider, outside the sandbox (the proxy
+        # refuses it too, see no_search.py); WebFetch is blocked anyway.
+        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
+                "--disallowedTools", "WebSearch,WebFetch", "--output-format", "json", prompt], env
     if agent == "codex":
         (home("codex") / "config.toml").write_text(
             f'model_provider = "bench"\n[model_providers.bench]\nname = "bench"\nbase_url = "{v1}"\nenv_key = "BENCH_API_KEY"\nwire_api = "responses"\n')
@@ -438,7 +441,10 @@ model_id = "{model}"
         (h / ".gemini" / "settings.json").write_text(json.dumps({
             "security": {"auth": {"selectedType": "gemini-api-key"}, "folderTrust": {"enabled": False}},
             "privacy": {"usageStatisticsEnabled": False}, "telemetry": {"enabled": False},
-            "general": {"disableAutoUpdate": True, "disableUpdateNag": True}}))
+            "general": {"disableAutoUpdate": True, "disableUpdateNag": True},
+            # google_web_search runs at the model provider, outside the sandbox
+            # (the proxy refuses it too, see no_search.py).
+            "tools": {"exclude": ["google_web_search", "web_fetch"]}}))
         return [str(nb / "gemini"), "--yolo", "-m", model, "-p", prompt], {
             "HOME": str(h), "GEMINI_API_KEY": API_KEY, "GOOGLE_GEMINI_BASE_URL": API}
     raise SystemExit(f"agent {agent} has no hosted (--api) configuration")
@@ -486,7 +492,10 @@ def agent_cmd(agent, model, prompt, ctx, wd=None):
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "CLAUDE_CONFIG_DIR": str(home("claude")),
         }
-        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt], env
+        # Its WebSearch runs at the model provider, outside the sandbox (the proxy
+        # refuses it too, see no_search.py); WebFetch is blocked anyway.
+        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
+                "--disallowedTools", "WebSearch,WebFetch", "--output-format", "json", prompt], env
     if agent == "codex":
         # Codex's local mode looks the model up by exact tag (and tries to pull it otherwise).
         return [agent_exe("codex"), "exec", "--oss", "--local-provider", "ollama", "-m", model if ":" in model else f"{model}:latest",
@@ -1047,6 +1056,10 @@ OFFTASK_PATTERNS = [
     # The fix itself on GitHub: a pull request, commit, compare view or patch,
     # or anything from its API. The upstream repository's own URLs are added
     # per task (see offtask_hits).
+    # Results of a web search the model provider ran for the agent (Claude
+    # Code's WebSearch, Gemini CLI's google_web_search): it happened outside the
+    # sandbox, so the run saw the web. The proxy now refuses these.
+    ("web search", re.compile(r"Web search results for query|\bweb_search_tool_result\b|google_web_search[^\n]{0,80}(?:Sources|results)")),
     ("web", re.compile(r"(?:https?://)?github\.com/[\w.-]+/[\w.-]+/(?:pull|commit|compare|blob|tree|raw)/[^\s\"'\\)]+"
                        r"|api\.github\.com[^\s\"'\\)]*|patch-diff\.githubusercontent\.com[^\s\"'\\)]*")),
 ]

@@ -144,6 +144,16 @@ system and toolchain paths, and can connect only to the model proxy on
 localhost. So no run can read another agent's workspace, a newer release with
 the fix, the upstream repository or this repository's hidden tests. After each
 run the transcript is checked for attempts anyway, recorded as `offtask_hits`.
+
+The model proxy itself is the one way out: some agents search the web *through
+the model API* (Claude Code's WebSearch sends a server-side `web_search` tool,
+Gemini CLI's google_web_search a `googleSearch` tool), and the upstream runs
+the search outside the sandbox. Runs before this change did, and some found
+published SWE-bench patches for the task being solved; their transcripts show
+it as a `web search` off-task hit. The proxy now refuses a request that asks
+only for a search and strips search tools and `web_search_options` from any
+other ([no_search.py](no_search.py)), and the two agents run with those tools
+switched off as well.
 `CHANTO_BENCH_ISOLATION=off` turns the sandbox off for debugging; result files
 record the mode, and `--report` refuses runs made without it.
 

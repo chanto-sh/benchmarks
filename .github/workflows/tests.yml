@@ -18,7 +18,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
       # Ubuntu 24.04 restricts unprivileged user namespaces, which bubblewrap needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - run: python3 -m unittest -v test_run test_meter
+      - run: python3 -m unittest -v test_run test_meter test_no_search
         env:
           BENCH_SANDBOX_SMOKE: "1"
 
@@ -29,6 +29,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - run: python3 -m unittest -v test_run test_meter
+      - run: python3 -m unittest -v test_run test_meter test_no_search
         env:
           BENCH_SANDBOX_SMOKE: "1"
