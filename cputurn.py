@@ -238,13 +238,18 @@ def one_run(agent, home, turns, blob_kb):
 
     ts = [json.loads(l)["t"] for l in log.read_text().splitlines() if l.strip()]
     nturns = len(ts)
+    # The whole run's CPU, for separating startup from per-turn work: a run of
+    # one request is mostly startup.
+    total = cpu_time * 1000 if cpu_time is not None else None
     if nturns < 2:
-        return {"turns": nturns, "cpu_time": None, "cpu_tree": None, "wall": None}
+        return {"turns": nturns, "cpu_time": None, "cpu_tree": None, "wall": None,
+                "cpu_total": total if nturns == 1 else None}
     gaps = [(ts[i + 1] - ts[i]) * 1000 for i in range(len(ts) - 1)]
     cpu_tree = sum(seen.values())
     return {
         "turns": nturns,
         "cpu_time": (cpu_time * 1000 / nturns) if cpu_time is not None else None,
+        "cpu_total": total,
         "cpu_tree": (cpu_tree * 1000 / nturns) if cpu_tree else None,
         "wall": statistics.median(gaps),
         "rss": (peak_rss[0] / 1024) if peak_rss[0] else None,  # peak tree RSS, MB
