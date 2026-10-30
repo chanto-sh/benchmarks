@@ -7,10 +7,16 @@
 
 It installs each agent at the version RESULTS.md reports (install-agents.sh:
 pinned, checksum-verified; Chanto as its release binary), drives each one
-through the same file-reading task against a local mock model, and prints CPU
-time per turn, peak memory and install size, with each agent's ratio to
-Chanto. The mock answers instantly, so what's measured is the agent's own
+through the same file-reading task against a local mock model, and prints its
+startup CPU, CPU per turn, peak memory and install size, with each agent's ratio
+to Chanto. The mock answers instantly, so what's measured is the agent's own
 work, and no API key or model is needed.
+
+Startup and per-turn cost are separate columns: an agent that is slow to start
+but cheap per turn, or the reverse, shows as such. Startup is the CPU of a run
+that makes one model request and stops; per turn is the rest of a full run's
+CPU spread over its other requests. A one-shot or CI run pays the first every
+time, a long session mostly the second.
 
 Absolute numbers depend on the machine; the ratios are what should carry over.
 A copy of the table, with the versions, machine, settings and every rep's raw
@@ -114,18 +120,22 @@ def main():
     (work / "work").mkdir()
     run.WORK = work / "work"
     run.API_KEY = "x"
-    est = len(agents) * a.reps * 6
+    est = len(agents) * a.reps * 8
     print(f"\nMeasuring {len(agents)} agents, {a.reps} runs each, {TURNS} turns reading {BLOB_KB} KB files "
           f"(roughly {est // 60 + 1} min)\n", flush=True)
-    raw = {}
+    raw, starts = {}, {}
     for agent in agents:
-        runs = []
+        runs, first = [], []
         for i in range(a.reps):
             r = cputurn.one_run(agent, work, TURNS, BLOB_KB)
             if r and r.get("cpu_time") is not None:
                 runs.append(r)
+            # No turns: one model request, answered with text, then the agent exits.
+            r = cputurn.one_run(agent, work, 0, BLOB_KB)
+            if r and r.get("cpu_total") is not None:
+                first.append(r["cpu_total"])
             print(f"\r  {agent:10} {i + 1}/{a.reps}", end="", flush=True)
-        raw[agent] = runs
+        raw[agent], starts[agent] = runs, first
         print(f"\r  {agent:10} done{' ' * 8}", flush=True)
         if not runs:
             # Show why, or a "did not run" row is all anyone gets to go on.
@@ -142,36 +152,49 @@ def main():
     for agent in agents:
         runs = raw[agent]
         if not runs:
-            rows.append((agent, None, None, None, None, 0))
+            rows.append((agent, None, None, None, None, None, None, 0))
             continue
-        cpu = statistics.median(r["cpu_time"] for r in runs)
-        sd = statistics.stdev([r["cpu_time"] for r in runs]) if len(runs) > 1 else 0.0
+        blended = statistics.median(r["cpu_time"] for r in runs)
+        start = statistics.median(starts[agent]) if starts[agent] else None
+        # Each full run's CPU without the startup, over the requests after the first.
+        turn = [(r["cpu_total"] - start) / (r["turns"] - 1) for r in runs] if start is not None else []
+        cpu = statistics.median(turn) if turn else None
+        sd = statistics.stdev(turn) if len(turn) > 1 else 0.0
         rss = statistics.median(r["rss"] for r in runs if r.get("rss"))
         try:
             mb = size.measure(agent, lock)[0] / 1e6
         except Exception:
             mb = None
-        rows.append((agent, cpu, sd, rss, mb, statistics.median(r["turns"] for r in runs)))
-    rows.sort(key=lambda r: (r[1] is None, r[1] or 0))
-    base = next((r for r in rows if r[0] == "chanto" and r[1]), None)
+        rows.append((agent, start, cpu, sd, blended, rss, mb, statistics.median(r["turns"] for r in runs)))
+    # By per-turn CPU; an agent with no startup run sorts by its whole-run figure.
+    rows.sort(key=lambda r: (r[4] is None, r[2] if r[2] is not None else r[4] or 0))
+    base = next((r for r in rows if r[0] == "chanto" and r[2]), None)
 
     name = lambda x: size.AGENTS[x][0]
-    out = [f"{'agent':14}{'CPU ms/turn':>12}{'±sd':>6}{'peak MB':>9}{'install MB':>12}  {'× Chanto CPU':>12}{'× mem':>7}  needs",
-           "-" * 84]
-    for agent, cpu, sd, rss, mb, turns in rows:
-        if cpu is None:
-            out.append(f"{name(agent):14}{'did not run':>12}")
+    out = [f"{'agent':14}{'startup ms':>11}{'ms/turn':>9}{'±sd':>6}{'whole run':>11}{'peak MB':>9}{'install MB':>12}"
+           f"  {'× Chanto CPU':>12}{'× mem':>7}  needs",
+           "-" * 103]
+    for agent, start, cpu, sd, blended, rss, mb, turns in rows:
+        if blended is None:
+            out.append(f"{name(agent):14}{'did not run':>11}")
             continue
-        ratio = f"{cpu / base[1]:.1f}×" if base else ""
-        mratio = f"{rss / base[3]:.1f}×" if base and rss else ""
+        ratio = f"{cpu / base[2]:.1f}×" if base and cpu is not None else ""
+        mratio = f"{rss / base[5]:.1f}×" if base and rss else ""
         note = size.NEEDS.get(agent, "")
         if turns < TURNS:
             note = (note + f" (stopped after {turns:.0f} turns)").strip()
         if agent == "aider":
             note = (note + " (per message: no tool loop)").strip()
-        out.append(f"{name(agent):14}{cpu:12.1f}{sd:6.1f}{rss:9.0f}{(f'{mb:.1f}' if mb else '?'):>12}  {ratio:>12}{mratio:>7}  {note}")
+        if start is None:
+            note = (note + " (no one-request run: startup not separated)").strip()
+        num = lambda v, w, f=".1f": f"{v:{w}{f}}" if v is not None else f"{'—':>{w}}"
+        out.append(f"{name(agent):14}{num(start, 11, '.0f')}{num(cpu, 9)}{num(sd if cpu is not None else None, 6)}"
+                   f"{blended:11.1f}{rss:9.0f}{(f'{mb:.1f}' if mb else '?'):>12}  {ratio:>12}{mratio:>7}  {note}")
     out += ["",
-            f"CPU: user+sys time of the agent and everything it started, per model request (median of {a.reps} runs).",
+            f"Startup: CPU of a run that makes one model request and exits (median of {a.reps} runs).",
+            f"ms/turn: CPU per model request after the first, startup excluded (median of {a.reps} runs).",
+            "Whole run: the full run's CPU over all its requests, startup included (the earlier single figure).",
+            "CPU is user+sys time of the agent and everything it started. × Chanto CPU compares ms/turn.",
             "Peak MB: largest resident memory of the agent's whole process tree, sampled every 60 ms.",
             "Install MB: what the pinned install puts on disk; Node and Python, where needed, aren't counted."]
     table = "\n".join(out)
@@ -186,8 +209,10 @@ def main():
               f"# machine: {machine()}",
               *[f"# {x}: {v}" for x, v in versions.items()],
               f"# date: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}", ""]
-    detail = ["", "Every run (CPU ms/turn, peak MB, turns):",
-              *[f"  {x}: " + ", ".join(f"{r['cpu_time']:.2f}/{r['rss'] or 0:.0f}/{r['turns']}" for r in raw[x]) for x in agents]]
+    detail = ["", "Every run (whole-run CPU ms total, peak MB, requests):",
+              *[f"  {x}: " + ", ".join(f"{r['cpu_total']:.1f}/{r['rss'] or 0:.0f}/{r['turns']}" for r in raw[x]) for x in agents],
+              "", "Every one-request run (CPU ms total):",
+              *[f"  {x}: " + ", ".join(f"{s:.1f}" for s in starts[x]) for x in agents]]
     path = run.RESULTS / f"overhead-{stamp}.txt"
     path.parent.mkdir(exist_ok=True)
     path.write_text("\n".join(header) + table + "\n" + "\n".join(detail) + "\n")
