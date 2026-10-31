@@ -76,14 +76,14 @@ python3 reproduce.py --quick   # Chanto, Goose, Codewhale, opencode: about 5 min
 and for every agent in the table:
 
 ```sh
-python3 reproduce.py           # all 24 agents: 20–40 minutes
+python3 reproduce.py           # all 23 agents: 20–40 minutes
 ```
 
 | | `--quick` | full |
 |---|---|---|
-| Agents | the 4 standalone binaries | all 24: the 16 in the table, plus jcode, DeepSeek-Reasonix, oh-my-pi, Open Interpreter, Grok Build, fx, mini-swe-agent and Mistral Vibe |
+| Agents | the 4 standalone binaries | the 23 in the table (fx, hax and zerostack, below 5,000 stars, run when `--agents` names them) |
 | Needs | Python 3.9+, curl, tar (and unzip on macOS) | the same, plus Node 22+ with npm, and [uv](https://docs.astral.sh/uv/) |
-| Runtime | about 5 minutes | 20–40 minutes (9 on GitHub's Linux runner and 13 on its macOS one before the six were added) |
+| Runtime | about 5 minutes | 20–40 minutes (about 20 on GitHub's Linux and macOS runners) |
 | Disk | about 700 MB | up to 6 GB |
 
 No API key and no model are needed: a local mock answers every request at
@@ -113,7 +113,7 @@ anything:
    with them off).
 3. Choose **reproduce** in the list on the left, then **Run workflow**. Leave
    **quick** unticked for every agent, or tick it for the native binaries only.
-4. When it finishes (a few minutes for quick, about 15 for the full run),
+4. When it finishes (a few minutes for quick, about 20 for the full run),
    open the run: its summary has the table for macOS and for Linux, and the
    results files are under **Artifacts**.
 

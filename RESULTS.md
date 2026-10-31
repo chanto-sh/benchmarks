@@ -92,7 +92,7 @@ or in short:
 git clone https://github.com/chanto-sh/benchmarks.git
 cd benchmarks
 python3 reproduce.py --quick   # 4 native agents, about 5 minutes; needs only Python 3, curl and tar
-python3 reproduce.py           # all 23; also needs Node 22+ with npm, and uv; 30–45 minutes
+python3 reproduce.py           # all 23; also needs Node 22+ with npm, and uv; 20–40 minutes
 ```
 
 To run it on GitHub's machines instead, fork this repository and run the
