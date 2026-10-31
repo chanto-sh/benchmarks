@@ -329,7 +329,9 @@ model_id = "{model}"
         h = home("openhands")
         return [*launch("openhands"), "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
             "HOME": str(h), "LLM_MODEL": f"openai/{model}", "LLM_BASE_URL": v1, "LLM_API_KEY": API_KEY,
-            "OPENHANDS_SUPPRESS_BANNER": "1"}
+            "OPENHANDS_SUPPRESS_BANNER": "1",
+            # Its banner has an emoji, which Windows' default encoding can't write.
+            "PYTHONUTF8": "1"}
     if agent == "codewhale":
         # A named OpenAI-compatible provider in its own CODEWHALE_HOME; `exec
         # --auto` is its headless mode with tool use auto-approved. Telemetry
