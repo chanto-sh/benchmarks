@@ -21,9 +21,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      # The lockfile alone: nothing is installed or run.
-      - run: npm audit --package-lock-only --audit-level=low
-        working-directory: agents
+      # The lockfile alone: nothing is installed or run. Any advisory fails,
+      # apart from the written exceptions in audit.py.
+      - run: python3 audit.py
 
   dependency-review:
     name: dependency review
