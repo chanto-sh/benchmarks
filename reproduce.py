@@ -36,17 +36,19 @@ REPS = 10  # runs per agent; the table shows the median
 # stars), and what installs it.
 NATIVE = ["chanto", "goose", "codewhale", "opencode"]
 NPM = ["forge", "pi", "crush", "claude", "qwen", "codex", "gemini", "cline", "cn", "kilo"]
-UV = ["aider", "openhands"]
-# Added after the October 25 table (each over 5,000 stars, except fx at 3,600,
-# included for its native, small-footprint design): measured in every
+UV = ["openhands"]
+# Added after the October 25 table (each over 5,000 stars): measured in every
 # full run, but not in --quick, which stays the original four for speed.
-NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter", "grok", "fx"]
+NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter", "grok"]
 NEW_UV = ["mini", "vibe"]
 PUBLISHED = NATIVE + NPM + UV + NEW_NATIVE + NEW_UV
-# Native agents that still run here but aren't in the published table, since
-# they're below that bar: only measured when --agents names them.
-EXTRA = ["hax", "zerostack"]
-ALL = PUBLISHED + EXTRA
+# Agents that still run here but aren't in the published table, only measured
+# when --agents names them: native ones below the 5,000-star bar (fx has about
+# 3,600), and Aider, which answers one message at a time with no tool loop,
+# so it has no per-turn or startup figure comparable with the others.
+EXTRA = ["hax", "zerostack", "fx"]
+EXTRA_UV = ["aider"]
+ALL = PUBLISHED + EXTRA + EXTRA_UV
 
 
 def sh(cmd, **kw):
@@ -75,7 +77,7 @@ def install(agents):
     groups = []
     if any(a in NPM for a in agents):
         groups.append("npm")
-    if any(a in UV + NEW_UV for a in agents):
+    if any(a in UV + NEW_UV + EXTRA_UV for a in agents):
         groups.append("uv")
     groups += [a for a in agents if a in NATIVE + EXTRA + NEW_NATIVE]
     for g in groups:

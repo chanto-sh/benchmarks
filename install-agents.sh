@@ -59,7 +59,7 @@ install_uv() {
 
 # Standalone binaries, each a GitHub release (or official build) checked
 # against a pinned SHA-256:
-#   Chanto 0.1.9 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.10 (checksums from the release's signed SHA256SUMS);
 #   Goose 1.54.0;
 #   opencode 2.0.22 (checksums from the opencode Homebrew formula for 2.0.22);
 #   jcode 0.99.1, DeepSeek-Reasonix 2.54.0, oh-my-pi 18.13.3, Open Interpreter 0.0.56,
@@ -85,14 +85,14 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.9
+CHANTO_VERSION=0.1.10
 
 install_chanto() {
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=3edf50f97ffdf091caadebd9d3b025622010302b30e0f029e336eb6c09bc843b ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=9264dae80409e32afd44feebfbf4be0e5e382061ed08da35e3a065fe6f1418bb ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=4366a880b236667b6f87be80b994f7f76c16b8f3928b9ec074c659f457189914 ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=aa9282a89299bd3833d12908c264546c4f13fc36d578767f48db063120a6d6d5 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=32b28b0b92f004a56b0710eb4bac6603d2d00f4a18e88b16881d3a9be225ead9 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=2d120b949a53f7d0c02d1268030c6ac8c872f2515a8039d7879bd29257dd31b0 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=76e86507f1ff23ff6363f930864cd5bfa4289dc844283749e975d890e2ffded5 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=6cac3c5712abd78473824abd433ba09f999b237974bca9d38f2e3d671505c20a ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
