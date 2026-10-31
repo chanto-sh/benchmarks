@@ -222,9 +222,14 @@ def one_run(agent, home, turns, blob_kb):
             threading.Thread(target=_drain, daemon=True).start()
         else:
             start = job.start if job else subprocess.Popen
-            if WINDOWS and agent in ("forge", "mini"):
-                # rustyline and prompt_toolkit need a console on Windows: these
-                # get one of their own and use it for input and output.
+            if WINDOWS and agent == "mini":
+                # prompt_toolkit writes to a console on Windows, so all of its
+                # streams must be the new console's: redirecting any one makes
+                # Python hand the child this process's stdout too.
+                p = start(tcmd, cwd=wd, env=env, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            elif WINDOWS and agent == "forge":
+                # rustyline needs a console on Windows, as a terminal on Unix:
+                # forge gets one of its own and uses it for input.
                 p = start(tcmd, cwd=wd, env=env, stderr=ef,
                           creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
