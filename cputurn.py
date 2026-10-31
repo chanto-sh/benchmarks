@@ -146,8 +146,11 @@ def one_run(agent, home, turns, blob_kb):
     stdin_data = None
     if agent == "aider":
         # aider has no tool-call loop; drive its stdin REPL instead, where each
-        # line is one model request, so it makes `turns` requests like the rest.
-        # It is an edit-block agent, so this is per-MESSAGE overhead (marked * in
+        # message is one model request, so it makes `turns` requests like the
+        # rest (at least one: the startup run's). Before each message it adds
+        # that turn's file to the chat with /read-only, so like the others it
+        # reads a file a turn and sends it, and its context grows the same way.
+        # It is an edit-block agent, so this is per-MESSAGE overhead (marked in
         # the report), not the same tool-loop turn as the others.
         v1 = f"{run.API}/v1"
         cmd = [run.agent_exe("aider"), "--model", "openai/fake", "--yes-always", "--no-auto-commits",
@@ -155,7 +158,8 @@ def one_run(agent, home, turns, blob_kb):
                "--no-stream", "--no-gitignore", "--no-analytics"]
         extra = {"OPENAI_API_BASE": v1, "OPENAI_API_KEY": run.API_KEY, "AIDER_HOME": str(home / "aiderhome")}
         subprocess.run(["git", "init", "-q"], cwd=wd)
-        stdin_data = "".join(f"read file f{i}.txt\n" for i in range(turns)) + "/exit\n"
+        stdin_data = "".join(f"/read-only f{i}.txt\nread file f{i}.txt\n"
+                             for i in range(max(turns, 1))) + "/exit\n"
     else:
         try:
             cmd, extra = run.hosted_cmd(agent, "fake", "Read each file I point you to, in order.", 200000, wd)

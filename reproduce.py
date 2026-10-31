@@ -37,15 +37,15 @@ REPS = 10  # runs per agent; the table shows the median
 NATIVE = ["chanto", "goose", "codewhale", "opencode"]
 NPM = ["forge", "pi", "crush", "claude", "qwen", "codex", "gemini", "cline", "cn", "kilo"]
 UV = ["aider", "openhands"]
-# Added after the October 25 table (each over 5,000 stars, except fx at 3,600,
-# included for its native, small-footprint design): measured in every
+# Added after the October 25 table (each over 5,000 stars): measured in every
 # full run, but not in --quick, which stays the original four for speed.
-NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter", "grok", "fx"]
+NEW_NATIVE = ["jcode", "reasonix", "omp", "interpreter", "grok"]
 NEW_UV = ["mini", "vibe"]
 PUBLISHED = NATIVE + NPM + UV + NEW_NATIVE + NEW_UV
 # Native agents that still run here but aren't in the published table, since
-# they're below that bar: only measured when --agents names them.
-EXTRA = ["hax", "zerostack"]
+# they're below the 5,000-star bar (fx has about 3,600): only measured when
+# --agents names them.
+EXTRA = ["hax", "zerostack", "fx"]
 ALL = PUBLISHED + EXTRA
 
 
@@ -184,7 +184,7 @@ def main():
         if turns < TURNS:
             note = (note + f" (stopped after {turns:.0f} turns)").strip()
         if agent == "aider":
-            note = (note + " (per message: no tool loop)").strip()
+            note = (note + " (one model request per message: no tool loop)").strip()
         if start is None:
             note = (note + " (no one-request run: startup not separated)").strip()
         num = lambda v, w, f=".1f": f"{v:{w}{f}}" if v is not None else f"{'—':>{w}}"
