@@ -1,0 +1,26 @@
+# reproduce.py: agent overhead against a local mock model
+# command: python3 reproduce.py --agents openhands,mini
+# settings: 40 turns, 40 KB files, 10 reps
+# machine: AMD EPYC 9V45 96-Core Processor, 4 cores, 16 GB RAM, Windows 2025Server AMD64
+# openhands: OpenHands CLI 1.16.0
+# mini: This is mini-swe-agent version 2.4.6.
+# date: 2026-10-31T18:16:31Z
+agent          startup ms  ms/turn   ±sd  whole run  peak MB  install MB  × Chanto CPU  × mem  needs
+-------------------------------------------------------------------------------------------------------
+OpenHands            8656    205.6  43.7      406.8      456       519.0                       Python
+mini-swe-agentdid not run
+
+Startup: CPU of a run that makes one model request and exits (median of 10 runs).
+ms/turn: CPU per model request after the first, startup excluded (median of 10 runs).
+Whole run: the full run's CPU over all its requests, startup included (the earlier single figure).
+CPU is user+sys time of the agent and everything it started. × Chanto CPU compares ms/turn.
+Peak MB: largest resident memory of the agent's whole process tree, sampled every 60 ms.
+Install MB: what the pinned install puts on disk; Node and Python, where needed, aren't counted.
+
+Every run (whole-run CPU ms total, peak MB, requests):
+  openhands: 22421.9/467/42, 15906.2/455/42, 17140.6/454/42, 16765.6/456/42, 17031.2/455/42, 17750.0/454/42, 17015.6/455/42, 17250.0/456/42, 16578.1/461/42, 17265.6/456/42
+  mini: 
+
+Every one-request run (CPU ms total):
+  openhands: 8531.2, 8640.6, 8546.9, 9031.2, 9140.6, 8531.2, 8671.9, 8718.8, 8625.0, 10093.8
+  mini: 
