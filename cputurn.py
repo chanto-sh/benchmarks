@@ -255,6 +255,8 @@ def one_run(agent, home, turns, blob_kb):
         done.set()
         th.join()
         if job:
+            # What the agent started, since on Windows a shell is costly.
+            print(f"\n  {agent}: {job.summary()}", file=sys.stderr)
             job.close()
     if mfd is not None:
         try:

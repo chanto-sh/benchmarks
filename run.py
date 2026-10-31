@@ -295,7 +295,9 @@ model_id = "{model}"
 ''')
         (h / ".forge" / ".credentials.json").write_text(
             json.dumps([{"id": "bench", "auth_details": {"api_key": API_KEY}}]))
-        return [*launch("forge"), "-p", prompt], {"HOME": str(h)}
+        # FORGE_CONFIG because on Windows it finds its home through the OS, not the
+        # environment, so a HOME or USERPROFILE of ours wouldn't reach it.
+        return [*launch("forge"), "-p", prompt], {"HOME": str(h), "FORGE_CONFIG": str(h / ".forge")}
     if agent == "kilo":
         cfg = home("kilo") / "kilo.json"
         cfg.write_text(json.dumps({

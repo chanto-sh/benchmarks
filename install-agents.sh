@@ -99,7 +99,7 @@ bin_setup() {
 CHANTO_VERSION=0.1.10
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 1dee8bb5f997f091d7c7ee865c9c4ca949f988c9e6489d7e72f7dd0640e77b35 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 8e2ccdb4196215a961b20529303ed2c5186d69e01eb5f34bd402197a197348ad chanto.exe; return; }
     case "$plat" in
         darwin-arm64) t=aarch64-apple-darwin; sha=32b28b0b92f004a56b0710eb4bac6603d2d00f4a18e88b16881d3a9be225ead9 ;;
         darwin-x64) t=x86_64-apple-darwin; sha=2d120b949a53f7d0c02d1268030c6ac8c872f2515a8039d7879bd29257dd31b0 ;;

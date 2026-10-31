@@ -52,6 +52,8 @@ kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(ctypes.c_int64)] * 4
 kernel32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(MemoryCounters), wintypes.DWORD]
 kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                 ctypes.POINTER(wintypes.DWORD)]
 ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
 
 
@@ -64,6 +66,7 @@ class Job:
     def __init__(self):
         self.handle = kernel32.CreateJobObjectW(None, None)
         check(self.handle, "CreateJobObject")
+        self.names = {}  # pid -> program, of the processes sampling saw
 
     def start(self, cmd, **popen):
         """Popen(cmd) inside the job."""
@@ -77,12 +80,24 @@ class Job:
         ntdll.NtResumeProcess(int(p._handle))
         return p
 
-    def cpu_seconds(self):
-        """User and kernel CPU of every process ever in the job."""
+    def accounting(self):
         info = Accounting()
         check(kernel32.QueryInformationJobObject(self.handle, JOB_ACCOUNTING, ctypes.byref(info),
                                                  ctypes.sizeof(info), None), "QueryInformationJobObject")
+        return info
+
+    def cpu_seconds(self):
+        """User and kernel CPU of every process ever in the job."""
+        info = self.accounting()
         return (info.TotalUserTime + info.TotalKernelTime) / 1e7  # 100 ns units
+
+    def summary(self):
+        """How many processes the job ever held, and the programs sampling saw."""
+        counts = {}
+        for name in self.names.values():
+            counts[name] = counts.get(name, 0) + 1
+        seen = ", ".join(f"{n} x{c}" for n, c in sorted(counts.items(), key=lambda x: -x[1]))
+        return f"{self.accounting().TotalProcesses} processes; sampled: {seen}"
 
     def pids(self):
         """The processes in the job now."""
@@ -102,6 +117,11 @@ class Job:
             if not h:
                 continue
             try:
+                if pid not in self.names:
+                    buf = ctypes.create_unicode_buffer(1024)
+                    size = wintypes.DWORD(len(buf))
+                    if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                        self.names[pid] = buf.value.rsplit("\\", 1)[-1]
                 times = [ctypes.c_int64() for _ in range(4)]
                 if kernel32.GetProcessTimes(h, *[ctypes.byref(t) for t in times]):
                     cpu = (times[2].value + times[3].value) / 1e7
