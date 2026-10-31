@@ -87,6 +87,21 @@ def machine():
     return f"{cpu}, {mem / 2**30:.0f} GB RAM, {platform.system()} {platform.release()} {platform.machine()}"
 
 
+def bash():
+    """The bash that runs install-agents.sh. On Windows that's Git Bash: a bare
+    `bash` there finds System32's WSL launcher first, which needs a Linux
+    distribution installed."""
+    if platform.system() != "Windows":
+        return "bash"
+    found = shutil.which("bash")
+    if found and "system32" not in found.lower():
+        return found
+    git = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+    if git.exists():
+        return str(git)
+    sys.exit("install-agents.sh needs Git Bash on Windows")
+
+
 def install(agents):
     groups = []
     if any(a in NPM for a in agents):
@@ -95,7 +110,7 @@ def install(agents):
         groups.append("uv")
     groups += [a for a in agents if a in NATIVE + EXTRA + NEW_NATIVE]
     for g in groups:
-        sh(["bash", str(ROOT / "install-agents.sh"), g])
+        sh([bash(), str(ROOT / "install-agents.sh"), g])
 
 
 def main():
