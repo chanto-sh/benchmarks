@@ -192,7 +192,7 @@ def one_run(agent, home, turns, blob_kb):
     # forge uses rustyline, which opens /dev/tty and fails ("Device not
     # configured") without a controlling terminal, so give it a PTY that is one
     # (setsid + TIOCSCTTY) and drain the master, or it blocks.
-    # (Windows has no PTY of this kind; forge runs on pipes there.)
+    # On Windows it gets a console of its own instead (see below).
     use_pty = agent == "forge" and not WINDOWS
     job = winjob.Job() if WINDOWS else None
     mfd = sfd = None
@@ -218,8 +218,14 @@ def one_run(agent, home, turns, blob_kb):
             threading.Thread(target=_drain, daemon=True).start()
         else:
             start = job.start if job else subprocess.Popen
-            p = start(tcmd, cwd=wd, env=env, stdout=subprocess.DEVNULL, stderr=ef,
-                      stdin=(subprocess.PIPE if stdin_data else subprocess.DEVNULL))
+            if WINDOWS and agent == "forge":
+                # rustyline needs a console on Windows, as a terminal on Unix:
+                # forge gets one of its own and uses it for input and output.
+                p = start(tcmd, cwd=wd, env=env, stderr=ef,
+                          creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                p = start(tcmd, cwd=wd, env=env, stdout=subprocess.DEVNULL, stderr=ef,
+                          stdin=(subprocess.PIPE if stdin_data else subprocess.DEVNULL))
             if stdin_data:
                 try:
                     p.stdin.write(stdin_data.encode())

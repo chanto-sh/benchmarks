@@ -67,7 +67,8 @@ class Job:
 
     def start(self, cmd, **popen):
         """Popen(cmd) inside the job."""
-        p = subprocess.Popen(cmd, creationflags=CREATE_SUSPENDED, **popen)
+        flags = popen.pop("creationflags", 0) | CREATE_SUSPENDED
+        p = subprocess.Popen(cmd, creationflags=flags, **popen)
         try:
             check(kernel32.AssignProcessToJobObject(self.handle, int(p._handle)), "AssignProcessToJobObject")
         except OSError:

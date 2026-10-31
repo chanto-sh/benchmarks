@@ -127,7 +127,7 @@ def main():
         sys.exit(f"unknown agents: {', '.join(unknown)} (choose from {', '.join(ALL)})")
 
     bench_home = Path(os.environ.get("BENCH_HOME", Path.home() / ".local/share/chanto-bench"))
-    chanto = Path(a.chanto).resolve() if a.chanto else bench_home / "bin" / "chanto"
+    chanto = Path(a.chanto).resolve() if a.chanto else bench_home / "bin" / ("chanto.exe" if platform.system() == "Windows" else "chanto")
     # Read by run.py, cputurn.py and size.py when they're imported below.
     os.environ["BENCH_CHANTO_BIN"] = str(chanto)
     if not a.no_install:
@@ -246,7 +246,8 @@ def main():
               *[f"  {x}: " + ", ".join(f"{s:.1f}" for s in starts[x]) for x in agents]]
     path = run.RESULTS / f"overhead-{stamp}.txt"
     path.parent.mkdir(exist_ok=True)
-    path.write_text("\n".join(header) + table + "\n" + "\n".join(detail) + "\n")
+    # UTF-8 everywhere: Windows would otherwise write its own code page.
+    path.write_text("\n".join(header) + table + "\n" + "\n".join(detail) + "\n", encoding="utf-8")
     print(f"\nSaved {path.relative_to(ROOT)}. Compare the ratios with RESULTS.md; absolute numbers vary by machine.")
 
 
