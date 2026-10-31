@@ -67,12 +67,20 @@ install_uv() {
 #   Grok Build 1.0.70 (see install_grok);
 #   Codewhale 0.10.1, zerostack 1.8.5, hax 0.6.1 (checksums
 #   cross-checked against each release's own SHA-256 manifest).
+# On Windows (win32-x64) each agent's .exe comes through win_install, pinned
+# from the same sources: GitHub's SHA-256 digest of each release file, Chanto's
+# signed SHA256SUMS, and Grok Build's matching bytes from both origins. opencode
+# 2.0.22 publishes no checksum for Windows and has no second source (its
+# Homebrew formula has no Windows build; npm and Scoop stop at 1.19.5), so its
+# pin is the opencode.ai download's own SHA-256 as first fetched over HTTPS.
 platform() {
     case "$(uname -s)/$(uname -m)" in
         Darwin/arm64) echo darwin-arm64 ;;
         Darwin/x86_64) echo darwin-x64 ;;
         Linux/aarch64 | Linux/arm64) echo linux-arm64 ;;
         Linux/x86_64) echo linux-x64 ;;
+        # Git Bash on Windows (the reproduce workflow's Windows runner).
+        MINGW*/x86_64 | MSYS*/x86_64) echo win32-x64 ;;
         *) echo "error: no pinned binaries for $(uname -s)/$(uname -m)" >&2; exit 1 ;;
     esac
 }
@@ -81,6 +89,9 @@ bin_setup() {
     need curl
     need tar
     plat=$(platform)
+    # Windows Python is `python`; `python3` there can be a Store placeholder.
+    py=python3
+    [ "$plat" = win32-x64 ] && py=python
     dl="$PREFIX/downloads"
     mkdir -p "$dl" "$PREFIX/bin"
 }
@@ -88,6 +99,7 @@ bin_setup() {
 CHANTO_VERSION=0.1.8
 
 install_chanto() {
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 1dee8bb5f997f091d7c7ee865c9c4ca949f988c9e6489d7e72f7dd0640e77b35 chanto.exe; return; }
     case "$plat" in
         darwin-arm64) t=aarch64-apple-darwin; sha=d9591565bd993cd26f4e7b8f1d6dc0f3b65c03cacc08c222b59043b5a2453def ;;
         darwin-x64) t=x86_64-apple-darwin; sha=a532ff43025e688dd70165a7342a60424350306fb3a551134df8b3a59e8daed4 ;;
@@ -104,6 +116,7 @@ install_chanto() {
 }
 
 install_goose() {
+    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.54.0/goose-x86_64-pc-windows-msvc.zip 5c39bc91c3eadc231847e21a8a469e778431084437b233a63a950fee22db6239 goose.exe; return; }
     case "$plat" in
         darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=feda29744cd4e13f9a5211a968ed47c67fb8fa79647f4d271d92d564998a393c ;;
         darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=7cf5bcd0c23983993900a4da49c91a0eb30ad492d2ff85af3e03bb718fb9b8af ;;
@@ -116,6 +129,7 @@ install_goose() {
 }
 
 install_opencode() {
+    [ "$plat" = win32-x64 ] && { win_install opencode https://opencode.ai/files/bin/2.0.22/opencode-windows-x64-baseline.zip 1fb6ba5d0ca496e0de6ef9064fc0e5420f76edf93b3f789f39f855166753529f opencode.exe; return; }
     case "$plat" in
         darwin-arm64) f=opencode-darwin-arm64.zip; sha=b152ebd6ae63790e1f4751494d9db35266e7d06118e3a79afb4f65d549441db6 ;;
         darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=209d2996c45583cf64634d2ebc1aa4bdf665432cd6506c45a65964b2aa2d3013 ;;
@@ -130,11 +144,35 @@ install_opencode() {
     chmod +x "$PREFIX/bin/opencode"
 }
 
+# Windows: agent $1's .exe from $2, checked against SHA-256 $3. The download is
+# either the .exe itself or a zip holding it as $4 (found wherever it sits;
+# Git Bash's tar can't read zips).
+win_install() {
+    f=${2##*/}
+    fetch "$2" "$dl/$f" "$3"
+    case "$f" in
+        *.exe) cat "$dl/$f" > "$PREFIX/bin/$1.exe" ;;
+        *) "$py" - "$dl/$f" "$4" "$PREFIX/bin/$1.exe" <<'PY'
+import shutil, sys, zipfile
+archive, member, out = sys.argv[1:]
+with zipfile.ZipFile(archive) as z:
+    names = [n for n in z.namelist() if n.rsplit("/", 1)[-1] == member]
+    if not names:
+        sys.exit(f"error: {archive} has no {member}")
+    with z.open(names[0]) as src, open(out, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+PY
+            ;;
+    esac
+    rm -f "$dl/$f"
+}
+
 # A bare executable, not an archive (the release's `codew` is the same file).
 # Copied out of the download rather than kept where curl wrote it: on APFS a
 # streamed download can hold ~15% more disk than its size, which size.py
 # would count.
 install_codewhale() {
+    [ "$plat" = win32-x64 ] && { win_install codewhale https://github.com/codewhale-hq/Codewhale/releases/download/v0.10.1/codewhale-windows-x64.exe 76a6156baa8be350d12cb3d5d049ce1d796597da8475470d3179b51d47d22729; return; }
     case "$plat" in
         darwin-arm64) f=codewhale-macos-arm64; sha=e50fdb7dfbb39d7c01eb63175da01bc40f16fb958e01cbcbef03220460302654 ;;
         darwin-x64) f=codewhale-macos-x64; sha=67019fd263cf6b1c8608e1748e368d472346da0ad417ef5b9428a887dfbb9cb1 ;;
@@ -176,6 +214,7 @@ install_hax() {
 }
 
 install_jcode() {
+    [ "$plat" = win32-x64 ] && { win_install jcode https://github.com/1jehuang/jcode/releases/download/v0.99.1/jcode-windows-x86_64.exe 142052584016b44fe12dc21b9fa7d0f67771fc9bcc9d1565c69f4318fae73586; return; }
     case "$plat" in
         darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=3623164d518b0c9d443ab07052084244b379e8a3377037db67d2382220f4ed14 ;;
         darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=d7d53c40b1e105926e06df5aa02c0f082616d602bbd20e0c318248ce3fdad4c9 ;;
@@ -195,6 +234,7 @@ install_jcode() {
 }
 
 install_reasonix() {
+    [ "$plat" = win32-x64 ] && { win_install reasonix https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.54.0/reasonix-windows-amd64.zip fa93efc3e4e7abb3704b0a0ba6d347d2f42f5e9d9a7bf0fcc867663919af0669 reasonix.exe; return; }
     case "$plat" in
         darwin-arm64) f=reasonix-darwin-arm64.tar.gz; sha=be4e185703c1a3f95f140bbb785ce4861d5008689916fe892ed2683424a9fe10 ;;
         darwin-x64) f=reasonix-darwin-amd64.tar.gz; sha=6b5d36a6564e818452fe28f291816dde458319c3f4ab7409e91074f234a66a3e ;;
@@ -211,6 +251,7 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.13.3/omp-windows-x64.exe ce97a82dc767f4cf5683ad17e08f095a27de9a15208dc702668cce24feb1b4fb; return; }
     case "$plat" in
         darwin-arm64) f=omp-darwin-arm64; sha=b449d0d0d779a0b2e655f0ce41d5c414a253de71c67b3affc30a6528fc967314 ;;
         darwin-x64) f=omp-darwin-x64; sha=cfd47dc46d028bbdfc220ccb1fdd40af7a82a4e182cb3c2fd1d66a8c20d90326 ;;
@@ -226,6 +267,7 @@ install_omp() {
 
 # Open Interpreter is a Codex fork and keeps Codex's asset names.
 install_interpreter() {
+    [ "$plat" = win32-x64 ] && { win_install interpreter https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.56/codex-x86_64-pc-windows-msvc.exe a31684f8bdc3634d18a849cfcbdf7c2926a7849a61152b146b17fdbca7689902; return; }
     case "$plat" in
         darwin-arm64) t=aarch64-apple-darwin; sha=837570739cf7cd13e0d5b88cc18d6aea33e31eba3682844218fdb050640deee2 ;;
         darwin-x64) t=x86_64-apple-darwin; sha=9f998b2b61c60e60e3c5e8d6006bdda44884175c19ac518eccc0f5d8a7a10689 ;;
@@ -262,6 +304,7 @@ install_fx() {
 # both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
 # build is also signed by xAI (team 5Y6N3AJ54S).
 install_grok() {
+    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.70-windows-x86_64.exe 1e03c16cf2bd4626a79d6b1ea1430f88c38e0c8ec75edd283a60de11296ba326; return; }
     case "$plat" in
         darwin-arm64) p=macos-aarch64; sha=5c8a688251bf61e35370b828b6a353b0a20fcc3f64000de8a91d426039f29cec ;;
         darwin-x64) p=macos-x86_64; sha=d9ecd462f1f3c3b40a7a131944987ee7ed1c38069b7009cc4107398ab767f484 ;;
@@ -277,9 +320,14 @@ install_grok() {
 
 bin_agents="chanto goose opencode codewhale zerostack hax jcode reasonix omp interpreter grok fx"
 
+# Those with a Windows build pinned (the rest are below the published bar).
+win_agents="chanto goose opencode codewhale jcode reasonix omp interpreter grok"
+
 install_bin() {
     bin_setup
-    for a in $bin_agents; do "install_$a"; done
+    agents=$bin_agents
+    [ "$plat" = win32-x64 ] && agents=$win_agents
+    for a in $agents; do "install_$a"; done
 }
 
 case "$only" in
@@ -290,7 +338,12 @@ case "$only" in
     *)
         # One binary agent by name, e.g. `./install-agents.sh hax`.
         case " $bin_agents " in
-            *" $only "*) bin_setup; "install_$only" ;;
+            *" $only "*)
+                bin_setup
+                if [ "$plat" = win32-x64 ] && ! case " $win_agents " in *" $only "*) true ;; *) false ;; esac; then
+                    echo "error: no Windows build of $only is pinned" >&2; exit 1
+                fi
+                "install_$only" ;;
             *) echo "usage: $0 [npm|uv|bin|<binary agent>]" >&2; exit 2 ;;
         esac ;;
 esac

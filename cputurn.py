@@ -27,9 +27,15 @@ as trustworthy as the scenario; the `turns` column shows who bailed, and a run
 that stops early divides a shorter CPU total by fewer turns (still per-turn, but
 on a truncated loop). For a real-task memory comparison use realoverhead.py.
 """
-import argparse, fcntl, importlib.util, json, os, pty, re, shutil, statistics, subprocess, sys, tempfile, termios, threading, time
+import argparse, importlib.util, json, os, re, shutil, statistics, subprocess, sys, tempfile, threading, time
 from collections import defaultdict
 from pathlib import Path
+
+WINDOWS = os.name == "nt"
+if WINDOWS:
+    import winjob  # wait4's stand-in: a job object (see winjob.py)
+else:
+    import fcntl, pty, termios
 
 ROOT = Path(__file__).resolve().parent
 MOCK = Path(__file__).resolve().parent / "stressmock.py"
@@ -150,7 +156,7 @@ def one_run(agent, home, turns, blob_kb):
         # It is an edit-block agent, so this is per-MESSAGE overhead (marked * in
         # the report), not the same tool-loop turn as the others.
         v1 = f"{run.API}/v1"
-        cmd = [run.agent_exe("aider"), "--model", "openai/fake", "--yes-always", "--no-auto-commits",
+        cmd = [*run.launch("aider"), "--model", "openai/fake", "--yes-always", "--no-auto-commits",
                "--no-check-update", "--no-show-model-warnings", "--no-pretty",
                "--no-stream", "--no-gitignore", "--no-analytics"]
         extra = {"OPENAI_API_BASE": v1, "OPENAI_API_KEY": run.API_KEY, "AIDER_HOME": str(home / "aiderhome")}
@@ -164,23 +170,31 @@ def one_run(agent, home, turns, blob_kb):
             return None
     env = dict(os.environ, **extra)
     env["PWD"] = str(wd)
+    if WINDOWS and "HOME" in extra:
+        # Windows programs find their config through the profile folders, not
+        # HOME: point those at the same throwaway home.
+        h = Path(extra["HOME"])
+        env.update(USERPROFILE=str(h), APPDATA=str(h / "AppData" / "Roaming"),
+                   LOCALAPPDATA=str(h / "AppData" / "Local"))
     for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
         if k not in extra:
             env.pop(k, None)
-    if agent == "openhands":
+    if agent == "openhands" and not WINDOWS:
         # With tmux on PATH, OpenHands runs its shell in a tmux server that
         # detaches from the process tree, so neither wait4 nor the ps-tree
         # poll would see that CPU. Without it, OpenHands runs commands as plain
         # child processes, like every other agent here, and all of it counts.
         env["PATH"] = path_without(env.get("PATH", ""), "tmux", home / "path-without-tmux")
-    # CPU comes from wait4 on the agent itself (see wait_rusage), so nothing
-    # wraps it.
+    # CPU comes from wait4 on the agent itself (see wait_rusage), or on Windows
+    # from the job object it runs in, so nothing wraps it.
     tcmd = list(cmd)
     errf = home / f"{agent}.stderr"
     # forge uses rustyline, which opens /dev/tty and fails ("Device not
     # configured") without a controlling terminal, so give it a PTY that is one
     # (setsid + TIOCSCTTY) and drain the master, or it blocks.
-    use_pty = agent == "forge"
+    # (Windows has no PTY of this kind; forge runs on pipes there.)
+    use_pty = agent == "forge" and not WINDOWS
+    job = winjob.Job() if WINDOWS else None
     mfd = sfd = None
     if use_pty:
         env["TERM"] = "xterm-256color"
@@ -203,8 +217,9 @@ def one_run(agent, home, turns, blob_kb):
                         break
             threading.Thread(target=_drain, daemon=True).start()
         else:
-            p = subprocess.Popen(tcmd, cwd=wd, env=env, stdout=subprocess.DEVNULL, stderr=ef,
-                                 stdin=(subprocess.PIPE if stdin_data else subprocess.DEVNULL))
+            start = job.start if job else subprocess.Popen
+            p = start(tcmd, cwd=wd, env=env, stdout=subprocess.DEVNULL, stderr=ef,
+                      stdin=(subprocess.PIPE if stdin_data else subprocess.DEVNULL))
             if stdin_data:
                 try:
                     p.stdin.write(stdin_data.encode())
@@ -219,16 +234,18 @@ def one_run(agent, home, turns, blob_kb):
         def poll():
             # Not p.poll(): reaping the agent here would lose its rusage.
             while not done.is_set():
-                r = sample_tree_cpu(p.pid, seen)
+                r = job.sample(seen) if job else sample_tree_cpu(p.pid, seen)
                 if r > peak_rss[0]:
                     peak_rss[0] = r
                 time.sleep(0.06)
 
         th = threading.Thread(target=poll)
         th.start()
-        cpu_time = wait_rusage(p, 240)
+        cpu_time = job.wait(p, 240) if job else wait_rusage(p, 240)
         done.set()
         th.join()
+        if job:
+            job.close()
     if mfd is not None:
         try:
             os.close(mfd)

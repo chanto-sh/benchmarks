@@ -60,6 +60,22 @@ def machine():
         q = lambda k: subprocess.run(["sysctl", "-n", k], capture_output=True, text=True).stdout.strip()
         cpu = f"{q('machdep.cpu.brand_string')} ({q('hw.model')}), {q('hw.ncpu')} cores"
         mem = int(q("hw.memsize") or 0)
+    elif platform.system() == "Windows":
+        import ctypes, winreg
+
+        class Memory(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_uint32), ("dwMemoryLoad", ctypes.c_uint32)] + \
+                       [(n, ctypes.c_uint64) for n in ("total", "avail", "pagefile", "availPagefile",
+                                                       "virtual", "availVirtual", "availExtended")]
+        m = Memory(dwLength=ctypes.sizeof(Memory))
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        mem = m.total
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+                name = winreg.QueryValueEx(k, "ProcessorNameString")[0].strip()
+        except OSError:
+            name = platform.processor() or "unknown CPU"
+        cpu = f"{name}, {os.cpu_count()} cores"
     else:
         info = Path("/proc/cpuinfo").read_text() if Path("/proc/cpuinfo").exists() else ""
         names = [l.split(":", 1)[1].strip() for l in info.splitlines() if l.lower().startswith(("model name", "hardware"))]
@@ -79,7 +95,7 @@ def install(agents):
         groups.append("uv")
     groups += [a for a in agents if a in NATIVE + EXTRA + NEW_NATIVE]
     for g in groups:
-        sh([str(ROOT / "install-agents.sh"), g])
+        sh(["bash", str(ROOT / "install-agents.sh"), g])
 
 
 def main():

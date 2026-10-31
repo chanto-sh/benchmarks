@@ -6,6 +6,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -809,3 +810,34 @@ probe home-write sh -c 'echo z > "$HOME/h" && grep -q z "$HOME/h"'
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NpmShimTest(unittest.TestCase):
+    """On Windows an npm agent runs as the script its .cmd launcher starts."""
+
+    SHIM = (
+        '@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\n'
+        'CALL :find_dp0\r\n\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n'
+        ') ELSE (\r\n  SET "_prog=node"\r\n  SET PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\n'
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  '
+        '"%dp0%\\..\\@anthropic-ai\\claude-code\\cli.js" %*\r\n'
+    )
+
+    def shim(self, text):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d)
+        (d / ".bin").mkdir()
+        f = d / ".bin" / "agent.cmd"
+        f.write_text(text)
+        return f
+
+    def test_a_script_runs_with_node(self):
+        cmd = run.npm_target(self.shim(self.SHIM))
+        self.assertEqual(cmd[0], "node")
+        self.assertTrue(cmd[1].replace("\\", "/").endswith("@anthropic-ai/claude-code/cli.js"), cmd)
+
+    def test_an_executable_runs_itself(self):
+        text = '@ECHO off\r\n"%dp0%\\..\\@openai\\codex\\bin\\codex.exe"   %*\r\n'
+        cmd = run.npm_target(self.shim(text))
+        self.assertEqual(len(cmd), 1)
+        self.assertTrue(cmd[0].replace("\\", "/").endswith("@openai/codex/bin/codex.exe"), cmd)

@@ -1,4 +1,5 @@
-# Reproduces the published overhead numbers on GitHub's own machines. Anyone
+# Reproduces the published overhead numbers on GitHub's own machines (macOS,
+# Linux and Windows). Anyone
 # can run it from a fork (Actions → reproduce → Run workflow) and get numbers
 # from hardware nobody here controls; each run's table is in its summary and
 # its results file is an artifact. Pull requests that change the measuring
@@ -13,10 +14,15 @@ on:
         description: Only the four original native binaries (minutes) instead of every agent (about 25 minutes)
         type: boolean
         default: false
+      agents:
+        description: Only these agents, comma-separated (empty for the usual set)
+        type: string
+        default: ""
   pull_request:
     paths:
       - reproduce.py
       - cputurn.py
+      - winjob.py
       - size.py
       - stressmock.py
       - install-agents.sh
@@ -33,9 +39,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
+    # Git Bash on Windows, so every step reads the same everywhere.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -48,8 +58,10 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           QUICK_INPUT: ${{ inputs.quick }}
+          AGENTS_INPUT: ${{ inputs.agents }}
         run: |
           quick=$QUICK_INPUT
+          [ -n "$AGENTS_INPUT" ] && quick=false
           if [ "$EVENT" = pull_request ]; then
             quick=true
             git fetch --no-tags --depth=1 origin "$BASE_REF"
@@ -67,8 +79,14 @@ jobs:
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - env:
           QUICK: ${{ steps.scope.outputs.quick }}
+          AGENTS: ${{ inputs.agents }}
         run: |
-          if [ "$QUICK" = true ]; then python3 reproduce.py --quick; else python3 reproduce.py; fi
+          # Windows Python is `python`; `python3` there can be a Store placeholder.
+          py=python3
+          [ "$RUNNER_OS" = Windows ] && py=python
+          if [ -n "$AGENTS" ]; then "$py" reproduce.py --agents "$AGENTS"
+          elif [ "$QUICK" = true ]; then "$py" reproduce.py --quick
+          else "$py" reproduce.py; fi
       # Only this run's results file: the published ones are in the checkout too.
       - if: always()
         run: |

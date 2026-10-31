@@ -60,8 +60,22 @@ CLINE_BIN = Path(os.environ.get("BENCH_CLINE_BIN", NPM_BIN.parent / "cline" / "b
 # Agents shipped as standalone binaries (opencode, goose, codewhale, zerostack,
 # hax), pinned and checksummed.
 BIN_DIR = Path(os.environ.get("BENCH_BIN_DIR", BENCH_HOME / "bin"))
+WINDOWS = sys.platform == "win32"
+EXE = ".exe" if WINDOWS else ""
+
+
+def uv_tools():
+    """Where `uv tool install` puts each tool's environment."""
+    if not WINDOWS:
+        return Path.home() / ".local/share/uv/tools"
+    try:
+        return Path(subprocess.run(["uv", "tool", "dir"], capture_output=True, text=True, check=True).stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        return Path(os.environ.get("APPDATA", Path.home())) / "uv" / "tools"
+
+
 # Python agents installed with `uv tool install`, each in its own environment.
-UV_TOOLS = Path.home() / ".local/share/uv/tools"
+UV_TOOLS = uv_tools()
 AGENT_INSTALLS = [NPM_BIN.parent.parent, BIN_DIR, UV_TOOLS / "aider-chat", UV_TOOLS / "openhands",
                   UV_TOOLS / "mini-swe-agent", UV_TOOLS / "mistral-vibe"]
 
@@ -71,10 +85,35 @@ def agent_exe(name):
     binaries directory, or its uv tool environment. A copy on the user's PATH is
     only the fallback, so a global upgrade can't change what a run measures."""
     tool = {"aider": "aider-chat", "mini": "mini-swe-agent", "vibe": "mistral-vibe"}.get(name, name)
-    for p in (NPM_BIN / name, BIN_DIR / name, UV_TOOLS / tool / "bin" / name):
+    npm = NPM_BIN / (name + ".cmd" if WINDOWS else name)
+    uv = UV_TOOLS / tool / ("Scripts" if WINDOWS else "bin") / (name + EXE)
+    for p in (npm, BIN_DIR / (name + EXE), uv):
         if p.exists():
             return str(p)
     return name
+
+
+def launch(name):
+    """The command that starts an agent: its executable, as agent_exe finds it.
+    On Windows an npm agent's launcher is a .cmd script, and running one goes
+    through cmd.exe, which re-parses the prompt and JSON arguments; the script
+    it would start (with node) or the .exe it points at runs instead."""
+    if name == "cline":
+        return ["node", str(CLINE_BIN)] if WINDOWS else [str(CLINE_BIN)]
+    exe = agent_exe(name)
+    if WINDOWS and exe.lower().endswith(".cmd"):
+        return npm_target(Path(exe))
+    return [exe]
+
+
+def npm_target(shim):
+    """What npm's Windows .cmd launcher at `shim` runs: the last `"%dp0%\\…"`
+    path in it (the one before %*), with node unless it's an .exe."""
+    targets = [t for t in re.findall(r'"%dp0%\\([^"]+)"', shim.read_text()) if t.lower() != "node.exe"]
+    if not targets:
+        raise SystemExit(f"can't tell what {shim} starts")
+    target = str((shim.parent / targets[-1]).resolve())
+    return [target] if target.lower().endswith(".exe") else ["node", target]
 # BENCH_CHANTO_BIN pins a frozen build for long runs (so rebuilding doesn't change it mid-run).
 CHANTO_BIN = Path(os.environ.get("BENCH_CHANTO_BIN", CHANTO_REPO / "target" / "release" / "chanto"))
 
@@ -171,7 +210,7 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
                                    "models": {model: {"name": model, "tools": True}}}},
             "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         }))
-        return [agent_exe("opencode"), "run", "--standalone", "--auto", "-m", f"bench/{model}", prompt], {
+        return [*launch("opencode"), "run", "--standalone", "--auto", "-m", f"bench/{model}", prompt], {
             "OPENCODE_CONFIG": str(cfg), "XDG_CONFIG_HOME": str(home("opencode") / "xdg"), "XDG_DATA_HOME": str(home("opencode") / "data")}
     if agent == "claude":
         env = {"ANTHROPIC_BASE_URL": API, "ANTHROPIC_AUTH_TOKEN": API_KEY, "ANTHROPIC_API_KEY": "", "ANTHROPIC_MODEL": model,
@@ -179,20 +218,20 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
                "CLAUDE_CODE_SUBAGENT_MODEL": model, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CONFIG_DIR": str(home("claude"))}
         # Its WebSearch runs at the model provider, outside the sandbox (the proxy
         # refuses it too, see no_search.py); WebFetch is blocked anyway.
-        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
+        return [*launch("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
                 "--disallowedTools", "WebSearch,WebFetch", "--output-format", "json", prompt], env
     if agent == "codex":
         (home("codex") / "config.toml").write_text(
             f'model_provider = "bench"\n[model_providers.bench]\nname = "bench"\nbase_url = "{v1}"\nenv_key = "BENCH_API_KEY"\nwire_api = "responses"\n')
-        return [agent_exe("codex"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {
+        return [*launch("codex"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {
             "CODEX_HOME": str(home("codex")), "BENCH_API_KEY": API_KEY}
     if agent == "aider":
         files = source_files(wd) if wd else []
-        return [agent_exe("aider"), "--model", f"openai/{model}", "--yes-always", "--no-auto-commits", "--no-check-update", "--analytics-disable",
+        return [*launch("aider"), "--model", f"openai/{model}", "--yes-always", "--no-auto-commits", "--no-check-update", "--analytics-disable",
                 "--no-show-model-warnings", "--no-pretty", "--no-stream", "--no-gitignore", "--message", prompt, *files], {
             "OPENAI_API_BASE": v1, "OPENAI_API_KEY": API_KEY, "AIDER_HOME": str(home("aider"))}
     if agent == "goose":
-        return [agent_exe("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
+        return [*launch("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
             "GOOSE_PROVIDER": "openai", "GOOSE_MODEL": model, "OPENAI_HOST": API, "OPENAI_API_KEY": API_KEY, "GOOSE_MODE": "auto",
             "GOOSE_DISABLE_KEYRING": "1", "XDG_CONFIG_HOME": str(home("goose") / "xdg"), "XDG_DATA_HOME": str(home("goose") / "data"),
             "XDG_STATE_HOME": str(home("goose") / "state")}
@@ -209,14 +248,14 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
             "providers": {"openai-compatible": {
                 "settings": {"provider": "openai-compatible", "apiKey": API_KEY, "model": model, "baseUrl": v1},
                 "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "tokenSource": "manual"}}}))
-        return [str(CLINE_BIN), "--yolo", "--json", "-P", "openai-compatible", "-m", model, "-k", API_KEY,
+        return [*launch("cline"), "--yolo", "--json", "-P", "openai-compatible", "-m", model, "-k", API_KEY,
                 "--config", str(d), "--data-dir", str(d), prompt], {"CLINE_DIR": str(d)}
     if agent == "pi":
         d = home("pi")
         (d / "models.json").write_text(json.dumps({"providers": {"bench": {
             "baseUrl": v1, "api": "openai-completions", "apiKey": API_KEY,
             "models": [{"id": model, "contextWindow": ctx}]}}}))
-        return [str(nb / "pi"), "-p", "--no-session", "--provider", "bench", "--model", model, prompt], {"PI_CODING_AGENT_DIR": str(d)}
+        return [*launch("pi"), "-p", "--no-session", "--provider", "bench", "--model", model, prompt], {"PI_CODING_AGENT_DIR": str(d)}
     if agent == "crush":
         xdg = home("crush") / "xdg"
         (xdg / "crush").mkdir(parents=True, exist_ok=True)
@@ -227,13 +266,13 @@ def hosted_cmd(agent, model, prompt, ctx, wd):
             "options": {"disable_metrics": True}}))
         tmp = home("crush") / "tmp"
         tmp.mkdir(exist_ok=True)
-        return [str(nb / "crush"), "run", "--quiet", "-D", str(home("crush") / "data"), "-m", f"bench/{model}", prompt], {
+        return [*launch("crush"), "run", "--quiet", "-D", str(home("crush") / "data"), "-m", f"bench/{model}", prompt], {
             "XDG_CONFIG_HOME": str(xdg), "XDG_DATA_HOME": str(home("crush") / "data"), "TMPDIR": str(tmp), "CRUSH_DISABLE_METRICS": "1"}
     if agent == "qwen":
         h = home("qwen")
         (h / ".qwen").mkdir(exist_ok=True)
         (h / ".qwen" / "settings.json").write_text(json.dumps({"security": {"auth": {"selectedType": "openai"}}, "usageStatisticsEnabled": False}))
-        return [str(nb / "qwen"), "--yolo", "-m", model, prompt], {
+        return [*launch("qwen"), "--yolo", "-m", model, prompt], {
             "HOME": str(h), "OPENAI_API_KEY": API_KEY, "OPENAI_BASE_URL": v1, "OPENAI_MODEL": model}
     if agent == "forge":
         # forge 2.13+ no longer reads OPENAI_* env vars: it needs an explicit
@@ -256,7 +295,7 @@ model_id = "{model}"
 ''')
         (h / ".forge" / ".credentials.json").write_text(
             json.dumps([{"id": "bench", "auth_details": {"api_key": API_KEY}}]))
-        return [str(nb / "forge"), "-p", prompt], {"HOME": str(h)}
+        return [*launch("forge"), "-p", prompt], {"HOME": str(h)}
     if agent == "kilo":
         cfg = home("kilo") / "kilo.json"
         cfg.write_text(json.dumps({
@@ -265,7 +304,7 @@ model_id = "{model}"
                                    "models": {model: {"name": model, "tools": True}}}},
             "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         }))
-        return [str(nb / "kilo"), "run", "--auto", "-m", f"bench/{model}", prompt], {
+        return [*launch("kilo"), "run", "--auto", "-m", f"bench/{model}", prompt], {
             "KILO_CONFIG": str(cfg), "OPENCODE_CONFIG": str(cfg), "XDG_CONFIG_HOME": str(home("kilo") / "xdg"), "XDG_DATA_HOME": str(home("kilo") / "data")}
     if agent == "cn":
         # Continue's CLI: a local config.yaml with one OpenAI-compatible model,
@@ -278,7 +317,7 @@ model_id = "{model}"
             "models": [{"name": model, "provider": "openai", "model": model, "apiBase": v1, "apiKey": API_KEY,
                         "roles": ["chat", "edit", "apply"], "capabilities": ["tool_use"],
                         "defaultCompletionOptions": {"contextLength": ctx}}]}))
-        return [str(nb / "cn"), "-p", "--auto", "--config", str(cfg), prompt], {
+        return [*launch("cn"), "-p", "--auto", "--config", str(cfg), prompt], {
             "HOME": str(h), "CONTINUE_GLOBAL_DIR": str(h / ".continue"),
             "CONTINUE_CLI_ENABLE_TELEMETRY": "0", "CONTINUE_METRICS_ENABLED": "0"}
     if agent == "openhands":
@@ -286,7 +325,7 @@ model_id = "{model}"
         # --override-with-envs takes the model from LLM_* (LiteLLM naming, so
         # openai/<model> against the proxy). Its own HOME keeps ~/.openhands apart.
         h = home("openhands")
-        return [agent_exe("openhands"), "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
+        return [*launch("openhands"), "--headless", "--override-with-envs", "--exit-without-confirmation", "-t", prompt], {
             "HOME": str(h), "LLM_MODEL": f"openai/{model}", "LLM_BASE_URL": v1, "LLM_API_KEY": API_KEY,
             "OPENHANDS_SUPPRESS_BANNER": "1"}
     if agent == "codewhale":
@@ -297,7 +336,7 @@ model_id = "{model}"
         cfg = h / "config.toml"
         cfg.write_text(f'provider = "bench"\ndefault_text_model = "{model}"\n\n[providers.bench]\nkind = "openai-compatible"\n'
                        f'base_url = "{v1}"\napi_key = "{API_KEY}"\nmodel = "{model}"\n')
-        return [agent_exe("codewhale"), "--config", str(cfg), "--provider", "bench", "--model", model, "exec", "--auto", prompt], {
+        return [*launch("codewhale"), "--config", str(cfg), "--provider", "bench", "--model", model, "exec", "--auto", prompt], {
             "HOME": str(h), "CODEWHALE_HOME": str(h / ".codewhale"), "CODEWHALE_CONFIG_PATH": str(cfg),
             "CODEWHALE_TELEMETRY": "0", "CODEWHALE_NO_UPDATE_CHECK": "1"}
     if agent == "zerostack":
@@ -310,14 +349,14 @@ model_id = "{model}"
         (cfg / "config.toml").write_text(
             f'context_window = {ctx}\nenable-exa-mcp = false\n\n[custom_providers.bench]\nprovider_type = "openai"\nbase_url = "{v1}"\n'
             f'api_key_env = "BENCH_API_KEY"\nmodel = "{model}"\n')
-        return [agent_exe("zerostack"), "-p", "--no-session", "--dangerously-skip-permissions", "--provider", "bench",
+        return [*launch("zerostack"), "-p", "--no-session", "--dangerously-skip-permissions", "--provider", "bench",
                 "--model", model, prompt], {
             "HOME": str(h), "ZS_CONFIG_DIR": str(cfg), "ZS_DATA_DIR": str(h / "data"), "BENCH_API_KEY": API_KEY}
     if agent == "hax":
         # hax has no permission prompts; its openai-compatible provider is
         # configured from HAX_* variables, with XDG dirs kept in its own home.
         h = home("hax")
-        return [agent_exe("hax"), "-p", "--no-session", "--provider=openai-compatible", f"--model={model}", prompt], {
+        return [*launch("hax"), "-p", "--no-session", "--provider=openai-compatible", f"--model={model}", prompt], {
             "HAX_OPENAI_BASE_URL": v1, "HAX_OPENAI_API_KEY": API_KEY, "HAX_CONTEXT_LIMIT": str(ctx),
             "XDG_CONFIG_HOME": str(h / "config"), "XDG_STATE_HOME": str(h / "state"), "XDG_CACHE_HOME": str(h / "cache"),
             "XDG_DATA_HOME": str(h / "data")}
@@ -329,7 +368,7 @@ model_id = "{model}"
             f'[providers.bench]\ntype = "openai-compatible"\nbase_url = "{v1}"\n'
             f'api_key_env = "BENCH_API_KEY"\ndefault_model = "{model}"\n'
             f'models = [{{ id = "{model}", context_window = {ctx} }}]\n')
-        return [agent_exe("jcode"), "run", "--no-update", "--provider-profile", "bench", "-m", model, prompt], {
+        return [*launch("jcode"), "run", "--no-update", "--provider-profile", "bench", "-m", model, prompt], {
             "JCODE_HOME": str(d), "BENCH_API_KEY": API_KEY, "JCODE_NO_TELEMETRY": "1"}
     if agent == "reasonix":
         # Its own bash sandbox nests sandbox-exec, which the run's sandbox
@@ -341,7 +380,7 @@ model_id = "{model}"
             f'api_key_env = "BENCH_API_KEY"\ncontext_window = {ctx}\n')
         # Provider keys come only from <Reasonix home>/.env, not the environment.
         (d / ".env").write_text(f"BENCH_API_KEY={API_KEY}\n")
-        return [agent_exe("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d)}
+        return [*launch("reasonix"), "run", "--yolo", prompt], {"REASONIX_HOME": str(d)}
     if agent == "mini":
         # mini-swe-agent: one `bash` tool, no compaction (so no context window to
         # set). litellm 1.106.2 imports the optional `mcp` package for any request
@@ -351,7 +390,7 @@ model_id = "{model}"
             "model": {"model_name": f"openai/{model}", "cost_tracking": "ignore_errors",
                       "model_kwargs": {"api_base": v1, "api_key": API_KEY, "_skip_mcp_handler": True}},
             "agent": {"mode": "yolo", "confirm_exit": False, "cost_limit": 0, "step_limit": 250}}))
-        return [agent_exe("mini"), "-c", "mini.yaml", "-c", str(d / "bench.yaml"), "--yolo", "--exit-immediately",
+        return [*launch("mini"), "-c", "mini.yaml", "-c", str(d / "bench.yaml"), "--yolo", "--exit-immediately",
                 "-o", str(d / "traj.json"), "-t", prompt], {
             "MSWEA_GLOBAL_CONFIG_DIR": str(d / "mswea"), "MSWEA_CONFIGURED": "true", "MSWEA_SILENT_STARTUP": "1",
             "MSWEA_COST_TRACKING": "ignore_errors", "LITELLM_LOCAL_MODEL_COST_MAP": "True"}
@@ -368,7 +407,7 @@ model_id = "{model}"
             'api_style = "openai"\nbackend = "generic"\n\n'
             f'[models.{json.dumps(model)}]\nname = "{model}"\nprovider = "bench"\nalias = "{model}"\n'
             f'max_context_length = {ctx}\n')
-        return [agent_exe("vibe"), "-p", prompt, "--auto-approve", "--trust", "--output-dir", str(d / "out")], {
+        return [*launch("vibe"), "-p", prompt, "--auto-approve", "--trust", "--output-dir", str(d / "out")], {
             "VIBE_HOME": str(d), "BENCH_API_KEY": API_KEY, "VIBE_TEST_DISABLE_KEYRING": "1"}
     if agent == "omp":
         # oh-my-pi reads models.yml (JSON is valid YAML) from PI_CODING_AGENT_DIR.
@@ -384,7 +423,7 @@ model_id = "{model}"
             "marketplace": {"autoUpdate": "off"}, "telemetry": {"otlpExportEnabled": False},
             "providers": {"cacheWarming": "off"}, "memory": {"backend": "off"},
             "ttsr": {"judge": "off"}, "lsp": {"enabled": False}, "tools": {"approvalMode": "yolo"}}))
-        return [agent_exe("omp"), "-p", "--no-session", "--no-title", "--no-lsp", "--approval-mode=yolo",
+        return [*launch("omp"), "-p", "--no-session", "--no-title", "--no-lsp", "--approval-mode=yolo",
                 "--model", f"bench/{model}", prompt], {"PI_CODING_AGENT_DIR": str(d)}
     if agent == "interpreter":
         # Open Interpreter is a Codex fork; chat wire API, since its chat route
@@ -395,7 +434,7 @@ model_id = "{model}"
             '[features]\napps = false\nplugins = false\nremote_plugin = false\nplugin_sharing = false\n'
             'in_app_updates = false\ntool_suggest = false\n'
             f'[model_providers.bench]\nname = "bench"\nbase_url = "{v1}"\nenv_key = "BENCH_API_KEY"\nwire_api = "chat"\n')
-        return [agent_exe("interpreter"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox",
+        return [*launch("interpreter"), "exec", "-m", model, "--dangerously-bypass-approvals-and-sandbox",
                 "--skip-git-repo-check", "--ephemeral", prompt], {
             "INTERPRETER_HOME": str(home("interpreter")), "BENCH_API_KEY": API_KEY}
     if agent == "grok":
@@ -414,7 +453,7 @@ model_id = "{model}"
             '[models]\ndefault = "bench"\nsession_summary = "bench"\n'
             f'[model.bench]\nmodel = "{model}"\nbase_url = "{v1}"\nname = "bench"\n'
             f'env_key = "BENCH_API_KEY"\napi_backend = "chat_completions"\ncontext_window = {ctx}\n')
-        return [agent_exe("grok"), "-p", prompt, "-m", "bench", "--always-approve", "--no-auto-update",
+        return [*launch("grok"), "-p", prompt, "-m", "bench", "--always-approve", "--no-auto-update",
                 "--output-format", "json"], {
             "GROK_HOME": str(d), "BENCH_API_KEY": API_KEY, "GROK_TELEMETRY_ENABLED": "0",
             "GROK_FILE_LOCK_SLOT_DIR": str(locks)}
@@ -429,7 +468,7 @@ model_id = "{model}"
                                     "model_metadata": {model: {"context_window": ctx, "supports_tool_use": True}}}},
             "models": {"bench": model}, "permission_mode": "full-access", "yolo_acknowledged": True,
             "auto_upgrade": False, "session_titles": False}))
-        return [agent_exe("fx"), "ask", "--full-access", "--model", model, "--json", "--", prompt], {
+        return [*launch("fx"), "ask", "--full-access", "--model", model, "--json", "--", prompt], {
             "HOME": str(d), "BENCH_API_KEY": API_KEY, "FX_AUTO_UPGRADE": "0", "FX_NO_OPEN_BROWSER": "1",
             "FX_DISABLE_KEYCHAIN": "1", "FX_HERDR": "0"}
     if agent == "gemini":
@@ -445,7 +484,7 @@ model_id = "{model}"
             # google_web_search runs at the model provider, outside the sandbox
             # (the proxy refuses it too, see no_search.py).
             "tools": {"exclude": ["google_web_search", "web_fetch"]}}))
-        return [str(nb / "gemini"), "--yolo", "-m", model, "-p", prompt], {
+        return [*launch("gemini"), "--yolo", "-m", model, "-p", prompt], {
             "HOME": str(h), "GEMINI_API_KEY": API_KEY, "GOOGLE_GEMINI_BASE_URL": API}
     raise SystemExit(f"agent {agent} has no hosted (--api) configuration")
 
@@ -477,7 +516,7 @@ def agent_cmd(agent, model, prompt, ctx, wd=None):
                                     "models": {model: {"name": model, "tools": True, "reasoning": True}}}},
             "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         }))
-        return [agent_exe("opencode"), "run", "--standalone", "--auto", "-m", f"ollama/{model}", prompt], {
+        return [*launch("opencode"), "run", "--standalone", "--auto", "-m", f"ollama/{model}", prompt], {
             "OPENCODE_CONFIG": str(cfg), "XDG_CONFIG_HOME": str(home("opencode") / "xdg"), "XDG_DATA_HOME": str(home("opencode") / "data")}
     if agent == "claude":
         env = {
@@ -494,22 +533,22 @@ def agent_cmd(agent, model, prompt, ctx, wd=None):
         }
         # Its WebSearch runs at the model provider, outside the sandbox (the proxy
         # refuses it too, see no_search.py); WebFetch is blocked anyway.
-        return [agent_exe("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
+        return [*launch("claude"), "-p", "--model", model, "--dangerously-skip-permissions",
                 "--disallowedTools", "WebSearch,WebFetch", "--output-format", "json", prompt], env
     if agent == "codex":
         # Codex's local mode looks the model up by exact tag (and tries to pull it otherwise).
-        return [agent_exe("codex"), "exec", "--oss", "--local-provider", "ollama", "-m", model if ":" in model else f"{model}:latest",
+        return [*launch("codex"), "exec", "--oss", "--local-provider", "ollama", "-m", model if ":" in model else f"{model}:latest",
                 "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt], {"CODEX_HOME": str(home("codex"))}
     if agent == "aider":
         settings = home("aider") / "model-settings.yml"
         settings.write_text(f"- name: ollama_chat/{model}\n  extra_params:\n    num_ctx: {ctx}\n")
         files = source_files(wd) if wd else []
-        return [agent_exe("aider"), "--model", f"ollama_chat/{model}", "--model-settings-file", str(settings), "--yes-always",
+        return [*launch("aider"), "--model", f"ollama_chat/{model}", "--model-settings-file", str(settings), "--yes-always",
                 "--no-auto-commits", "--no-check-update", "--analytics-disable", "--no-show-model-warnings",
                 "--no-pretty", "--no-stream", "--no-gitignore", "--message", prompt, *files], {
             "OLLAMA_API_BASE": "http://127.0.0.1:11434", "AIDER_HOME": str(home("aider"))}
     if agent == "goose":
-        return [agent_exe("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
+        return [*launch("goose"), "run", "--no-session", "--quiet", "-t", prompt], {
             "GOOSE_PROVIDER": "ollama", "GOOSE_MODEL": model, "OLLAMA_HOST": "http://localhost:11434",
             "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1", "XDG_CONFIG_HOME": str(home("goose") / "xdg"),
             "XDG_DATA_HOME": str(home("goose") / "data"), "XDG_STATE_HOME": str(home("goose") / "state")}
@@ -1408,7 +1447,7 @@ VERSION_CMDS = {
     **{a: [agent_exe(a), "--version"] for a in ("claude", "codex", "opencode", "goose", "aider", "openhands",
                                                  "codewhale", "zerostack", "hax", "jcode", "reasonix", "vibe", "omp",
                                                  "interpreter", "grok", "fx")},
-    "mini": [agent_exe("mini"), "--help"],
+    "mini": [*launch("mini"), "--help"],
     "pi": [str(NPM_BIN / "pi"), "--version"], "crush": [str(NPM_BIN / "crush"), "--version"],
     "qwen": [str(NPM_BIN / "qwen"), "--version"], "kilo": [str(NPM_BIN / "kilo"), "--version"],
     "forge": [str(NPM_BIN / "forge"), "--version"],

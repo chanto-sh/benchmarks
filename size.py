@@ -60,11 +60,23 @@ AGENTS = {
 NEEDS = {"pi": "Node", "qwen": "Node", "cline": "Node", "cn": "Node", "gemini": "Node", "aider": "Python",
          "openhands": "Python"}
 FORGE_PLATFORM = {("Darwin", "arm64"): "darwin/arm64", ("Darwin", "x86_64"): "darwin/x64",
-                  ("Linux", "aarch64"): "linux/arm64", ("Linux", "x86_64"): "linux/x64"}
+                  ("Linux", "aarch64"): "linux/arm64", ("Linux", "x86_64"): "linux/x64",
+                  ("Windows", "AMD64"): "win32/x64"}
 
 
 def du_bytes(paths):
     """Disk usage of `paths` together, each hard-linked file counted once."""
+    if run.WINDOWS:
+        # No du (and no block counts): the files' sizes, each one once.
+        seen, total = set(), 0
+        for p in map(Path, paths):
+            for f in ([p] if p.is_file() else p.rglob("*")):
+                if f.is_file() and not f.is_symlink():
+                    st = f.stat()
+                    if (st.st_dev, st.st_ino) not in seen:
+                        seen.add((st.st_dev, st.st_ino))
+                        total += st.st_size
+        return total
     out = subprocess.run(["du", "-skc", *map(str, paths)], capture_output=True, text=True, check=True).stdout
     return int(out.strip().splitlines()[-1].split()[0]) * 1024
 
@@ -101,9 +113,10 @@ def other_platform_bytes(pkg_dir):
     mine = FORGE_PLATFORM.get((platform.system(), platform.machine()))
     total = 0
     for dirpath, _, files in os.walk(pkg_dir / "bin"):
-        if mine and mine in dirpath:
+        if mine and os.path.normpath(mine) in dirpath:
             continue
-        total += sum(os.lstat(os.path.join(dirpath, f)).st_blocks * 512 for f in files)
+        size = (lambda st: st.st_size) if run.WINDOWS else (lambda st: st.st_blocks * 512)
+        total += sum(size(os.lstat(os.path.join(dirpath, f))) for f in files)
     return total
 
 
@@ -115,7 +128,10 @@ def measure(agent, lock):
         if agent == "forge":
             size -= other_platform_bytes(NPM_ROOT / "node_modules" / where)
         return size, f"{len(paths)} npm packages"
-    path = Path(where).resolve()
+    path = Path(where)
+    if run.WINDOWS and not path.exists() and path.with_name(path.name + run.EXE).exists():
+        path = path.with_name(path.name + run.EXE)
+    path = path.resolve()
     return du_bytes([path]), str(where).replace(str(Path.home()), "~")
 
 
@@ -125,7 +141,7 @@ def runtime_sizes():
     node = subprocess.run(["node", "-p", "process.execPath"], capture_output=True, text=True).stdout.strip()
     if node:
         out["Node"] = (os.path.getsize(node), f"node {run.first_line(['node', '--version'])}")
-    py = run.UV_TOOLS / "aider-chat" / "bin" / "python"
+    py = run.UV_TOOLS / "aider-chat" / ("Scripts" if run.WINDOWS else "bin") / ("python" + run.EXE)
     if py.exists():
         home = py.resolve().parent.parent
         out["Python"] = (du_bytes([home]), home.name)
