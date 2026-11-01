@@ -66,7 +66,7 @@ jobs:
           persist-credentials: false
       - id: plan
         env:
-          TIER: ${{ inputs.tier || 'core' }}
+          TIER: ${{ inputs.tier || 'core,hard' }}
           TASKS: ${{ inputs.tasks }}
           SAMPLE: ${{ inputs.sample || 2 }}
           REPEAT: ${{ inputs.repeat || 1 }}
@@ -101,7 +101,17 @@ jobs:
         with:
           node-version: 22
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-      - run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+      # What the tasks grade with: numpy, pandas and scipy for the imported ones,
+      # and the older Pythons the SWE-bench repositories build on.
+      - run: sudo apt-get update && sudo apt-get install -y bubblewrap socat python3-numpy python3-pandas python3-scipy
+      - run: |
+          uv python install 3.9 3.11
+          uv python dir >> "$GITHUB_PATH"
+          uv python dir --bin >> "$GITHUB_PATH"
+      - run: |
+          python3 -c 'import numpy, pandas, scipy'
+          python3.9 --version
+          python3.11 --version
       # Ubuntu 24.04 restricts unprivileged user namespaces, which bubblewrap needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - run: ./install-agents.sh
