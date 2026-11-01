@@ -17,9 +17,11 @@ wait_for() {
 }
 
 start_proxy() {
-    uv tool install --python 3.12 "litellm[proxy]==1.106.2"
-    # uv's tool directory isn't on a runner's PATH.
-    PATH="$(uv tool dir --bin):$PATH" BENCH_PROXY_PORT=$1 nohup ./proxy.sh deepseek/deepseek-flash > "$RUNNER_TEMP/proxy.log" 2>&1 &
+    # Every package locked by hash: this process holds the key. Refresh with
+    # uv pip compile proxy.in --universal --python-version 3.12 --generate-hashes --no-build -o proxy.lock
+    uv venv --python 3.12 "$RUNNER_TEMP/proxy"
+    uv pip install --python "$RUNNER_TEMP/proxy/bin/python" --require-hashes --no-build -r proxy.lock
+    PATH="$RUNNER_TEMP/proxy/bin:$PATH" BENCH_PROXY_PORT=$1 nohup ./proxy.sh deepseek/deepseek-flash > "$RUNNER_TEMP/proxy.log" 2>&1 &
     wait_for "$1" "$RUNNER_TEMP/proxy.log"
 }
 
