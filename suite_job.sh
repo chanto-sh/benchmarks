@@ -40,7 +40,7 @@ run)
     [ "$MOCK" = true ] && ctx=(--ctx 200000)
     python3 run.py --api "http://localhost:$(cat "$RUNNER_TEMP/model.port")" --meter http://localhost:4101 --meter-log "$METER_LOG" \
         --agents "$AGENTS" --tier core,medium,hard,beyond --tasks "$TASKS" --repeat "$REPEAT" --seed "$SEED" \
-        --timeout "$TIMEOUT" --model bench-model "${ctx[@]}"
+        --timeout "$TIMEOUT" --swe-timeout "$SWE_TIMEOUT" --model bench-model "${ctx[@]}"
     ;;
 check)
     # Only this job's results: the published ones are in the checkout too.

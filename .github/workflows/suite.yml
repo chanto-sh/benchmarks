@@ -33,6 +33,10 @@ on:
         description: Seconds an agent gets per task
         type: number
         default: 300
+      swe_timeout:
+        description: Seconds an agent gets per SWE-bench task
+        type: number
+        default: 1800
       mock:
         description: Use a mock model (no key, no cost, every task fails)
         type: boolean
@@ -55,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      runs: ${{ steps.plan.outputs.runs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -68,6 +73,8 @@ jobs:
         run: |
           matrix=$(python3 suite_plan.py --agents "$AGENTS" --tier "$TIER" --tasks "$TASKS" --sample "$SAMPLE" --repeat "$REPEAT")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          tasks=$(echo "$matrix" | python3 -c 'import json,sys; print(sum(len(j["tasks"].split(",")) for j in json.load(sys.stdin)))')
+          echo "runs=$((tasks * REPEAT))" >> "$GITHUB_OUTPUT"
           {
             echo "Mock model: $MOCK. Agents: $AGENTS."
             echo '```'
@@ -110,6 +117,7 @@ jobs:
           REPEAT: ${{ inputs.repeat || 1 }}
           SEED: ${{ matrix.job.id }}
           TIMEOUT: ${{ inputs.timeout || 120 }}
+          SWE_TIMEOUT: ${{ inputs.swe_timeout || 120 }}
         run: ./suite_job.sh run
       # Runs even after a timeout: run.py saves its results after every run.
       - name: Check for the key
@@ -125,7 +133,7 @@ jobs:
           if-no-files-found: warn
 
   report:
-    needs: run
+    needs: [plan, run]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -140,10 +148,13 @@ jobs:
         with:
           path: artifacts
           pattern: suite-*
-      - run: |
+      - env:
+          EXPECT: ${{ needs.plan.outputs.runs }}
+        run: |
           mkdir merged
           find artifacts -maxdepth 2 -name '*.json' -exec cp {} merged/ \;
           python3 run.py --report merged/*.json | tee merged/report.md >> "$GITHUB_STEP_SUMMARY"
+          python3 suite_plan.py --agents "$AGENTS" --check merged/*.json --expect "$EXPECT" | tee merged/runs.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: merged/*
