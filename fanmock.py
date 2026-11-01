@@ -10,7 +10,7 @@ import argparse, http.server, json, re, socketserver, threading, time
 import stressmock
 
 LOCK = threading.Lock()
-STATE = {"root": 0, "child": {}, "started": set(), "finished": set(), "max_live": 0}
+STATE = {"last": 0, "root": 0, "child": {}, "started": set(), "finished": set(), "max_live": 0}
 ARGS = None
 SUBAGENT = ("task", "agent", "spawn_agent", "spawn_subagent", "subagent", "delegate", "dispatch_agent", "new_task")
 NAMESPACE = {}
@@ -122,10 +122,11 @@ def decide(body):
         return [(sub[0], subagent_args(sub[1], sub[2], i)) for i in range(ARGS.agents)], ""
     # An agent that doesn't wait for its subagents by itself (Codex) would end
     # the run here: a real model takes its time, so give them time to finish.
-    deadline = time.time() + ARGS.limit
-    while time.time() < deadline:
+    # Stop waiting once nothing has asked for anything in a while: an agent that
+    # refused some of them (over its limit) will never finish them.
+    while True:
         with LOCK:
-            if len(STATE["finished"]) >= ARGS.agents:
+            if len(STATE["finished"]) >= ARGS.agents or time.time() - STATE["last"] > ARGS.quiet:
                 break
         time.sleep(0.02)
     return [], "all done"
@@ -166,6 +167,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.loads(raw)
         except ValueError:
             body = {}
+        with LOCK:
+            STATE["last"] = time.time()
         if "/count_tokens" in self.path:
             return self.send_json({"input_tokens": 1000})
         if stressmock.is_summary(body):
@@ -257,7 +260,7 @@ if __name__ == "__main__":
     ap.add_argument("--agents", type=int, required=True)
     ap.add_argument("--delay", type=float, default=0.5)
     ap.add_argument("--log", required=True)
-    ap.add_argument("--limit", type=float, default=300)
+    ap.add_argument("--quiet", type=float, default=15, help="seconds without a request before the main agent gets its answer")
     ARGS = ap.parse_args()
     server = Server(("127.0.0.1", 0), Handler)
     print("PORT", server.server_address[1], flush=True)

@@ -18,7 +18,18 @@ ROOT = Path(__file__).resolve().parent
 PROMPT = "FANOUT-ROOT: start the subagents the task needs, then report."
 
 
-def one(agent, fan, delay, limit, base):
+def raise_limit(agent, fan):
+    """Set an agent's own limit on parallel subagents to `fan`, where it has one
+    that its config can change."""
+    if agent == "chanto":
+        with open(run.home("chanto") / "config.toml", "a") as f:
+            f.write(f"\n[resources]\nmax_parallel_agents = {fan}\n")
+    elif agent == "codex":
+        with open(run.home("codex") / "config.toml", "a") as f:
+            f.write(f"\n[agents]\nmax_threads = {fan + 1}\n")
+
+
+def one(agent, fan, delay, limit, base, raised=False):
     home = Path(tempfile.mkdtemp(prefix=f"fan-{agent}-", dir=base)).resolve()
     wd = home / "work"
     wd.mkdir()
@@ -26,11 +37,13 @@ def one(agent, fan, delay, limit, base):
     subprocess.run(["git", "init", "-q"], cwd=wd)
     log = home / "mock.jsonl"
     log.write_text("")
-    mock = subprocess.Popen([sys.executable, str(ROOT / "fanmock.py"), "--agents", str(fan), "--delay", str(delay), "--limit", str(limit),
+    mock = subprocess.Popen([sys.executable, str(ROOT / "fanmock.py"), "--agents", str(fan), "--delay", str(delay),
                              "--log", str(log)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     port = mock.stdout.readline().split()[1]
     run.API = f"http://127.0.0.1:{port}"
     cmd, extra = run.hosted_cmd(agent, "fake", PROMPT, 200000, wd)
+    if raised:
+        raise_limit(agent, fan)
     env = dict(os.environ, **extra)
     env["PWD"] = str(wd)
     for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
@@ -81,6 +94,7 @@ def main():
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--delay", type=float, default=0.5)
     ap.add_argument("--limit", type=int, default=300)
+    ap.add_argument("--raised", action="store_true", help="raise each agent's parallel limit to N, where config allows")
     ap.add_argument("--json")
     a = ap.parse_args()
     results = []
@@ -90,7 +104,7 @@ def main():
     for agent in a.agents.split(","):
         floor = None
         for fan in [int(x) for x in a.fan.split(",")]:
-            rows = [one(agent, fan, a.delay, a.limit, base) for _ in range(a.reps)]
+            rows = [one(agent, fan, a.delay, a.limit, base, a.raised) for _ in range(a.reps)]
             results += rows
             med = lambda k: statistics.median(r[k] or 0 for r in rows)
             peak = max(r["peak_mb"] for r in rows)
