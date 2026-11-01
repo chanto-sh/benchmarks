@@ -41,7 +41,7 @@ case "$BENCH_UPSTREAM" in
 esac
 # The config and its no_search.py hook go in one directory: LiteLLM loads
 # callbacks from beside the config file.
-dir="$(mktemp -d -t bench-litellm)"
+dir="$(mktemp -d "${TMPDIR:-/tmp}/bench-litellm.XXXXXX")"
 cfg="$dir/litellm.yaml"
 sed -e "s/__COST_IN__/$cost_in/" -e "s/__COST_OUT__/$cost_out/" "$(dirname "$0")/litellm.yaml" > "$cfg"
 cp "$(dirname "$0")/no_search.py" "$dir/"

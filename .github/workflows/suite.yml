@@ -152,6 +152,10 @@ jobs:
           EXPECT: ${{ needs.plan.outputs.runs }}
         run: |
           mkdir merged
+          if [ ! -d artifacts ]; then
+            echo "No job produced results: see the jobs above." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           find artifacts -maxdepth 2 -name '*.json' -exec cp {} merged/ \;
           python3 run.py --report merged/*.json | tee merged/report.md >> "$GITHUB_STEP_SUMMARY"
           python3 suite_plan.py --agents "$AGENTS" --check merged/*.json --expect "$EXPECT" | tee merged/runs.md >> "$GITHUB_STEP_SUMMARY"
