@@ -1891,6 +1891,7 @@ def main():
     ap.add_argument("--estimate", action="store_true", help="print projected cost/time and exit; runs nothing")
     ap.add_argument("--estimate-ref", nargs="+", help="result JSONs to average tokens from (default: results/*.json)")
     ap.add_argument("--timeout", type=int, default=None, help="agent seconds (default 1800 for swe-*, 900 otherwise)")
+    ap.add_argument("--swe-timeout", type=int, default=None, help="agent seconds for swe-* tasks (default: --timeout, then 1800)")
     ap.add_argument("--meter", help="token meter URL (meter.py), e.g. http://localhost:4100")
     ap.add_argument("--meter-log", default=str(ROOT / "meter.jsonl"), help="the meter's log file")
     ap.add_argument("--min-balance", type=float, help="DeepSeek: stop when the account balance (USD) drops below this")
@@ -2012,7 +2013,7 @@ def main():
                 print(f"\nStopped: DeepSeek balance ${bal:.2f} is below --min-balance ${args.min_balance:.2f}. "
                       f"{len(results)} completed runs kept in {res_file}.", flush=True)
                 sys.exit(2)
-        r = run_task(agent, t, args.model, args.ctx, args.timeout if args.timeout is not None else (1800 if t.startswith("swe-") else 900), rep)
+        r = run_task(agent, t, args.model, args.ctx, (args.swe_timeout if t.startswith("swe-") and args.swe_timeout is not None else args.timeout if args.timeout is not None else (1800 if t.startswith("swe-") else 900)), rep)
         results.append(r)
         print(f"{agent:14} {t:22} {'PASS' if r['passed'] else 'FAIL'} {r['seconds']:7.1f}s"
               f"{' (timeout)' if r['timed_out'] else ''}{' (read hidden tests)' if r.get('leaked') else ''}"
