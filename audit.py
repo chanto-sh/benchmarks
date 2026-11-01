@@ -17,8 +17,8 @@ AGENTS = Path(__file__).resolve().parent / "agents"
 
 # (advisory URL, agent package, its pinned version): why it doesn't apply.
 EXCEPTIONS = {
-    ("https://github.com/advisories/GHSA-g3hv-75wg-m249", "@earendil-works/pi-coding-agent", "1.1.0"):
-        "minimatch < 11.0.1 can be slowed by crafted glob patterns. Pi 1.1.0 pins "
+    ("https://github.com/advisories/GHSA-g3hv-75wg-m249", "@earendil-works/pi-coding-agent", "1.4.0"):
+        "minimatch < 11.0.1 can be slowed by crafted glob patterns. Pi 1.4.0 pins "
         "minimatch 10 and no fixed 10.x exists; forcing 11 would change the agent "
         "being measured. The benchmark only runs Pi against a local mock with fixed "
         "prompts, so no untrusted pattern reaches it.",
