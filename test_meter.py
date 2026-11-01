@@ -71,11 +71,17 @@ class MeterTests(unittest.TestCase):
         self.assertEqual(self.post("/..%2F..%2Fescape/v1/chat/completions"), 200)
         for _ in range(50):  # the dump is written after the response is sent
             names = os.listdir(self.dump)
-            if len(names) == 2:
+            if len(names) == 3:
                 break
             time.sleep(0.05)
-        self.assertTrue(names and all("/" not in n and not n.startswith(".") for n in names), names)
+        self.assertEqual(len(names), 3, names)
+        self.assertTrue(all("/" not in n and not n.startswith(".") and ".." not in n for n in names), names)
+        with open(os.path.join(self.dump, "dumps.jsonl")) as f:
+            self.assertIn("_.._escape", f.read())
         self.assertEqual(sorted(os.listdir(self.tmp.name)), ["dump", "meter.jsonl"])
+
+    def test_headers_cant_end_a_line(self):
+        self.assertEqual(meter.strip_line_breaks("a\r\nSet-Cookie: x"), "aSet-Cookie: x")
 
     def test_safe_label(self):
         self.assertEqual(meter.safe_label("chanto~swe-x~0~ab12"), "chanto~swe-x~0~ab12")
