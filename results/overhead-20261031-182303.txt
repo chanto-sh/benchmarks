@@ -1,0 +1,22 @@
+# reproduce.py: agent overhead against a local mock model
+# command: python3 reproduce.py --agents mini
+# settings: 40 turns, 40 KB files, 10 reps
+# machine: AMD EPYC 9V74 80-Core Processor, 4 cores, 16 GB RAM, Windows 2025Server AMD64
+# mini: This is mini-swe-agent version 2.4.6.
+# date: 2026-10-31T18:23:03Z
+agent          startup ms  ms/turn   ±sd  whole run  peak MB  install MB  × Chanto CPU  × mem  needs
+-------------------------------------------------------------------------------------------------------
+mini-swe-agent       4133     61.6  32.5      156.2      239       414.8                       
+
+Startup: CPU of a run that makes one model request and exits (median of 10 runs).
+ms/turn: CPU per model request after the first, startup excluded (median of 10 runs).
+Whole run: the full run's CPU over all its requests, startup included (the earlier single figure).
+CPU is user+sys time of the agent and everything it started. × Chanto CPU compares ms/turn.
+Peak MB: largest resident memory of the agent's whole process tree, sampled every 60 ms.
+Install MB: what the pinned install puts on disk; Node and Python, where needed, aren't counted.
+
+Every run (whole-run CPU ms total, peak MB, requests):
+  mini: 11046.9/253/43, 6703.1/239/43, 6640.6/239/43, 6953.1/239/43, 6593.8/239/43, 6546.9/239/43, 6593.8/239/43, 6734.4/239/43, 7171.9/240/43, 7187.5/239/43
+
+Every one-request run (CPU ms total):
+  mini: 4125.0, 4125.0, 4140.6, 4328.1, 4015.6, 4062.5, 4031.2, 4203.1, 4515.6, 4312.5

@@ -60,6 +60,22 @@ def machine():
         q = lambda k: subprocess.run(["sysctl", "-n", k], capture_output=True, text=True).stdout.strip()
         cpu = f"{q('machdep.cpu.brand_string')} ({q('hw.model')}), {q('hw.ncpu')} cores"
         mem = int(q("hw.memsize") or 0)
+    elif platform.system() == "Windows":
+        import ctypes, winreg
+
+        class Memory(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_uint32), ("dwMemoryLoad", ctypes.c_uint32)] + \
+                       [(n, ctypes.c_uint64) for n in ("total", "avail", "pagefile", "availPagefile",
+                                                       "virtual", "availVirtual", "availExtended")]
+        m = Memory(dwLength=ctypes.sizeof(Memory))
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        mem = m.total
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+                name = winreg.QueryValueEx(k, "ProcessorNameString")[0].strip()
+        except OSError:
+            name = platform.processor() or "unknown CPU"
+        cpu = f"{name}, {os.cpu_count()} cores"
     else:
         info = Path("/proc/cpuinfo").read_text() if Path("/proc/cpuinfo").exists() else ""
         names = [l.split(":", 1)[1].strip() for l in info.splitlines() if l.lower().startswith(("model name", "hardware"))]
@@ -71,6 +87,21 @@ def machine():
     return f"{cpu}, {mem / 2**30:.0f} GB RAM, {platform.system()} {platform.release()} {platform.machine()}"
 
 
+def bash():
+    """The bash that runs install-agents.sh. On Windows that's Git Bash: a bare
+    `bash` there finds System32's WSL launcher first, which needs a Linux
+    distribution installed."""
+    if platform.system() != "Windows":
+        return "bash"
+    found = shutil.which("bash")
+    if found and "system32" not in found.lower():
+        return found
+    git = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+    if git.exists():
+        return str(git)
+    sys.exit("install-agents.sh needs Git Bash on Windows")
+
+
 def install(agents):
     groups = []
     if any(a in NPM for a in agents):
@@ -79,7 +110,7 @@ def install(agents):
         groups.append("uv")
     groups += [a for a in agents if a in NATIVE + EXTRA + NEW_NATIVE]
     for g in groups:
-        sh([str(ROOT / "install-agents.sh"), g])
+        sh([bash(), str(ROOT / "install-agents.sh"), g])
 
 
 def main():
@@ -96,7 +127,7 @@ def main():
         sys.exit(f"unknown agents: {', '.join(unknown)} (choose from {', '.join(ALL)})")
 
     bench_home = Path(os.environ.get("BENCH_HOME", Path.home() / ".local/share/chanto-bench"))
-    chanto = Path(a.chanto).resolve() if a.chanto else bench_home / "bin" / "chanto"
+    chanto = Path(a.chanto).resolve() if a.chanto else bench_home / "bin" / ("chanto.exe" if platform.system() == "Windows" else "chanto")
     # Read by run.py, cputurn.py and size.py when they're imported below.
     os.environ["BENCH_CHANTO_BIN"] = str(chanto)
     if not a.no_install:
@@ -215,7 +246,8 @@ def main():
               *[f"  {x}: " + ", ".join(f"{s:.1f}" for s in starts[x]) for x in agents]]
     path = run.RESULTS / f"overhead-{stamp}.txt"
     path.parent.mkdir(exist_ok=True)
-    path.write_text("\n".join(header) + table + "\n" + "\n".join(detail) + "\n")
+    # UTF-8 everywhere: Windows would otherwise write its own code page.
+    path.write_text("\n".join(header) + table + "\n" + "\n".join(detail) + "\n", encoding="utf-8")
     print(f"\nSaved {path.relative_to(ROOT)}. Compare the ratios with RESULTS.md; absolute numbers vary by machine.")
 
 
