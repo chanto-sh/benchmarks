@@ -124,6 +124,9 @@ def home(agent):
     (one agent per run root); outside one, a per-agent folder in WORK."""
     d = RUN_HOME if RUN_HOME is not None else WORK / ".homes" / agent
     d.mkdir(parents=True, exist_ok=True)
+    # Agents' config here holds API_KEY, which realoverhead.py can set to a real
+    # key, so nobody else on the machine should read it.
+    d.chmod(0o700)
     return d
 
 

@@ -16,6 +16,7 @@ provider bills.
 import argparse
 import os
 import http.client
+import itertools
 import json
 import re
 import threading
@@ -24,6 +25,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOCK = threading.Lock()
+DUMP_NUMBER = itertools.count(1)
 # What the meter forwards: an absolute path on the upstream, nothing that could
 # name another host (`//host`, a scheme) or break the request line.
 SAFE_PATH = re.compile(r"(?!.*//)/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*")
@@ -33,6 +35,11 @@ HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
 HEADER_VALUE = re.compile(r"[\t\x20-\x7e]*")
 # A label as it may appear in a dump file name.
 UNSAFE_LABEL_CHARS = re.compile(r"[^A-Za-z0-9._~-]")
+
+
+def strip_line_breaks(text):
+    """`text` with no way to end a header line early."""
+    return text.replace("\r", "").replace("\n", "")
 
 
 def safe_label(label):
@@ -120,7 +127,7 @@ class Handler(BaseHTTPRequestHandler):
             name, value = HEADER_NAME.fullmatch(k), HEADER_VALUE.fullmatch(v)
             if not name or not value or k.lower() in ("transfer-encoding", "content-length", "connection"):
                 continue
-            self.send_header(name.group(0), value.group(0))
+            self.send_header(strip_line_breaks(name.group(0)), strip_line_breaks(value.group(0)))
         self.send_header("Transfer-Encoding", "chunked")
         self.end_headers()
         acc = {"input": 0, "output": 0, "cached": 0}
@@ -182,9 +189,11 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps(rec) + "\n")
             if self.dump_dir:
                 # Request and raw response per call, for looking at what a model actually produced.
-                stem = os.path.join(self.dump_dir, f"{safe_label(label)}-{rec['t']:.3f}")
-                if os.path.dirname(os.path.abspath(stem)) != os.path.abspath(self.dump_dir):
-                    return
+                # Named by a counter, so nothing a client sends reaches the path;
+                # `dumps.jsonl` says which label each one belongs to.
+                stem = os.path.join(self.dump_dir, f"{next(DUMP_NUMBER):06d}")
+                with LOCK, open(os.path.join(self.dump_dir, "dumps.jsonl"), "a") as f:
+                    f.write(json.dumps({"dump": os.path.basename(stem), "label": safe_label(label), "t": rec["t"]}) + "\n")
                 with open(stem + ".req.json", "wb") as f:
                     f.write(body)
                 with open(stem + ".resp", "wb") as f:
