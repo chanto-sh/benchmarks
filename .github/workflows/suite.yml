@@ -1,0 +1,153 @@
+# Runs the coding benchmark on GitHub's machines, in public: the plan, every
+# job's log and the raw results are in the run, and the merged results are
+# attested. A pull request that changes this runs it against a mock model, which
+# needs no key and shows only that the pieces fit: every task fails there.
+# A real run spends money from DEEPSEEK_API_KEY in the benchmark environment, so
+# it's started by hand. Use a prepaid key with a small balance: a run stops when
+# the provider reports no budget left.
+name: suite
+on:
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: Agents, comma-separated
+        type: string
+        default: chanto,aider,claude,cline,cn,codewhale,codex,crush,forge,gemini,goose,grok,interpreter,jcode,kilo,mini,omp,opencode,openhands,pi,qwen,reasonix,vibe
+      tier:
+        description: Tiers, comma-separated
+        type: string
+        default: core,medium,hard,beyond
+      tasks:
+        description: Task name globs, comma-separated (empty for all in the tiers)
+        type: string
+        default: ""
+      sample:
+        description: Run this many tasks, chosen in proportion to each tier (0 for all)
+        type: number
+        default: 40
+      repeat:
+        description: Runs per task and agent
+        type: number
+        default: 1
+      timeout:
+        description: Seconds an agent gets per task
+        type: number
+        default: 300
+      mock:
+        description: Use a mock model (no key, no cost, every task fails)
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - suite_plan.py
+      - suite_job.sh
+      - .github/workflows/suite.yml
+
+permissions:
+  contents: read
+
+env:
+  AGENTS: ${{ inputs.agents || 'chanto,pi' }}
+  MOCK: ${{ github.event_name == 'pull_request' || inputs.mock }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: plan
+        env:
+          TIER: ${{ inputs.tier || 'core' }}
+          TASKS: ${{ inputs.tasks }}
+          SAMPLE: ${{ inputs.sample || 2 }}
+          REPEAT: ${{ inputs.repeat || 1 }}
+        run: |
+          matrix=$(python3 suite_plan.py --agents "$AGENTS" --tier "$TIER" --tasks "$TASKS" --sample "$SAMPLE" --repeat "$REPEAT")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          {
+            echo "Mock model: $MOCK. Agents: $AGENTS."
+            echo '```'
+            echo "$matrix" | python3 -c 'import json,sys; [print(j["id"], j["tasks"]) for j in json.load(sys.stdin)]'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    # Only a real run can reach the key.
+    environment: ${{ (github.event_name == 'workflow_dispatch' && !inputs.mock) && 'benchmark' || '' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        job: ${{ fromJson(needs.plan.outputs.matrix) }}
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+      # Ubuntu 24.04 restricts unprivileged user namespaces, which bubblewrap needs.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - run: ./install-agents.sh
+      # The key goes to the proxy alone; later steps, and so the agents, never have it.
+      - name: Start the model
+        env:
+          BENCH_UPSTREAM_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: ./suite_job.sh start
+      - name: Run
+        timeout-minutes: 320
+        env:
+          TASKS: ${{ matrix.job.tasks }}
+          REPEAT: ${{ inputs.repeat || 1 }}
+          SEED: ${{ matrix.job.id }}
+          TIMEOUT: ${{ inputs.timeout || 120 }}
+        run: ./suite_job.sh run
+      # Runs even after a timeout: run.py saves its results after every run.
+      - name: Check for the key
+        if: always()
+        env:
+          KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: ./suite_job.sh check
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: suite-${{ matrix.job.id }}
+          path: ${{ runner.temp }}/suite/
+          if-no-files-found: warn
+
+  report:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: artifacts
+          pattern: suite-*
+      - run: |
+          mkdir merged
+          find artifacts -maxdepth 2 -name '*.json' -exec cp {} merged/ \;
+          python3 run.py --report merged/*.json | tee merged/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: merged/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: suite-report
+          path: merged/
