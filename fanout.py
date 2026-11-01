@@ -22,8 +22,8 @@ def raise_limit(agent, fan):
     """Set an agent's own limit on parallel subagents to `fan`, where it has one
     that its config can change."""
     if agent == "chanto":
-        with open(run.home("chanto") / "config.toml", "a") as f:
-            f.write(f"\n[resources]\nmax_parallel_agents = {fan}\n")
+        # Written whole: this runs once per repetition, and TOML refuses a repeated table.
+        (run.home("chanto") / "config.toml").write_text(f"[resources]\nmax_parallel_agents = {fan}\n")
     elif agent == "codex":
         with open(run.home("codex") / "config.toml", "a") as f:
             f.write(f"\n[agents]\nmax_threads = {fan + 1}\n")

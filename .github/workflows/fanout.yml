@@ -36,11 +36,10 @@ jobs:
         env:
           BENCH_CHANTO_BIN: ${{ github.workspace }}/chanto-src/target/release/chanto
         run: |
-          python3 fanout.py --agents chanto,claude,codex,opencode --fan 1,6,20,100 --reps 3 --limit 240 --json fanout.json | tee fanout.md
           {
             echo
             echo "Limits raised to N, where config allows:"
-            python3 fanout.py --agents chanto,codex --fan 100,500 --reps 3 --limit 240 --raised --json fanout-raised.json
+            python3 fanout.py --agents chanto,codex --fan 100,500,1000 --reps 3 --limit 240 --raised --json fanout-raised.json
           } | tee -a fanout.md
           cat fanout.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
