@@ -1,5 +1,7 @@
-# Measures each new Chanto release. Once a day it compares Chanto's latest
-# release with the pin in install-agents.sh and stops if that's current.
+# Measures each new Chanto release. Chanto's release workflow can start it
+# with a `chanto-release` repository_dispatch; otherwise every hour it compares
+# Chanto's latest release with the pin in install-agents.sh and stops if that's
+# current, after one API call.
 # Otherwise it checks the release's SHA256SUMS against Chanto's release key,
 # pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
 # workflow's overhead job on macOS, Linux and Windows, and opens a pull request
@@ -9,14 +11,18 @@
 #
 # Running it by hand measures the release named (or the latest) even when it's
 # already pinned, and updates that release's pull request if there is one. The
-# daily run leaves a release alone once its branch exists.
+# hourly and dispatched runs leave a release alone once its branch exists.
 #
 # Opening the pull request needs the repository setting "Allow GitHub Actions
 # to create and approve pull requests" (Settings → Actions → General).
 name: auto-overhead
 on:
   schedule:
-    - cron: "41 7 * * *"
+    - cron: "41 * * * *"
+  # Sent by Chanto's release workflow once a release is published, with
+  # client_payload.version. The version is checked like any other.
+  repository_dispatch:
+    types: [chanto-release]
   workflow_dispatch:
     inputs:
       version:
@@ -50,7 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
-          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ inputs.version || github.event.client_payload.version }}
           REPO: ${{ github.repository }}
         shell: bash
         run: |
@@ -73,10 +79,10 @@ jobs:
           if [ "$order" = older ]; then
             echo "::error::$version is older than the pinned $pinned"
             exit 1
-          elif [ "$EVENT" = schedule ] && [ "$order" = same ]; then
+          elif [ "$EVENT" != workflow_dispatch ] && [ "$order" = same ]; then
             measure=false
             echo "Chanto $pinned is pinned and is the latest release: nothing to do." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "$EVENT" = schedule ] && gh api "repos/$REPO/branches/$branch" --silent 2>/dev/null; then
+          elif [ "$EVENT" != workflow_dispatch ] && gh api "repos/$REPO/branches/$branch" --silent 2>/dev/null; then
             measure=false
             echo "Chanto $version already has a branch ($branch); run this workflow by hand to measure it again." >> "$GITHUB_STEP_SUMMARY"
           fi
