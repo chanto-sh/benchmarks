@@ -1,0 +1,286 @@
+# Measures each new Chanto release. Once a day it compares Chanto's latest
+# release with the pin in install-agents.sh and stops if that's current.
+# Otherwise it checks the release's SHA256SUMS against Chanto's release key,
+# pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
+# workflow's overhead job on macOS, Linux and Windows, and opens a pull request
+# with the results: the raw files, RESULTS.md's overhead section and its README
+# copy, and overhead-latest.json. It never pushes to main or merges; a person
+# reviews the pull request.
+#
+# Running it by hand measures the release named (or the latest) even when it's
+# already pinned, and updates that release's pull request if there is one. The
+# daily run leaves a release alone once its branch exists.
+#
+# Opening the pull request needs the repository setting "Allow GitHub Actions
+# to create and approve pull requests" (Settings → Actions → General).
+name: auto-overhead
+on:
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Chanto release to measure, like 0.1.16 (empty for the latest)
+        type: string
+        default: ""
+
+permissions: {}
+
+# One at a time: two runs for the same release would race on its branch.
+concurrency:
+  group: auto-overhead
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: check for a new release
+    # Only main's pin and results are measured and published.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      measure: ${{ steps.check.outputs.measure }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pinned=$(python3 chanto_pin.py --current)
+          if [ -n "$INPUT_VERSION" ]; then
+            version=${INPUT_VERSION#v}
+          else
+            # Chanto's public releases, read with this repository's own token.
+            tag=$(gh api repos/chanto-sh/chanto/releases/latest --jq .tag_name)
+            version=${tag#v}
+          fi
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::not a release version: $version"
+            exit 1
+          fi
+          order=$(python3 -c 'import sys; v = lambda s: tuple(map(int, s.split("."))); a, b = map(v, sys.argv[1:]); print("newer" if a > b else "same" if a == b else "older")' "$version" "$pinned")
+          branch="auto/chanto-v$version"
+          measure=true
+          if [ "$order" = older ]; then
+            echo "::error::$version is older than the pinned $pinned"
+            exit 1
+          elif [ "$EVENT" = schedule ] && [ "$order" = same ]; then
+            measure=false
+            echo "Chanto $pinned is pinned and is the latest release: nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$EVENT" = schedule ] && gh api "repos/$REPO/branches/$branch" --silent 2>/dev/null; then
+            measure=false
+            echo "Chanto $version already has a branch ($branch); run this workflow by hand to measure it again." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "measure=$measure" >> "$GITHUB_OUTPUT"
+          echo "pinned $pinned, release $version, measure: $measure"
+
+  pin:
+    name: pin the release
+    needs: check
+    if: needs.check.outputs.measure == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # Fails closed: without a good signature nothing is pinned or measured.
+      # The key is the one Chanto's install.sh checks releases with.
+      - name: Check the release's signed checksums
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          ALLOWED_SIGNER: chanto-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB5PMqav6ZU7swlGeD/fm5sHrGS5MDNfAgTuwHFECxnd
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/release"
+          mkdir -p "$d"
+          base="https://github.com/chanto-sh/chanto/releases/download/v$VERSION"
+          curl -fsSL --retry 3 -o "$d/SHA256SUMS" "$base/SHA256SUMS"
+          curl -fsSL --retry 3 -o "$d/SHA256SUMS.sshsig" "$base/SHA256SUMS.sshsig"
+          printf '%s\n' "$ALLOWED_SIGNER" > "$d/allowed_signers"
+          ssh-keygen -Y verify -f "$d/allowed_signers" -I chanto-release -n chanto-release \
+            -s "$d/SHA256SUMS.sshsig" < "$d/SHA256SUMS"
+      - name: Pin it
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: python3 chanto_pin.py "$VERSION" --sums "$RUNNER_TEMP/release/SHA256SUMS"
+      # The branch starts again from main on every run, so a rerun replaces
+      # the earlier results instead of piling up on them.
+      - name: Push the branch
+        id: push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add install-agents.sh
+          if ! git diff --cached --quiet; then
+            git commit -s -q -m "chore(agents): pin chanto $VERSION" \
+              -m "The checksums come from v$VERSION's SHA256SUMS, whose SSH signature verified against Chanto's release key."
+          fi
+          git push --force -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/auto/chanto-v$VERSION"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  measure:
+    needs: pin
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reproduce.yml # zizmor: ignore[self-repository] the documented form
+    with:
+      ref: ${{ needs.pin.outputs.sha }}
+
+  # Which OSes to measure again: those whose job left no results without
+  # failing, as when it was cancelled because no runner became available.
+  gather:
+    name: find missing platforms
+    needs: [pin, measure]
+    if: always() && needs.pin.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      retry: ${{ steps.retry.outputs.retry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/artifacts
+          pattern: overhead-*
+      - id: retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | {id, name, conclusion}' > "$RUNNER_TEMP/jobs.jsonl"
+          retry=$(python3 overhead_report.py retry --artifacts "$RUNNER_TEMP/artifacts" --jobs "$RUNNER_TEMP/jobs.jsonl")
+          echo "retry=$retry" >> "$GITHUB_OUTPUT"
+          echo "measure again: $retry"
+
+  retry:
+    needs: [pin, gather]
+    if: always() && needs.pin.result == 'success' && needs.gather.result == 'success' && needs.gather.outputs.retry != '[]'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reproduce.yml # zizmor: ignore[self-repository] the documented form
+    with:
+      ref: ${{ needs.pin.outputs.sha }}
+      os: ${{ needs.gather.outputs.retry }}
+      artifact_prefix: overhead-retry
+
+  publish:
+    name: open the pull request
+    needs: [check, pin, measure, gather, retry]
+    if: always() && needs.pin.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.pin.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/artifacts
+          pattern: overhead-*
+      - name: Write the results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | {id, name, conclusion}' > "$RUNNER_TEMP/jobs.jsonl"
+          python3 overhead_report.py collect --artifacts "$RUNNER_TEMP/artifacts" \
+            --jobs "$RUNNER_TEMP/jobs.jsonl" --run-id "$RUN_ID" --out "$RUNNER_TEMP/manifest.json"
+          # With no results at all there's nothing to render; the pull request
+          # still opens, as a draft, to say so.
+          if grep -q '"path"' "$RUNNER_TEMP/manifest.json"; then
+            python3 overhead_report.py render "$RUNNER_TEMP/manifest.json" --summary "$RUNNER_TEMP/summary.json"
+          fi
+      - name: Commit and push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add results/ RESULTS.md README.md overhead-latest.json
+          if ! git diff --cached --quiet; then
+            git commit -s -q -m "chore(agents): measure chanto $VERSION" \
+              -m "From $SERVER/$REPO/actions/runs/$RUN_ID, generated by overhead_report.py."
+          fi
+          git push -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/auto/chanto-v$VERSION"
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          branch="auto/chanto-v$VERSION"
+          title="chore(agents): measure chanto $VERSION"
+          python3 overhead_report.py body "$RUNNER_TEMP/summary.json" --version "$VERSION" \
+            --run-url "$SERVER/$REPO/actions/runs/$RUN_ID" > "$RUNNER_TEMP/body.md"
+          # A draft when any OS has no results (or nothing rendered at all).
+          draft=$(python3 -c 'import json, sys; from pathlib import Path; p = Path(sys.argv[1]); print(str(not p.exists() or bool(json.loads(p.read_text())["missing"])).lower())' "$RUNNER_TEMP/summary.json")
+          pr=$(gh pr list --repo "$REPO" --head "$branch" --base main --state open --json number,isDraft --jq '.[0] // empty | "\(.number) \(.isDraft)"')
+          if [ -n "$pr" ]; then
+            number=${pr% *}
+            was_draft=${pr#* }
+            gh pr edit "$number" --repo "$REPO" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+            if [ "$draft" = true ] && [ "$was_draft" = false ]; then
+              gh pr ready "$number" --repo "$REPO" --undo
+            elif [ "$draft" = false ] && [ "$was_draft" = true ]; then
+              gh pr ready "$number" --repo "$REPO"
+            fi
+          else
+            flags=""
+            [ "$draft" = true ] && flags="--draft"
+            # shellcheck disable=SC2086 # $flags is empty or one flag
+            if ! gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" \
+              --body-file "$RUNNER_TEMP/body.md" $flags; then
+              echo "::error::couldn't open the pull request. If GitHub refused it, enable \"Allow GitHub Actions to create and approve pull requests\" in the repository's Actions settings; the branch $branch has the results."
+              exit 1
+            fi
+          fi
+          {
+            echo "Chanto $VERSION: branch [\`$branch\`]($SERVER/$REPO/tree/$branch)"
+            echo
+            cat "$RUNNER_TEMP/body.md"
+          } >> "$GITHUB_STEP_SUMMARY"

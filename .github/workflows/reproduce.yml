@@ -5,9 +5,24 @@
 # its results file is an artifact. Pull requests that change the measuring
 # code run the quick version, so it keeps working on both platforms; those
 # that change what gets installed (the agents' lockfile, install-agents.sh or
-# the agents' configs in run.py) run every agent.
+# the agents' configs in run.py) run every agent. The auto-overhead workflow
+# calls it (workflow_call) to measure each new Chanto release.
 name: reproduce
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to measure (the caller's by default)
+        type: string
+        default: ""
+      os:
+        description: Runners to measure on, as a JSON list (all three by default)
+        type: string
+        default: ""
+      artifact_prefix:
+        description: Name each OS's results artifact <prefix>-<runner>
+        type: string
+        default: overhead
   workflow_dispatch:
     inputs:
       quick:
@@ -39,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: ${{ fromJSON(inputs.os || '["macos-latest", "ubuntu-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     # Git Bash on Windows, so every step reads the same everywhere.
@@ -49,6 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       # Quick unless asked otherwise; a PR measures every agent when it changes
       # what gets installed.
@@ -98,6 +114,6 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: overhead-${{ matrix.os }}
+          name: ${{ inputs.artifact_prefix || 'overhead' }}-${{ matrix.os }}
           path: ${{ runner.temp }}/overhead/
           if-no-files-found: ignore
