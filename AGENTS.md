@@ -6,6 +6,7 @@
 - A run: `python3 run.py --agents chanto,opencode --model <model> [--tasks a,b] [--tier hard]`; `--estimate` projects cost and runs nothing
 - Report from raw results: `python3 run.py --report results/<files>.json`
 - Overhead numbers: `python3 reproduce.py [--quick]` installs the pinned agents (Chanto as its release), runs `cputurn.py` and `size.py` with the published settings, and saves `results/overhead-<date>.txt`; the settings live in `reproduce.py`
+- New Chanto releases are measured by `.github/workflows/auto-overhead.yml` (on a `chanto-release` dispatch, hourly, or by hand): it verifies the release's signed SHA256SUMS, pins it with `chanto_pin.py`, calls the reproduce workflow and opens a pull request whose overhead section (RESULTS.md and README.md) and `overhead-latest.json` come from `overhead_report.py`. Tests: `python3 -m unittest test_chanto_pin test_overhead_report`
 - The Chanto binary comes from a sibling checkout (`../chanto/target/release/chanto`); `CHANTO_REPO` or `BENCH_CHANTO_BIN` point elsewhere
 - Enable the hooks once per clone: `git config core.hooksPath .githooks`; don't bypass them with `--no-verify`
 
