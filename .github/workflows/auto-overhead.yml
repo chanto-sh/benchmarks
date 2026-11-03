@@ -1,7 +1,8 @@
-# Measures each new Chanto release. Chanto's release workflow can start it
-# with a `chanto-release` repository_dispatch; otherwise every hour it compares
-# Chanto's latest release with the pin in install-agents.sh and stops if that's
-# current, after one API call.
+# Measures each new Chanto release. Chanto's release workflow starts it by hand
+# (a workflow_dispatch with the version) once a release is published; a
+# `chanto-release` repository_dispatch works too. Otherwise every hour it
+# compares Chanto's latest release with the pin in install-agents.sh and stops
+# if that's current, after one API call.
 # Otherwise it checks the release's SHA256SUMS against Chanto's release key,
 # pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
 # workflow's overhead job on macOS, Linux and Windows, and opens a pull request
@@ -13,7 +14,12 @@
 # already pinned, and updates that release's pull request if there is one. The
 # hourly and dispatched runs leave a release alone once its branch exists.
 #
-# Opening the pull request needs the repository setting "Allow GitHub Actions
+# The results are pushed and the pull request opened with a token from the
+# chanto-automation GitHub App (AUTOMATION_APP_ID and AUTOMATION_APP_KEY in
+# the `benchmark` environment), so the pull request's checks start on their
+# own. Without those secrets it falls back to the workflow's token with a
+# warning: then the checks wait until someone closes and reopens the pull
+# request, and opening it needs the repository setting "Allow GitHub Actions
 # to create and approve pull requests" (Settings → Actions → General).
 name: auto-overhead
 on:
@@ -202,11 +208,48 @@ jobs:
     needs: [check, pin, measure, gather, retry]
     if: always() && needs.pin.result == 'success'
     runs-on: ubuntu-latest
+    # The app's ID and key live here; main is the only branch it allows.
+    environment: benchmark
+    # The workflow's token writes only when the app's isn't available.
     permissions:
       contents: write
       pull-requests: write
       actions: read
     steps:
+      - name: Check for the automation app
+        id: app
+        env:
+          APP_ID: ${{ secrets.AUTOMATION_APP_ID }}
+          APP_KEY: ${{ secrets.AUTOMATION_APP_KEY }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=No automation app::AUTOMATION_APP_ID or AUTOMATION_APP_KEY isn't set in the benchmark environment, so the pull request is opened with the workflow's token and its checks won't start until it's closed and reopened."
+          fi
+      # Only this repository, and only what pushing the branch and opening the
+      # pull request need.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        if: steps.app.outputs.configured == 'true'
+        continue-on-error: true
+        with:
+          # The app ID works here too: GitHub takes either as the JWT issuer.
+          client-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Choose the token
+        id: token
+        env:
+          OUTCOME: ${{ steps.app-token.outcome }}
+        run: |
+          if [ "$OUTCOME" = success ]; then
+            echo "fallback=false" >> "$GITHUB_OUTPUT"
+          else
+            [ "$OUTCOME" = failure ] && echo "::warning title=Automation app::Couldn't get a token from the automation app; using the workflow's token, so the pull request's checks won't start until it's closed and reopened."
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.pin.outputs.sha }}
@@ -235,7 +278,7 @@ jobs:
           fi
       - name: Commit and push
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           VERSION: ${{ needs.check.outputs.version }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
@@ -252,7 +295,8 @@ jobs:
           git push -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/auto/chanto-v$VERSION"
       - name: Open or update the pull request
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          FALLBACK: ${{ steps.token.outputs.fallback }}
           VERSION: ${{ needs.check.outputs.version }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
@@ -261,8 +305,11 @@ jobs:
           set -eu
           branch="auto/chanto-v$VERSION"
           title="chore(agents): measure chanto $VERSION"
+          token_flag=""
+          [ "$FALLBACK" = true ] && token_flag="--workflow-token"
+          # shellcheck disable=SC2086 # $token_flag is empty or one flag
           python3 overhead_report.py body "$RUNNER_TEMP/summary.json" --version "$VERSION" \
-            --run-url "$SERVER/$REPO/actions/runs/$RUN_ID" > "$RUNNER_TEMP/body.md"
+            --run-url "$SERVER/$REPO/actions/runs/$RUN_ID" $token_flag > "$RUNNER_TEMP/body.md"
           # A draft when any OS has no results (or nothing rendered at all).
           draft=$(python3 -c 'import json, sys; from pathlib import Path; p = Path(sys.argv[1]); print(str(not p.exists() or bool(json.loads(p.read_text())["missing"])).lower())' "$RUNNER_TEMP/summary.json")
           pr=$(gh pr list --repo "$REPO" --head "$branch" --base main --state open --json number,isDraft --jq '.[0] // empty | "\(.number) \(.isDraft)"')
@@ -281,7 +328,7 @@ jobs:
             # shellcheck disable=SC2086 # $flags is empty or one flag
             if ! gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" \
               --body-file "$RUNNER_TEMP/body.md" $flags; then
-              echo "::error::couldn't open the pull request. If GitHub refused it, enable \"Allow GitHub Actions to create and approve pull requests\" in the repository's Actions settings; the branch $branch has the results."
+              echo "::error::couldn't open the pull request. If GitHub refused the workflow's token, set up the automation app or enable \"Allow GitHub Actions to create and approve pull requests\" in the repository's Actions settings; the branch $branch has the results."
               exit 1
             fi
           fi
