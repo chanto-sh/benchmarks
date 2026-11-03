@@ -1,8 +1,7 @@
-# Measures each new Chanto release. Chanto's release workflow starts it by hand
-# (a workflow_dispatch with the version) once a release is published; a
-# `chanto-release` repository_dispatch works too. Otherwise every hour it
-# compares Chanto's latest release with the pin in install-agents.sh and stops
-# if that's current, after one API call.
+# Measures each new Chanto release. Chanto's release workflow starts it with a
+# `chanto-release` repository_dispatch once a release checks out; otherwise
+# every hour it compares Chanto's latest release with the pin in
+# install-agents.sh and stops if that's current, after one API call.
 # Otherwise it checks the release's SHA256SUMS against Chanto's release key,
 # pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
 # workflow's overhead job on macOS, Linux and Windows, and opens a pull request
