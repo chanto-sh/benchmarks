@@ -1,0 +1,91 @@
+# Asks chanto.sh to redeploy once new overhead numbers reach main (a merged
+# auto-overhead pull request, or any change to overhead-latest.json), instead
+# of waiting for the website's daily check. That check compares this file on
+# main with what the live site was built from, so starting it is all this
+# does; it deploys only when they differ.
+#
+# The website's repository is private and isn't named here: it comes from the
+# SITE_REPOSITORY Actions variable (owner/name). Without it the run stops with
+# a notice. The token is the chanto-automation GitHub App's
+# (AUTOMATION_APP_ID and AUTOMATION_APP_KEY in the `benchmark` environment),
+# limited to that one repository and to starting its workflows.
+name: site
+on:
+  push:
+    branches: [main]
+    paths: [overhead-latest.json]
+  workflow_dispatch:
+
+permissions: {}
+
+# A newer push supersedes a run still waiting for its file.
+concurrency:
+  group: site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: start the website's deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: benchmark
+    # Nothing from this repository's token: the file is read anonymously.
+    permissions: {}
+    steps:
+      - name: Find the website's repository
+        id: site
+        env:
+          SITE_REPOSITORY: ${{ vars.SITE_REPOSITORY }}
+        run: |
+          if [ -z "$SITE_REPOSITORY" ]; then
+            echo "::notice title=No website repository::SITE_REPOSITORY isn't set, so the website isn't asked to deploy."
+            exit 0
+          fi
+          if ! [[ $SITE_REPOSITORY =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::SITE_REPOSITORY must be owner/name"
+            exit 1
+          fi
+          # A private repository: keep its name out of this public log.
+          echo "::add-mask::$SITE_REPOSITORY"
+          echo "::add-mask::${SITE_REPOSITORY#*/}"
+          {
+            echo "owner=${SITE_REPOSITORY%%/*}"
+            echo "name=${SITE_REPOSITORY#*/}"
+          } >> "$GITHUB_OUTPUT"
+      # The website reads the file from raw.githubusercontent.com, which caches
+      # it for a few minutes: wait until it serves this commit's copy, or the
+      # check would see the old one and skip the deploy.
+      - name: Wait for the new file to be served
+        if: steps.site.outputs.name != ''
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          raw="https://raw.githubusercontent.com/$REPO"
+          want=$(curl -fsSL --retry 3 "$raw/$SHA/overhead-latest.json" | sha256sum | cut -d' ' -f1)
+          for _ in $(seq 40); do
+            got=$( (curl -fsSL --retry 3 "$raw/main/overhead-latest.json" || true) | sha256sum | cut -d' ' -f1)
+            [ "$got" = "$want" ] && exit 0
+            sleep 15
+          done
+          echo "::warning::raw.githubusercontent.com still serves an older overhead-latest.json; asking anyway, and the website's daily check will catch up if this deploy misses it."
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        if: steps.site.outputs.name != ''
+        with:
+          # The app ID works here too: GitHub takes either as the JWT issuer.
+          client-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_KEY }}
+          owner: ${{ steps.site.outputs.owner }}
+          repositories: ${{ steps.site.outputs.name }}
+          permission-actions: write
+      - name: Start the website's docs-release workflow
+        if: steps.site.outputs.name != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SITE_REPOSITORY: ${{ vars.SITE_REPOSITORY }}
+        run: |
+          gh workflow run docs-release.yml --repo "$SITE_REPOSITORY" > /dev/null
+          echo "Started the website's docs-release workflow." >> "$GITHUB_STEP_SUMMARY"

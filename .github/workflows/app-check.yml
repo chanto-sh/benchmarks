@@ -1,0 +1,65 @@
+# Checks the chanto-automation GitHub App by hand: mints its token from
+# AUTOMATION_APP_ID and AUTOMATION_APP_KEY (the `benchmark` environment) for
+# this repository and the website's, then reads each repository's metadata.
+# Nothing is written or started, so a green run means the ID and key are right
+# and the app is installed on both.
+#
+# The website's repository comes from the SITE_REPOSITORY Actions variable
+# (owner/name); without it only this repository is checked, with a notice.
+#
+#   gh workflow run app-check.yml --repo chanto-sh/benchmarks
+name: app-check
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: check the automation app
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: benchmark
+    permissions: {}
+    steps:
+      - name: Choose the repositories
+        id: repos
+        env:
+          SITE_REPOSITORY: ${{ vars.SITE_REPOSITORY }}
+          OWNER: ${{ github.repository_owner }}
+          SELF: ${{ github.event.repository.name }}
+        run: |
+          repos=$SELF
+          if [ -z "$SITE_REPOSITORY" ]; then
+            echo "::notice title=No website repository::SITE_REPOSITORY isn't set; checking this repository only."
+          elif [ "${SITE_REPOSITORY%%/*}" != "$OWNER" ] || ! [[ ${SITE_REPOSITORY#*/} =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::SITE_REPOSITORY must be $OWNER/<name>"
+            exit 1
+          else
+            # A private repository: keep its name out of this public log.
+            echo "::add-mask::$SITE_REPOSITORY"
+            echo "::add-mask::${SITE_REPOSITORY#*/}"
+            repos="$repos,${SITE_REPOSITORY#*/}"
+          fi
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        with:
+          # The app ID works here too: GitHub takes either as the JWT issuer.
+          client-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.repos.outputs.repos }}
+          permission-metadata: read
+      - name: Read each repository
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPOS: ${{ steps.repos.outputs.repos }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$REPOS"
+          for name in "${names[@]}"; do
+            gh api "repos/$OWNER/$name" --jq '"\(.full_name): readable (private: \(.private))"'
+          done
+          echo "The automation app's token reads all ${#names[@]} repositories." >> "$GITHUB_STEP_SUMMARY"
