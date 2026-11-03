@@ -22,6 +22,24 @@ measured (as reruns of single agents did on October 31). Each file also names
 the workflow run and job it came from, which the section links to. The section's
 notes ("What isn't quite like for like" to the end of the section) are written
 by hand and carried over unchanged; everything above them is generated.
+
+overhead-latest.json has the same numbers for programs to read. Its first
+fields (chanto_version, date, run_url, and each platform's runner, startup_ms,
+cpu_ms_per_turn, peak_mb, results and job_url, all Chanto's) keep their place
+and meaning; format 2 adds the rest of the table after them:
+
+    format        2
+    repo_url, command, model, sorted_by
+    settings      {turns, file_kb, reps}
+    agents        [{id, name, runtime, version}], in the table's order
+    platforms.<OS> (null when the OS has no results, or no Chanto row):
+      install_mb  Chanto's install size
+      run_url     the run that measured the OS
+      machine     {cpu, cores, memory_gb, os, arch, description}
+      agents      [{id, name, runtime, startup_ms, cpu_ms_per_turn, peak_mb,
+                   install_mb, results, job_url}], in the table's order; an
+                  agent that made no measurable run there has null numbers
+                  and no results or job_url
 """
 import argparse, json, re, shutil, sys
 from datetime import datetime
@@ -114,6 +132,17 @@ def os_name(m):
         w = re.fullmatch(r"(\d+)Server", rel)
         return f"Windows Server {w[1]}" if w else f"Windows {rel}"
     return f"{sys_} {rel}"
+
+
+def machine(p):
+    """A measured platform's runner: the CPU (the words its files' CPUs share),
+    cores, memory, OS and architecture, from its first file."""
+    cpus = [cpu_name(f["header"]["machine"])[0] for f in p["files"]]
+    _, m = cpu_name(p["files"][0]["header"]["machine"])
+    out = {"cpu": common_words(cpus), "cores": int(m["cores"]), "memory_gb": int(m["mem"]), "os": os_name(m),
+           "arch": m["arch"]}
+    out["description"] = f"{out['cpu']}, {out['cores']} cores, {out['memory_gb']} GB RAM, {out['os']}, {out['arch']}"
+    return out
 
 
 def common_words(names):
@@ -209,10 +238,7 @@ def build(manifest, old_section, root=ROOT):
             out.append(f"- **{p['os']}**: `{p['runner']}`, not measured in this run")
             continue
         first = p["files"][0]
-        cpus = [cpu_name(f["header"]["machine"])[0] for f in p["files"]]
-        _, m = cpu_name(first["header"]["machine"])
-        line = (f"- **{p['os']}**: `{p['runner']}`, {common_words(cpus)}, {m['cores']} cores, {m['mem']} GB RAM, "
-                f"{os_name(m)}, {m['arch']}")
+        line = f"- **{p['os']}**: `{p['runner']}`, {machine(p)['description']}"
         if first["run_id"] != main_run:
             line += ", measured separately in " + link(f"run {first['run_id']}", first["url"])
         extras = []
@@ -253,7 +279,8 @@ def build(manifest, old_section, root=ROOT):
         v = row and row[field]
         return DASH if v is None else format(v, fmt)
 
-    for a in sorted(agents, key=key):
+    table_order = sorted(agents, key=key)
+    for a in table_order:
         cells = [cell(p, a, f, fmt) for f, fmt in (("startup", ".0f"), ("cpu", ".1f"), ("rss", ".0f")) for p in platforms]
         if a == "chanto":
             cells = [c if c == DASH else f"**{c}**" for c in cells]
@@ -294,17 +321,36 @@ tree, sampled every 60 ms; install MB is what the pinned install puts on disk
     readme = (f"## Overhead: latest results\n\n{body}\n\n"
               f"Notes on what isn't like for like are in [RESULTS.md](RESULTS.md#{anchor(heading)}).\n\n")
 
+    as_int = lambda v: None if v is None else int(v)
+
+    def agent_numbers(p, a):
+        row = p["rows"].get(a)
+        out = {"id": a, "name": name(a), "runtime": size.AGENTS[a][1]}
+        if not row:
+            return {**out, "startup_ms": None, "cpu_ms_per_turn": None, "peak_mb": None, "install_mb": None}
+        f = p["files"][p["source"][a]]
+        return {**out, "startup_ms": as_int(row["startup"]), "cpu_ms_per_turn": row["cpu"],
+                "peak_mb": as_int(row["rss"]), "install_mb": row["install"], "results": f["path"],
+                "job_url": f["job_url"]}
+
     def numbers(p):
         row = p["rows"].get("chanto") if p["files"] else None
         if not row:
             return None
         f = p["files"][p["source"]["chanto"]]
-        as_int = lambda v: None if v is None else int(v)
+        # Chanto's numbers first, where format 1 had them.
         return {"runner": p["runner"], "startup_ms": as_int(row["startup"]), "cpu_ms_per_turn": row["cpu"],
-                "peak_mb": as_int(row["rss"]), "results": f["path"], "job_url": f["job_url"]}
+                "peak_mb": as_int(row["rss"]), "results": f["path"], "job_url": f["job_url"],
+                "install_mb": row["install"], "run_url": p["files"][0]["url"], "machine": machine(p),
+                "agents": [agent_numbers(p, a) for a in table_order]}
 
     data = {"chanto_version": versions.get("chanto"), "date": f"{when:%Y-%m-%d}", "run_url": run_url(main_run),
-            "platforms": {p["os"]: numbers(p) for p in platforms}}
+            "platforms": {p["os"]: numbers(p) for p in platforms},
+            "format": 2, "repo_url": manifest.get("repo_url", REPO_URL), "command": command,
+            "model": "local mock (stressmock.py)", "sorted_by": sort_os,
+            "settings": {"turns": turns, "file_kb": kb, "reps": reps},
+            "agents": [{"id": a, "name": name(a), "runtime": size.AGENTS[a][1], "version": versions[a]}
+                       for a in table_order]}
     missing = [p["os"] for p in platforms if not p["files"]]
     # A different CPU than the last table's is worth a hand-written note.
     hardware = {}

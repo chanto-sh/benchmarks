@@ -70,9 +70,55 @@ class OctoberThirtyFirst(unittest.TestCase):
         self.assertEqual(data["run_url"], f"https://github.com/chanto-sh/benchmarks/actions/runs/{RUN}")
         got = {os: (p["startup_ms"], p["cpu_ms_per_turn"], p["peak_mb"]) for os, p in data["platforms"].items()}
         self.assertEqual(got, {"macOS": (13, 1.5, 17), "Linux": (23, 3.1, 24), "Windows": (78, 3.1, 19)})
-        # The committed file is this data.
+        # Every field the October 31 file had is still there, first, with the
+        # same value, so readers of that file keep working.
         committed = json.loads((PUBLISHED / "overhead-latest.json").read_text())
-        self.assertEqual(committed, data)
+        self.assertEqual(list(data)[:len(committed)], list(committed))
+        for k in ("chanto_version", "date", "run_url"):
+            self.assertEqual(data[k], committed[k])
+        self.assertEqual(list(data["platforms"]), list(committed["platforms"]))
+        for os_, old in committed["platforms"].items():
+            new = data["platforms"][os_]
+            self.assertEqual(list(new)[:len(old)], list(old), os_)
+            self.assertEqual({k: new[k] for k in old}, old, os_)
+
+    def test_latest_json_has_the_whole_table(self):
+        _, old, _ = published("RESULTS.md", "Overhead: ")
+        _, _, data, _ = report.build(OCTOBER_31, old)
+        self.assertEqual(data["format"], 2)
+        self.assertEqual(data["settings"], {"turns": 40, "file_kb": 40, "reps": 10})
+        self.assertEqual((data["command"], data["sorted_by"]), ("python3 reproduce.py", "Linux"))
+        # The table's rows, as the JSON has them: name, runtime, then each
+        # metric for macOS, Linux and Windows, formatted as the table does.
+        table = [[c.strip().strip("*") for c in line.strip("|").split("|")]
+                 for line in old.splitlines() if line.startswith("| ") and not line.startswith("| agent")]
+        self.assertEqual(len(table), 23)
+        fmt = lambda v, f: report.DASH if v is None else format(v, f)
+        oses = ["macOS", "Linux", "Windows"]
+        rows = []
+        for i, a in enumerate(data["agents"]):
+            per_os = [data["platforms"][o]["agents"][i] for o in oses]
+            self.assertEqual({r["id"] for r in per_os}, {a["id"]})
+            rows.append([a["name"], a["runtime"]]
+                        + [fmt(r[k], f) for k, f in (("startup_ms", ".0f"), ("cpu_ms_per_turn", ".1f"),
+                                                     ("peak_mb", ".0f")) for r in per_os]
+                        + [" / ".join(fmt(r["install_mb"], ",.0f") for r in per_os)])
+        self.assertEqual(rows, table)
+        self.assertEqual(data["agents"][0], {"id": "chanto", "name": "Chanto", "runtime": "Rust", "version": "0.1.10"})
+        self.assertEqual({a["id"]: a["version"] for a in data["agents"]}["pi"], "1.1.0")
+        # Each row names the file and job its numbers came from: on Windows,
+        # OpenHands came from a rerun that has no job ID.
+        win = data["platforms"]["Windows"]
+        self.assertEqual(win["run_url"], "https://github.com/chanto-sh/benchmarks/actions/runs/41224112845")
+        oh = next(r for r in win["agents"] if r["id"] == "openhands")
+        self.assertEqual((oh["results"], oh["job_url"]),
+                         (WIN_OPENHANDS, "https://github.com/chanto-sh/benchmarks/actions/runs/41227780887"))
+        self.assertEqual(win["install_mb"], win["agents"][0]["install_mb"])
+        self.assertEqual(data["platforms"]["Linux"]["machine"],
+                         {"cpu": "Intel Xeon Platinum 8573C", "cores": 4, "memory_gb": 16, "os": "Linux 7.0 (Azure)",
+                          "arch": "x86_64",
+                          "description": "Intel Xeon Platinum 8573C, 4 cores, 16 GB RAM, Linux 7.0 (Azure), x86_64"})
+        self.assertEqual(data["platforms"]["macOS"]["run_url"], data["run_url"])
 
 
 class Render(unittest.TestCase):
@@ -106,6 +152,11 @@ class Render(unittest.TestCase):
         self.assertIn(f"(Linux), and [`{WIN}`]({WIN})\n(Windows).\n", new)
         # That run didn't get OpenHands or mini-swe-agent on Windows.
         self.assertIn("| OpenHands | Python | 5488 | 7271 | — | 85.0 | 98.3 | — | 341 | 320 | — | 626 / 620 / — |", new)
+        # The JSON has that row too, with no numbers or file for Windows.
+        data = json.loads((self.root / "overhead-latest.json").read_text())
+        oh = next(r for r in data["platforms"]["Windows"]["agents"] if r["id"] == "openhands")
+        self.assertEqual(oh, {"id": "openhands", "name": "OpenHands", "runtime": "Python", "startup_ms": None,
+                              "cpu_ms_per_turn": None, "peak_mb": None, "install_mb": None})
         # The notes are carried over, and the README links to the new heading.
         self.assertIn("What isn't quite like for like:\n\n- Aider has no tool loop", new)
         readme = (self.root / "README.md").read_text(encoding="utf-8")
