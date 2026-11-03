@@ -81,9 +81,8 @@ What isn't quite like for like:
 
 - Aider has no tool loop, so it's driven through its chat input, one model request per message. Before each message it adds that turn's file to the chat with `/read-only`, so its requests grow by a file a turn like everyone else's.
 - OpenHands runs shell commands inside a tmux server when tmux is installed, and that server sits outside the measured process tree. tmux is hidden from it here, so its commands run as ordinary child processes and all of its CPU counts.
-- The macOS runner is a 3-core virtual machine and varies more between runs than the Linux one: mini-swe-agent, OpenHands, oh-my-pi, Mistral Vibe, Aider and Codex had standard deviations of 30–80% of their medians there. The raw files list every run.
-- Windows CPU comes from a job object, which adds up every process the agent started. Its clock ticks every 15.6 ms, so a startup figure there is only good to about that much, and two agents can land on the same value (Qwen Code and Aider both read 4984).
-- The Windows runs got different CPUs: EPYC 7763 for most agents, EPYC 9V45 for OpenHands and EPYC 9V74 for mini-swe-agent, so those two compare less directly with the rest. mini-swe-agent's CPU per turn also varied a lot, with a standard deviation of 32.5 ms on its 61.6.
+- The macOS runner is a 3-core virtual machine and varies more than the Linux one, between runs and between tables: every agent's macOS figures roughly doubled from the October 31 table to the November 3 one. Compare agents within one table, not across tables. The raw files list every run and its spread.
+- Windows CPU comes from a job object, which adds up every process the agent started. Its clock ticks every 15.6 ms, so a startup figure there is only good to about that much, and two agents can land on the same value.
 - On Windows, Codex and Open Interpreter start PowerShell about once a turn, so their per-turn cost includes it.
 - Agents with fewer than 5,000 GitHub stars aren't in the table. `reproduce.py --agents fx,hax,zerostack` still measures three of them.
 
