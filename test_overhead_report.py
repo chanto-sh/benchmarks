@@ -275,6 +275,11 @@ class Workflow(unittest.TestCase):
         self.assertIn("Chanto 0.1.16", body)
         self.assertIn(f"[this auto-overhead run]({url})", body)
         self.assertNotIn("Draft", body)
+        # Opened with the app's token, the checks start on their own.
+        self.assertNotIn("reopen", body)
+        body = report.pr_body({"missing": [], "did_not_run": {}, "hardware_changed": {}}, "0.1.16", url,
+                              workflow_token=True)
+        self.assertIn("close and reopen this pull request to start the checks", body)
         body = report.pr_body({"missing": ["Windows"], "did_not_run": {"Linux": ["Aider"]},
                                "hardware_changed": {"Linux": {"was": "AMD EPYC 7763", "now": "Intel Xeon"}}}, "0.1.16", url)
         self.assertIn("**Draft: no results for Windows.**", body)
