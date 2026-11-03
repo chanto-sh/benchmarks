@@ -1,11 +1,16 @@
 """Tests for overhead_report.py. The main one regenerates the October 31
-overhead section from its own results files and compares it with RESULTS.md."""
+overhead section from its own results files and compares it with the copy
+of RESULTS.md in fixtures/."""
 import json, re, shutil, tempfile, unittest
 from pathlib import Path
 
 import overhead_report as report
 
 ROOT = Path(__file__).resolve().parent
+# RESULTS.md, README.md and overhead-latest.json as the October 31 run left
+# them. The live files change with every measurement, so the tests compare
+# against this copy.
+PUBLISHED = ROOT / "fixtures" / "overhead-2026-10-31"
 MAC, LINUX = "results/overhead-20261031-064921.txt", "results/overhead-20261031-065121.txt"
 WIN, WIN_OPENHANDS, WIN_MINI = ("results/overhead-20261031-180439.txt", "results/overhead-20261031-181631.txt",
                                 "results/overhead-20261031-182303.txt")
@@ -31,7 +36,7 @@ HAND_WRITTEN = ("GitHub gave this run's Linux job an Intel Xeon where earlier ru
 
 
 def published(name, heading):
-    return report.split_section((ROOT / name).read_text(encoding="utf-8"), heading)
+    return report.split_section((PUBLISHED / name).read_text(encoding="utf-8"), heading)
 
 
 def single_run(**windows):
@@ -66,7 +71,7 @@ class OctoberThirtyFirst(unittest.TestCase):
         got = {os: (p["startup_ms"], p["cpu_ms_per_turn"], p["peak_mb"]) for os, p in data["platforms"].items()}
         self.assertEqual(got, {"macOS": (13, 1.5, 17), "Linux": (23, 3.1, 24), "Windows": (78, 3.1, 19)})
         # The committed file is this data.
-        committed = json.loads((ROOT / "overhead-latest.json").read_text())
+        committed = json.loads((PUBLISHED / "overhead-latest.json").read_text())
         self.assertEqual(committed, data)
 
 
@@ -75,7 +80,9 @@ class Render(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.root)
         (self.root / "results").mkdir()
-        for f in ["RESULTS.md", "README.md", MAC, LINUX, WIN, WIN_OPENHANDS, WIN_MINI]:
+        for f in ["RESULTS.md", "README.md"]:
+            shutil.copyfile(PUBLISHED / f, self.root / f)
+        for f in [MAC, LINUX, WIN, WIN_OPENHANDS, WIN_MINI]:
             shutil.copyfile(ROOT / f, self.root / f)
 
     def test_touches_only_the_overhead_sections(self):
