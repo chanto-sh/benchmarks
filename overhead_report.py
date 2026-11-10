@@ -426,8 +426,9 @@ def to_retry(artifacts, jobs, prefix="overhead", caller="measure"):
     return out
 
 
-def pr_body(summary, version, run_url):
-    """The pull request's description, from render's summary."""
+def pr_body(summary, version, run_url, workflow_token=False):
+    """The pull request's description, from render's summary. `workflow_token` says the pull request was opened
+    with the workflow's own token rather than the automation app's, so its checks haven't started."""
     lines = [f"Measures Chanto {version} against every agent in the overhead table.",
              "",
              f"- Measured by [this auto-overhead run]({run_url}).",
@@ -446,9 +447,10 @@ def pr_body(summary, version, run_url):
         lines += ["", f"GitHub gave the {os_} job a different CPU ({cpu['now']}) than the last table's "
                   f"({cpu['was']}); consider a note above the versions line, as the October 31 table had."]
     lines += ["", "Before merging:",
-              "- Check that the notes under the table (carried over unchanged) still match these numbers.",
-              "- Pull requests opened with the workflow's token don't start other workflows, so the usual "
-              "checks haven't run: close and reopen this pull request to start them."]
+              "- Check that the notes under the table (carried over unchanged) still match these numbers."]
+    if workflow_token:
+        lines += ["- The automation app's token wasn't available, so this was opened with the workflow's token, "
+                  "which doesn't start other workflows: close and reopen this pull request to start the checks."]
     return "\n".join(lines) + "\n"
 
 
@@ -472,6 +474,8 @@ def main(argv=None):
     b.add_argument("summary", type=Path, help="render's --summary file (missing if nothing was measured)")
     b.add_argument("--version", required=True)
     b.add_argument("--run-url", required=True)
+    b.add_argument("--workflow-token", action="store_true",
+                   help="opened with the workflow's token, which doesn't start the pull request's checks")
     a = ap.parse_args(argv)
     read_jobs = lambda p: [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
     try:
@@ -480,7 +484,7 @@ def main(argv=None):
             return 0
         if a.cmd == "body":
             summary = json.loads(a.summary.read_text()) if a.summary.exists() else {"missing": list(RUNNERS.values())}
-            print(pr_body(summary, a.version, a.run_url), end="")
+            print(pr_body(summary, a.version, a.run_url, a.workflow_token), end="")
             return 0
         if a.cmd == "collect":
             m = collect(a.artifacts, read_jobs(a.jobs), a.run_id, ROOT / "results", a.repo_url)
