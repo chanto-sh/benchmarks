@@ -6,8 +6,12 @@
 # pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
 # workflow's overhead job on macOS, Linux and Windows, and opens a pull request
 # with the results: the raw files, RESULTS.md's overhead section and its README
-# copy, and overhead-latest.json. It never pushes to main or merges; a person
-# reviews the pull request.
+# copy, and overhead-latest.json. It never pushes to main itself: once every
+# OS has results, it turns on auto-merge, so the pull request is squashed into
+# main (which starts the website's deploy) when its required checks pass. A
+# pull request missing an OS stays a draft, without auto-merge, for a person to
+# look at, as does one opened with the workflow's token, whose merge wouldn't
+# start the deploy.
 #
 # Running it by hand measures the release named (or the latest) even when it's
 # already pinned, and updates that release's pull request if there is one. The
@@ -325,11 +329,22 @@ jobs:
             flags=""
             [ "$draft" = true ] && flags="--draft"
             # shellcheck disable=SC2086 # $flags is empty or one flag
-            if ! gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" \
-              --body-file "$RUNNER_TEMP/body.md" $flags; then
+            if ! url=$(gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" \
+              --body-file "$RUNNER_TEMP/body.md" $flags); then
               echo "::error::couldn't open the pull request. If GitHub refused the workflow's token, set up the automation app or enable \"Allow GitHub Actions to create and approve pull requests\" in the repository's Actions settings; the branch $branch has the results."
               exit 1
             fi
+            number=${url##*/}
+          fi
+          # Complete results merge on their own once the required checks
+          # pass; a draft waits for a person. Only with the app's token: a
+          # merge made with the workflow's token doesn't start the deploy.
+          if [ "$draft" = false ] && [ "$FALLBACK" != true ]; then
+            if ! gh pr merge "$number" --repo "$REPO" --auto --squash; then
+              echo "::warning title=Auto-merge::Couldn't turn on auto-merge for #$number; merge it by hand once its checks pass."
+            fi
+          elif [ "$draft" = true ]; then
+            gh pr merge "$number" --repo "$REPO" --disable-auto 2>/dev/null || true
           fi
           {
             echo "Chanto $VERSION: branch [\`$branch\`]($SERVER/$REPO/tree/$branch)"
