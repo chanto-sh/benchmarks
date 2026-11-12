@@ -59,7 +59,7 @@ install_uv() {
 
 # Standalone binaries, each a GitHub release (or official build) checked
 # against a pinned SHA-256:
-#   Chanto 0.1.18 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.19 (checksums from the release's signed SHA256SUMS);
 #   Goose 1.57.0;
 #   opencode 2.2.5 (hashed from opencode.ai as first fetched over HTTPS);
 #   jcode 0.99.1, DeepSeek-Reasonix 2.56.1, oh-my-pi 18.14.2, Open Interpreter 0.0.57,
@@ -96,15 +96,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.18
+CHANTO_VERSION=0.1.19
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" e7b7983c33fa079f46d92ed6d96f3464c926675f30f094c732bd8e641ab89904 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 8d699d8e6be1c5e3968e48e08eaa5607b6bb32bbaaa48de3d6f8b2fca7093358 chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=b9722f8f25dae7eab5e64403a4220a6da5038c7f7a004e58a2d217c5f9be9665 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=0864a583db7f83f72cd2fe31ad6b409d74586ad24a53c6f1dab35ebb4c9c97ff ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=d8b02d494912145ea58e57147020637c929b7ec1a30ad3388f020f030248b42a ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=e3e0da02b33f507d510061028fb161f18f2ca4f179f1c97a414fe9b31c4b3510 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=5d3db2284c8c4acd91768f1d39b50fa9a40d8b5a750a8652ba08c475497d438d ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=a82624872e45250d570cdca8c2f3687fea2baa3776395873cd1668ff5d4bf03c ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=07fb1ed63c6cc57da8abc4961ffc6c53057280cec09a9228b277e0033106333b ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=b9ab7646a71aef647d6433a21f525704360c784840a5d67f52a425042613612b ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
