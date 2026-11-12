@@ -51,28 +51,20 @@ install_uv() {
     need uv
     uv tool install --force --python 3.12 aider-chat==0.86.2
     uv tool install --force --python 3.12 openhands==1.16.0
-    # mini-swe-agent's litellm stays at the release the proxy pins (1.106.2):
-    # 1.107.0 shipped a credential stealer, and later ones aren't vetted here.
+    # mini-swe-agent's litellm moves with the rest, but never to a release in
+    # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
     uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.106.2
     uv tool install --force --python 3.12 mistral-vibe==3.0.4
 }
 
-# Standalone binaries, each a GitHub release (or official build) checked
-# against a pinned SHA-256:
+# Standalone binaries, each pinned by version and SHA-256:
 #   Chanto 0.1.18 (checksums from the release's signed SHA256SUMS);
-#   Goose 1.57.0;
-#   opencode 2.2.5 (hashed from opencode.ai as first fetched over HTTPS);
-#   jcode 0.99.1, DeepSeek-Reasonix 2.56.1, oh-my-pi 18.14.2, Open Interpreter 0.0.57,
-#   fx 0.0.15 (checksums from each GitHub release's own SHA-256 digests);
-#   Grok Build 1.0.70 (see install_grok);
-#   Codewhale 0.10.2, zerostack 1.8.5, hax 0.6.1 (checksums
-#   cross-checked against each release's own SHA-256 manifest).
+#   the rest move to their latest releases through update_agents.py: GitHub
+#   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
+#   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
+#   Storage bucket serve the same bytes.
 # On Windows (win32-x64) each agent's .exe comes through win_install, pinned
-# from the same sources: GitHub's SHA-256 digest of each release file, Chanto's
-# signed SHA256SUMS, and Grok Build's matching bytes from both origins. opencode
-# 2.2.5 publishes no checksum for Windows and has no second source (its
-# Homebrew formula has no Windows build; npm and Scoop stop at 1.19.5), so its
-# pin is the opencode.ai download's own SHA-256 as first fetched over HTTPS.
+# the same way.
 platform() {
     case "$(uname -s)/$(uname -m)" in
         Darwin/arm64) echo darwin-arm64 ;;
@@ -300,7 +292,7 @@ install_fx() {
 }
 
 # Grok Build ships bare executables from x.ai with no published checksums (its
-# own installer checks none). These were pinned when the same bytes came from
+# own installer checks none). They're pinned only when the same bytes come from
 # both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
 # build is also signed by xAI (team 5Y6N3AJ54S).
 install_grok() {
