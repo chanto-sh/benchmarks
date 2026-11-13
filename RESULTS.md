@@ -24,44 +24,44 @@ tables with SWE-bench tasks (phase 2 of the optimization A/B and the mixed hard
 set) were measured the same way. The overhead numbers use a mock model and no
 tasks, so isolation doesn't affect them.
 
-## Overhead: 23 agents, startup and per turn, mock model (November 12)
+## Overhead: 23 agents, startup and per turn, mock model (November 13)
 
-Measured November 12, 2026 by the [reproduce workflow, run 43320987542](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542)
+Measured November 13, 2026 by the [reproduce workflow, run 43385862263](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263)
 on GitHub's own runners: `python3 reproduce.py`, the 23
 coding agents with at least 5,000 GitHub stars, each run 10 times; the table
 shows medians. Each number is in the summary of that run, under its OS.
 
-- **macOS**: `macos-latest`, Apple M2 Pro (Virtual), 5 cores, 14 GB RAM, macOS (Darwin 25.6.0), arm64
-- **Linux**: `ubuntu-latest`, AMD EPYC 9V74, 4 cores, 16 GB RAM, Linux 7.0 (Azure), x86_64
-- **Windows**: `windows-latest`, AMD EPYC 9V45, 4 cores, 16 GB RAM, Windows Server 2025, AMD64
+- **macOS**: `macos-latest`, Apple M1 (Virtual), 3 cores, 7 GB RAM, macOS (Darwin 25.6.0), arm64
+- **Linux**: `ubuntu-latest`, Intel Xeon Platinum 8370C, 4 cores, 16 GB RAM, Linux 7.0 (Azure), x86_64
+- **Windows**: `windows-latest`, AMD EPYC 7763, 4 cores, 16 GB RAM, Windows Server 2025, AMD64
 
-Versions: Chanto 0.1.19; Aider 0.86.2; Claude Code 2.1.316; Cline 3.0.74; Codewhale 0.10.2; Codex 0.166.0; Continue CLI 1.5.47; Crush 0.99.0; DeepSeek-Reasonix 2.56.1; Forge 2.13.21; Gemini CLI 0.66.0; Goose 1.57.0; Grok Build 1.0.70; jcode 0.99.1; Kilo Code 7.8.18; mini-swe-agent 2.4.6; Mistral Vibe 3.0.4; oh-my-pi 18.14.2; Open Interpreter 0.0.57; OpenHands CLI 1.16.0; opencode 2.2.5; Pi 1.4.0; Qwen Code 0.26.5. The model is a local mock (`stressmock.py`), not a real one.
+Versions: Chanto 0.1.20; Aider 0.86.2; Claude Code 2.1.323; Cline 3.0.74; Codewhale 0.10.2; Codex 0.168.0; Continue CLI 1.5.47; Crush 0.101.0; DeepSeek-Reasonix 2.61.0; Forge 2.13.21; Gemini CLI 0.68.0; Goose 1.59.0; Grok Build 1.0.77; jcode 0.99.1; Kilo Code 7.8.27; mini-swe-agent 2.4.6; Mistral Vibe 3.1.2; oh-my-pi 18.20.0; Open Interpreter 0.0.61; OpenHands CLI 1.16.0; opencode 2.2.7; Pi 1.5.2; Qwen Code 0.27.3. The model is a local mock (`stressmock.py`), not a real one.
 
-| agent | runtime | startup ms, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464359) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464223) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464260) | CPU ms/turn, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464359) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464223) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464260) | peak MB, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464359) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464223) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43320987542#summary-131541464260) | install MB, macOS / Linux / Windows |
+| agent | runtime | startup ms, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315911) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315874) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315863) | CPU ms/turn, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315911) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315874) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315863) | peak MB, [macOS](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315911) | [Linux](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315874) | [Windows](https://github.com/chanto-sh/benchmarks/actions/runs/43385862263#summary-131754315863) | install MB, macOS / Linux / Windows |
 |---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| **Chanto** | Rust | **12** | **12** | **23** | **1.4** | **3.4** | **2.7** | **18** | **23** | **18** | 21 / 25 / 30 |
-| Grok Build | Rust | 381 | 635 | 406 | 8.4 | 6.7 | 12.1 | 112 | 233 | 64 | 179 / 196 / 176 |
-| Goose | Rust | 246 | 521 | 391 | 6.7 | 9.1 | 11.5 | 177 | 164 | 94 | 177 / 208 / 171 |
-| Pi | Node | 320 | 539 | 438 | 5.3 | 10.0 | 7.4 | 176 | 178 | 138 | 157 / 163 / 112 |
-| jcode | Rust | 121 | 44 | 78 | 10.3 | 12.1 | 10.5 | 49 | 74 | 31 | 143 / 171 / 135 |
-| Forge | Rust | 145 | 255 | 461 | 7.7 | 13.1 | 11.7 | 86 | 81 | 84 | 112 / 131 / 98 |
-| Crush | Go | 272 | 318 | 430 | 20.3 | 16.7 | 9.2 | 186 | 178 | 145 | 132 / 133 / 132 |
-| oh-my-pi | Bun | 774 | 1976 | 1367 | 11.5 | 20.8 | 17.4 | 335 | 371 | 295 | 215 / 277 / 243 |
-| DeepSeek-Reasonix | Go | 240 | 225 | 430 | 12.5 | 22.5 | 13.5 | 75 | 85 | 72 | 51 / 54 / 59 |
-| mini-swe-agent | Python | 2224 | 3591 | 3469 | 28.6 | 29.9 | 53.0 | 233 | 211 | 239 | 464 / 582 / 416 |
-| Qwen Code | Node | 1247 | 2112 | 3117 | 23.4 | 30.9 | 95.3 | 251 | 249 | 441 | 277 / 316 / 198 |
-| Codewhale | Rust | 250 | 236 | 820 | 27.3 | 32.2 | 21.7 | 140 | 236 | 179 | 90 / 110 / 135 |
-| Gemini CLI | Node | 1429 | 2362 | 2133 | 23.8 | 32.4 | 25.4 | 537 | 516 | 415 | 106 / 105 / 112 |
-| Mistral Vibe | Python | 1620 | 2658 | 2352 | 28.8 | 43.3 | 42.0 | 262 | 235 | 237 | 208 / 362 / 194 |
-| Claude Code | Node | 279 | 529 | 719 | 26.5 | 45.2 | 43.8 | 329 | 293 | 291 | 319 / 643 / 336 |
-| Open Interpreter | Rust | 83 | 139 | 125 | 16.4 | 51.9 | 383.8 | 98 | 269 | 151 | 250 / 297 / 338 |
-| Codex | Rust | 250 | 637 | 375 | 23.2 | 54.1 | 501.0 | 141 | 216 | 247 | 380 / 456 / 503 |
-| Continue CLI | Node | 901 | 1534 | 1219 | 43.3 | 60.6 | 44.1 | 335 | 308 | 219 | 84 / 84 / 86 |
-| opencode | Bun | 1346 | 2935 | 2086 | 29.7 | 61.1 | 48.8 | 551 | 495 | 482 | 233 / 253 / 259 |
-| Cline | Node | 1041 | 1899 | 2023 | 28.0 | 68.6 | 35.2 | 616 | 603 | 565 | 384 / 424 / 321 |
-| OpenHands | Python | 5766 | 8261 | 9242 | 82.1 | 108.3 | 208.3 | 369 | 331 | 464 | 645 / 638 / 536 |
-| Kilo Code | Node | 5040 | 9147 | 6906 | 78.9 | 127.5 | 161.5 | 953 | 826 | 800 | 387 / 1,378 / 665 |
-| Aider | Python | 3688 | 3821 | 3047 | 143.9 | 189.8 | 117.2 | 352 | 306 | 281 | 690 / 610 / 526 |
+| **Chanto** | Rust | **14** | **10** | **55** | **2.1** | **2.9** | **4.7** | **18** | **23** | **18** | 21 / 25 / 30 |
+| Grok Build | Rust | 442 | 718 | 797 | 12.9 | 7.2 | 23.4 | 112 | 228 | 64 | 185 / 202 / 182 |
+| Pi | Node | 504 | 466 | 648 | 10.4 | 10.8 | 13.9 | 175 | 160 | 138 | 160 / 166 / 115 |
+| jcode | Rust | 148 | 35 | 102 | 13.5 | 11.0 | 17.0 | 50 | 73 | 32 | 143 / 171 / 135 |
+| Goose | Rust | 361 | 428 | 633 | 15.0 | 11.7 | 23.6 | 178 | 154 | 92 | 177 / 209 / 172 |
+| Forge | Rust | 238 | 197 | 875 | 12.3 | 11.8 | 21.3 | 86 | 81 | 83 | 111 / 131 / 98 |
+| Crush | Go | 373 | 334 | 672 | 22.5 | 16.2 | 15.2 | 178 | 179 | 143 | 138 / 140 / 140 |
+| DeepSeek-Reasonix | Go | 294 | 165 | 789 | 12.3 | 20.4 | 19.7 | 72 | 80 | 67 | 49 / 53 / 58 |
+| mini-swe-agent | Python | 2942 | 3374 | 5102 | 25.9 | 22.2 | 74.0 | 243 | 235 | 252 | 486 / 603 / 434 |
+| oh-my-pi | Bun | 1155 | 1522 | 2422 | 19.9 | 24.9 | 25.0 | 347 | 408 | 311 | 223 / 288 / 252 |
+| Gemini CLI | Node | 2015 | 2290 | 3359 | 31.9 | 28.9 | 51.6 | 531 | 512 | 415 | 105 / 106 / 112 |
+| Qwen Code | Node | 1545 | 1856 | 4781 | 30.8 | 30.9 | 129.8 | 236 | 237 | 421 | 281 / 320 / 202 |
+| Codewhale | Rust | 355 | 240 | 1203 | 34.8 | 36.6 | 36.7 | 138 | 236 | 179 | 90 / 110 / 135 |
+| Mistral Vibe | Python | 1979 | 2622 | 4359 | 36.7 | 41.2 | 70.5 | 255 | 244 | 246 | 210 / 348 / 197 |
+| Claude Code | Node | 592 | 473 | 891 | 49.8 | 45.4 | 54.5 | 343 | 298 | 286 | 353 / 363 / 368 |
+| Open Interpreter | Rust | 98 | 120 | 188 | 19.6 | 50.1 | 604.9 | 98 | 304 | 150 | 251 / 299 / 340 |
+| Continue CLI | Node | 1626 | 1480 | 1906 | 54.7 | 58.5 | 75.2 | 336 | 309 | 220 | 83 / 84 / 86 |
+| Codex | Rust | 373 | 469 | 602 | 42.9 | 59.3 | 774.8 | 160 | 228 | 248 | 381 / 463 / 505 |
+| opencode | Bun | 2498 | 2898 | 3219 | 52.1 | 63.4 | 60.7 | 567 | 542 | 526 | 248 / 259 / 266 |
+| Cline | Node | 1640 | 1732 | 2797 | 42.2 | 74.6 | 70.1 | 569 | 600 | 549 | 369 / 424 / 321 |
+| OpenHands | Python | 7137 | 7384 | 13805 | 93.8 | 101.5 | 328.7 | 346 | 332 | 463 | 645 / 638 / 536 |
+| Kilo Code | Node | 7365 | 9261 | 10516 | 109.8 | 124.1 | 251.0 | 930 | 814 | 714 | 387 / 723 / 665 |
+| Aider | Python | 3323 | 3601 | 5062 | 176.1 | 178.0 | 193.1 | 326 | 308 | 284 | 690 / 610 / 526 |
 
 An instant mock model answers every request with a tool call that reads the
 next 40 KB file, for 40 turns, so the context keeps growing. **Startup** is the
@@ -72,9 +72,9 @@ agent slow to start looked costly on every turn. CPU is user + sys time of the
 agent's whole process tree; peak memory is the largest resident set of that
 tree, sampled every 60 ms; install MB is what the pinned install puts on disk
 (Node and Python, where needed, aren't counted). Sorted by Linux CPU per turn.
-Raw files, with every run's numbers: [`results/overhead-20261112-225210.txt`](results/overhead-20261112-225210.txt)
-(macOS), [`results/overhead-20261112-225631.txt`](results/overhead-20261112-225631.txt)
-(Linux), and [`results/overhead-20261112-231320.txt`](results/overhead-20261112-231320.txt)
+Raw files, with every run's numbers: [`results/overhead-20261113-075250.txt`](results/overhead-20261113-075250.txt)
+(macOS), [`results/overhead-20261113-074916.txt`](results/overhead-20261113-074916.txt)
+(Linux), and [`results/overhead-20261113-081736.txt`](results/overhead-20261113-081736.txt)
 (Windows).
 
 What isn't quite like for like:
