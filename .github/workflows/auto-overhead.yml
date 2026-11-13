@@ -205,8 +205,10 @@ jobs:
           changed=false
           if ! git diff --cached --quiet; then
             changed=true
-            git commit -s -q -m "chore(agents): move agents to their latest releases" \
-              -F "$RUNNER_TEMP/agents.md"
+            # git takes the message from -m or -F, not both: one file.
+            { echo "chore(agents): move agents to their latest releases"; echo; cat "$RUNNER_TEMP/agents.md"; } \
+              > "$RUNNER_TEMP/agents-commit.txt"
+            git commit -s -q -F "$RUNNER_TEMP/agents-commit.txt"
           fi
           # The weekly refresh measures only when something moved.
           measure=true
