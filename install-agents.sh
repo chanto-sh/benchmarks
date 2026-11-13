@@ -53,12 +53,12 @@ install_uv() {
     uv tool install --force --python 3.12 openhands==1.16.0
     # mini-swe-agent's litellm moves with the rest, but never to a release in
     # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
-    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.106.2
-    uv tool install --force --python 3.12 mistral-vibe==3.0.4
+    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.109.1
+    uv tool install --force --python 3.12 mistral-vibe==3.1.2
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.19 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.20 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.19
+CHANTO_VERSION=0.1.20
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 8d699d8e6be1c5e3968e48e08eaa5607b6bb32bbaaa48de3d6f8b2fca7093358 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" eb3868da159e42df85bb22c97523873da6d9a1d71bb41cce83d141b53f7ebd6b chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=5d3db2284c8c4acd91768f1d39b50fa9a40d8b5a750a8652ba08c475497d438d ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=a82624872e45250d570cdca8c2f3687fea2baa3776395873cd1668ff5d4bf03c ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=07fb1ed63c6cc57da8abc4961ffc6c53057280cec09a9228b277e0033106333b ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=b9ab7646a71aef647d6433a21f525704360c784840a5d67f52a425042613612b ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=5d7ff9e8d3efebb4a640d4e4455dfc94556c7f44e8371e4607d8e977d71dc81c ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=68c0acf5e9ebcfc11706d3f2e30987cda8a35bd3c61d45a42bca80000ff8b172 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=5fb3c3d0881a838fd1125b3076cb4b6e75b0bbd3e36edfc9a3e55f0fdfcc2d7b ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=191a4042ed671f63da91d2fe6d0396a75b2bde95d0bb9ca8922cfc4374bcc12d ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -108,27 +108,27 @@ install_chanto() {
 }
 
 install_goose() {
-    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.57.0/goose-x86_64-pc-windows-msvc.zip 1ab2117ceec37f95be4d3ad0cdb921d3e97fd8b0fa244046631ecf4b7619d502 goose.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.59.0/goose-x86_64-pc-windows-msvc.zip 8b9ef7be66f469bdafd018de943a095ed83c32775dd623bebb0ab730da22d0d0 goose.exe; return; }
     case "$plat" in
-        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=80d43c49b77302777e9d2fe32faf3c40c1028dafbea1e0a39b0378404a8a074b ;;
-        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=5ad5594246841c759b34966e09ca421c09151b589183a8f1720e15e8395834ae ;;
-        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=c32605acfd560aeb2adbf17ec359cc0217e28022a7e647b35a6af5dcfca91749 ;;
-        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=10eb96cb6a159b6e1d38eeedbef6ab64cd28168aad91948f1fa5c34eefdf98e3 ;;
+        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=0142839f339e3484b49326d69de9d9cf808999087ab421ae9304d2620e647cbc ;;
+        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=1a15f649cabbdeccbb1905483a6c30681375653264273f022e03358ba53ad2ce ;;
+        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=ba96b78394e3050077482bb285ff35f34613646e90b84a18b5d674b71905166e ;;
+        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=a774667de6c20206a60d78d7bece2d9dda8389667e4f5c2fc8aaa758d1e81ef3 ;;
     esac
-    fetch "https://github.com/block/goose/releases/download/v1.57.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/block/goose/releases/download/v1.59.0/$f" "$dl/$f" "$sha"
     tar -xzf "$dl/$f" -C "$PREFIX/bin" ./goose
     chmod +x "$PREFIX/bin/goose"
 }
 
 install_opencode() {
-    [ "$plat" = win32-x64 ] && { win_install opencode https://opencode.ai/files/bin/2.2.5/opencode-windows-x64-baseline.zip 3acca208ad79add59aed13d07b7e08ddf24e0adbbb7f44a9131408d7b3ca67cd opencode.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.2.7/opencode-windows-x64-baseline.zip 93323d0d6f72f9d1ba9f847e8002de71ace79bb5ea64f18d6b70bbbc30cc719e opencode.exe; return; }
     case "$plat" in
-        darwin-arm64) f=opencode-darwin-arm64.zip; sha=25ba9908979fa7d764792c82589b4b5768ab1511154e0317d98aa77d216ce767 ;;
-        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=b83ab73b3eb7b08f580f597eba8a7bcd886d2efa2ebf90405ad74ef54da02f71 ;;
-        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=5a528f42caf576c6cdece6a191eb273d3db54effa5518e0402684d8f8026aeb6 ;;
-        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=09f44302c10fd036912f59c81fd1aef5df45dd06f649197f9dfc9bbe2a79614e ;;
+        darwin-arm64) f=opencode-darwin-arm64.zip; sha=811c42be9cad489ea8c411ead49e06f691deee4957ba9a0a56a159a7d6c1abdc ;;
+        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=7830c9ce3945ad9fee792f603d4c9abcbb041b5cabafb51ce3c40da1dad5b435 ;;
+        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=c1682057f0815cb2abdd6e00305f1146ebaf1c167f0335cdb74ddc80008120e7 ;;
+        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=89a6cee227b54bc011179c528a5e63176032462b1a5e21723b616801cddc2ca7 ;;
     esac
-    fetch "https://opencode.ai/files/bin/2.2.5/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/sst/opencode/releases/download/v2.2.7/$f" "$dl/$f" "$sha"
     case "$f" in
         *.zip) need unzip; unzip -o -q "$dl/$f" opencode -d "$PREFIX/bin" ;;
         *) tar -xzf "$dl/$f" -C "$PREFIX/bin" opencode ;;
@@ -194,12 +194,12 @@ install_zerostack() {
 
 install_hax() {
     case "$plat" in
-        darwin-arm64) f=hax-0.6.1-macos-arm64.tar.gz; sha=e8e317abe4ed565db9aff2f0faeb409d3edf7721adb850e66ae335aea8b280d2 ;;
-        linux-arm64) f=hax-0.6.1-linux-aarch64.tar.gz; sha=77e116bba4c9e46d63987958c4be095e1f3b0779391aad539d72504bea3a2e05 ;;
-        linux-x64) f=hax-0.6.1-linux-x86_64.tar.gz; sha=d648c6542014fbbb8d4789e5ad9723f213fb61f259815e54d51fd1dcd19b9ec9 ;;
-        *) echo "warning: hax 0.6.1 has no $plat build; skipping it" >&2; return 0 ;;
+        darwin-arm64) f=hax-0.7.0-macos-arm64.tar.gz; sha=98ae064d6d518992df0ad01eba1315bfaab8a7e3245cd5e312aa49b979159cc9 ;;
+        linux-arm64) f=hax-0.7.0-linux-aarch64.tar.gz; sha=57714f4ac1df31232e3e77bea97ccd6c9149ea19a3ea69270f24ef4f5d22b122 ;;
+        linux-x64) f=hax-0.7.0-linux-x86_64.tar.gz; sha=970183b80f1e7e8d2d4f8d9905234f415deb21cc80f111fbb5cc85bb9575fa3e ;;
+        *) echo "warning: hax 0.7.0 has no $plat build; skipping it" >&2; return 0 ;;
     esac
-    fetch "https://github.com/OleksandrChekhovskyi/hax/releases/download/v0.6.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/OleksandrChekhovskyi/hax/releases/download/v0.7.0/$f" "$dl/$f" "$sha"
     tar -xzf "$dl/$f" -C "$PREFIX/bin" hax
     rm -f "$dl/$f"
     chmod +x "$PREFIX/bin/hax"
@@ -226,14 +226,14 @@ install_jcode() {
 }
 
 install_reasonix() {
-    [ "$plat" = win32-x64 ] && { win_install reasonix https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.56.1/reasonix-windows-amd64.zip 217f91c11313fbb3363d6de645d4b382e4b8186ee351c347a193c3fc507babee reasonix.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install reasonix https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.61.0/reasonix-windows-amd64.zip 50062ac360a5d2351f0568b700cab90eda6d57b2329c43809e37c5bbb02284ac reasonix.exe; return; }
     case "$plat" in
-        darwin-arm64) f=reasonix-darwin-arm64.tar.gz; sha=943e93b24bd8a3dfedd4ce4e5be62ff9e265946ef7f8501846ffec8907f7e79a ;;
-        darwin-x64) f=reasonix-darwin-amd64.tar.gz; sha=fb73e359ca4937d5dcb157d7c10a2054f7dcf4bd43a7d74beb118d9a6ce57a20 ;;
-        linux-arm64) f=reasonix-linux-arm64.tar.gz; sha=0f3cf9ed0c7b799249aada9ed1691e851b87c314982db8e50516b0f6f3a59851 ;;
-        linux-x64) f=reasonix-linux-amd64.tar.gz; sha=c79933b8efc8d755ccb1873874ae91aaa707ac4044bd05fa517131329d0c0547 ;;
+        darwin-arm64) f=reasonix-darwin-arm64.tar.gz; sha=7318b46b28c2a05d53ea06b5f3346aa7ee86428e6ee76024ea728f1a47714d0d ;;
+        darwin-x64) f=reasonix-darwin-amd64.tar.gz; sha=8320aefaceb2685102fb0fff532661e9ea5f6acfffe005db778fc617598f68f1 ;;
+        linux-arm64) f=reasonix-linux-arm64.tar.gz; sha=08ce828507427f3f0e475e2b0bf5e71944e30e49b197fc8bd2ab8dc25983f174 ;;
+        linux-x64) f=reasonix-linux-amd64.tar.gz; sha=ceb15ec2f5509325a9f2f314b28758286a88492064a40f12d1ced1440f45fa0b ;;
     esac
-    fetch "https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.56.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/esengine/DeepSeek-Reasonix/releases/download/studio-v2.61.0/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/reasonix" && tar -xzf "$dl/$f" -C "$dl/reasonix" reasonix
     rm -f "$PREFIX/bin/reasonix"
     cat "$dl/reasonix/reasonix" > "$PREFIX/bin/reasonix"
@@ -243,14 +243,14 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
-    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.14.2/omp-windows-x64.exe aa04e4ff3b2d97d604839edf1bcf5a0085818389d9fc8c1a18875ee7b5e3b0f8; return; }
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.20.0/omp-windows-x64.exe 1b6c7bda8241bc7d948495539f90ec47e6f30d1fec72b6ee097a67a1fc8d8e48; return; }
     case "$plat" in
-        darwin-arm64) f=omp-darwin-arm64; sha=9b7bda0bd8ec8d1fd8f8deda076180deef2d4921ee60e7d2f39044ee7d9437ee ;;
-        darwin-x64) f=omp-darwin-x64; sha=62835e51acc0f07d19493da736b7215d3224fd5099754b7e42c3b0fdc2eb7f45 ;;
-        linux-arm64) f=omp-linux-arm64; sha=afbdf04be3ddbe34a07e91c913ddb6d335a3a0210f520ac5a197a245888ad63e ;;
-        linux-x64) f=omp-linux-x64; sha=cde0bc4ac8ec333c4880039a5242ff33dbfc6544747d67aeb99bb077874aeec1 ;;
+        darwin-arm64) f=omp-darwin-arm64; sha=2b1309b06a743ae939708f939b63f75c7a436ed08c7953309f0e387e0c793ead ;;
+        darwin-x64) f=omp-darwin-x64; sha=dcd8387f88d32a599451c21c3f402bdc2364243e9e6e5630ff7eec7a8638c4f6 ;;
+        linux-arm64) f=omp-linux-arm64; sha=8b5e197db7c58b7ebabf83c6f03597f89bae3a766a84c6481b3a942a125f5e22 ;;
+        linux-x64) f=omp-linux-x64; sha=c8694be8c6e6a1f45e3636dd8a8e9eaa78878ad629a89000b403ec5e456d3f89 ;;
     esac
-    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.14.2/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.20.0/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/omp"
     cat "$dl/$f" > "$PREFIX/bin/omp"
     rm -f "$dl/$f"
@@ -259,15 +259,15 @@ install_omp() {
 
 # Open Interpreter is a Codex fork and keeps Codex's asset names.
 install_interpreter() {
-    [ "$plat" = win32-x64 ] && { win_install interpreter https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.57/codex-x86_64-pc-windows-msvc.exe 90d10a8f93e07953b04b12801c3b752477081d0cde23236a0192d677aa140cf4; return; }
+    [ "$plat" = win32-x64 ] && { win_install interpreter https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.61/codex-x86_64-pc-windows-msvc.exe 6c4d98d3b75630b7967b47c461eb1e5f1a64bda0072bbed59abc3b2b5bd7b4d2; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=9a1c977cb675e59b0f46171dd3124c9ad05d4ee382c469c77aa6c40a08eb8d06 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=14b3a38484115ff6c051aa27e57da3c185b01495ed39f7bc0e15756b512e185d ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=d1a2dd60f9162717214e99f623516994e1d4d6f3ac9a37e8536817842b463beb ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=4573d09f7096e2e6786d83144243e480db1627ca5b6adb4dd697b3b977d6a176 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=2def67f2d42c9b4ec098e9f41b373bbbd9db4f0bcf6c63987a6e157b3d38309e ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=46839802355c824a91b13f30658b4fa39a3a49f4149e33e66dc243ae6b709ef7 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=4eb8dc3718b862ed8a2a7d10143932eb60a8ef30088ee0071549dfad64ee31fb ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=2dfb4798255e87f7c4520240312c8a4bba96cea4369b1ef55bff1174fd730f7f ;;
     esac
     f=codex-$t.tar.gz
-    fetch "https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.57/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/openinterpreter/openinterpreter/releases/download/rust-v0.0.61/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/interpreter" && tar -xzf "$dl/$f" -C "$dl/interpreter"
     rm -f "$PREFIX/bin/interpreter"
     cat "$dl/interpreter/codex-$t" > "$PREFIX/bin/interpreter"
@@ -278,12 +278,12 @@ install_interpreter() {
 # fx ships a tarball per platform with its own .sha256 next to it.
 install_fx() {
     case "$plat" in
-        darwin-arm64) f=fx-macos-aarch64.tar.gz; sha=9f7dcae1f42080d8a668ff8fec172d90d071a52540255776479bf973bc5a349b ;;
-        darwin-x64) f=fx-macos-x86_64.tar.gz; sha=dfa5199908150c19a9c8adc90f72bccefbe17d6740eddd0240f3b943ccdaf610 ;;
-        linux-arm64) f=fx-linux-aarch64.tar.gz; sha=1c06e770aa87e39c6a4807d6a42fc5508d051e4a381fb2c35e0728fc1f41d461 ;;
-        linux-x64) f=fx-linux-x86_64.tar.gz; sha=52def957321dc482c635ed613a4fff3489202b0374b6ccc6dc823e65736bbf26 ;;
+        darwin-arm64) f=fx-macos-aarch64.tar.gz; sha=2158a8d42e77457a774400d225d9802bb6c0e60a0bb0674a1116bc31252490d6 ;;
+        darwin-x64) f=fx-macos-x86_64.tar.gz; sha=b287974f97a0879f50b4439c46537fcd44b83326c11a230d87f596073f8d8d9b ;;
+        linux-arm64) f=fx-linux-aarch64.tar.gz; sha=ca9441b104357e2105039dbfd4c2eaf0d6ee65a84085f23f51e880c95cbf46af ;;
+        linux-x64) f=fx-linux-x86_64.tar.gz; sha=f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599 ;;
     esac
-    fetch "https://github.com/vercel-labs/fx/releases/download/v0.0.15/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/vercel-labs/fx/releases/download/v0.0.16/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/fx" && tar -xzf "$dl/$f" -C "$dl/fx" fx
     rm -f "$PREFIX/bin/fx"
     cat "$dl/fx/fx" > "$PREFIX/bin/fx"
@@ -296,14 +296,14 @@ install_fx() {
 # both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
 # build is also signed by xAI (team 5Y6N3AJ54S).
 install_grok() {
-    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.70-windows-x86_64.exe 1e03c16cf2bd4626a79d6b1ea1430f88c38e0c8ec75edd283a60de11296ba326; return; }
+    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.77-windows-x86_64.exe 6b757512d240a6439535ca75aad039e581d00f17ba8e937112fd0dbaadf1bc81; return; }
     case "$plat" in
-        darwin-arm64) p=macos-aarch64; sha=5c8a688251bf61e35370b828b6a353b0a20fcc3f64000de8a91d426039f29cec ;;
-        darwin-x64) p=macos-x86_64; sha=d9ecd462f1f3c3b40a7a131944987ee7ed1c38069b7009cc4107398ab767f484 ;;
-        linux-arm64) p=linux-aarch64; sha=3aa36883574b263088e5addffe241f55430e8daaee1a0c4934b02180007a9761 ;;
-        linux-x64) p=linux-x86_64; sha=22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9 ;;
+        darwin-arm64) p=macos-aarch64; sha=197c66a63e5ac46e07450b0ca21d141ce665050a412180f185dadfae1c7a5b2a ;;
+        darwin-x64) p=macos-x86_64; sha=7728f79ea713ae67a4fa4736dcf808f6b386d9642202aea1df695073fa56675a ;;
+        linux-arm64) p=linux-aarch64; sha=b30eee14a656124ef3c9da8577b5e783ef2cffabeb2b679c5c49633e77eed574 ;;
+        linux-x64) p=linux-x86_64; sha=b702950aa5827d855e493278ab6215a4e0f5bceb5bba6c6243a9f55cdd143b0a ;;
     esac
-    fetch "https://x.ai/cli/grok-1.0.70-$p" "$dl/grok" "$sha"
+    fetch "https://x.ai/cli/grok-1.0.77-$p" "$dl/grok" "$sha"
     rm -f "$PREFIX/bin/grok"
     cat "$dl/grok" > "$PREFIX/bin/grok"
     rm -f "$dl/grok"
