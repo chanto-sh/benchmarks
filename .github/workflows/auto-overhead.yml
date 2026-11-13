@@ -3,8 +3,9 @@
 # every hour it compares Chanto's latest release with the pin in
 # install-agents.sh and stops if that's current, after one API call.
 # Otherwise it checks the release's SHA256SUMS against Chanto's release key,
-# pins the release on a branch (auto/chanto-vX.Y.Z), runs the reproduce
-# workflow's overhead job on macOS, Linux and Windows, and opens a pull request
+# pins the release on a branch (auto/chanto-vX.Y.Z), moves every other agent
+# to its latest release (update_agents.py), runs the reproduce workflow's
+# overhead job on macOS, Linux and Windows, and opens a pull request
 # with the results: the raw files, RESULTS.md's overhead section and its README
 # copy, and overhead-latest.json. It never pushes to main itself: once every
 # OS has results, it turns on auto-merge, so the pull request is squashed into
@@ -12,6 +13,10 @@
 # pull request missing an OS stays a draft, without auto-merge, for a person to
 # look at, as does one opened with the workflow's token, whose merge wouldn't
 # start the deploy.
+#
+# Every Monday it also measures without a new Chanto: the pinned release
+# against every other agent at its latest, on auto/agents-YYYY-MM-DD, when
+# update_agents.py moved anything.
 #
 # Running it by hand measures the release named (or the latest) even when it's
 # already pinned, and updates that release's pull request if there is one. The
@@ -28,6 +33,9 @@ name: auto-overhead
 on:
   schedule:
     - cron: "41 * * * *"
+    # Weekly: measure again with every other agent at its latest release, even
+    # without a new Chanto.
+    - cron: "17 6 * * 1"
   # Sent by Chanto's release workflow once a release is published, with
   # client_payload.version. The version is checked like any other.
   repository_dispatch:
@@ -57,6 +65,10 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
       measure: ${{ steps.check.outputs.measure }}
+      # chanto (a new release) or agents (the weekly refresh).
+      mode: ${{ steps.check.outputs.mode }}
+      branch: ${{ steps.check.outputs.branch }}
+      title: ${{ steps.check.outputs.title }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -65,6 +77,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
           INPUT_VERSION: ${{ inputs.version || github.event.client_payload.version }}
           REPO: ${{ github.repository }}
         shell: bash
@@ -84,10 +97,21 @@ jobs:
           fi
           order=$(python3 -c 'import sys; v = lambda s: tuple(map(int, s.split("."))); a, b = map(v, sys.argv[1:]); print("newer" if a > b else "same" if a == b else "older")' "$version" "$pinned")
           branch="auto/chanto-v$version"
+          title="chore(agents): measure chanto $version"
+          mode=chanto
           measure=true
           if [ "$order" = older ]; then
             echo "::error::$version is older than the pinned $pinned"
             exit 1
+          elif [ "$EVENT" = schedule ] && [ "$SCHEDULE" = "17 6 * * 1" ] && [ "$order" = same ]; then
+            # The weekly refresh: the pinned Chanto against the latest agents.
+            mode=agents
+            branch="auto/agents-$(date -u +%Y-%m-%d)"
+            title="chore(agents): measure the latest agents"
+            if gh api "repos/$REPO/branches/$branch" --silent 2>/dev/null; then
+              measure=false
+              echo "This week's refresh already has a branch ($branch)." >> "$GITHUB_STEP_SUMMARY"
+            fi
           elif [ "$EVENT" != workflow_dispatch ] && [ "$order" = same ]; then
             measure=false
             echo "Chanto $pinned is pinned and is the latest release: nothing to do." >> "$GITHUB_STEP_SUMMARY"
@@ -95,8 +119,13 @@ jobs:
             measure=false
             echo "Chanto $version already has a branch ($branch); run this workflow by hand to measure it again." >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "measure=$measure" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "measure=$measure"
+            echo "mode=$mode"
+            echo "branch=$branch"
+            echo "title=$title"
+          } >> "$GITHUB_OUTPUT"
           echo "pinned $pinned, release $version, measure: $measure"
 
   pin:
@@ -108,6 +137,9 @@ jobs:
       contents: write
     outputs:
       sha: ${{ steps.push.outputs.sha }}
+      # False when the weekly refresh found nothing newer.
+      measure: ${{ steps.push.outputs.measure }}
+      agents: ${{ steps.agents.outputs.summary }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -115,6 +147,7 @@ jobs:
       # Fails closed: without a good signature nothing is pinned or measured.
       # The key is the one Chanto's install.sh checks releases with.
       - name: Check the release's signed checksums
+        if: needs.check.outputs.mode == 'chanto'
         env:
           VERSION: ${{ needs.check.outputs.version }}
           ALLOWED_SIGNER: chanto-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB5PMqav6ZU7swlGeD/fm5sHrGS5MDNfAgTuwHFECxnd
@@ -129,9 +162,24 @@ jobs:
           ssh-keygen -Y verify -f "$d/allowed_signers" -I chanto-release -n chanto-release \
             -s "$d/SHA256SUMS.sshsig" < "$d/SHA256SUMS"
       - name: Pin it
+        if: needs.check.outputs.mode == 'chanto'
         env:
           VERSION: ${{ needs.check.outputs.version }}
         run: python3 chanto_pin.py "$VERSION" --sums "$RUNNER_TEMP/release/SHA256SUMS"
+      # Every other agent at its latest release (update_agents.py says how each
+      # is checked), so Chanto is measured against what people install today.
+      - name: Move the other agents to their latest releases
+        id: agents
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          python3 update_agents.py --summary "$RUNNER_TEMP/agents.md"
+          {
+            echo "summary<<SUMMARY_END"
+            cat "$RUNNER_TEMP/agents.md"
+            echo "SUMMARY_END"
+          } >> "$GITHUB_OUTPUT"
       # The branch starts again from main on every run, so a rerun replaces
       # the earlier results instead of piling up on them.
       - name: Push the branch
@@ -139,21 +187,41 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check.outputs.version }}
+          MODE: ${{ needs.check.outputs.mode }}
+          BRANCH: ${{ needs.check.outputs.branch }}
           REPO: ${{ github.repository }}
         run: |
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
-          git add install-agents.sh
-          if ! git diff --cached --quiet; then
-            git commit -s -q -m "chore(agents): pin chanto $VERSION" \
-              -m "The checksums come from v$VERSION's SHA256SUMS, whose SSH signature verified against Chanto's release key."
+          if [ "$MODE" = chanto ]; then
+            git add install-agents.sh
+            if ! git diff --cached --quiet; then
+              git commit -s -q -m "chore(agents): pin chanto $VERSION" \
+                -m "The checksums come from v$VERSION's SHA256SUMS, whose SSH signature verified against Chanto's release key."
+            fi
           fi
-          git push --force -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/auto/chanto-v$VERSION"
+          git add install-agents.sh agents/package.json agents/package-lock.json
+          changed=false
+          if ! git diff --cached --quiet; then
+            changed=true
+            git commit -s -q -m "chore(agents): move agents to their latest releases" \
+              -F "$RUNNER_TEMP/agents.md"
+          fi
+          # The weekly refresh measures only when something moved.
+          measure=true
+          if [ "$MODE" = agents ] && [ "$changed" = false ]; then
+            measure=false
+            echo "Every agent is already at its latest release: nothing to measure." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git push --force -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/$BRANCH"
+          fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "measure=$measure" >> "$GITHUB_OUTPUT"
 
   measure:
     needs: pin
+    if: needs.pin.outputs.measure == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/reproduce.yml # zizmor: ignore[self-repository] the documented form
@@ -165,7 +233,7 @@ jobs:
   gather:
     name: find missing platforms
     needs: [pin, measure]
-    if: always() && needs.pin.result == 'success'
+    if: always() && needs.pin.result == 'success' && needs.pin.outputs.measure == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -197,7 +265,7 @@ jobs:
 
   retry:
     needs: [pin, gather]
-    if: always() && needs.pin.result == 'success' && needs.gather.result == 'success' && needs.gather.outputs.retry != '[]'
+    if: always() && needs.pin.result == 'success' && needs.pin.outputs.measure == 'true' && needs.gather.result == 'success' && needs.gather.outputs.retry != '[]'
     permissions:
       contents: read
     uses: ./.github/workflows/reproduce.yml # zizmor: ignore[self-repository] the documented form
@@ -209,7 +277,7 @@ jobs:
   publish:
     name: open the pull request
     needs: [check, pin, measure, gather, retry]
-    if: always() && needs.pin.result == 'success'
+    if: always() && needs.pin.result == 'success' && needs.pin.outputs.measure == 'true'
     runs-on: ubuntu-latest
     # The app's ID and key live here; main is the only branch it allows.
     environment: benchmark
@@ -282,7 +350,8 @@ jobs:
       - name: Commit and push
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
-          VERSION: ${{ needs.check.outputs.version }}
+          TITLE: ${{ needs.check.outputs.title }}
+          BRANCH: ${{ needs.check.outputs.branch }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
           RUN_ID: ${{ github.run_id }}
@@ -292,27 +361,31 @@ jobs:
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add results/ RESULTS.md README.md overhead-latest.json
           if ! git diff --cached --quiet; then
-            git commit -s -q -m "chore(agents): measure chanto $VERSION" \
+            git commit -s -q -m "$TITLE" \
               -m "From $SERVER/$REPO/actions/runs/$RUN_ID, generated by overhead_report.py."
           fi
-          git push -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/auto/chanto-v$VERSION"
+          git push -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/$BRANCH"
       - name: Open or update the pull request
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           FALLBACK: ${{ steps.token.outputs.fallback }}
           VERSION: ${{ needs.check.outputs.version }}
+          BRANCH: ${{ needs.check.outputs.branch }}
+          TITLE: ${{ needs.check.outputs.title }}
+          AGENTS: ${{ needs.pin.outputs.agents }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -eu
-          branch="auto/chanto-v$VERSION"
-          title="chore(agents): measure chanto $VERSION"
+          branch=$BRANCH
+          title=$TITLE
           token_flag=""
           [ "$FALLBACK" = true ] && token_flag="--workflow-token"
           # shellcheck disable=SC2086 # $token_flag is empty or one flag
           python3 overhead_report.py body "$RUNNER_TEMP/summary.json" --version "$VERSION" \
             --run-url "$SERVER/$REPO/actions/runs/$RUN_ID" $token_flag > "$RUNNER_TEMP/body.md"
+          printf '\n%s\n' "$AGENTS" >> "$RUNNER_TEMP/body.md"
           # A draft when any OS has no results (or nothing rendered at all).
           draft=$(python3 -c 'import json, sys; from pathlib import Path; p = Path(sys.argv[1]); print(str(not p.exists() or bool(json.loads(p.read_text())["missing"])).lower())' "$RUNNER_TEMP/summary.json")
           pr=$(gh pr list --repo "$REPO" --head "$branch" --base main --state open --json number,isDraft --jq '.[0] // empty | "\(.number) \(.isDraft)"')
