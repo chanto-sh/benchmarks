@@ -108,27 +108,27 @@ install_chanto() {
 }
 
 install_goose() {
-    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.59.0/goose-x86_64-pc-windows-msvc.zip 8b9ef7be66f469bdafd018de943a095ed83c32775dd623bebb0ab730da22d0d0 goose.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.59.2/goose-x86_64-pc-windows-msvc.zip aef6462832e8cbdcb465b45605afafe8459052effd9b9cbf74817d3d22f46a2f goose.exe; return; }
     case "$plat" in
-        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=0142839f339e3484b49326d69de9d9cf808999087ab421ae9304d2620e647cbc ;;
-        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=1a15f649cabbdeccbb1905483a6c30681375653264273f022e03358ba53ad2ce ;;
-        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=ba96b78394e3050077482bb285ff35f34613646e90b84a18b5d674b71905166e ;;
-        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=a774667de6c20206a60d78d7bece2d9dda8389667e4f5c2fc8aaa758d1e81ef3 ;;
+        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=7e7f5ac8bd3590a29fddc0f5121a6975e907fb57f274d3c4431963ee546fb435 ;;
+        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=ccbf40a585a40c0fb221afbccee725e293ce8c32d10d86ba38be5643c5f54d7d ;;
+        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=ec2e0aded1e2aba8d310727a5138f2e3cce0769f2611fbe196ed014c31ce370a ;;
+        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=c63cf82953e968d84b7542eb38a621dfdb5050b967728ed363517be5cdc666ea ;;
     esac
-    fetch "https://github.com/block/goose/releases/download/v1.59.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/block/goose/releases/download/v1.59.2/$f" "$dl/$f" "$sha"
     tar -xzf "$dl/$f" -C "$PREFIX/bin" ./goose
     chmod +x "$PREFIX/bin/goose"
 }
 
 install_opencode() {
-    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.2.7/opencode-windows-x64-baseline.zip 93323d0d6f72f9d1ba9f847e8002de71ace79bb5ea64f18d6b70bbbc30cc719e opencode.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.3.0/opencode-windows-x64-baseline.zip a3abde3f736a1b51acb28466001333189184507096cb2fe0d684fe822cbd37ec opencode.exe; return; }
     case "$plat" in
-        darwin-arm64) f=opencode-darwin-arm64.zip; sha=811c42be9cad489ea8c411ead49e06f691deee4957ba9a0a56a159a7d6c1abdc ;;
-        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=7830c9ce3945ad9fee792f603d4c9abcbb041b5cabafb51ce3c40da1dad5b435 ;;
-        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=c1682057f0815cb2abdd6e00305f1146ebaf1c167f0335cdb74ddc80008120e7 ;;
-        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=89a6cee227b54bc011179c528a5e63176032462b1a5e21723b616801cddc2ca7 ;;
+        darwin-arm64) f=opencode-darwin-arm64.zip; sha=7907df2b12720a840fbb49c5b978b9b82925b6bf75479a5fd216afa8932b6702 ;;
+        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=b4985f65e2e4d624ebe5a490df66cbbce06a4146b8ddfab86473f73c2cc57ea2 ;;
+        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=3207fb5cdec448d479242c0f1a14f4f7bdfcad3a79209b5eb8f9003725e93711 ;;
+        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=fc0f81522aceeabac47693d88389efa2bc517ce74c2c38fd6967819fcc6e4d3b ;;
     esac
-    fetch "https://github.com/sst/opencode/releases/download/v2.2.7/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/sst/opencode/releases/download/v2.3.0/$f" "$dl/$f" "$sha"
     case "$f" in
         *.zip) need unzip; unzip -o -q "$dl/$f" opencode -d "$PREFIX/bin" ;;
         *) tar -xzf "$dl/$f" -C "$PREFIX/bin" opencode ;;
@@ -243,14 +243,14 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
-    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.20.0/omp-windows-x64.exe 1b6c7bda8241bc7d948495539f90ec47e6f30d1fec72b6ee097a67a1fc8d8e48; return; }
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.21.0/omp-windows-x64.exe 2880d63e3d23156516b0200fd96a48fac9423cbd9959449efec79279a67ec314; return; }
     case "$plat" in
-        darwin-arm64) f=omp-darwin-arm64; sha=2b1309b06a743ae939708f939b63f75c7a436ed08c7953309f0e387e0c793ead ;;
-        darwin-x64) f=omp-darwin-x64; sha=dcd8387f88d32a599451c21c3f402bdc2364243e9e6e5630ff7eec7a8638c4f6 ;;
-        linux-arm64) f=omp-linux-arm64; sha=8b5e197db7c58b7ebabf83c6f03597f89bae3a766a84c6481b3a942a125f5e22 ;;
-        linux-x64) f=omp-linux-x64; sha=c8694be8c6e6a1f45e3636dd8a8e9eaa78878ad629a89000b403ec5e456d3f89 ;;
+        darwin-arm64) f=omp-darwin-arm64; sha=0f8b23c275682c5adaae373bdfe377c8800ebc7ba07b31959a2328ff7a5deaa1 ;;
+        darwin-x64) f=omp-darwin-x64; sha=c3acca1e25239338b30f8f7edc1fc7a4f462e2b8ea9e7a5b95830a82c62a1d30 ;;
+        linux-arm64) f=omp-linux-arm64; sha=3a3f3f1af115100670d555624a64069f32a0cc8c7ff43d721fa0ddef6c83b312 ;;
+        linux-x64) f=omp-linux-x64; sha=b00bd7ecdf7ad24d103ea56850969c9a8cc050527e1b9db64c25bbbf13fbedcc ;;
     esac
-    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.20.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.21.0/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/omp"
     cat "$dl/$f" > "$PREFIX/bin/omp"
     rm -f "$dl/$f"
@@ -278,12 +278,12 @@ install_interpreter() {
 # fx ships a tarball per platform with its own .sha256 next to it.
 install_fx() {
     case "$plat" in
-        darwin-arm64) f=fx-macos-aarch64.tar.gz; sha=2158a8d42e77457a774400d225d9802bb6c0e60a0bb0674a1116bc31252490d6 ;;
-        darwin-x64) f=fx-macos-x86_64.tar.gz; sha=b287974f97a0879f50b4439c46537fcd44b83326c11a230d87f596073f8d8d9b ;;
-        linux-arm64) f=fx-linux-aarch64.tar.gz; sha=ca9441b104357e2105039dbfd4c2eaf0d6ee65a84085f23f51e880c95cbf46af ;;
-        linux-x64) f=fx-linux-x86_64.tar.gz; sha=f0fb822c7be546c80bcc89d50521bc1454435e0c6f586e8420c4e2b84fa80599 ;;
+        darwin-arm64) f=fx-macos-aarch64.tar.gz; sha=5cacb5b3624a79db8fd4e31dcbc59d6a933d7e5ed4c397776d95df6b618296a9 ;;
+        darwin-x64) f=fx-macos-x86_64.tar.gz; sha=984eef6632d7bd27ff7b75befb52b9db32c25287905009db5822f6a669861fec ;;
+        linux-arm64) f=fx-linux-aarch64.tar.gz; sha=b4633b8987ec43f1b9454e4629f3b5a4f1e086aae36b84ae4fefeacd6a53761f ;;
+        linux-x64) f=fx-linux-x86_64.tar.gz; sha=78c155d59fa59e42fd56d93037fd75041868c9c67865e8c7f0ca6dcdfac23e75 ;;
     esac
-    fetch "https://github.com/vercel-labs/fx/releases/download/v0.0.16/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/vercel-labs/fx/releases/download/v0.0.17/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/fx" && tar -xzf "$dl/$f" -C "$dl/fx" fx
     rm -f "$PREFIX/bin/fx"
     cat "$dl/fx/fx" > "$PREFIX/bin/fx"
