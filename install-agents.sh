@@ -53,12 +53,12 @@ install_uv() {
     uv tool install --force --python 3.12 openhands==1.16.0
     # mini-swe-agent's litellm moves with the rest, but never to a release in
     # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
-    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.109.1
-    uv tool install --force --python 3.12 mistral-vibe==3.1.2
+    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.1
+    uv tool install --force --python 3.12 mistral-vibe==3.1.3
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.20 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.21 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.20
+CHANTO_VERSION=0.1.21
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" eb3868da159e42df85bb22c97523873da6d9a1d71bb41cce83d141b53f7ebd6b chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" eec9e9e9ad03be5b97f5e49d2761da9cd456d3526fa7e2968542719876c0c438 chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=5d7ff9e8d3efebb4a640d4e4455dfc94556c7f44e8371e4607d8e977d71dc81c ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=68c0acf5e9ebcfc11706d3f2e30987cda8a35bd3c61d45a42bca80000ff8b172 ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=5fb3c3d0881a838fd1125b3076cb4b6e75b0bbd3e36edfc9a3e55f0fdfcc2d7b ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=191a4042ed671f63da91d2fe6d0396a75b2bde95d0bb9ca8922cfc4374bcc12d ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=7f6486d4ba02449cab983ed8174517152dead4b19dce66904781eec62f06e4d7 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=994bd937bae423361253f25b5a02003b3fe13b0200de640215ab176fe070d3c2 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=eb05e070a584ef30c5253b1ca7e3c2a03e7f10bd24cc571f6d26e0692f181736 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=f26cedc44946fa7cab5ed40f0675326b375dce60718bc541c6c435f98de841a4 ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -108,27 +108,27 @@ install_chanto() {
 }
 
 install_goose() {
-    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.59.2/goose-x86_64-pc-windows-msvc.zip aef6462832e8cbdcb465b45605afafe8459052effd9b9cbf74817d3d22f46a2f goose.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.60.1/goose-x86_64-pc-windows-msvc.zip 1b66929a43d9645cbe2b31691c84fef95c880aee57dd7a207050976d312f0238 goose.exe; return; }
     case "$plat" in
-        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=7e7f5ac8bd3590a29fddc0f5121a6975e907fb57f274d3c4431963ee546fb435 ;;
-        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=ccbf40a585a40c0fb221afbccee725e293ce8c32d10d86ba38be5643c5f54d7d ;;
-        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=ec2e0aded1e2aba8d310727a5138f2e3cce0769f2611fbe196ed014c31ce370a ;;
-        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=c63cf82953e968d84b7542eb38a621dfdb5050b967728ed363517be5cdc666ea ;;
+        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=b4aa2a370ef26fea4727f4a117faa19e1b3d15b2777561904ae3763b11782a9f ;;
+        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=c55d49b6edf0d81ffdc776cb4a239442f5da05e2df225b67640ec1ac510fe5cb ;;
+        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=6a962a0ba55829e00f6f297dff736d53b9bdc8da84f0f49c4768e2557ac39cbe ;;
+        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=0327b1857f8030343f59b77503e0455629bbf472c2901cb94b88389d6278635a ;;
     esac
-    fetch "https://github.com/block/goose/releases/download/v1.59.2/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/block/goose/releases/download/v1.60.1/$f" "$dl/$f" "$sha"
     tar -xzf "$dl/$f" -C "$PREFIX/bin" ./goose
     chmod +x "$PREFIX/bin/goose"
 }
 
 install_opencode() {
-    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.3.0/opencode-windows-x64-baseline.zip a3abde3f736a1b51acb28466001333189184507096cb2fe0d684fe822cbd37ec opencode.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.3.2/opencode-windows-x64-baseline.zip 8dcfe392a79412bf908de4c0cf5338c52589147eff54f1a46c25fb24a94708e7 opencode.exe; return; }
     case "$plat" in
-        darwin-arm64) f=opencode-darwin-arm64.zip; sha=7907df2b12720a840fbb49c5b978b9b82925b6bf75479a5fd216afa8932b6702 ;;
-        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=b4985f65e2e4d624ebe5a490df66cbbce06a4146b8ddfab86473f73c2cc57ea2 ;;
-        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=3207fb5cdec448d479242c0f1a14f4f7bdfcad3a79209b5eb8f9003725e93711 ;;
-        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=fc0f81522aceeabac47693d88389efa2bc517ce74c2c38fd6967819fcc6e4d3b ;;
+        darwin-arm64) f=opencode-darwin-arm64.zip; sha=31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a ;;
+        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=6dc5deb4554df035d27dbb3a4663d96954969a33079aeb6b01dd9de2d9092545 ;;
+        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=9d10185acdb72336e086e699ca363a6065f410fd3c1caed0dc8046e95ac06ccb ;;
+        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0 ;;
     esac
-    fetch "https://github.com/sst/opencode/releases/download/v2.3.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/sst/opencode/releases/download/v2.3.2/$f" "$dl/$f" "$sha"
     case "$f" in
         *.zip) need unzip; unzip -o -q "$dl/$f" opencode -d "$PREFIX/bin" ;;
         *) tar -xzf "$dl/$f" -C "$PREFIX/bin" opencode ;;
@@ -206,14 +206,14 @@ install_hax() {
 }
 
 install_jcode() {
-    [ "$plat" = win32-x64 ] && { win_install jcode https://github.com/1jehuang/jcode/releases/download/v0.99.1/jcode-windows-x86_64.exe 142052584016b44fe12dc21b9fa7d0f67771fc9bcc9d1565c69f4318fae73586; return; }
+    [ "$plat" = win32-x64 ] && { win_install jcode https://github.com/1jehuang/jcode/releases/download/v1.0.1/jcode-windows-x86_64.exe c43a8c5a8489ecb1e52767a4f7c21982eb7f71b343de2f51d5b4b65c6197aec0; return; }
     case "$plat" in
-        darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=3623164d518b0c9d443ab07052084244b379e8a3377037db67d2382220f4ed14 ;;
-        darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=d7d53c40b1e105926e06df5aa02c0f082616d602bbd20e0c318248ce3fdad4c9 ;;
-        linux-arm64) f=jcode-linux-aarch64.tar.gz; sha=f66ffbaf7c4c0124f45d6c8616571146deb8509b8beef2e8c0d76cc35dda9b91 ;;
-        linux-x64) f=jcode-linux-x86_64.tar.gz; sha=0b2a612de97c6e01ae6de1c0cff555b3460cf8364d1a11d2f8649fc0c9d7a1e6 ;;
+        darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=7b11788a52b534183bf70949dbab686c47def7e1df20e912176227f3049af7fa ;;
+        darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=f75293308aec0cddf4e729e7265904cbd9952713dc7745a051b13cf74745e0a8 ;;
+        linux-arm64) f=jcode-linux-aarch64.tar.gz; sha=483232d1242a5da8f168cb4f0128c66b03751ed0d14b581b3b430c0583932f51 ;;
+        linux-x64) f=jcode-linux-x86_64.tar.gz; sha=f44a54978b503e5dd27fa8781c43ec4916ebe9c4a94d42aab50fc868bf4fbe86 ;;
     esac
-    fetch "https://github.com/1jehuang/jcode/releases/download/v0.99.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/1jehuang/jcode/releases/download/v1.0.1/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/jcode" && tar -xzf "$dl/$f" -C "$dl/jcode"
     # On Linux the plain name is a launcher script for the .bin next to it (it
     # only adds its own folder to LD_LIBRARY_PATH; the archive has no libraries).
@@ -243,14 +243,14 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
-    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v18.21.0/omp-windows-x64.exe 2880d63e3d23156516b0200fd96a48fac9423cbd9959449efec79279a67ec314; return; }
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v19.0.1/omp-windows-x64.exe ebc8cc11f1539034a013a59e7bcb9cdca46eb14c86a6fe0cf5939a184fc31c52; return; }
     case "$plat" in
-        darwin-arm64) f=omp-darwin-arm64; sha=0f8b23c275682c5adaae373bdfe377c8800ebc7ba07b31959a2328ff7a5deaa1 ;;
-        darwin-x64) f=omp-darwin-x64; sha=c3acca1e25239338b30f8f7edc1fc7a4f462e2b8ea9e7a5b95830a82c62a1d30 ;;
-        linux-arm64) f=omp-linux-arm64; sha=3a3f3f1af115100670d555624a64069f32a0cc8c7ff43d721fa0ddef6c83b312 ;;
-        linux-x64) f=omp-linux-x64; sha=b00bd7ecdf7ad24d103ea56850969c9a8cc050527e1b9db64c25bbbf13fbedcc ;;
+        darwin-arm64) f=omp-darwin-arm64; sha=2fe420bbd00f81899816e51cbeeb9593afa59d9368d62c9d3e78535d540e32f6 ;;
+        darwin-x64) f=omp-darwin-x64; sha=8d62502eede8c7a43311798434d0a31a1c024a3abc56bedc4da200cccf94fea1 ;;
+        linux-arm64) f=omp-linux-arm64; sha=237ede0f4994d61f523802c4cf562d4e48bae74c188add792d06d051b907cecf ;;
+        linux-x64) f=omp-linux-x64; sha=6ceef04430851bb1050c6fda3af467412eb44a11df0a6ff8121fe601013c5415 ;;
     esac
-    fetch "https://github.com/can1357/oh-my-pi/releases/download/v18.21.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v19.0.1/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/omp"
     cat "$dl/$f" > "$PREFIX/bin/omp"
     rm -f "$dl/$f"
@@ -296,14 +296,14 @@ install_fx() {
 # both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
 # build is also signed by xAI (team 5Y6N3AJ54S).
 install_grok() {
-    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.77-windows-x86_64.exe 6b757512d240a6439535ca75aad039e581d00f17ba8e937112fd0dbaadf1bc81; return; }
+    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.89-windows-x86_64.exe 24384a5a03d61d2c45416ef3d535bff5379fde4844b87a52c1bb882686e39469; return; }
     case "$plat" in
-        darwin-arm64) p=macos-aarch64; sha=197c66a63e5ac46e07450b0ca21d141ce665050a412180f185dadfae1c7a5b2a ;;
-        darwin-x64) p=macos-x86_64; sha=7728f79ea713ae67a4fa4736dcf808f6b386d9642202aea1df695073fa56675a ;;
-        linux-arm64) p=linux-aarch64; sha=b30eee14a656124ef3c9da8577b5e783ef2cffabeb2b679c5c49633e77eed574 ;;
-        linux-x64) p=linux-x86_64; sha=b702950aa5827d855e493278ab6215a4e0f5bceb5bba6c6243a9f55cdd143b0a ;;
+        darwin-arm64) p=macos-aarch64; sha=f149e6ad81339491f8d6e0c5fd712f2813042c0dfbb595c28d5767e4567c17a1 ;;
+        darwin-x64) p=macos-x86_64; sha=3103ba39e3bd7f9c6f55e1b4a61219e7d49736f334e97527a49f73aaf5743d8d ;;
+        linux-arm64) p=linux-aarch64; sha=641b3e500d6420d3b07117a2c857cceeb82b33f4b53d23a95895bd76a4773f96 ;;
+        linux-x64) p=linux-x86_64; sha=a3dface51d9bdc71fd121e0481dd02d9b46a721f7a6b892f756480e9666eba1f ;;
     esac
-    fetch "https://x.ai/cli/grok-1.0.77-$p" "$dl/grok" "$sha"
+    fetch "https://x.ai/cli/grok-1.0.89-$p" "$dl/grok" "$sha"
     rm -f "$PREFIX/bin/grok"
     cat "$dl/grok" > "$PREFIX/bin/grok"
     rm -f "$dl/grok"
