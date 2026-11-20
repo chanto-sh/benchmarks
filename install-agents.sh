@@ -53,7 +53,7 @@ install_uv() {
     uv tool install --force --python 3.12 openhands==1.16.0
     # mini-swe-agent's litellm moves with the rest, but never to a release in
     # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
-    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.1
+    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.2
     uv tool install --force --python 3.12 mistral-vibe==3.1.3
 }
 
