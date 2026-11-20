@@ -54,11 +54,11 @@ install_uv() {
     # mini-swe-agent's litellm moves with the rest, but never to a release in
     # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
     uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.2
-    uv tool install --force --python 3.12 mistral-vibe==3.1.3
+    uv tool install --force --python 3.12 mistral-vibe==3.1.4
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.21 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.22 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.21
+CHANTO_VERSION=0.1.22
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" eec9e9e9ad03be5b97f5e49d2761da9cd456d3526fa7e2968542719876c0c438 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 555e914a5164ad93a92433e5cc50ee585d96ca31c93e2ad78256729511c74a84 chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=7f6486d4ba02449cab983ed8174517152dead4b19dce66904781eec62f06e4d7 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=994bd937bae423361253f25b5a02003b3fe13b0200de640215ab176fe070d3c2 ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=eb05e070a584ef30c5253b1ca7e3c2a03e7f10bd24cc571f6d26e0692f181736 ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=f26cedc44946fa7cab5ed40f0675326b375dce60718bc541c6c435f98de841a4 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=acca2adc983e9cc82643e9db871e26093de8825d8a739c1885b00a5168999a24 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=f5737817fa88ff641f058bffc1c7ac4e9470bcaa50a4ae085756947bbf27163b ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=3d2ed8297b53e306a32e47f4f499d278cfc673c077e84c3e22718a5586f73a3e ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=6e52ab124082089dbe8b64064fead62e27c6c3c966343b3e650a33e908290115 ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -108,14 +108,14 @@ install_chanto() {
 }
 
 install_goose() {
-    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.60.1/goose-x86_64-pc-windows-msvc.zip 1b66929a43d9645cbe2b31691c84fef95c880aee57dd7a207050976d312f0238 goose.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install goose https://github.com/block/goose/releases/download/v1.60.2/goose-x86_64-pc-windows-msvc.zip 5b838ab498f7a6b121fab621b99d39a480458c373f16be7f7ce7869e9bc54888 goose.exe; return; }
     case "$plat" in
-        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=b4aa2a370ef26fea4727f4a117faa19e1b3d15b2777561904ae3763b11782a9f ;;
-        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=c55d49b6edf0d81ffdc776cb4a239442f5da05e2df225b67640ec1ac510fe5cb ;;
-        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=6a962a0ba55829e00f6f297dff736d53b9bdc8da84f0f49c4768e2557ac39cbe ;;
-        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=0327b1857f8030343f59b77503e0455629bbf472c2901cb94b88389d6278635a ;;
+        darwin-arm64) f=goose-aarch64-apple-darwin.tar.gz; sha=3a317d80997f40bba4c6bd9edbe9a3381e88badea7ff5064fe9d757512006511 ;;
+        darwin-x64) f=goose-x86_64-apple-darwin.tar.gz; sha=82d9f11c2ee6d4021a05a9471c5112ebc67dc77519d77cce0cc12953affe3ed1 ;;
+        linux-arm64) f=goose-aarch64-unknown-linux-gnu.tar.gz; sha=7e74d796e93b89df374715dc669149cb634f74d778de0b87bb7c031b5b093731 ;;
+        linux-x64) f=goose-x86_64-unknown-linux-gnu.tar.gz; sha=5f6e463621a8428617ae4870eecee7a00a253e9bbfccb6340dfaa4f0ec2aaf32 ;;
     esac
-    fetch "https://github.com/block/goose/releases/download/v1.60.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/block/goose/releases/download/v1.60.2/$f" "$dl/$f" "$sha"
     tar -xzf "$dl/$f" -C "$PREFIX/bin" ./goose
     chmod +x "$PREFIX/bin/goose"
 }
