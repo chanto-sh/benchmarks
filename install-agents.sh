@@ -296,14 +296,14 @@ install_fx() {
 # both of its origins, x.ai and its Google Cloud Storage bucket; the macOS
 # build is also signed by xAI (team 5Y6N3AJ54S).
 install_grok() {
-    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.89-windows-x86_64.exe 24384a5a03d61d2c45416ef3d535bff5379fde4844b87a52c1bb882686e39469; return; }
+    [ "$plat" = win32-x64 ] && { win_install grok https://x.ai/cli/grok-1.0.92-windows-x86_64.exe 060e51f93743b540e59c5cf9c81c0ce7b48b61c263f09235d981a6ababb1c9d7; return; }
     case "$plat" in
-        darwin-arm64) p=macos-aarch64; sha=f149e6ad81339491f8d6e0c5fd712f2813042c0dfbb595c28d5767e4567c17a1 ;;
-        darwin-x64) p=macos-x86_64; sha=3103ba39e3bd7f9c6f55e1b4a61219e7d49736f334e97527a49f73aaf5743d8d ;;
-        linux-arm64) p=linux-aarch64; sha=641b3e500d6420d3b07117a2c857cceeb82b33f4b53d23a95895bd76a4773f96 ;;
-        linux-x64) p=linux-x86_64; sha=a3dface51d9bdc71fd121e0481dd02d9b46a721f7a6b892f756480e9666eba1f ;;
+        darwin-arm64) p=macos-aarch64; sha=8b5f67b24f2cc9a4341d8e2eb7f67e3228d7d647ed04752a4f932f7133e5ab08 ;;
+        darwin-x64) p=macos-x86_64; sha=66b7a3ef1d647280ac649b68d89b5a3d4800b1ae9df76707c011e2d400858ea9 ;;
+        linux-arm64) p=linux-aarch64; sha=8c74f1dc6cdc1befff6b9faada06bec4cf6759d04f2a60cdc28ece5ff696b44f ;;
+        linux-x64) p=linux-x86_64; sha=add4d201dbf2c0bd6077a36feb55a76939de30bae48dbb06f16b2307d38ceacb ;;
     esac
-    fetch "https://x.ai/cli/grok-1.0.89-$p" "$dl/grok" "$sha"
+    fetch "https://x.ai/cli/grok-1.0.92-$p" "$dl/grok" "$sha"
     rm -f "$PREFIX/bin/grok"
     cat "$dl/grok" > "$PREFIX/bin/grok"
     rm -f "$dl/grok"
