@@ -158,11 +158,22 @@ def main():
     for agent in agents:
         runs, first = [], []
         for i in range(a.reps):
-            r = cputurn.one_run(agent, work, TURNS, BLOB_KB)
+            # One agent's crash must not discard the agents already measured:
+            # record it and carry on, so its row is "did not run" and the rest
+            # of the table still lands.
+            try:
+                r = cputurn.one_run(agent, work, TURNS, BLOB_KB)
+            except Exception as e:  # noqa: BLE001 - report and keep measuring
+                print(f"\n  {agent}: {type(e).__name__}: {e}", file=sys.stderr)
+                r = None
             if r and r.get("cpu_time") is not None:
                 runs.append(r)
             # No turns: one model request, answered with text, then the agent exits.
-            r = cputurn.one_run(agent, work, 0, BLOB_KB)
+            try:
+                r = cputurn.one_run(agent, work, 0, BLOB_KB)
+            except Exception as e:  # noqa: BLE001
+                print(f"\n  {agent}: {type(e).__name__}: {e}", file=sys.stderr)
+                r = None
             if r and r.get("cpu_total") is not None:
                 first.append(r["cpu_total"])
             print(f"\r  {agent:10} {i + 1}/{a.reps}", end="", flush=True)

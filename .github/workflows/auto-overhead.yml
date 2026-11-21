@@ -180,6 +180,11 @@ jobs:
             cat "$RUNNER_TEMP/agents.md"
             echo "SUMMARY_END"
           } >> "$GITHUB_OUTPUT"
+      # The measurement installs with `npm ci`, which refuses a package.json and
+      # lockfile that disagree; catch that here, once, instead of in three
+      # measurement jobs that each die at install.
+      - name: Check the agents install from the lockfile
+        run: cd agents && npm ci --dry-run --ignore-scripts --no-audit --no-fund
       # The branch starts again from main on every run, so a rerun replaces
       # the earlier results instead of piling up on them.
       - name: Push the branch

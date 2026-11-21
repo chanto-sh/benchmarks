@@ -257,7 +257,9 @@ class Collect(unittest.TestCase):
 
 
 class Workflow(unittest.TestCase):
-    def test_retries_only_what_did_not_fail(self):
+    def test_retries_every_platform_without_results(self):
+        # A failed job has no column either, and a fresh runner is worth one
+        # more attempt; only the retry itself is not retried.
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)
         (tmp / "overhead-macos-latest").mkdir()
@@ -265,9 +267,9 @@ class Workflow(unittest.TestCase):
         jobs = [{"name": "measure / overhead (macos-latest)", "conclusion": "success"},
                 {"name": "measure / overhead (ubuntu-latest)", "conclusion": "failure"},
                 {"name": "measure / overhead (windows-latest)", "conclusion": "cancelled"}]
-        self.assertEqual(report.to_retry(tmp, jobs), ["windows-latest"])
+        self.assertEqual(report.to_retry(tmp, jobs), ["ubuntu-latest", "windows-latest"])
         # A job that never showed up is retried too.
-        self.assertEqual(report.to_retry(tmp, jobs[:2]), ["windows-latest"])
+        self.assertEqual(report.to_retry(tmp, jobs[:2]), ["ubuntu-latest", "windows-latest"])
 
     def test_body(self):
         url = "https://github.com/chanto-sh/benchmarks/actions/runs/1"
