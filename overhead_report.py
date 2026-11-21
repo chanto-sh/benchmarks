@@ -413,16 +413,14 @@ def collect(artifacts, jobs, run_id, results_dir, repo_url=REPO_URL):
 
 
 def to_retry(artifacts, jobs, prefix="overhead", caller="measure"):
-    """Runners whose job left no results file without failing: cancelled
-    (say, no runner became available) or never started. A job that failed
-    outright would most likely fail again, so it isn't retried."""
+    """Runners whose job left no results file — cancelled, never started, or
+    failed. A failed job has no column either, and a fresh runner is worth one
+    more attempt (the retry itself is not retried)."""
     out = []
     for runner in RUNNERS:
         if list((artifacts / f"{prefix}-{runner}").glob("overhead-*.txt")):
             continue
-        job = next((j for j in jobs if j.get("name") == f"{caller} / overhead ({runner})"), None)
-        if job is None or job.get("conclusion") != "failure":
-            out.append(runner)
+        out.append(runner)
     return out
 
 
