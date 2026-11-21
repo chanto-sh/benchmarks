@@ -58,7 +58,7 @@ install_uv() {
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.22 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.23 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.22
+CHANTO_VERSION=0.1.23
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 555e914a5164ad93a92433e5cc50ee585d96ca31c93e2ad78256729511c74a84 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 8e4575ce9fb48d4786824caeb179808a483ed4fb94d817368691272bde12f1b2 chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=acca2adc983e9cc82643e9db871e26093de8825d8a739c1885b00a5168999a24 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=f5737817fa88ff641f058bffc1c7ac4e9470bcaa50a4ae085756947bbf27163b ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=3d2ed8297b53e306a32e47f4f499d278cfc673c077e84c3e22718a5586f73a3e ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=6e52ab124082089dbe8b64064fead62e27c6c3c966343b3e650a33e908290115 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=eda54ab8d90eed8d5e4ec2025d28088c9eca509dbbadeb258db84e89b59b5c93 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=9ff3829c290fbb84d2ac72d793765c68ee6e9ee216bf931ddeed778bc4594a5b ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=0bd01a758cf6e474acef49a6b98d54796922545a8c49afdb75cb4b283cc2ab69 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=163559996b1ef47073e71d969faab4584b78675c1dae65af13ee930f50c6c84b ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -243,14 +243,14 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
-    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v19.0.1/omp-windows-x64.exe ebc8cc11f1539034a013a59e7bcb9cdca46eb14c86a6fe0cf5939a184fc31c52; return; }
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v19.1.0/omp-windows-x64.exe b9ed82d7b06d6d5fa9e8149a845a37ffb1c0ab03bef9f1737ee5f9f2460bcb19; return; }
     case "$plat" in
-        darwin-arm64) f=omp-darwin-arm64; sha=2fe420bbd00f81899816e51cbeeb9593afa59d9368d62c9d3e78535d540e32f6 ;;
-        darwin-x64) f=omp-darwin-x64; sha=8d62502eede8c7a43311798434d0a31a1c024a3abc56bedc4da200cccf94fea1 ;;
-        linux-arm64) f=omp-linux-arm64; sha=237ede0f4994d61f523802c4cf562d4e48bae74c188add792d06d051b907cecf ;;
-        linux-x64) f=omp-linux-x64; sha=6ceef04430851bb1050c6fda3af467412eb44a11df0a6ff8121fe601013c5415 ;;
+        darwin-arm64) f=omp-darwin-arm64; sha=dca5643669ed5e553f707bd065499babd0fe3030696bbb24c9da09c798af5abb ;;
+        darwin-x64) f=omp-darwin-x64; sha=edf51e3754f3f145298ae6dbfd9e6d5f5ec178e3386f043959ec71f7981c52af ;;
+        linux-arm64) f=omp-linux-arm64; sha=785e8e519acb55852a85e5495271d768a221ca92c095c043cd3eb0d7f8d3eafc ;;
+        linux-x64) f=omp-linux-x64; sha=be2b45c437b623e15c29b1f8c98aacb842f92118196454b5e9eed884359e9a01 ;;
     esac
-    fetch "https://github.com/can1357/oh-my-pi/releases/download/v19.0.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v19.1.0/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/omp"
     cat "$dl/$f" > "$PREFIX/bin/omp"
     rm -f "$dl/$f"
