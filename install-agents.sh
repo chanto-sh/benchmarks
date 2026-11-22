@@ -58,7 +58,7 @@ install_uv() {
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.23 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.24 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.23
+CHANTO_VERSION=0.1.24
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 8e4575ce9fb48d4786824caeb179808a483ed4fb94d817368691272bde12f1b2 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 99d2fb6effcbf0102de918f05b7b208d6b6e520e5af953f261a24c92bdb5efe7 chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=eda54ab8d90eed8d5e4ec2025d28088c9eca509dbbadeb258db84e89b59b5c93 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=9ff3829c290fbb84d2ac72d793765c68ee6e9ee216bf931ddeed778bc4594a5b ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=0bd01a758cf6e474acef49a6b98d54796922545a8c49afdb75cb4b283cc2ab69 ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=163559996b1ef47073e71d969faab4584b78675c1dae65af13ee930f50c6c84b ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=2889afa7dc7c8fcaee9816d54298e034f7a899e315d1b473eb0d8ec267837fb4 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=01aa5c365b15e1b8df569a6f1f6029254ba743348b6fdf5604c3806ea04b9a03 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=2f075f995771144168d3bfd23aacf035a87f7b5b12f38c9f4ae2ebad729d723f ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=07a092dea51ba4100f645e4d8953648895d3baf77418cd8a3fdcc01a9b019fce ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -206,14 +206,14 @@ install_hax() {
 }
 
 install_jcode() {
-    [ "$plat" = win32-x64 ] && { win_install jcode https://github.com/1jehuang/jcode/releases/download/v1.0.1/jcode-windows-x86_64.exe c43a8c5a8489ecb1e52767a4f7c21982eb7f71b343de2f51d5b4b65c6197aec0; return; }
+    [ "$plat" = win32-x64 ] && { win_install jcode https://github.com/1jehuang/jcode/releases/download/v1.0.3/jcode-windows-x86_64.exe 3c929e46b2facc14a21032f845d26c0e2a80a7a9d008cb64c4845fa4434d30dd; return; }
     case "$plat" in
-        darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=7b11788a52b534183bf70949dbab686c47def7e1df20e912176227f3049af7fa ;;
-        darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=f75293308aec0cddf4e729e7265904cbd9952713dc7745a051b13cf74745e0a8 ;;
-        linux-arm64) f=jcode-linux-aarch64.tar.gz; sha=483232d1242a5da8f168cb4f0128c66b03751ed0d14b581b3b430c0583932f51 ;;
-        linux-x64) f=jcode-linux-x86_64.tar.gz; sha=f44a54978b503e5dd27fa8781c43ec4916ebe9c4a94d42aab50fc868bf4fbe86 ;;
+        darwin-arm64) f=jcode-macos-aarch64.tar.gz; sha=274396799d2c60600ce3e4890abe78439c1882017eedfc272ce30b1730c5b74b ;;
+        darwin-x64) f=jcode-macos-x86_64.tar.gz; sha=1e9833027eeac661662c15d4d7cd568ea394a399470e131f7ad40dd4dda5198e ;;
+        linux-arm64) f=jcode-linux-aarch64.tar.gz; sha=c76cec0b9b98458aca9d1a0bcfa92d330459b7cfef12700c19f130881129ce8f ;;
+        linux-x64) f=jcode-linux-x86_64.tar.gz; sha=7283a4417fed877229fd89049173a3bb469368a3dec37ca2cc31c4895fb3a6ad ;;
     esac
-    fetch "https://github.com/1jehuang/jcode/releases/download/v1.0.1/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/1jehuang/jcode/releases/download/v1.0.3/$f" "$dl/$f" "$sha"
     mkdir -p "$dl/jcode" && tar -xzf "$dl/$f" -C "$dl/jcode"
     # On Linux the plain name is a launcher script for the .bin next to it (it
     # only adds its own folder to LD_LIBRARY_PATH; the archive has no libraries).
