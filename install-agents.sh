@@ -58,7 +58,7 @@ install_uv() {
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.24 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.25 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.24
+CHANTO_VERSION=0.1.25
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 99d2fb6effcbf0102de918f05b7b208d6b6e520e5af953f261a24c92bdb5efe7 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" cc016c5c3c9ce47f9667356952d50bc4d23d8156071e2d0ba501b5be9db06cbd chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=2889afa7dc7c8fcaee9816d54298e034f7a899e315d1b473eb0d8ec267837fb4 ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=01aa5c365b15e1b8df569a6f1f6029254ba743348b6fdf5604c3806ea04b9a03 ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=2f075f995771144168d3bfd23aacf035a87f7b5b12f38c9f4ae2ebad729d723f ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=07a092dea51ba4100f645e4d8953648895d3baf77418cd8a3fdcc01a9b019fce ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=1b473512bd69beee46234d06fbac31d215c0ac01ff0009da876c70f9b78184fb ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=e7f80074e1e8b728ebd22a0c9f09b5c06dd1509f601c62b8e1f9093ef5ee7eca ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=f9ba82c1c72de15db5ab16b964631773f4d44db56303baafc197caa41b17a441 ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=1189d561dbf8a9f4449be9f8670f50ba414c7059fbaea56019af63ba9583fc23 ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
@@ -164,14 +164,14 @@ PY
 # streamed download can hold ~15% more disk than its size, which size.py
 # would count.
 install_codewhale() {
-    [ "$plat" = win32-x64 ] && { win_install codewhale https://github.com/codewhale-hq/Codewhale/releases/download/v0.10.2/codewhale-windows-x64.exe 578280bec8d6e0ee9cfe97ee29de817535689f4078d8afd47384ff1941b1ee6c; return; }
+    [ "$plat" = win32-x64 ] && { win_install codewhale https://github.com/codewhale-hq/Codewhale/releases/download/v0.10.3/codewhale-windows-x64.exe 6fb1a5a3a236aa0a4dadbf76c08ba59824aa978acd11ea89f5bb726631451d3d; return; }
     case "$plat" in
-        darwin-arm64) f=codewhale-macos-arm64; sha=da0229610647f1cc2dd14c4227b333a92ea276a49f5d4d79160fa19e515e590d ;;
-        darwin-x64) f=codewhale-macos-x64; sha=ac135d8961525b4092101a15874016d42f71ef821c9c34db3b8f936aad9cb988 ;;
-        linux-arm64) f=codewhale-linux-arm64; sha=b7c55e36f7ef30c8fae4b8741bfaf9e0177220a9d4d6d3e26650609b4d9ffe90 ;;
-        linux-x64) f=codewhale-linux-x64; sha=28ac984a2f145bf99b29933498a3f951a591283c22782933ce933861dda6c70b ;;
+        darwin-arm64) f=codewhale-macos-arm64; sha=b137c9617d5b4a18a403757e65eafcec580e6ab5b57c502b252f1f8046c90bea ;;
+        darwin-x64) f=codewhale-macos-x64; sha=2622a7b1a5268ff11c7c445209e037da7fb95ca1f2c04a94a0a4fb0a63859260 ;;
+        linux-arm64) f=codewhale-linux-arm64; sha=f2f13829cd40690963a59eb207de6ca984b42d6b80be40c270aa75dd94c879b8 ;;
+        linux-x64) f=codewhale-linux-x64; sha=d14edefc7edd9976fcb76fb187344287de25f8090ad2af49cfde2e7f36343e6b ;;
     esac
-    fetch "https://github.com/codewhale-hq/Codewhale/releases/download/v0.10.2/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/codewhale-hq/Codewhale/releases/download/v0.10.3/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/codewhale"
     cat "$dl/$f" > "$PREFIX/bin/codewhale"
     rm -f "$dl/$f"
