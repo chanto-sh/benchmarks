@@ -49,6 +49,10 @@ BAD = ("image", "screenshot", "browser", "web", "fetch", "apply_patch", "edit", 
 # them loop forever. On the final turn the mock calls the agent's terminal tool.
 TERMINAL = ("submit_and_exit", "attempt_completion", "task_complete", "complete_task",
             "finish", "complete", "done", "exit", "submit", "end_task", "stop")
+# Tools that control a sub-agent or a background job, not the session. Calling
+# one on the final turn doesn't end the agent (crush's `agent_stop`), so they
+# never count as the completion tool.
+CONTROL = ("agent_", "subagent_", "job_")
 
 
 def pick(body):
@@ -68,6 +72,8 @@ def pick_terminal(body):
     ExitPlanMode for a finish tool and keep calling it forever."""
     for name, props, req in tools_of(body):
         nl = (name or "").lower()
+        if nl.startswith(CONTROL):
+            continue
         if any(nl == t or nl.endswith("_" + t) for t in TERMINAL):
             return name, props, req, False
     return None

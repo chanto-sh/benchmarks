@@ -48,6 +48,17 @@ PUBLISHED = NATIVE + NPM + UV + NEW_NATIVE + NEW_UV
 EXTRA = ["hax", "zerostack", "fx"]
 ALL = PUBLISHED + EXTRA
 
+# A run may make a few requests beyond the scenario (a retry, a side call);
+# thousands means it looped and the per-turn figure is a division artefact.
+LOOP_SLACK = 10
+
+
+def measurable(runs):
+    """The runs that completed the scenario, and those that looped past it."""
+    ok = [r for r in runs if r["turns"] <= TURNS + LOOP_SLACK]
+    looped = [r for r in runs if r["turns"] > TURNS + LOOP_SLACK]
+    return ok, looped
+
 
 def sh(cmd, **kw):
     print(f"$ {' '.join(map(str, cmd))}", flush=True)
@@ -194,20 +205,31 @@ def main():
     for agent in agents:
         runs = raw[agent]
         if not runs:
-            rows.append((agent, None, None, None, None, None, None, 0))
+            rows.append((agent, None, None, None, None, None, None, 0, ""))
             continue
-        blended = statistics.median(r["cpu_time"] for r in runs)
+        ok, looped = measurable(runs)
+        blended = statistics.median(r["cpu_time"] for r in (ok or runs))
         start = statistics.median(starts[agent]) if starts[agent] else None
         # Each full run's CPU without the startup, over the requests after the first.
-        turn = [(r["cpu_total"] - start) / (r["turns"] - 1) for r in runs] if start is not None else []
+        turn = [(r["cpu_total"] - start) / (r["turns"] - 1) for r in ok] if start is not None else []
         cpu = statistics.median(turn) if turn else None
         sd = statistics.stdev(turn) if len(turn) > 1 else 0.0
-        rss = statistics.median(r["rss"] for r in runs if r.get("rss"))
+        rss_vals = [r["rss"] for r in runs if r.get("rss")]
+        rss = statistics.median(rss_vals) if rss_vals else None
         try:
             mb = size.measure(agent, lock)[0] / 1e6
         except Exception:
             mb = None
-        rows.append((agent, start, cpu, sd, blended, rss, mb, statistics.median(r["turns"] for r in runs)))
+        # Say why a per-turn number is missing instead of letting the row vanish.
+        loop_note = ""
+        if looped:
+            most = max(r["turns"] for r in looped)
+            loop_note = f"{len(looped)}/{len(runs)} runs looped ({most:.0f} requests)"
+            if not cpu:
+                loop_note += "; CPU per turn not measurable"
+        runs_shown = ok or runs
+        rows.append((agent, start, cpu, sd, blended, rss, mb,
+                     statistics.median(r["turns"] for r in runs_shown), loop_note))
     # By per-turn CPU; an agent with no startup run sorts by its whole-run figure.
     rows.sort(key=lambda r: (r[4] is None, r[2] if r[2] is not None else r[4] or 0))
     base = next((r for r in rows if r[0] == "chanto" and r[2]), None)
@@ -216,7 +238,7 @@ def main():
     out = [f"{'agent':14}{'startup ms':>11}{'ms/turn':>9}{'±sd':>6}{'whole run':>11}{'peak MB':>9}{'install MB':>12}"
            f"  {'× Chanto CPU':>12}{'× mem':>7}  needs",
            "-" * 103]
-    for agent, start, cpu, sd, blended, rss, mb, turns in rows:
+    for agent, start, cpu, sd, blended, rss, mb, turns, loop_note in rows:
         if blended is None:
             out.append(f"{name(agent):14}{'did not run':>11}")
             continue
@@ -225,13 +247,15 @@ def main():
         note = size.NEEDS.get(agent, "")
         if turns < TURNS:
             note = (note + f" (stopped after {turns:.0f} turns)").strip()
+        if loop_note:
+            note = (note + f" ({loop_note})").strip()
         if agent == "aider":
             note = (note + " (one model request per message: no tool loop)").strip()
         if start is None:
             note = (note + " (no one-request run: startup not separated)").strip()
         num = lambda v, w, f=".1f": f"{v:{w}{f}}" if v is not None else f"{'—':>{w}}"
         out.append(f"{name(agent):14}{num(start, 11, '.0f')}{num(cpu, 9)}{num(sd if cpu is not None else None, 6)}"
-                   f"{blended:11.1f}{rss:9.0f}{(f'{mb:.1f}' if mb else '?'):>12}  {ratio:>12}{mratio:>7}  {note}")
+                   f"{blended:11.1f}{num(rss, 9, '.0f')}{(f'{mb:.1f}' if mb else '?'):>12}  {ratio:>12}{mratio:>7}  {note}")
     out += ["",
             f"Startup: CPU of a run that makes one model request and exits (median of {a.reps} runs).",
             f"ms/turn: CPU per model request after the first, startup excluded (median of {a.reps} runs).",
