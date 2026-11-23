@@ -121,14 +121,14 @@ install_goose() {
 }
 
 install_opencode() {
-    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.3.2/opencode-windows-x64-baseline.zip 8dcfe392a79412bf908de4c0cf5338c52589147eff54f1a46c25fb24a94708e7 opencode.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install opencode https://github.com/sst/opencode/releases/download/v2.4.1/opencode-windows-x64-baseline.zip 40c4f842398abcba3837d554a2b0ddd9a11c5fae667f198e0bb716d101a2aab4 opencode.exe; return; }
     case "$plat" in
-        darwin-arm64) f=opencode-darwin-arm64.zip; sha=31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a ;;
-        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=6dc5deb4554df035d27dbb3a4663d96954969a33079aeb6b01dd9de2d9092545 ;;
-        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=9d10185acdb72336e086e699ca363a6065f410fd3c1caed0dc8046e95ac06ccb ;;
-        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0 ;;
+        darwin-arm64) f=opencode-darwin-arm64.zip; sha=95a101eda95108478f1db43cff8fcbd4811f6c0e79af1e167301843c6a48d731 ;;
+        darwin-x64) f=opencode-darwin-x64-baseline.zip; sha=3dd6612423b69f7f282866112d99b6d690c8e07f27375b227f6a6ee4e652f5b5 ;;
+        linux-arm64) f=opencode-linux-arm64.tar.gz; sha=cb28cf94541aeb62a4b2ea5997a99b5dd6bae595a772f36fbe279299f2032a4f ;;
+        linux-x64) f=opencode-linux-x64-baseline.tar.gz; sha=9ddd18e3faf64eaeccf6a0fcbc96a5c7a14520ae5fd5b61e5be51d894f478b47 ;;
     esac
-    fetch "https://github.com/sst/opencode/releases/download/v2.3.2/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/sst/opencode/releases/download/v2.4.1/$f" "$dl/$f" "$sha"
     case "$f" in
         *.zip) need unzip; unzip -o -q "$dl/$f" opencode -d "$PREFIX/bin" ;;
         *) tar -xzf "$dl/$f" -C "$PREFIX/bin" opencode ;;
@@ -243,14 +243,14 @@ install_reasonix() {
 
 # oh-my-pi ships bare executables (a Bun single-file build).
 install_omp() {
-    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v19.1.0/omp-windows-x64.exe b9ed82d7b06d6d5fa9e8149a845a37ffb1c0ab03bef9f1737ee5f9f2460bcb19; return; }
+    [ "$plat" = win32-x64 ] && { win_install omp https://github.com/can1357/oh-my-pi/releases/download/v19.1.1/omp-windows-x64.exe 4e18f472975bb87f9b1992f1d5981b9a1403fd559cdb3eb96f1f1a7d709096ef; return; }
     case "$plat" in
-        darwin-arm64) f=omp-darwin-arm64; sha=dca5643669ed5e553f707bd065499babd0fe3030696bbb24c9da09c798af5abb ;;
-        darwin-x64) f=omp-darwin-x64; sha=edf51e3754f3f145298ae6dbfd9e6d5f5ec178e3386f043959ec71f7981c52af ;;
-        linux-arm64) f=omp-linux-arm64; sha=785e8e519acb55852a85e5495271d768a221ca92c095c043cd3eb0d7f8d3eafc ;;
-        linux-x64) f=omp-linux-x64; sha=be2b45c437b623e15c29b1f8c98aacb842f92118196454b5e9eed884359e9a01 ;;
+        darwin-arm64) f=omp-darwin-arm64; sha=d5a3324acd98375a01698a1b0c018be48caed2956c8aa9044ad137fe43bc0400 ;;
+        darwin-x64) f=omp-darwin-x64; sha=6ffecb22a9fe01a98f90f91a2ef04a697850a23bf4dde83adad2fe80e51a8353 ;;
+        linux-arm64) f=omp-linux-arm64; sha=f022f720c4899eb24c6e5e34dcbbae98ae05f5532bb03e97dffc02cfc8dd9a6f ;;
+        linux-x64) f=omp-linux-x64; sha=04e9490f9394da6d6804474cc2e41eb3d18f8e26215df4b34bdd4ad4c0d8a401 ;;
     esac
-    fetch "https://github.com/can1357/oh-my-pi/releases/download/v19.1.0/$f" "$dl/$f" "$sha"
+    fetch "https://github.com/can1357/oh-my-pi/releases/download/v19.1.1/$f" "$dl/$f" "$sha"
     rm -f "$PREFIX/bin/omp"
     cat "$dl/$f" > "$PREFIX/bin/omp"
     rm -f "$dl/$f"
