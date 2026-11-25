@@ -53,12 +53,12 @@ install_uv() {
     uv tool install --force --python 3.12 openhands==1.16.0
     # mini-swe-agent's litellm moves with the rest, but never to a release in
     # update_agents.py's BLOCKED (1.107.0 shipped a credential stealer).
-    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.3
+    uv tool install --force --python 3.12 mini-swe-agent==2.4.6 --with litellm==1.110.4
     uv tool install --force --python 3.12 mistral-vibe==3.1.5
 }
 
 # Standalone binaries, each pinned by version and SHA-256:
-#   Chanto 0.1.27 (checksums from the release's signed SHA256SUMS);
+#   Chanto 0.1.28 (checksums from the release's signed SHA256SUMS);
 #   the rest move to their latest releases through update_agents.py: GitHub
 #   ones with each file's checksum from GitHub's own SHA-256 digest (opencode
 #   too, from its GitHub releases), and Grok Build when x.ai and its Cloud
@@ -88,15 +88,15 @@ bin_setup() {
     mkdir -p "$dl" "$PREFIX/bin"
 }
 
-CHANTO_VERSION=0.1.27
+CHANTO_VERSION=0.1.28
 
 install_chanto() {
-    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 58db46597fd5f33eb220a406980008d4f08edd5bdb6ec0af068d080b8b974a40 chanto.exe; return; }
+    [ "$plat" = win32-x64 ] && { win_install chanto "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/chanto-v$CHANTO_VERSION-x86_64-pc-windows-msvc.zip" 2050b5fc9cc7001a1baec396987aa856d73837cd56917cefd28363a4253be7bd chanto.exe; return; }
     case "$plat" in
-        darwin-arm64) t=aarch64-apple-darwin; sha=786e9015a45e1c962c25393ddfea341dd3ca5c993abc712063d945a54efbc8aa ;;
-        darwin-x64) t=x86_64-apple-darwin; sha=79683dd64d25bf77e54189d0afba4a42fc477abd30ad1f7bcf55a532e20033d4 ;;
-        linux-arm64) t=aarch64-unknown-linux-musl; sha=e9b8c2fb316bcd2a4499b55c049b275e67f9bad051427c5221536c511174ab1e ;;
-        linux-x64) t=x86_64-unknown-linux-musl; sha=ca71195fcadc83b8053cd7e5164919fbd2c34f9a5b3e291181945119dbf1b049 ;;
+        darwin-arm64) t=aarch64-apple-darwin; sha=f792126a93239560799cebbffabcb4f6f150b1dc34d3ad7d7a54cb1974e2ca07 ;;
+        darwin-x64) t=x86_64-apple-darwin; sha=ad019fc5cedddcae38ec8f1dbb3ebe035c7f5ba17e4b9c5dbf39994308f04a45 ;;
+        linux-arm64) t=aarch64-unknown-linux-musl; sha=8bdd772b4cbcc6d7c63d2095e625cd2368b085d4df66eeed6702871ffeeb462e ;;
+        linux-x64) t=x86_64-unknown-linux-musl; sha=33588ae176fe252128f3759a35fbd6c4e0eb8f1fe510ac5a554b59852606673d ;;
     esac
     f=chanto-v$CHANTO_VERSION-$t.tar.gz
     fetch "https://github.com/chanto-sh/chanto/releases/download/v$CHANTO_VERSION/$f" "$dl/$f" "$sha"
